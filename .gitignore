@@ -19,6 +19,7 @@ __pycache__/
 .gemini/
 .claude/
 .agents/
+.codestral/
 .vscode/
 
 # Archivos temporales de procesamiento de audio
