@@ -1,0 +1,445 @@
+JavaScript
+TypeScript
+React
+Vue.js
+Angular
+Next.js
+Nuxt.js
+Svelte
+Django
+Flask
+Ruby on Rails
+Laravel
+Express.js
+Node.js
+Deno
+Bun
+HTML5
+CSS3
+Flexbox
+Grid Layout
+Tailwind CSS
+Bootstrap
+Sass
+SCSS
+Less
+Styled Components
+Emotion
+Material UI
+Chakra UI
+Responsive Design
+Mobile First
+Progressive Web App
+PWA
+REST API
+GraphQL
+JSON
+XML
+YAML
+JWT
+OAuth
+OpenAPI
+Swagger
+Middleware
+Microservices
+Serverless
+WebSocket
+gRPC
+CORS
+PostgreSQL
+MongoDB
+MySQL
+SQLite
+Redis
+Firebase
+Supabase
+Prisma
+Sequelize
+TypeORM
+NoSQL
+ORM
+Migration
+Seed Data
+AWS
+Azure
+Google Cloud
+GCP
+Docker
+Kubernetes
+K8s
+CI/CD
+GitHub Actions
+GitLab CI
+Jenkins
+Terraform
+Ansible
+Helm Chart
+Load Balancer
+CDN
+Edge Computing
+Unit Test
+Integration Test
+E2E Testing
+End-to-End
+Jest
+Cypress
+Playwright
+Selenium
+TDD
+BDD
+Mock Data
+Stub
+Snapshot Testing
+Code Coverage
+Linting
+ESLint
+Vercel
+Netlify
+Heroku
+Render
+Railway
+Fly.io
+DigitalOcean
+Linode
+Vultr
+SSH Key
+Domain Name
+SSL Certificate
+DNS Records
+Reverse Proxy
+Blue-Green Deployment
+React Native
+Flutter
+Ionic
+Capacitor
+Expo
+Swift
+Kotlin
+Android Studio
+Xcode
+APK
+IPA
+App Store
+Google Play
+HTTPS
+TLS
+SSL
+bcrypt
+Argon2
+Two-Factor Auth
+2FA
+Multi-Factor Auth
+MFA
+SSO
+RBAC
+OWASP
+XSS
+CSRF
+SQL Injection
+Rate Limiting
+Helmet.js
+Lazy Loading
+Code Splitting
+Tree Shaking
+Minification
+Bundling
+Caching
+Service Worker
+Web Vitals
+Lighthouse
+Core Web Vitals
+Critical CSS
+Image Optimization
+Compression
+Brotli
+Gzip
+Git
+GitHub
+GitLab
+Bitbucket
+Commit
+Push
+Pull Request
+PR
+Merge Conflict
+Branch
+Fork
+Clone
+Stash
+Rebase
+Cherry Pick
+Blame
+LLM
+Large Language Model
+GPT
+Claude
+Gemini
+Copilot
+Cursor
+LangChain
+Vector Database
+Embeddings
+RAG
+Fine-tuning
+Prompt Engineering
+AI Agent
+MCP
+WebAssembly
+WASM
+Deploy to production
+Merge into main branch
+Run npm install
+Build the project
+Start the development server
+Push changes to remote
+Create a new pull request
+Fix the merge conflict
+Update dependencies
+Run unit tests
+Check code coverage
+Optimize bundle size
+Implement lazy loading
+Configure environment variables
+Set up CI/CD pipeline
+Deploy using Docker containers
+Monitor with Datadog
+Scale horizontally
+Enable auto-scaling
+Configure load balancer
+npm install
+npm run dev
+npm run build
+npm start
+yarn add
+pnpm install
+git commit -m
+git push origin main
+docker-compose up
+kubectl apply -f
+terraform plan
+terraform apply
+heroku deploy
+vercel --prod
+netlify deploy
+
+Coger
+Tomar
+Abordar
+Concha
+Verga
+Varilla
+Elemento
+Paja
+Mentiras
+Tonterías
+Pelado
+Joven
+Empleado junior
+Parce
+Parcero
+Amigo
+Colega
+Compañero
+Chimba
+Excelente
+Genial
+Mierda
+Falló
+Salió mal
+Tinto
+Café negro
+Carro
+Automóvil
+Buseta
+Minibús urbano
+Celular
+Teléfono móvil
+Computador
+Ordenadora
+PC
+Nevera
+Refrigerador
+Plata
+Dinero
+Fondos
+Luces
+Semáforo
+Guayabo
+Resaca
+Cruda
+Eh
+Este
+O sea
+Es decir
+Como que
+Parece que
+Quizás
+Entonces
+Bueno
+Dañe
+Romper
+Averiar
+Estropear
+Hacer daño
+Lastimar
+Hay
+Ay
+Ahí
+Vaya
+Allá
+Hallar
+Arrollar
+Arroyo
+Hecho
+Echo
+Haber
+A ver
+Hola
+Ola
+Tubo
+Tuvo
+Voto
+Botar
+Casa
+Caza
+Has
+Haz
+Haya
+Halla
+Calla
+Caya
+Alistar
+Preparar
+Organizar
+Arreglar
+Reparar
+Solucionar
+Paila
+Problema
+Lástima
+Error
+Qué pena
+Disculpa
+Perdón
+Lo siento
+Rumba
+Fiesta
+Parranda
+Reunión social
+Chisme
+Rumor
+Cotilleo
+Noticia
+Parroquia
+Barrio
+Zona
+Comunidad
+Finca
+Casa de campo
+Hacienda
+Propiedad rural
+Tinto
+Café solo
+Café negro
+Agua panela
+Bebida tradicional
+Panela
+Azúcar sin refinar
+Arepa
+Pan de maíz
+Alimento básico
+Changua
+Sopa bogotana
+Caldo matutino
+Ajiaco
+Sopa de pollo
+Plato típico
+Bandeja paisa
+Desayuno abundante
+Plato fuerte
+Tinto
+Cafecito
+Break
+Pausa
+Descanso
+Novela
+Serie
+Telenovela
+Programa
+Celular
+Móvil
+Teléfono
+Smartphone
+Computador
+PC
+Portátil
+Laptop
+Parcero
+Amigo
+Compañero
+Bro
+Cuate
+Verga
+Cosas
+Asuntos
+Temas
+Asunto
+Mierda
+Desastre
+Lío
+Problema grave
+Bronca
+Discusión
+Pelea
+Conflicto
+Relajo
+Desorden
+Caos
+Descontrol
+Camello
+Trabajo
+Empleo
+Labor
+Oficina
+Empresa
+Negocio
+Compañía
+Jefe
+Patrón
+Gerente
+Supervisor
+Empleado
+Trabajador
+Colaborador
+Sueldo
+Salario
+Pago
+Remuneración
+Plata
+Dinero
+Efectivo
+Fondos
+Luces
+Semáforo
+Señal de tráfico
+Indicador
+Carro
+Vehículo
+Auto
+Automóvil
+Buseta
+Bus
+Autobús
+Transporte público
+Taxi
+Cabina
+Servicio particular
+Moto
+Motocicleta
+Bicicleta
+Bici
+Ciclo
+Patín
+Patineta
+Skate
+Monopatín

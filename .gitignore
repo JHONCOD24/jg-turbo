@@ -1,0 +1,29 @@
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Variables de entorno sensibles (claves API)
+.env
+
+# Archivos temporales y del sistema
+.system_generated/
+*.log
+.gemini/
+.claude/
+.agents/
+.vscode/
+
+# Archivos temporales de procesamiento de audio
+backend/temp/
+*.tmp
+*.wav
+*.mp3
+*.webm
