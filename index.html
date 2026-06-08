@@ -159,6 +159,63 @@
   .chip.on{color:var(--text);border-color:var(--cyan-glow);background:rgba(39,225,193,.07)}
   .chip.on .sw{background:linear-gradient(90deg,var(--cyan),#11b89c)}
   .chip.on .sw::after{left:13px;background:#062b25}
+  
+  /* ── Estilos para Tooltips del Glosario/Opciones ── */
+  .chip {
+    position: relative;
+  }
+  .chip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 130%;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.45;
+    white-space: normal;
+    width: 210px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.6);
+    z-index: 999;
+    text-align: left;
+    font-weight: 400;
+  }
+  .chip::before {
+    content: '';
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    border-width: 6px;
+    border-style: solid;
+    border-color: rgba(15, 23, 42, 0.96) transparent transparent transparent;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 999;
+  }
+  @media (hover: hover) {
+    .chip:hover::after, .chip:hover::before {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+  @media (max-width: 600px) {
+    .chip::after {
+      width: 160px;
+      font-size: 10px;
+    }
+  }
+
   .lang{margin-left:auto}
   .lang select{background:var(--bg-2);border:1px solid var(--line);color:var(--text);font-family:inherit;
     font-size:12px;padding:6px 8px;border-radius:9px;cursor:pointer;outline:none}
@@ -528,11 +585,11 @@
       </div>
 
       <div class="opts">
-        <div class="chip on" data-opt="punt"><span class="sw"></span>Puntuación por voz</div>
-        <div class="chip on" data-opt="preg"><span class="sw"></span>Modo pregunta ¿?</div>
-        <div class="chip" data-opt="code"><span class="sw"></span>Modo código { } ( )</div>
-        <div class="chip on" data-opt="caps"><span class="sw"></span>Mayúsculas auto</div>
-        <div class="chip on" data-opt="auto"><span class="sw"></span>Autocorrección</div>
+        <div class="chip on" data-opt="punt" data-tooltip="Convierte palabras dictadas como 'punto', 'coma' o 'nuevo párrafo' en signos de puntuación físicos."><span class="sw"></span>Puntuación por voz</div>
+        <div class="chip on" data-opt="preg" data-tooltip="Detecta si tu frase empieza con palabras de pregunta y añade automáticamente los signos '¿' y '?' al inicio y al final."><span class="sw"></span>Modo pregunta ¿?</div>
+        <div class="chip" data-opt="code" data-tooltip="Transforma comandos dictados como 'abrir paréntesis' o 'etiqueta div' en caracteres sintácticos de programación."><span class="sw"></span>Modo código { } ( )</div>
+        <div class="chip on" data-opt="caps" data-tooltip="Fuerza automáticamente la primera letra en mayúscula al inicio de cada oración y después de signos de puntuación final."><span class="sw"></span>Mayúsculas auto</div>
+        <div class="chip on" data-opt="auto" data-tooltip="Reemplaza términos tecnológicos y abreviaturas por su formato correcto y capitalización oficial (ej: javascript -> JavaScript, github -> GitHub)."><span class="sw"></span>Autocorrección</div>
         <div class="lang">
           <select id="lang" aria-label="Idioma de reconocimiento">
             <option value="es-CO" selected>Español (Colombia)</option>
