@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JG Turbo · Transcribe Audio</title>
+<title>JG Turbo · Voz a texto en segundos</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FF7A18'/%3E%3Cstop offset='100%25' stop-color='%23FF2D55'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M16 6a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V9a3 3 0 0 0-3-3z' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M23 14v1a7 7 0 0 1-14 0v-1' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cline x1='16' y1='22' x2='16' y2='26' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -506,16 +506,16 @@
     </div>
     <div class="brand">
       <h1>JG <b>Turbo</b></h1>
-      <p>Transcribe Audio · voz, archivos y YouTube a texto</p>
+      <p>Dicta, sube un audio o pega un enlace de YouTube — obtén texto listo para copiar</p>
     </div>
-    <button class="server-pill checking" id="serverPill" title="Indicador de estado del servidor">
+    <button class="server-pill checking" id="serverPill" title="Estado del servidor">
       <span class="dot"></span><span id="serverTxt">Verificando…</span>
     </button>
-    <button class="mini-btn" id="btnSettingsOpen" style="padding: 6px 12px; font-weight: 600; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--text); display: flex; align-items: center; gap: 6px;" title="Configurar Servidor e IA">
+    <button class="mini-btn" id="btnSettingsOpen" style="padding: 6px 12px; font-weight: 600; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--text); display: flex; align-items: center; gap: 6px;" title="Configurar servidor e inteligencia artificial">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      Ajustes IA y Servidor
+      Servidor e IA
     </button>
-    <span class="badge" id="topBadge">v2.1 · Micrófono en vivo</span>
+    <span class="badge" id="topBadge">v2.1 · Dictado en vivo</span>
   </header>
 
   <div class="tabs-row">
@@ -524,7 +524,7 @@
       <button class="tab" data-tab="file"><span class="em">🎧</span><span class="lbl">Archivo de audio</span></button>
       <button class="tab" data-tab="yt"><span class="em">▶️</span><span class="lbl">YouTube</span></button>
     </nav>
-    <button class="btn-cheat" id="btnCheat" title="Ver comandos de voz">🗣️</button>
+    <button class="btn-cheat" id="btnCheat" title="Comandos de voz disponibles">🗣️</button>
   </div>
 
   <!-- ========== PANEL MIC ========== -->
@@ -539,12 +539,12 @@
             </svg>
             <span id="recLabel">Grabar</span>
           </button>
-          <div class="kbd-hint"><kbd>Espacio</kbd> grabar/pausar</div>
+          <div class="kbd-hint"><kbd>Espacio</kbd> para grabar o pausar</div>
         </div>
         <div class="meter-area">
           <div class="status" id="status">
             <span class="pip"></span>
-            <span id="statusTxt">Listo. Pulsa Grabar o Espacio y empieza a hablar.</span>
+            <span id="statusTxt">Listo. Pulsa Grabar o Espacio y habla.</span>
             <span class="timer" id="timer" style="display:none">00:00</span>
           </div>
           <canvas id="wave"></canvas>
@@ -579,17 +579,17 @@
         <div id="unsupported"></div>
 
       <div class="sens-row">
-        <label for="sensSlider">Sensibilidad mic:</label>
+        <label for="sensSlider">Sensibilidad del micrófono</label>
         <input type="range" id="sensSlider" min="0" max="100" value="50" step="5">
         <span class="sens-val" id="sensVal">50</span>
       </div>
 
       <div class="opts">
-        <div class="chip on" data-opt="punt" data-tooltip="Convierte palabras dictadas como 'punto', 'coma' o 'nuevo párrafo' en signos de puntuación físicos."><span class="sw"></span>Puntuación por voz</div>
-        <div class="chip on" data-opt="preg" data-tooltip="Detecta si tu frase empieza con palabras de pregunta y añade automáticamente los signos '¿' y '?' al inicio y al final."><span class="sw"></span>Modo pregunta ¿?</div>
-        <div class="chip" data-opt="code" data-tooltip="Transforma comandos dictados como 'abrir paréntesis' o 'etiqueta div' en caracteres sintácticos de programación."><span class="sw"></span>Modo código { } ( )</div>
-        <div class="chip on" data-opt="caps" data-tooltip="Fuerza automáticamente la primera letra en mayúscula al inicio de cada oración y después de signos de puntuación final."><span class="sw"></span>Mayúsculas auto</div>
-        <div class="chip on" data-opt="auto" data-tooltip="Reemplaza términos tecnológicos y abreviaturas por su formato correcto y capitalización oficial (ej: javascript -> JavaScript, github -> GitHub)."><span class="sw"></span>Autocorrección</div>
+        <div class="chip on" data-opt="punt" data-tooltip="Convierte «punto», «coma» o «nuevo párrafo» en signos de puntuación reales."><span class="sw"></span>Puntuación por voz</div>
+        <div class="chip on" data-opt="preg" data-tooltip="Si empiezas con una palabra de pregunta, añade automáticamente ¿ al inicio y ? al final."><span class="sw"></span>Modo pregunta ¿?</div>
+        <div class="chip" data-opt="code" data-tooltip="Convierte «abrir paréntesis» o «etiqueta div» en símbolos de código."><span class="sw"></span>Modo código { } ( )</div>
+        <div class="chip on" data-opt="caps" data-tooltip="Pone en mayúscula la primera letra de cada oración y tras signos finales (. ! ?)."><span class="sw"></span>Mayúsculas auto</div>
+        <div class="chip on" data-opt="auto" data-tooltip="Corrige términos técnicos y marcas (ej.: javascript → JavaScript, github → GitHub)."><span class="sw"></span>Autocorrección</div>
         <div class="lang">
           <select id="lang" aria-label="Idioma de reconocimiento">
             <option value="es-CO" selected>Español (Colombia)</option>
@@ -617,7 +617,7 @@
           <div class="live-panel-actions" id="livePanelActions" style="display:none; margin-top:10px; gap:8px;">
             <button class="mini-btn" id="btnLiveAccept" type="button" style="background:rgba(39,225,193,.12); border-color:rgba(39,225,193,.35); color:#9DEBDC;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-right:2px;"><polyline points="20 6 9 17 4 12"/></svg>
-              Aceptar e insertar texto
+              Aceptar e insertar
             </button>
             <button class="mini-btn danger" id="btnLiveDiscard" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-right:2px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -628,14 +628,14 @@
       </div>
 
       <div class="out-head">
-        <h3>Texto transcrito</h3>
-        <button class="mini-btn" id="btnShowText" type="button" style="margin-left:10px;padding:3px 8px;font-size:11px;gap:4px;" title="Pantalla completa">
+        <h3>Tu transcripción</h3>
+        <button class="mini-btn" id="btnShowText" type="button" style="margin-left:10px;padding:3px 8px;font-size:11px;gap:4px;" title="Abrir en pantalla completa">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
           Expandir
         </button>
         <span class="count" id="count">0 palabras · 0 caracteres</span>
       </div>
-      <textarea id="output" class="output" placeholder="Aquí aparecerá tu texto en vivo. También puedes editarlo a mano antes de copiar…" spellcheck="true"></textarea>
+      <textarea id="output" class="output" placeholder="Tu texto aparece aquí en vivo. Edítalo, corrígelo o cópialo cuando quieras." spellcheck="true"></textarea>
 
       </div><!-- /card-body -->
 
@@ -644,13 +644,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           <span id="copyLabel">Copiar todo</span>
         </button>
-        <button class="btn" id="btnCorrect" title="Corregir ortografía y gramática">
+        <button class="btn" id="btnCorrect" title="Corregir ortografía, tildes y gramática">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
           <span id="correctLabel">Corregir</span>
         </button>
-        <button class="btn btn-improve" id="btnImprove" title="Mejorar expresión, ideas y claridad del texto">
+        <button class="btn btn-improve" id="btnImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
-          <span id="improveLabel">Mejorar</span>
+          <span id="improveLabel">Pulir texto</span>
         </button>
         <button class="btn" id="btnTxt">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -670,12 +670,12 @@
   <section class="panel" data-panel="file">
     <div class="card">
       <div class="file-area">
-        <h2>🎧 Transcribir archivo de audio</h2>
-        <p>Sube un MP3, WAV, M4A, OGG o FLAC de cualquier duración. Whisper lo convierte a texto con alta precisión.</p>
+        <h2>🎧 Convierte un audio a texto</h2>
+        <p>Sube MP3, WAV, M4A, OGG o FLAC de cualquier duración. Whisper lo transcribe con alta precisión.</p>
 
         <div id="fileServerWarn" class="notice warn" style="margin:0 0 18px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <div>Servidor no conectado. Inicia el backend con <code style="font-family:monospace;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:4px">uvicorn app:app --reload</code> en la carpeta <b>backend/</b> y haz clic en el indicador de servidor arriba.</div>
+          <div>Servidor desconectado. Inicia el backend con <code style="font-family:monospace;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:4px">uvicorn app:app --reload</code> en <b>backend/</b> y pulsa el indicador de servidor arriba.</div>
         </div>
 
         <div class="file-opts">
@@ -691,7 +691,7 @@
 
         <div class="drop" id="drop">
           <div class="drop-icon">📁</div>
-          <p>Arrastra aquí tu archivo de audio<br><span style="font-size:12px;color:var(--muted-2)">o haz clic para seleccionar · MP3, WAV, M4A, OGG, FLAC</span></p>
+          <p>Arrastra tu audio aquí<br><span style="font-size:12px;color:var(--muted-2)">o haz clic para elegir · MP3, WAV, M4A, OGG, FLAC</span></p>
           <div class="fname" id="fname"></div>
           <input type="file" id="fileInput" accept="audio/*,video/mp4,video/webm">
         </div>
@@ -704,7 +704,7 @@
         <div id="fileTranscribeArea" style="display:flex;gap:9px;margin-top:16px;flex-wrap:wrap">
           <button class="btn primary" id="btnFileTranscribe" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Transcribir archivo
+            Transcribir a texto
           </button>
         </div>
 
@@ -712,28 +712,28 @@
           <div class="out-head" style="padding:10px 0 8px;gap:6px;flex-wrap:wrap">
             <button class="btn-back" id="btnFileBack" title="Subir otro archivo">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-              Nueva transcripción
+              Otra transcripción
             </button>
-            <h3 style="flex:none">Resultado</h3>
-            <button class="mini-btn" id="btnFileShowText" type="button" style="padding:3px 8px;font-size:11px;gap:4px;" title="Pantalla completa">
+            <h3 style="flex:none">Tu transcripción</h3>
+            <button class="mini-btn" id="btnFileShowText" type="button" style="padding:3px 8px;font-size:11px;gap:4px;" title="Abrir en pantalla completa">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
               Expandir
             </button>
             <span class="count" id="fileCount" style="margin-left:auto">0 palabras</span>
           </div>
-          <textarea id="fileOutput" class="output" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--bg-2)" placeholder="El texto transcrito aparecerá aquí…" spellcheck="true"></textarea>
+          <textarea id="fileOutput" class="output" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--bg-2)" placeholder="Aquí verás el texto transcrito. Puedes editarlo antes de copiarlo." spellcheck="true"></textarea>
           <div class="actions" style="padding:10px 0 0">
             <button class="btn primary" id="btnFileCopy">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               <span id="fileCopyLabel">Copiar todo</span>
             </button>
-            <button class="btn" id="btnFileCorrect" title="Corregir ortografía y gramática">
+            <button class="btn" id="btnFileCorrect" title="Corregir ortografía, tildes y gramática">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
               <span id="fileCorrectLabel">Corregir</span>
             </button>
-            <button class="btn btn-improve" id="btnFileImprove" title="Mejorar expresión, ideas y claridad del texto">
+            <button class="btn btn-improve" id="btnFileImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
-              <span id="fileImproveLabel">Mejorar</span>
+              <span id="fileImproveLabel">Pulir texto</span>
             </button>
             <button class="btn" id="btnFileTxt">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -753,19 +753,19 @@
   <section class="panel" data-panel="yt">
     <div class="card">
       <div class="yt-area">
-        <h2>▶️ Transcribir video de YouTube</h2>
-        <p>Pega el enlace. Primero intenta los subtítulos del video (instantáneo); si no los tiene, descarga el audio y usa Whisper.</p>
+        <h2>▶️ Extrae el texto de un video de YouTube</h2>
+        <p>Pega el enlace. Si el video tiene subtítulos, los usa al instante; si no, descarga el audio y lo transcribe con Whisper.</p>
 
         <div id="ytServerWarn" class="notice warn" style="margin:0 0 18px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <div>Servidor no conectado. Inicia el backend para activar esta función.</div>
+          <div>Conecta el servidor para usar esta función. Pulsa el indicador de arriba o abre Ajustes.</div>
         </div>
 
         <div class="ytrow">
           <input type="text" id="ytUrl" placeholder="https://www.youtube.com/watch?v=...">
           <button class="btn primary" id="ytBtn" disabled style="flex:none;min-width:150px">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Transcribir
+            Transcribir video
           </button>
         </div>
 
@@ -779,8 +779,8 @@
             <option value="pt">Portugués</option>
           </select>
           <select id="ytSubPref">
-            <option value="true">Usar subtítulos del video si existen</option>
-            <option value="false">Siempre usar Whisper (más preciso)</option>
+            <option value="true">Usar subtítulos del video si están disponibles</option>
+            <option value="false">Forzar Whisper (más preciso, más lento)</option>
           </select>
         </div>
 
@@ -793,10 +793,10 @@
           <div class="out-head" style="padding:10px 0 8px;gap:6px;flex-wrap:wrap">
             <button class="btn-back" id="btnYtBack" title="Transcribir otro video">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-              Nueva búsqueda
+              Otro video
             </button>
-            <h3 id="ytResultTitle" style="flex:none">Resultado</h3>
-            <button class="mini-btn" id="btnYtShowText" type="button" style="padding:3px 8px;font-size:11px;gap:4px;" title="Pantalla completa">
+            <h3 id="ytResultTitle" style="flex:none">Tu transcripción</h3>
+            <button class="mini-btn" id="btnYtShowText" type="button" style="padding:3px 8px;font-size:11px;gap:4px;" title="Abrir en pantalla completa">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
               Expandir
             </button>
@@ -808,13 +808,13 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               <span id="ytCopyLabel">Copiar todo</span>
             </button>
-            <button class="btn" id="btnYtCorrect" title="Corregir ortografía y gramática">
+            <button class="btn" id="btnYtCorrect" title="Corregir ortografía, tildes y gramática">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
               <span id="ytCorrectLabel">Corregir</span>
             </button>
-            <button class="btn btn-improve" id="btnYtImprove" title="Mejorar expresión, ideas y claridad del texto">
+            <button class="btn btn-improve" id="btnYtImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
-              <span id="ytImproveLabel">Mejorar</span>
+              <span id="ytImproveLabel">Pulir texto</span>
             </button>
             <button class="btn" id="btnYtTxt">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -830,7 +830,7 @@
     </div>
   </section>
 
-  <footer>JG Turbo v2.1 · micrófono en <b>Google Chrome</b> o <b>Microsoft Edge</b> · archivos/YouTube requieren el backend</footer>
+  <footer>JG Turbo v2.1 · dictado en vivo en <b>Chrome</b> o <b>Edge</b> · archivos y YouTube requieren el servidor</footer>
 </div>
 
 <!-- Modal de Comandos de Voz -->
@@ -838,7 +838,7 @@
   <div class="modal-backdrop" id="modalBackdrop"></div>
   <div class="modal-content">
     <div class="modal-header">
-      <h3>🗣️ Comandos de voz disponibles</h3>
+      <h3>🗣️ Comandos de voz</h3>
       <button class="modal-close" id="modalClose" aria-label="Cerrar modal">&times;</button>
     </div>
     <div class="modal-body">
@@ -872,7 +872,7 @@
   <div class="modal-backdrop" id="textModalBackdrop"></div>
   <div class="modal-content" style="max-width: 800px; max-height: 85vh; height: 85vh;">
     <div class="modal-header">
-      <h3 id="textModalTitle">📝 Editor de Texto Completo</h3>
+      <h3 id="textModalTitle">📝 Editor de texto</h3>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="mini-btn" id="btnTextModalCorrect" style="padding:5px 11px;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
@@ -880,7 +880,7 @@
         </button>
         <button class="mini-btn mini-btn-improve" id="btnTextModalImprove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
-          <span id="textModalImproveLabel">✦ Mejorar</span>
+          <span id="textModalImproveLabel">✦ Pulir texto</span>
         </button>
         <button class="mini-btn" id="btnTextModalCopy" style="padding:5px 11px;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -890,11 +890,11 @@
       </div>
     </div>
     <div class="modal-body" style="padding: 0; display: flex; flex-direction: column; height: 100%;">
-      <textarea id="textModalTextarea" style="width: 100%; flex: 1; min-height: 0; resize: none; border: 0; outline: none; background: transparent; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 15px; line-height: 1.6; padding: 20px; overflow-y: auto;" placeholder="El texto transcrito aparecerá aquí. Puedes editarlo libremente..."></textarea>
+      <textarea id="textModalTextarea" style="width: 100%; flex: 1; min-height: 0; resize: none; border: 0; outline: none; background: transparent; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 15px; line-height: 1.6; padding: 20px; overflow-y: auto;" placeholder="Edita tu transcripción aquí. Los cambios se guardan al cerrar."></textarea>
       <div class="modal-footer" style="padding: 10px 20px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; background: var(--bg-2); flex: none;gap:8px;flex-wrap:wrap;">
         <span id="textModalCount" style="font-size: 11px; color: var(--muted-2); font-family: 'JetBrains Mono', monospace;">0 palabras · 0 caracteres</span>
         <span id="textModalImproveStatus" style="display:none;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;"></span>
-        <span style="font-size: 11px; color: var(--muted); font-style: italic;">Los cambios se guardan automáticamente en tiempo real</span>
+        <span style="font-size: 11px; color: var(--muted); font-style: italic;">Los cambios se sincronizan con el panel principal</span>
       </div>
     </div>
   </div>
@@ -907,7 +907,7 @@
     <div class="modal-header">
       <h3 style="display: flex; align-items: center; gap: 8px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" style="width:16px;height:16px;"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
-        Previsualizar Mejora de Texto
+        Previsualizar mejora
         <span id="improvePreviewBadge"></span>
       </h3>
       <button class="modal-close" id="improvePreviewClose" aria-label="Cerrar">&times;</button>
@@ -915,17 +915,17 @@
     <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; flex: 1; overflow-y: auto;">
       <div id="improvePreviewNotice" class="notice warn" style="margin: 0; display: none;"></div>
       <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-        <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px;">Texto Original</label>
+        <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px;">Texto original</label>
         <div id="improvePreviewOriginal" style="flex: 1; overflow-y: auto; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.6; color: var(--muted); opacity: 0.85; white-space: pre-wrap;"></div>
       </div>
       <div style="display: flex; flex-direction: column; flex: 1.3; min-height: 0;">
-        <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--cyan); margin-bottom: 6px;">Propuesta Mejorada (puedes editarla libremente)</label>
-        <textarea id="improvePreviewSuggested" style="width: 100%; flex: 1; min-height: 0; resize: none; border: 1px solid var(--cyan-glow); border-radius: 10px; outline: none; background: rgba(39, 225, 193, 0.02); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.6; padding: 12px 16px; overflow-y: auto; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--cyan-glow)'" placeholder="La propuesta mejorada aparecerá aquí..."></textarea>
+        <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--cyan); margin-bottom: 6px;">Versión mejorada (puedes editarla)</label>
+        <textarea id="improvePreviewSuggested" style="width: 100%; flex: 1; min-height: 0; resize: none; border: 1px solid var(--cyan-glow); border-radius: 10px; outline: none; background: rgba(39, 225, 193, 0.02); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.6; padding: 12px 16px; overflow-y: auto; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--cyan-glow)'" placeholder="La versión pulida aparecerá aquí…"></textarea>
       </div>
     </div>
     <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; background: var(--bg-2); flex: none;">
       <button class="btn ghost" id="btnImprovePreviewCancel" style="max-width:140px; padding: 8px 16px;">Descartar</button>
-      <button class="btn" id="btnImprovePreviewAccept" style="max-width:200px; padding: 8px 20px; background: linear-gradient(135deg, var(--cyan), #11b89c); border: 0; color: #062b25; font-weight: 700; box-shadow: 0 4px 15px -4px var(--cyan-glow);">Aplicar Cambios</button>
+      <button class="btn" id="btnImprovePreviewAccept" style="max-width:200px; padding: 8px 20px; background: linear-gradient(135deg, var(--cyan), #11b89c); border: 0; color: #062b25; font-weight: 700; box-shadow: 0 4px 15px -4px var(--cyan-glow);">Usar esta versión</button>
     </div>
   </div>
 </div>
@@ -937,7 +937,7 @@
     <div class="modal-header">
       <h3 style="display: flex; align-items: center; gap: 8px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Configuración de JG Turbo
+        Configuración
       </h3>
       <button class="modal-close" id="settingsModalClose" aria-label="Cerrar">&times;</button>
     </div>
@@ -945,44 +945,44 @@
       
       <!-- Dirección del Servidor -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Dirección del Servidor Backend</label>
+        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">URL del servidor</label>
         <input type="text" id="settingsServerUrl" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13.5px; padding: 10px 12px; border-radius: 10px; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--line)'" placeholder="http://localhost:8000">
       </div>
 
       <!-- Proveedor de IA -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Proveedor de IA (Mejora de Texto)</label>
+        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">IA para pulir texto</label>
         <select id="settingsAiProvider" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13.5px; padding: 10px 12px; border-radius: 10px; outline: none; cursor: pointer;">
-          <option value="none">Desactivado (Heurístico básico local)</option>
-          <option value="gemini" selected>Google Gemini (Recomendado - Rápido y gratis)</option>
-          <option value="mistral">Mistral (Rápido y bueno para texto)</option>
-          <option value="anthropic">Anthropic Claude (Calidad premium)</option>
+          <option value="none">Desactivada (corrección básica local)</option>
+          <option value="gemini" selected>Google Gemini (rápida y gratuita)</option>
+          <option value="mistral">Mistral (buena para texto largo)</option>
+          <option value="anthropic">Anthropic Claude (máxima calidad)</option>
         </select>
       </div>
 
       <!-- API Key -->
       <div id="settingsApiKeyContainer" style="display: flex; flex-direction: column; gap: 6px;">
         <label id="settingsApiKeyLabel" style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em;">Clave de API de Gemini (API Key)</label>
-        <input type="password" id="settingsApiKey" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 10px 12px; border-radius: 10px; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--line)'" placeholder="Pega tu API Key aquí...">
+        <input type="password" id="settingsApiKey" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 10px 12px; border-radius: 10px; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--line)'" placeholder="Pega tu clave de API aquí">
         <span id="settingsApiKeyHelp" style="font-size: 11px; color: var(--muted); line-height: 1.4;"></span>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Glosario técnico (corrección en vivo)</label>
         <textarea id="settingsGlossary" style="width: 100%; min-height: 84px; resize: vertical; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12.5px; padding: 10px 12px; border-radius: 10px; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--line)'" placeholder="Ej: LangChain, RAG, JWT, OAuth, GPT-4o, React Native&#10;Una palabra o frase por línea, o separadas por comas."></textarea>
-        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">La app intentará corregir esas palabras/frases cuando las detecte en tu dictado (ideal para inglés y términos técnicos).</span>
+        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">Palabras o frases que la app corregirá al dictar (ideal para términos técnicos en inglés).</span>
       </div>
 
       <!-- Modelo de Whisper (Carga Local) -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Modelo Whisper (Procesamiento Local)</label>
+        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Modelo Whisper (transcripción local)</label>
         <select id="settingsWhisperModel" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13.5px; padding: 10px 12px; border-radius: 10px; outline: none; cursor: pointer;">
-          <option value="tiny">Tiny (Ultra rápido, menos preciso)</option>
-          <option value="base">Base (Rápido, precisión estándar - Defecto)</option>
-          <option value="small">Small (Velocidad media, precisión alta)</option>
-          <option value="medium">Medium (Lento, precisión muy alta)</option>
+          <option value="tiny">Tiny (muy rápido, menos preciso)</option>
+          <option value="base">Base (equilibrio velocidad/precisión — recomendado)</option>
+          <option value="small">Small (más lento, más preciso)</option>
+          <option value="medium">Medium (lento, máxima precisión)</option>
         </select>
-        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">Un modelo más grande mejora drásticamente la transcripción de términos técnicos y en inglés, pero consume más CPU/GPU y memoria.</span>
+        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">Modelos más grandes captan mejor términos técnicos e inglés, pero consumen más CPU y memoria.</span>
       </div>
 
     </div>
@@ -1070,7 +1070,7 @@
         font-size: 13px;
         color: var(--muted);
         line-height: 1.5;
-      " id="loadingOverlaySub">La Inteligencia Artificial está optimizando la redacción, claridad y coherencia...</p>
+      " id="loadingOverlaySub">Revisando claridad, ritmo y ortografía…</p>
     </div>
   </div>
 </div>
@@ -1112,9 +1112,9 @@ if(window.location.protocol === 'file:'){
   notice.className = 'notice warn';
   notice.style.cssText = 'margin:0 0 16px';
   notice.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
-    + '<div><b>¡Abierto como archivo local!</b> El micrófono y el backend no funcionan correctamente así. '
-    + 'Inicia el backend con <code style="font-family:monospace;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:4px">iniciar.bat</code> '
-    + 'y accede a la app en <a href="http://localhost:8000" style="color:var(--cyan)">http://localhost:8000</a>.</div>';
+    + '<div><b>Archivo local detectado.</b> El micrófono y el servidor no funcionan bien así. '
+    + 'Ejecuta <code style="font-family:monospace;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:4px">iniciar.bat</code> '
+    + 'y abre la app en <a href="http://localhost:8000" style="color:var(--cyan)">http://localhost:8000</a>.</div>';
   const wrap = document.querySelector('.wrap');
   const header = document.querySelector('header');
   if(wrap && header) wrap.insertBefore(notice, header.nextSibling);
@@ -1175,7 +1175,7 @@ function _actualizarNoticeModelo(){
   } else if(serverInfo.modelState === 'cargando'){
     _noticeModelo.innerHTML = `<div class="notice info" style="gap:11px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none;width:18px;height:18px;margin-top:1px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span>⏳ El modelo Whisper está cargando en segundo plano… Los botones de archivo y YouTube se activarán sueltos solos. <b>El micrófono en vivo ya funciona ahora.</b></span>
+      <span>El modelo Whisper se está cargando en segundo plano. Archivos y YouTube se activarán solos. <b>El dictado en vivo ya funciona.</b></span>
     </div>`;
     _noticeModelo.style.display='block';
   } else {
@@ -1324,17 +1324,17 @@ function updateApiKeyFields() {
       settingsApiKeyLabel.textContent = 'Clave de API de Gemini (API Key)';
       settingsApiKeyLabel.style.color = 'var(--cyan)';
       settingsApiKey.placeholder = 'AIzaSy...';
-      settingsApiKeyHelp.innerHTML = 'Para obtener una clave de API de Gemini gratis, ve a <a href="https://aistudio.google.com/" target="_blank" style="color: var(--cyan); text-decoration: underline;">Google AI Studio</a>.';
+      settingsApiKeyHelp.innerHTML = 'Consigue una clave gratis en <a href="https://aistudio.google.com/" target="_blank" style="color: var(--cyan); text-decoration: underline;">Google AI Studio</a>.';
     } else if (provider === 'mistral') {
       settingsApiKeyLabel.textContent = 'Clave de API de Mistral (API Key)';
       settingsApiKeyLabel.style.color = 'var(--cyan)';
       settingsApiKey.placeholder = '...';
-      settingsApiKeyHelp.innerHTML = 'Para obtener una clave de API de Mistral, ve a <a href="https://console.mistral.ai/" target="_blank" style="color: var(--cyan); text-decoration: underline;">Mistral Console</a>.';
+      settingsApiKeyHelp.innerHTML = 'Obtén tu clave en <a href="https://console.mistral.ai/" target="_blank" style="color: var(--cyan); text-decoration: underline;">Mistral Console</a>.';
     } else {
       settingsApiKeyLabel.textContent = 'Clave de API de Anthropic (API Key)';
       settingsApiKeyLabel.style.color = '#FFC79A';
       settingsApiKey.placeholder = 'sk-ant-api03-...';
-      settingsApiKeyHelp.innerHTML = 'Para obtener una clave de API de Claude, ve a la <a href="https://console.anthropic.com/" target="_blank" style="color: #FFC79A; text-decoration: underline;">consola de Anthropic</a>.';
+      settingsApiKeyHelp.innerHTML = 'Obtén tu clave en la <a href="https://console.anthropic.com/" target="_blank" style="color: #FFC79A; text-decoration: underline;">consola de Anthropic</a>.';
     }
   }
 }
@@ -1403,7 +1403,7 @@ setInterval(checkServer, 15000);
 const tabs = document.querySelectorAll('.tab');
 const panels = document.querySelectorAll('.panel');
 const badge = document.getElementById('topBadge');
-const badgeText = {mic:'v2.1 · Micrófono en vivo', file:'Whisper · Archivos', yt:'Whisper · YouTube'};
+const badgeText = {mic:'v2.1 · Dictado en vivo', file:'Whisper · Archivos', yt:'Whisper · YouTube'};
 tabs.forEach(t=>t.addEventListener('click',()=>{
   tabs.forEach(x=>x.classList.remove('active'));
   panels.forEach(x=>x.classList.remove('active'));
@@ -1688,11 +1688,11 @@ function detenerTimer(){
 
 if(!navigator.mediaDevices || !window.MediaRecorder){
   document.getElementById('unsupported').innerHTML =
-    '<div class="notice warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>Tu navegador no soporta la grabación de audio. Actualiza tu navegador para usar esta aplicación.</div></div>';
+    '<div class="notice warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>Tu navegador no puede grabar audio. Actualízalo o prueba Chrome o Edge.</div></div>';
   recBtn.disabled = true; recBtn.style.opacity = .5; recBtn.style.cursor = 'not-allowed';
 } else if(usarWhisperAlFinal){
   document.getElementById('unsupported').innerHTML =
-    '<div class="notice info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><div><b>Modo Grabadora Whisper activo:</b> Tu navegador no soporta transcripción en vivo en tiempo real (limitación de Opera/Firefox). Grabaremos tu voz local y Whisper la transcribirá automáticamente al detener la grabación.</div></div>';
+    '<div class="notice info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><div><b>Modo grabadora activo:</b> Tu navegador no transcribe en vivo (Opera/Firefox). Grabamos tu voz y Whisper la transcribe al pulsar Detener.</div></div>';
   recBtn.disabled = false; recBtn.style.opacity = 1; recBtn.style.cursor = 'pointer';
 }
 
@@ -1939,7 +1939,7 @@ async function transcribirGrabacionAutomatica(blob) {
   if (!serverInfo.online) {
     setEstado('⚠️ Grabación guardada localmente, pero el servidor backend está desconectado.', false);
     if (labelEl) labelEl.textContent = 'Servidor desconectado';
-    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">No se pudo transcribir porque el servidor está desconectado. Conéctalo y usa "Re-transcribir con Whisper".</span>';
+    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Servidor desconectado. Conéctalo y pulsa «Re-transcribir con Whisper».</span>';
     if (actionsEl) actionsEl.style.display = 'none';
     panel.classList.add('live-panel--active');
     return;
@@ -1947,7 +1947,7 @@ async function transcribirGrabacionAutomatica(blob) {
   if (!serverInfo.modelReady) {
     setEstado('⏳ Whisper se está cargando…', false);
     if (labelEl) labelEl.textContent = 'Whisper cargando';
-    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Whisper se está cargando. Espera unos segundos y usa "Re-transcribir con Whisper" en los controles de abajo.</span>';
+    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Whisper aún se carga. Espera unos segundos y pulsa «Re-transcribir con Whisper».</span>';
     if (actionsEl) actionsEl.style.display = 'none';
     panel.classList.add('live-panel--active');
     return;
@@ -1983,7 +1983,7 @@ async function transcribirGrabacionAutomatica(blob) {
         if (actionsEl) actionsEl.style.display = 'none';
         panel.classList.remove('live-panel--active');
         setEstado('✓ Whisper transcribió con éxito.', false);
-        abrirTextModal(document.getElementById('output'), '📝 Editor de Texto · Micrófono');
+        abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
       } else {
         textoEnVivoAcumulado = '';
         interimEl.textContent = '';
@@ -2099,7 +2099,7 @@ function arrancarUI(){
   }
   
   if (usarWhisperAlFinal) {
-    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Tu voz se está grabando de forma segura. Al pulsar Detener, Whisper la transcribirá automáticamente.</span>';
+    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Grabando tu voz. Al pulsar Detener, Whisper la transcribirá automáticamente.</span>';
     document.getElementById('livePanel').classList.add('live-panel--active');
     iniciarPreviewWhisper();
   }
@@ -2175,7 +2175,7 @@ async function toggleGrabacion(){
         const actionsEl = document.getElementById('livePanelActions');
         if (actionsEl) actionsEl.style.display = 'none';
         panel.classList.remove('live-panel--active');
-        abrirTextModal(document.getElementById('output'), '📝 Editor de Texto · Micrófono');
+        abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
       }, 250);
     }
   }else{
@@ -2250,7 +2250,7 @@ document.getElementById('pbTranscribe').addEventListener('click', async ()=>{
     if(data.text){
       const frag = procesarFragmento(data.text);
       if(frag) anexar(frag);
-      abrirTextModal(document.getElementById('output'), '📝 Editor de Texto · Micrófono');
+      abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
       setEstado('✓ Whisper terminó. Texto añadido abajo.', false);
     }else{
       setEstado('Whisper no devolvió texto.', false);
@@ -2462,12 +2462,12 @@ document.getElementById('btnFileTranscribe').addEventListener('click', async ()=
     document.querySelector('.file-area').classList.add('has-results');
     fileOutput.scrollTop = 0;
     finalizarProgreso('fileProgLabel','fileProg', true, '✓ Transcripción completa');
-    abrirTextModal(document.getElementById('fileOutput'), '🎧 Editor de Texto · Archivo');
+    abrirTextModal(document.getElementById('fileOutput'), '🎧 Editor · Archivo');
   }catch(e){
     finalizarProgreso('fileProgLabel','fileProg', false, '✗ Error: ' + e.message);
   }finally{
     btn.disabled = false;
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir archivo';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir a texto';
     actualizarBotonesServidor();
   }
 });
@@ -2547,12 +2547,12 @@ document.getElementById('ytBtn').addEventListener('click', async ()=>{
     document.querySelector('.yt-area').classList.add('has-results');
     ytOutput.scrollTop = 0;
     finalizarProgreso('ytProgLabel','ytProg', true, '✓ Transcripción completa · fuente: ' + sourceLabel);
-    abrirTextModal(document.getElementById('ytOutput'), '▶️ Editor de Texto · YouTube');
+    abrirTextModal(document.getElementById('ytOutput'), '▶️ Editor · YouTube');
   }catch(e){
     finalizarProgreso('ytProgLabel','ytProg', false, '✗ Error: ' + e.message);
   }finally{
     actualizarBotonesServidor();
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir video';
   }
 });
 
@@ -2734,7 +2734,7 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
   const statusEl = document.getElementById('textModalImproveStatus');
 
   btnEl.disabled = true;
-  btnEl.innerHTML = `<span class="spin"></span><span id="${labelId}">Analizando…</span>`;
+  btnEl.innerHTML = `<span class="spin"></span><span id="${labelId}">Puliendo…</span>`;
   if (statusEl) statusEl.style.display = 'none';
 
   // Activar overlay de carga y personalizar según proveedor
@@ -2746,13 +2746,16 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
   if (overlay && overlayIcon && overlayTitle) {
     if (provider === 'gemini') {
       overlayIcon.textContent = '✦';
-      overlayTitle.textContent = 'Mejorando con Gemini';
+      overlayTitle.textContent = 'Puliendo con Gemini';
     } else if (provider === 'anthropic') {
       overlayIcon.textContent = '✍️';
-      overlayTitle.textContent = 'Mejorando con Claude';
+      overlayTitle.textContent = 'Puliendo con Claude';
+    } else if (provider === 'mistral') {
+      overlayIcon.textContent = '🌬️';
+      overlayTitle.textContent = 'Puliendo con Mistral';
     } else {
       overlayIcon.textContent = '⚡';
-      overlayTitle.textContent = 'Optimizando texto';
+      overlayTitle.textContent = 'Puliendo tu texto';
     }
     overlay.style.display = 'flex';
     overlay.offsetHeight; // Forzar reflow
@@ -2796,7 +2799,7 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
     if (data.text) {
       const suggestedText = data.text.trim();
       if (suggestedText === txt) {
-        _mostrarToastMejora('El texto ya está en su mejor versión', false);
+        _mostrarToastMejora('El texto ya está pulido', false);
         return;
       }
 
@@ -2814,12 +2817,12 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
       if (noticeEl) {
         if (!data.ia_used) {
           noticeEl.style.display = 'flex';
-          let msg = '<b>Mejora local básica activa:</b> Para activar Inteligencia Artificial (Gemini o Claude) y obtener mejores resultados, debes configurar tu API Key.';
-          let btnTxt = '⚙️ Configurar API Key';
+          let msg = '<b>Mejora local activa:</b> Configura una clave de API (Gemini, Mistral o Claude) para pulir el texto con IA.';
+          let btnTxt = '⚙️ Configurar IA';
           let errDetail = '';
           if (data.error_detail) {
-            msg = '<b>La API de Inteligencia Artificial falló:</b> Se aplicó la mejora heurística local como alternativa.';
-            btnTxt = '⚙️ Revisar Configuración';
+            msg = '<b>La IA no respondió:</b> Se aplicó la corrección local como alternativa.';
+            btnTxt = '⚙️ Revisar configuración';
             errDetail = `<div style="font-size:11px;color:#FF8FA3;background:rgba(255,59,92,.06);border:1px solid rgba(255,59,92,.25);padding:6px 10px;border-radius:8px;margin-top:4px;font-family:monospace;word-break:break-all;"><b>Detalle del error:</b> ${data.error_detail}</div>`;
           }
           noticeEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex:none;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -2838,7 +2841,7 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
       }
 
       if (data.ia_used) {
-        const provName = data.provider === 'gemini' ? 'Gemini' : 'Claude';
+        const provName = data.provider === 'gemini' ? 'Gemini' : data.provider === 'mistral' ? 'Mistral' : 'Claude';
         badgeEl.textContent = `✦ IA (${provName})`;
         badgeEl.style.cssText = 'font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: linear-gradient(135deg,rgba(255,122,24,.2),rgba(255,45,85,.2)); border: 1px solid rgba(255,122,24,.4); color: #FFC79A; margin-left: 8px;';
       } else {
@@ -2889,9 +2892,9 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
 
             // Toast de confirmación
             if (data.ia_used) {
-              _mostrarToastMejora('✦ Texto mejorado con IA', true);
+              _mostrarToastMejora('✦ Texto pulido con IA', true);
             } else {
-              _mostrarToastMejora('⚡ Texto mejorado', false);
+              _mostrarToastMejora('⚡ Texto pulido', false);
             }
 
             // Cambiar el botón original a "Deshacer" por 8 segundos
@@ -2956,13 +2959,13 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
 
 // Registrar triggers para abrir el modal
 document.getElementById('btnShowText').addEventListener('click', () => {
-  abrirTextModal(document.getElementById('output'), '📝 Editor de Texto · Micrófono');
+  abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
 });
 document.getElementById('btnFileShowText').addEventListener('click', () => {
-  abrirTextModal(document.getElementById('fileOutput'), '🎧 Editor de Texto · Archivo');
+  abrirTextModal(document.getElementById('fileOutput'), '🎧 Editor · Archivo');
 });
 document.getElementById('btnYtShowText').addEventListener('click', () => {
-  abrirTextModal(document.getElementById('ytOutput'), '▶️ Editor de Texto · YouTube');
+  abrirTextModal(document.getElementById('ytOutput'), '▶️ Editor · YouTube');
 });
 
 // Registrar eventos de corrección (cada panel usa su propio selector de idioma)

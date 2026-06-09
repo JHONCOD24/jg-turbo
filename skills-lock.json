@@ -1,11 +1,26 @@
 {
   "version": 1,
   "skills": {
+    "affiliate-marketing-2026": {
+      "source": "Skills/affiliate-marketing-2026.skill",
+      "sourceType": "local",
+      "computedHash": "44a795cefeec9f3982477425bcecedadeef3ffa8d2bfbe207c90945b83b752c8"
+    },
+    "arquitecto-fullstack": {
+      "source": "Skills/arquitecto-fullstack (1).skill",
+      "sourceType": "local",
+      "computedHash": "6cf759e8183dcafe275c87098be7ff84447479cae604b27ef36d4722cd65357f"
+    },
     "brandkit": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
       "skillPath": "skills/brandkit/SKILL.md",
       "computedHash": "735007879f5110aeae1e981a53fe74a12afde70347f9773dacd50e4697a091bf"
+    },
+    "conversion-web": {
+      "source": "Skills/conversion-web.skill",
+      "sourceType": "local",
+      "computedHash": "ffcf04fa2be7a57a85a9cff8d3512e68e2665a1dea207c0f03ad5fbf980e416a"
     },
     "design-taste-frontend": {
       "source": "Leonxlnx/taste-skill",
@@ -18,6 +33,11 @@
       "sourceType": "github",
       "skillPath": "skills/taste-skill-v1/SKILL.md",
       "computedHash": "8d59c96751feacf88f341a43151eae6f4fd748978884c4552293b8841573d776"
+    },
+    "diseno-ui-responsive": {
+      "source": "Skills/diseno-ui-responsive.skill",
+      "sourceType": "local",
+      "computedHash": "89df46c0751031a2d7c718e2bbeefb5ff89758f47841b80d35bd55bfe7dadfb3"
     },
     "full-output-enforcement": {
       "source": "Leonxlnx/taste-skill",
@@ -61,11 +81,21 @@
       "skillPath": "skills/brutalist-skill/SKILL.md",
       "computedHash": "e66e5a2a8b73cef79ab6546459c665e8b983645689c5f3772f7eed8b9f1e8e0e"
     },
+    "lanzador-meta-ads": {
+      "source": "Skills/lanzador-meta-ads.skill",
+      "sourceType": "local",
+      "computedHash": "6786808c0d76186b1f686374eb34be69b4893ed58b26673cccb9c08b67034018"
+    },
     "minimalist-ui": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
       "skillPath": "skills/minimalist-skill/SKILL.md",
       "computedHash": "7e88897e0371184e97a82b8d9ef080323c13f21eb067b58ef71eb05173a08ac2"
+    },
+    "redactor-maestro": {
+      "source": "Skills/redactor-maestro.skill",
+      "sourceType": "local",
+      "computedHash": "14d9f84371cb5a1d36f1487f780595bcb2b20341d0b820561f9c602f8e821ad6"
     },
     "redesign-existing-projects": {
       "source": "Leonxlnx/taste-skill",

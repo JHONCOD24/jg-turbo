@@ -448,3 +448,140 @@ def transcribe_youtube(req: YouTubeRequest):
         raise HTTPException(status_code=400, detail="URL de YouTube no válida.")
     # Implementación del endpoint para YouTube
     # ...
+
+# ── /improve ───────────────────────────────────────────────────────────────────
+
+class ImproveRequest(BaseModel):
+    text: str
+    language: str = "es"
+    provider: str = "gemini"   # "gemini" | "anthropic"
+    api_key: str = ""
+
+def _mejorar_heuristico(texto: str) -> str:
+    """Mejora local sin IA: elimina muletillas, limpia repeticiones, mejora puntuación y estructura."""
+    # 1. Normalizar espacios y saltos
+    texto = re.sub(r"\r\n|\r", "\n", texto)
+    texto = re.sub(r" {2,}", " ", texto).strip()
+
+    # 2. Eliminar muletillas y sonidos de relleno (español e inglés)
+    muletillas = [
+        r"\b(eh+|ah+|oh+|uh+|mm+|hmm+|eeh+|aah+|uhh+|umm+)\b",
+        r"\b(bueno pues|bueno|pues bueno|pues|a ver|o sea|este+|entonces este)\b",
+        r"\b(o sea que|es que|la verdad es que|la verdad)\b",
+        r"\b(¿no\?|¿verdad\?|¿sí\?|¿entiendes\?)\s*",
+        r"\b(no sé|o algo así|y tal|y eso)\b",
+        r"\b(como que|o cómo|como|digamos)\b(?=\s+[^,])",
+        r"\b(literalmente|básicamente|obviamente)\b(?=\s)",
+    ]
+    for patron in muletillas:
+        texto = re.sub(patron, " ", texto, flags=re.IGNORECASE)
+
+    # 3. Eliminar repeticiones de palabras consecutivas (ej: "que que", "y y", "de de")
+    texto = re.sub(r"\b(\w{2,})\s+\1\b", r"\1", texto, flags=re.IGNORECASE)
+    # Repeticiones de frases cortas (hasta 4 palabras)
+    texto = re.sub(r"\b(\w+(?: \w+){0,3})[,.]?\s+\1\b", r"\1", texto, flags=re.IGNORECASE)
+
+    # 4. Limpiar comas y puntos extra
+    texto = re.sub(r"[,،]{2,}", ",", texto)
+    texto = re.sub(r"\s+([,.:;!?])", r"\1", texto)
+    texto = re.sub(r"([,])(?!\s)", r"\1 ", texto)
+
+    # 5. Normalizar espacios de nuevo tras limpiezas
+    texto = re.sub(r" {2,}", " ", texto).strip()
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+
+    # 6. Capitalizar primera letra de cada oración
+    if texto:
+        texto = texto[0].upper() + texto[1:]
+    texto = re.sub(
+        r"([.!?…]\s+)([a-záéíóúüñ])",
+        lambda m: m.group(1) + m.group(2).upper(),
+        texto,
+    )
+
+    # 7. Asegurar punto final
+    texto = texto.strip()
+    if texto and texto[-1] not in ".!?…":
+        texto += "."
+
+    return texto
+
+@app.post("/improve")
+async def improve_text(req: ImproveRequest):
+    """Mejora el texto con IA (Gemini o Claude) o con heurística local como fallback."""
+    txt = req.text.strip()
+    if not txt:
+        raise HTTPException(status_code=400, detail="Texto vacío.")
+
+    lang = req.language if req.language and req.language != "auto" else "es"
+    error_detail = None
+
+    prompt = (
+        f"Eres un editor profesional de textos transcritos de audio (idioma: {lang}). "
+        "Mejora el texto siguiendo este orden: (1) estructura y orden lógico, "
+        "(2) claridad — cada frase debe entenderse a la primera, "
+        "(3) concisión — elimina muletillas, repeticiones y relleno "
+        "(«es importante mencionar», «en el mundo actual», gerundios encadenados), "
+        "(4) estilo — ritmo variado, tono consistente, ortografía impecable con ¿ y ¡ en español. "
+        "Usa verbos fuertes y frases concretas. No cambies el significado ni añadas datos, "
+        "cifras ni información nueva. Conserva la voz del autor. "
+        "Devuelve ÚNICAMENTE el texto mejorado, sin explicaciones ni comentarios.\n\n"
+        f"Texto:\n{txt}"
+    )
+
+    if req.api_key:
+        if req.provider == "anthropic":
+            try:
+                import anthropic as _ant
+                client = _ant.Anthropic(api_key=req.api_key)
+                msg = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return {"text": msg.content[0].text.strip(), "ia_used": True, "provider": "anthropic"}
+            except Exception as e:
+                error_detail = str(e)
+
+        elif req.provider == "gemini":
+            try:
+                import json as _json
+                import urllib.request as _ur
+                url = (
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"gemini-2.0-flash:generateContent?key={req.api_key}"
+                )
+                payload = _json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
+                http_req = _ur.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+                with _ur.urlopen(http_req, timeout=30) as r:
+                    data = _json.loads(r.read())
+                improved = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                return {"text": improved, "ia_used": True, "provider": "gemini"}
+            except Exception as e:
+                error_detail = str(e)
+
+        elif req.provider == "mistral":
+            try:
+                import json as _json
+                import urllib.request as _ur
+                url = "https://api.mistral.ai/v1/chat/completions"
+                payload = _json.dumps({
+                    "model": "mistral-small-latest",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 2048,
+                    "temperature": 0.3,
+                }).encode()
+                http_req = _ur.Request(
+                    url, data=payload,
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {req.api_key}"},
+                    method="POST",
+                )
+                with _ur.urlopen(http_req, timeout=30) as r:
+                    data = _json.loads(r.read())
+                improved = data["choices"][0]["message"]["content"].strip()
+                return {"text": improved, "ia_used": True, "provider": "mistral"}
+            except Exception as e:
+                error_detail = str(e)
+
+    # Fallback heurístico
+    return {"text": _mejorar_heuristico(txt), "ia_used": False, "provider": None, "error_detail": error_detail}
