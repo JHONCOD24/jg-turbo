@@ -11,13 +11,40 @@
 <style>
   :root{
     --bg:#0B0D12; --bg-2:#0F131B; --surface:#161B26; --surface-2:#1C2230;
-    --line:rgba(255,255,255,.08); --text:#E9EDF6; --muted:#8A93A6; --muted-2:#5E677A;
+    --line:rgba(255,255,255,.08); --text:#E9EDF6; --muted:#9098AC; --muted-2:#6C7488;
     --hot-1:#FF7A18; --hot-2:#FF2D55; --cyan:#27E1C1; --cyan-glow:rgba(39,225,193,.35);
     --rec:#FF3B5C; --ok:#27E1C1; --radius:18px; --shadow:0 18px 50px -20px rgba(0,0,0,.8);
+    /* Escala de espaciado (múltiplos de 4) */
+    --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+    --space-5:20px; --space-6:24px; --space-8:32px;
+    /* Tipografía fluida */
+    --fs-xs:clamp(10.5px, 0.65vw + 9px, 11.5px);
+    --fs-sm:clamp(11.5px, 0.6vw + 10.5px, 12.5px);
+    --fs-md:clamp(13px, 0.5vw + 12px, 14.5px);
+    --fs-lg:clamp(15px, 0.7vw + 13.5px, 17px);
+    --fs-xl:clamp(18px, 1.6vw + 14px, 22px);
+    --fs-2xl:clamp(20px, 3.6vw + 12px, 28px);
+    --t:.18s ease;
+    --focus:0 0 0 2px var(--bg), 0 0 0 4px var(--cyan);
     font-family:'Figtree',system-ui,-apple-system,sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
+  /* Foco visible accesible (solo teclado) */
+  :focus{outline:none}
+  button:focus-visible, a:focus-visible, [role=tab]:focus-visible,
+  input:focus-visible, select:focus-visible, textarea:focus-visible,
+  .chip:focus-visible, .mini-btn:focus-visible, .btn:focus-visible,
+  .btn-back:focus-visible, .tab:focus-visible, .recBtn:focus-visible{
+    outline:none; box-shadow:var(--focus); border-radius:10px;
+  }
+  /* Respetar prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:.001ms !important; animation-iteration-count:1 !important;
+      transition-duration:.001ms !important; scroll-behavior:auto !important;
+    }
+  }
   body{
     background:
       radial-gradient(900px 500px at 80% -10%, rgba(255,122,24,.12), transparent 60%),
@@ -587,7 +614,7 @@
       <div class="opts">
         <div class="chip on" data-opt="punt" data-tooltip="Convierte «punto», «coma» o «nuevo párrafo» en signos de puntuación reales."><span class="sw"></span>Puntuación por voz</div>
         <div class="chip on" data-opt="preg" data-tooltip="Si empiezas con una palabra de pregunta, añade automáticamente ¿ al inicio y ? al final."><span class="sw"></span>Modo pregunta ¿?</div>
-        <div class="chip" data-opt="code" data-tooltip="Convierte «abrir paréntesis» o «etiqueta div» en símbolos de código."><span class="sw"></span>Modo código { } ( )</div>
+        <div class="chip" data-opt="code" data-tooltip="Convierte «abrir paréntesis» o «etiqueta div» en símbolos de código. Se activa solo al detectar que dictas código; tócalo para fijarlo manualmente."><span class="sw"></span>Modo código { } ( )</div>
         <div class="chip on" data-opt="caps" data-tooltip="Pone en mayúscula la primera letra de cada oración y tras signos finales (. ! ?)."><span class="sw"></span>Mayúsculas auto</div>
         <div class="chip on" data-opt="auto" data-tooltip="Corrige términos técnicos y marcas (ej.: javascript → JavaScript, github → GitHub)."><span class="sw"></span>Autocorrección</div>
         <div class="lang">
@@ -1414,11 +1441,15 @@ tabs.forEach(t=>t.addEventListener('click',()=>{
 
 /* ── 2) Opciones inteligentes ───────────────────────────────────────── */
 const opt = { punt:true, preg:true, code:false, caps:true, auto:true };
+// Cuando el usuario toca manualmente el chip de código, respetamos su decisión
+// y dejamos de auto-activarlo/desactivarlo durante la sesión.
+let codeModoManual = false;
 document.querySelectorAll('.chip[data-opt]').forEach(chip=>{
   chip.addEventListener('click',()=>{
     const k = chip.dataset.opt;
     opt[k] = !opt[k];
     chip.classList.toggle('on', opt[k]);
+    if(k === 'code') codeModoManual = true;
   });
 });
 
@@ -1583,8 +1614,36 @@ function esPregunta(frase){
   const limpia = frase.trim().toLowerCase().replace(/^[¿¡"'(]+/,'');
   return PREG_INICIO.some(p => limpia === p || limpia.startsWith(p+' '));
 }
+// Señales estructurales fuertes: frases que casi solo se dicen al dictar código
+// (se excluyen a propósito «etiqueta X», «menor/mayor que» por ser comunes en habla normal).
+const CODE_SIGNAL_FUERTE = /\b((abrir|abre|cerrar|cierra)\s+(par[ée]ntesis|llave|corchete)|(abrir|cerrar)\s+etiqueta\s+\p{L}+|gui(ó|o)n bajo|barra invertida|contrabarra)\b/iu;
+// Palabras clave de programación poco frecuentes en el habla cotidiana:
+// hacen falta 2 o más en el mismo fragmento para encender el modo.
+const CODE_KEYWORDS = /\b(function|const|var|require|async|await|def|println|printf|elif|foreach|endif|undefined|boolean|console\s*\.?\s*log|null|void)\b/giu;
+
+// Detección conservadora: 1 señal estructural fuerte, o 2+ palabras clave de programación.
+function detectarModoCodigo(crudo){
+  if(CODE_SIGNAL_FUERTE.test(crudo)) return true;
+  const kw = crudo.match(CODE_KEYWORDS);
+  return !!(kw && kw.length >= 2);
+}
+
+function activarModoCodigoAuto(){
+  opt.code = true;
+  const chip = document.querySelector('.chip[data-opt="code"]');
+  if(chip) chip.classList.add('on');
+  if(typeof _mostrarToastMejora === 'function'){
+    _mostrarToastMejora('🧩 Modo código activado automáticamente', false);
+  }
+}
+
 function procesarFragmento(crudo, esInicioDeOracion = true){
   let s = crudo;
+  // Auto-activación de Modo código al detectar que se está dictando código,
+  // salvo que el usuario lo haya gestionado manualmente.
+  if(!opt.code && !codeModoManual && detectarModoCodigo(crudo)){
+    activarModoCodigoAuto();
+  }
   if(opt.code) s = aplicar(CODE, s);
   if(opt.punt) s = aplicar(PUNT, s);
   if(opt.auto){
@@ -1601,6 +1660,18 @@ function procesarFragmento(crudo, esInicioDeOracion = true){
   return s;
 }
 function contarPalabras(t){ return t.trim() ? t.trim().split(/\s+/).length : 0; }
+// Convierte las señales de confianza de Whisper en un aviso para el usuario.
+// Devuelve '' cuando la transcripción es fiable.
+function mensajeConfianza(data){
+  if(!data) return '';
+  const partes = [];
+  if(data.removed_hallucinations > 0) partes.push(`se omitieron ${data.removed_hallucinations} tramo(s) sin voz clara`);
+  if(data.low_confidence_segments > 0) partes.push(`${data.low_confidence_segments} tramo(s) de baja confianza`);
+  if(data.needs_review){
+    return '⚠️ Audio poco claro: ' + (partes.join(' · ') || 'revisa el resultado') + '. Verifica antes de usar.';
+  }
+  return '';
+}
 function actualizarContador(){
   const t = output.value.trim();
   countEl.textContent = contarPalabras(t) + ' palabras · ' + output.value.length + ' caracteres';
@@ -2251,7 +2322,8 @@ document.getElementById('pbTranscribe').addEventListener('click', async ()=>{
       const frag = procesarFragmento(data.text);
       if(frag) anexar(frag);
       abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
-      setEstado('✓ Whisper terminó. Texto añadido abajo.', false);
+      const avisoMic = mensajeConfianza(data);
+      setEstado(avisoMic ? '✓ Whisper terminó · ' + avisoMic : '✓ Whisper terminó. Texto añadido abajo.', false);
     }else{
       setEstado('Whisper no devolvió texto.', false);
     }
@@ -2461,7 +2533,8 @@ document.getElementById('btnFileTranscribe').addEventListener('click', async ()=
     document.getElementById('fileResultArea').style.display = 'block';
     document.querySelector('.file-area').classList.add('has-results');
     fileOutput.scrollTop = 0;
-    finalizarProgreso('fileProgLabel','fileProg', true, '✓ Transcripción completa');
+    const avisoFile = mensajeConfianza(data);
+    finalizarProgreso('fileProgLabel','fileProg', true, avisoFile ? '✓ Transcripción completa · ' + avisoFile : '✓ Transcripción completa');
     abrirTextModal(document.getElementById('fileOutput'), '🎧 Editor · Archivo');
   }catch(e){
     finalizarProgreso('fileProgLabel','fileProg', false, '✗ Error: ' + e.message);
@@ -2546,7 +2619,8 @@ document.getElementById('ytBtn').addEventListener('click', async ()=>{
     document.getElementById('ytResultArea').style.display = 'block';
     document.querySelector('.yt-area').classList.add('has-results');
     ytOutput.scrollTop = 0;
-    finalizarProgreso('ytProgLabel','ytProg', true, '✓ Transcripción completa · fuente: ' + sourceLabel);
+    const avisoYt = mensajeConfianza(data);
+    finalizarProgreso('ytProgLabel','ytProg', true, '✓ Transcripción completa · fuente: ' + sourceLabel + (avisoYt ? ' · ' + avisoYt : ''));
     abrirTextModal(document.getElementById('ytOutput'), '▶️ Editor · YouTube');
   }catch(e){
     finalizarProgreso('ytProgLabel','ytProg', false, '✗ Error: ' + e.message);

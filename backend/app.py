@@ -271,6 +271,49 @@ def corregir_terminos_tecnicos(texto: str) -> str:
 
     return texto
 
+# ── Anti-alucinación de Whisper ─────────────────────────────────────────────────
+# Frases que Whisper "inventa" típicamente sobre silencios, música o ruido de fondo.
+_FRASES_ALUCINACION = [
+    r"subt[íi]tulos?\b.*\bamara\.org",
+    r"subt[íi]tulos?\b.*\bcomunidad",
+    r"subtitles?\b.*\bamara\.org",
+    r"gracias por ver (el|este) (v[íi]deo|video)",
+    r"no olvides? suscribirte",
+    r"suscr[íi]bete al canal",
+    r"thanks? for watching",
+    r"please (like and )?subscribe",
+    r"\b(www\.)?[\w\-]+\.(com|net|org)/[\w\-]*$",
+]
+
+def _confianza_segmento(seg: dict) -> float:
+    """Estima la confianza (0..1) de un segmento a partir de las métricas internas
+    de Whisper. Mapea avg_logprob (~-0.1 excelente, ~-1.5 muy malo) a una escala 0..1."""
+    logprob = seg.get("avg_logprob", -0.3)
+    conf = (logprob + 1.5) / 1.4
+    return round(max(0.0, min(1.0, conf)), 3)
+
+def _es_alucinacion(seg: dict) -> bool:
+    """Detecta segmentos probablemente alucinados por Whisper (audio difuso o silencio).
+    Conservador: solo descarta cuando hay señales claras, para no perder voz real."""
+    texto = (seg.get("text") or "").strip().lower()
+    if not texto:
+        return True
+    no_speech = seg.get("no_speech_prob", 0.0)
+    logprob = seg.get("avg_logprob", 0.0)
+    comp = seg.get("compression_ratio", 1.0)
+    # 1) Silencio detectado (alta prob. de no-voz) + texto poco fiable
+    if no_speech > 0.6 and logprob < -0.8:
+        return True
+    # 2) Bucle de repetición: ratio de compresión alto (umbral propio de Whisper)
+    if comp > 2.4 and logprob < -0.4:
+        return True
+    # 3) Frases de relleno que Whisper inventa en tramos sin voz
+    for patron in _FRASES_ALUCINACION:
+        if re.search(patron, texto):
+            return True
+    return False
+
+
 def transcribir_archivo(ruta: Path, idioma: Optional[str] = None, preview: bool = False) -> dict:
     if not modelo_listo():
         if modelo_estado == "cargando":
@@ -304,18 +347,47 @@ def transcribir_archivo(ruta: Path, idioma: Optional[str] = None, preview: bool 
         with transcribe_lock:
             resultado = modelo.transcribe(input_path, **opciones)
 
-        texto_limpio = corregir_terminos_tecnicos(resultado["text"].strip())
+        segmentos_raw = resultado.get("segments", [])
+        segmentos = []
+        partes_texto = []
+        baja_confianza = 0
+        alucinaciones = 0
+
+        for s in segmentos_raw:
+            if _es_alucinacion(s):
+                alucinaciones += 1
+                continue
+            texto_seg = corregir_terminos_tecnicos((s.get("text") or "").strip())
+            if not texto_seg:
+                continue
+            conf = _confianza_segmento(s)
+            es_dudoso = conf < 0.45
+            if es_dudoso:
+                baja_confianza += 1
+            partes_texto.append(texto_seg)
+            segmentos.append({
+                "start": round(s["start"], 2),
+                "end":   round(s["end"],   2),
+                "text":  texto_seg,
+                "confidence": conf,
+                "low_confidence": es_dudoso,
+            })
+
+        texto_limpio = corregir_terminos_tecnicos(" ".join(partes_texto)) if partes_texto else ""
+        # Respaldo: si todo se filtró pero Whisper sí devolvió texto, conservarlo
+        if not texto_limpio and (resultado.get("text") or "").strip():
+            texto_limpio = corregir_terminos_tecnicos(resultado["text"].strip())
+
+        total = len(segmentos)
+        needs_review = alucinaciones > 0 or (total > 0 and baja_confianza / total > 0.25)
+
         return {
             "text": texto_limpio,
             "language": resultado.get("language", "desconocido"),
-            "segments": [
-                {
-                    "start": round(s["start"], 2),
-                    "end":   round(s["end"],   2),
-                    "text":  corregir_terminos_tecnicos(s["text"].strip()),
-                }
-                for s in resultado.get("segments", [])
-            ],
+            "segments": segmentos,
+            "low_confidence_segments": baja_confianza,
+            "removed_hallucinations": alucinaciones,
+            "needs_review": needs_review,
         }
     except Exception as e:
         import traceback
@@ -438,16 +510,139 @@ class YouTubeRequest(BaseModel):
     language: str = "auto"
     prefer_subtitles: bool = True
 
+def _vtt_a_texto(contenido: str) -> str:
+    """Convierte un archivo de subtítulos VTT a texto plano, sin marcas de tiempo
+    ni líneas duplicadas (frecuentes en subtítulos automáticos con efecto rodante)."""
+    texto_partes = []
+    anterior = None
+    for linea in contenido.splitlines():
+        linea = linea.strip()
+        if not linea or linea.upper().startswith("WEBVTT") or "-->" in linea:
+            continue
+        if re.match(r"^\d+$", linea) or linea.startswith(("Kind:", "Language:")):
+            continue
+        linea = re.sub(r"<[^>]+>", "", linea)
+        if linea and linea != anterior:
+            texto_partes.append(linea)
+            anterior = linea
+    return " ".join(texto_partes)
+
+def _obtener_subtitulos(info: dict, idioma_corto: Optional[str]):
+    """Busca subtítulos (manuales o automáticos) en el video y devuelve (texto, idioma)
+    o (None, None) si no hay disponibles."""
+    import urllib.request as _ur
+
+    for fuente in ("subtitles", "automatic_captions"):
+        subs = info.get(fuente) or {}
+        if not subs:
+            continue
+
+        candidatos = []
+        if idioma_corto:
+            candidatos += [k for k in subs if k == idioma_corto or k.startswith(idioma_corto + "-")]
+        for preferido in ("es", "en"):
+            candidatos += [k for k in subs if k == preferido and k not in candidatos]
+        candidatos += [k for k in subs if k not in candidatos]
+
+        for lang in candidatos:
+            tracks = subs.get(lang) or []
+            track = next((t for t in tracks if t.get("ext") == "vtt"), tracks[0] if tracks else None)
+            if not track or not track.get("url"):
+                continue
+            try:
+                with _ur.urlopen(track["url"], timeout=20) as r:
+                    contenido = r.read().decode("utf-8", errors="ignore")
+                texto = _vtt_a_texto(contenido)
+                if texto:
+                    return texto, lang
+            except Exception:
+                continue
+
+    return None, None
+
 @app.post("/youtube")
 def transcribe_youtube(req: YouTubeRequest):
-    """Recibe una URL de YouTube y devuelve el texto transcrito."""
+    """Recibe una URL de YouTube y devuelve el texto: primero intenta usar los
+    subtítulos del video y, si no hay disponibles, descarga el audio y lo
+    transcribe con Whisper."""
     yt_pattern = re.compile(
         r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)[\w\-]+"
     )
     if not yt_pattern.search(req.url):
         raise HTTPException(status_code=400, detail="URL de YouTube no válida.")
-    # Implementación del endpoint para YouTube
-    # ...
+
+    import yt_dlp
+
+    idioma = req.language if req.language and req.language != "auto" else None
+    idioma_corto = idioma.split("-")[0].lower() if idioma else None
+
+    try:
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
+            info = ydl.extract_info(req.url, download=False)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"No se pudo procesar el video: {e}")
+
+    titulo = info.get("title", "")
+
+    # 1. Intentar usar subtítulos (manuales o automáticos) — es más rápido
+    if req.prefer_subtitles:
+        texto_subs, lang_subs = _obtener_subtitulos(info, idioma_corto)
+        if texto_subs:
+            return JSONResponse({
+                "text": corregir_terminos_tecnicos(texto_subs),
+                "language": lang_subs,
+                "title": titulo,
+                "source": "subtitles",
+            })
+
+    # 2. Fallback: descargar el audio y transcribirlo con Whisper
+    if not modelo_listo():
+        if modelo_estado == "cargando":
+            raise HTTPException(status_code=503, detail="El modelo Whisper aún se está cargando. Espera unos segundos.")
+        raise HTTPException(status_code=500, detail=f"Modelo Whisper no disponible: {modelo_error or 'error desconocido'}")
+
+    tmp_id = uuid.uuid4()
+    ydl_opts_audio = {
+        "format": "bestaudio/best",
+        "outtmpl": str(TEMP_DIR / f"{tmp_id}.%(ext)s"),
+        "quiet": True,
+        "no_warnings": True,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "128",
+        }],
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+            ydl.download([req.url])
+
+        candidatos = list(TEMP_DIR.glob(f"{tmp_id}.*"))
+        if not candidatos:
+            raise HTTPException(status_code=500, detail="No se pudo descargar el audio del video.")
+        audio_path = candidatos[0]
+
+        resultado = transcribir_archivo(audio_path, req.language)
+        if "_error" in resultado:
+            raise HTTPException(status_code=500, detail=resultado["_error"])
+
+        return JSONResponse({
+            "text": resultado["text"],
+            "language": resultado.get("language", "desconocido"),
+            "title": titulo,
+            "source": "whisper",
+            "segments": resultado.get("segments", []),
+            "low_confidence_segments": resultado.get("low_confidence_segments", 0),
+            "removed_hallucinations": resultado.get("removed_hallucinations", 0),
+            "needs_review": resultado.get("needs_review", False),
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar el video: {e}")
+    finally:
+        for f in TEMP_DIR.glob(f"{tmp_id}.*"):
+            limpiar_archivo(f)
 
 # ── /improve ───────────────────────────────────────────────────────────────────
 
@@ -608,7 +803,7 @@ async def improve_text(req: ImproveRequest):
                 )
                 return {"text": msg.content[0].text.strip(), "ia_used": True, "provider": "anthropic"}
             except Exception as e:
-                error_detail = str(e)
+                error_detail = _detalle_error_ia("Anthropic (Claude)", e)
 
         elif req.provider == "gemini":
             try:
@@ -625,7 +820,7 @@ async def improve_text(req: ImproveRequest):
                 improved = data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 return {"text": improved, "ia_used": True, "provider": "gemini"}
             except Exception as e:
-                error_detail = str(e)
+                error_detail = _detalle_error_ia("Gemini", e)
 
         elif req.provider == "mistral":
             try:
@@ -648,10 +843,25 @@ async def improve_text(req: ImproveRequest):
                 improved = data["choices"][0]["message"]["content"].strip()
                 return {"text": improved, "ia_used": True, "provider": "mistral"}
             except Exception as e:
-                error_detail = str(e)
+                error_detail = _detalle_error_ia("Mistral", e)
 
     # Fallback heurístico
     return {"text": _mejorar_heuristico(txt), "ia_used": False, "provider": None, "error_detail": error_detail}
+
+
+def _detalle_error_ia(nombre_proveedor: str, e: Exception) -> str:
+    """Convierte errores HTTP/SDK en un mensaje claro para el usuario."""
+    texto_error = str(e)
+    if "401" in texto_error or "Unauthorized" in texto_error or "authentication" in texto_error.lower():
+        return (
+            f"Clave de API de {nombre_proveedor} inválida, vencida o vacía. "
+            f"Revisa la clave en Configuración (sin espacios extra)."
+        )
+    if "403" in texto_error:
+        return f"Acceso denegado por {nombre_proveedor} (clave sin permisos o cuota agotada)."
+    if "429" in texto_error:
+        return f"Límite de uso alcanzado en {nombre_proveedor}. Intenta de nuevo más tarde."
+    return f"{nombre_proveedor}: {texto_error}"
 
 
 # ── /correct ────────────────────────────────────────────────────────────────────
