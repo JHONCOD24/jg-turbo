@@ -476,6 +476,24 @@ def _mejorar_heuristico(texto: str) -> str:
     for patron in muletillas:
         texto = re.sub(patron, " ", texto, flags=re.IGNORECASE)
 
+    # 2b. Eliminar frases de relleno típicas (ver edicion.md, sección "lista de caza")
+    frases_relleno = [
+        r"\bes importante (mencionar|destacar|señalar|recalcar) que\b",
+        r"\bcabe (destacar|mencionar|señalar|resaltar) que\b",
+        r"\bvale la pena (mencionar|destacar|aclarar) que\b",
+        r"\bhay que tener en cuenta que\b",
+        r"\ben el mundo (actual|de hoy)\b",
+        r"\bhoy en d[ií]a\b",
+        r"\ba d[ií]a de hoy\b",
+        r"\bsin lugar a dudas\b",
+        r"\ben términos generales\b",
+    ]
+    for patron in frases_relleno:
+        texto = re.sub(patron, "", texto, flags=re.IGNORECASE)
+
+    # 2c. Simplificar "el cual / la cual / los cuales / las cuales" -> "que"
+    texto = re.sub(r"\b(el|la|los|las)\s+(cual|cuales)\b", "que", texto, flags=re.IGNORECASE)
+
     # 3. Eliminar repeticiones de palabras consecutivas (ej: "que que", "y y", "de de")
     texto = re.sub(r"\b(\w{2,})\s+\1\b", r"\1", texto, flags=re.IGNORECASE)
     # Repeticiones de frases cortas (hasta 4 palabras)
@@ -485,6 +503,9 @@ def _mejorar_heuristico(texto: str) -> str:
     texto = re.sub(r"[,،]{2,}", ",", texto)
     texto = re.sub(r"\s+([,.:;!?])", r"\1", texto)
     texto = re.sub(r"([,])(?!\s)", r"\1 ", texto)
+    # Quitar comas/puntuación colgante al inicio o tras saltos de línea (por frases eliminadas)
+    texto = re.sub(r"^[\s,;:.]+", "", texto)
+    texto = re.sub(r"(\n)[\s,;:.]+", r"\1", texto)
 
     # 5. Normalizar espacios de nuevo tras limpiezas
     texto = re.sub(r" {2,}", " ", texto).strip()
@@ -499,12 +520,58 @@ def _mejorar_heuristico(texto: str) -> str:
         texto,
     )
 
+    # 6b. Tildes diacríticas y normativa básica (edicion.md, sección 6)
+    texto = _corregir_normativa_basica(texto)
+
+    # 6c. Agregar signos de apertura ¿ ¡ que falten
+    texto = _agregar_signos_apertura(texto)
+
     # 7. Asegurar punto final
     texto = texto.strip()
     if texto and texto[-1] not in ".!?…":
         texto += "."
 
     return texto
+
+
+def _corregir_normativa_basica(texto: str) -> str:
+    """Aplica reglas normativas básicas del español (días/meses/idiomas en minúscula,
+    eliminación de tildes en demostrativos y 'solo' según la RAE)."""
+    dias_meses_idiomas = [
+        "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo",
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto",
+        "Septiembre", "Setiembre", "Octubre", "Noviembre", "Diciembre",
+        "Español", "Inglés", "Francés", "Alemán", "Italiano", "Portugués",
+    ]
+    for palabra in dias_meses_idiomas:
+        texto = re.sub(
+            rf"(?<![.!?¿¡\n]\s)\b{palabra}\b",
+            palabra.lower(),
+            texto,
+        )
+
+    # "Solo" y demostrativos (este/ese/aquel...) ya no llevan tilde según la RAE
+    texto = re.sub(r"\bsólo\b", "solo", texto, flags=re.IGNORECASE)
+    for dem in ["éste", "ésta", "éstos", "éstas", "ése", "ésa", "ésos", "ésas", "aquél", "aquélla", "aquéllos", "aquéllas"]:
+        texto = re.sub(rf"\b{dem}\b", dem.replace("é", "e").replace("á", "a"), texto, flags=re.IGNORECASE)
+
+    return texto
+
+
+def _agregar_signos_apertura(texto: str) -> str:
+    """Asegura que las oraciones interrogativas o exclamativas tengan ¿ o ¡ de apertura."""
+    partes = re.split(r"(?<=[.!?…])\s+", texto)
+    resultado = []
+    for parte in partes:
+        p = parte.strip()
+        if not p:
+            continue
+        if p.endswith("?") and "¿" not in p:
+            p = "¿" + p
+        elif p.endswith("!") and "¡" not in p:
+            p = "¡" + p
+        resultado.append(p)
+    return " ".join(resultado)
 
 @app.post("/improve")
 async def improve_text(req: ImproveRequest):
@@ -585,3 +652,67 @@ async def improve_text(req: ImproveRequest):
 
     # Fallback heurístico
     return {"text": _mejorar_heuristico(txt), "ia_used": False, "provider": None, "error_detail": error_detail}
+
+
+# ── /correct ────────────────────────────────────────────────────────────────────
+
+class CorrectRequest(BaseModel):
+    text: str
+    language: str = "es"
+
+# Mapeo de códigos de idioma del frontend a códigos de LanguageTool
+_LT_LANG_MAP = {
+    "es": "es", "es-ES": "es", "es-MX": "es", "es-CO": "es", "es-AR": "es", "es-419": "es",
+    "en": "en-US", "en-US": "en-US", "en-GB": "en-GB",
+    "fr": "fr", "fr-FR": "fr",
+    "de": "de-DE", "de-DE": "de-DE",
+    "pt": "pt-BR", "pt-BR": "pt-BR", "pt-PT": "pt-PT",
+    "it": "it",
+}
+
+@app.post("/correct")
+async def correct_text(req: CorrectRequest):
+    """Corrige ortografía, gramática y tildes. Usa LanguageTool y, si no está disponible,
+    aplica correcciones normativas locales básicas (tildes diacríticas, mayúsculas, signos ¿¡)."""
+    txt = req.text.strip()
+    if not txt:
+        raise HTTPException(status_code=400, detail="Texto vacío.")
+
+    lt_lang = _LT_LANG_MAP.get(req.language, "es")
+
+    try:
+        import json as _json
+        import urllib.request as _ur
+        import urllib.parse as _up
+
+        url = "https://api.languagetool.org/v2/check"
+        payload = _up.urlencode({"text": txt, "language": lt_lang}).encode()
+        http_req = _ur.Request(url, data=payload, method="POST")
+        with _ur.urlopen(http_req, timeout=15) as r:
+            result = _json.loads(r.read())
+
+        # Aplicar reemplazos de atrás hacia adelante para no desajustar los offsets
+        matches = sorted(result.get("matches", []), key=lambda m: m["offset"], reverse=True)
+        corregido = txt
+        aplicados = 0
+        for m in matches:
+            replacements = m.get("replacements", [])
+            if replacements:
+                start = m["offset"]
+                end = start + m["length"]
+                corregido = corregido[:start] + replacements[0]["value"] + corregido[end:]
+                aplicados += 1
+
+        return {"text": corregido, "matches": aplicados}
+    except Exception as e:
+        # Fallback: correcciones normativas locales básicas
+        corregido = re.sub(r"\s+([,.:;!?])", r"\1", txt)
+        corregido = re.sub(r"([,])(?!\s)", r"\1 ", corregido)
+        corregido = re.sub(r" {2,}", " ", corregido).strip()
+        if corregido:
+            corregido = corregido[0].upper() + corregido[1:]
+        corregido = _corregir_normativa_basica(corregido)
+        corregido = _agregar_signos_apertura(corregido)
+        if corregido and corregido[-1] not in ".!?…":
+            corregido += "."
+        return {"text": corregido, "matches": 0, "error_detail": str(e)}
