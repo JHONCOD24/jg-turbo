@@ -1,3 +1,4 @@
+<!-- JG Turbo v2.1 -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1114,6 +1115,8 @@
      más potente en la grabación del mic
    ============================================================ */
 
+console.log('JG Turbo v2.1');
+
 /* ── 0) Conexión con el servidor ──────────────────────────────────────── */
 
 // Auto-detect: si la app se sirve desde http://localhost:8000, usar el mismo origen.
@@ -1453,13 +1456,18 @@ document.querySelectorAll('.chip[data-opt]').forEach(chip=>{
   });
 });
 
-let sensThreshold = 0;
 const sensSlider = document.getElementById('sensSlider');
 const sensVal    = document.getElementById('sensVal');
-sensSlider.addEventListener('input',()=>{
-  sensVal.textContent = sensSlider.value;
-  sensThreshold = parseInt(sensSlider.value) * 2;
-});
+// Umbral de sensibilidad invertido: mayor valor del slider = mayor sensibilidad = menor umbral
+// Mapea el valor del slider [0..100] a un umbral [150..0]. Por defecto (50) el umbral es 75.
+let sensThreshold = Math.round((100 - parseInt(sensSlider?.value || '50')) * 1.5);
+
+if (sensSlider) {
+  sensSlider.addEventListener('input',()=>{
+    sensVal.textContent = sensSlider.value;
+    sensThreshold = Math.round((100 - parseInt(sensSlider.value)) * 1.5);
+  });
+}
 
 const output    = document.getElementById('output');
 const interimEl = document.getElementById('interim');
@@ -1722,6 +1730,7 @@ let textoEnVivoAcumulado = '';
 let previewInterval = null;
 let isTranscribingPreview = false;
 let activeWhisperController = null;
+let fallbackWhisperPorRed = false;
 
 // ── Variables para MediaRecorder (audio guardado) ──
 let mediaRecorder      = null;
@@ -1757,6 +1766,16 @@ function detenerTimer(){
   timerInterval = null;
 }
 
+function mostrarErrorMicrofono(msg){
+  setEstado(msg, false);
+  const unsupported = document.getElementById('unsupported');
+  if(!unsupported) return;
+  unsupported.innerHTML =
+    '<div class="notice err"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div>' +
+    msg +
+    '</div></div>';
+}
+
 if(!navigator.mediaDevices || !window.MediaRecorder){
   document.getElementById('unsupported').innerHTML =
     '<div class="notice warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>Tu navegador no puede grabar audio. Actualízalo o prueba Chrome o Edge.</div></div>';
@@ -1783,7 +1802,10 @@ function crearRecog(){
         let mejor = res[0];
         for(let j=1;j<res.length;j++){ if(res[j].confidence > mejor.confidence) mejor = res[j]; }
         const confPct = Math.round((mejor.confidence||0)*100);
-        if(sensThreshold > 0 && confPct < (sensThreshold/2)) continue;
+        // Filtrar según la confianza mínima derivada del control de sensibilidad del micrófono.
+        // Si el slider está en 50, se descartan los fragmentos con confianza menor al 50%.
+        const minConfidence = 100 - parseInt(sensSlider?.value || '50');
+        if(confPct < minConfidence) continue;
         
         // Acumular fragmento en vivo en vez de anexar al textarea directamente
         let transcript = mejor.transcript.trim();
@@ -1867,7 +1889,9 @@ function crearRecog(){
     }else if(e.error === 'network'){
       _netErrCount++;
       if(_netErrCount >= 3){
-        setEstado('⚠️ Sin internet para reconocimiento en vivo. Sigue grabando y usa “Re-transcribir con Whisper” al terminar.', true);
+        fallbackWhisperPorRed = true;
+        setEstado('⚠️ Sin internet para reconocimiento en vivo. Seguimos grabando y Whisper transcribirá automáticamente al terminar.', true);
+        try{ r.abort(); }catch(_){}
       }else{
         setEstado('Error de red en el reconocimiento. Reconectando…', true);
       }
@@ -1880,6 +1904,9 @@ function crearRecog(){
 
   r.onend = ()=>{
     if(grabando){
+      if(fallbackWhisperPorRed){
+        return;
+      }
       reinicios++;
       if(reinicios > 80){
         grabando = false; pararTodo();
@@ -1915,10 +1942,18 @@ function elegirMime(){
 async function iniciarMediaRecorder(){
   try{
     grabacionStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation:true, noiseSuppression:true, sampleRate:16000 }
+      audio: { echoCancellation:true, noiseSuppression:true }
     });
   }catch(e){
-    console.error('No se pudo abrir el mic para MediaRecorder:', e);
+    let msg = 'No se pudo acceder al micrófono. Revisa los permisos del navegador.';
+    if (e && (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError')) {
+      msg = 'No se encontró ningún micrófono disponible. Conecta o habilita un micrófono en Windows y vuelve a intentarlo.';
+    } else if (e && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')) {
+      msg = 'El navegador no tiene permiso para usar el micrófono. Permítelo desde el icono del candado y en Privacidad de Windows.';
+    } else if (e && e.name === 'NotReadableError') {
+      msg = 'El micrófono está siendo usado por otra aplicación o no se puede leer en este momento.';
+    }
+    mostrarErrorMicrofono(msg);
     return false;
   }
   const mime = elegirMime();
@@ -1950,7 +1985,7 @@ async function iniciarMediaRecorder(){
     if(grabacionStream){ grabacionStream.getTracks().forEach(t=>t.stop()); grabacionStream=null; }
     
     // Auto-transcribe with Whisper when recording finishes in fallback mode
-    if (usarWhisperAlFinal) {
+    if (usarWhisperAlFinal || fallbackWhisperPorRed) {
       transcribirGrabacionAutomatica(blob);
     }
   };
@@ -1966,14 +2001,20 @@ function detenerMediaRecorder(){
 
 function mostrarGrabacion(blob){
   ultimaGrabacionBlob = blob;
-  if(ultimaGrabacionURL) URL.revokeObjectURL(ultimaGrabacionURL);
-  ultimaGrabacionURL = URL.createObjectURL(blob);
-
   const pb = document.getElementById('playback');
   const audio = document.getElementById('pbAudio');
   const sizeEl = document.getElementById('pbSize');
   const durEl  = document.getElementById('pbDur');
+
+  if(ultimaGrabacionURL){
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    URL.revokeObjectURL(ultimaGrabacionURL);
+  }
+  ultimaGrabacionURL = URL.createObjectURL(blob);
   audio.src = ultimaGrabacionURL;
+  audio.load();
   pb.classList.add('show');
   sizeEl.textContent = (blob.size/1024).toFixed(1) + ' KB';
   // Duración estimada (al cargar metadata)
@@ -1984,10 +2025,13 @@ function mostrarGrabacion(blob){
 }
 
 function limpiarGrabacion(){
+  const audio = document.getElementById('pbAudio');
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
   if(ultimaGrabacionURL) URL.revokeObjectURL(ultimaGrabacionURL);
   ultimaGrabacionURL = null; ultimaGrabacionBlob = null;
   document.getElementById('playback').classList.remove('show');
-  document.getElementById('pbAudio').src = '';
   actualizarBotonesServidor();
 }
 
@@ -2068,9 +2112,10 @@ async function transcribirGrabacionAutomatica(blob) {
       setEstado('Whisper no devolvió texto.', false);
     }
   }catch(e){
-    setEstado('✗ Error Whisper auto: ' + e.message, false);
+    const msg = normalizarMensajeWhisperError(e && e.message ? e.message : String(e));
+    setEstado('✗ Error Whisper auto: ' + msg, false);
     if (labelEl) labelEl.textContent = 'Error transcripción';
-    interimEl.innerHTML = `<span style="color:var(--rec); font-style:italic;">Error: ${e.message}</span>`;
+    interimEl.innerHTML = `<span style="color:var(--rec); font-style:italic;">Error: ${msg}</span>`;
     if (actionsEl) actionsEl.style.display = 'none';
     panel.classList.add('live-panel--active');
     console.error(e);
@@ -2081,6 +2126,14 @@ async function transcribirGrabacionAutomatica(blob) {
     }
     actualizarBotonesServidor();
   }
+}
+
+function normalizarMensajeWhisperError(message){
+  const raw = String(message || '');
+  if(/WinError 2|ffmpeg/i.test(raw)){
+    return 'Falta ffmpeg en el backend. Instala ffmpeg y reinicia el servidor. Ruta sugerida: C:\\ffmpeg\\bin\\ffmpeg.exe';
+  }
+  return raw;
 }
 
 function iniciarPreviewWhisper() {
@@ -2251,6 +2304,7 @@ async function toggleGrabacion(){
     }
   }else{
     grabando = true; reinicios = 0; backoffMs = 200;
+    fallbackWhisperPorRed = false;
     const okRec = await iniciarMediaRecorder();
     if(!okRec){
       grabando = false;
@@ -2382,7 +2436,9 @@ function dibujar(){
   const n = dataArr.length, bw = w / n;
   for(let i=0;i<n;i++){
     const raw = dataArr[i];
-    const v = Math.max(0, raw - sensThreshold) / (255 - sensThreshold);
+    // Evitar división por cero si sensThreshold es 255 (en cuyo caso v es 0)
+    const divisor = 255 - sensThreshold;
+    const v = divisor > 0 ? Math.max(0, raw - sensThreshold) / divisor : 0;
     const bh = Math.max(3, v * h * .9);
     const x = i*bw, y = (h-bh)/2;
     const g = ctx.createLinearGradient(0,y,0,y+bh);
@@ -2414,9 +2470,11 @@ function descargarTxt(ta, nombre){
   const txt = ta.value.trim(); if(!txt) return;
   const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  const blobUrl = URL.createObjectURL(blob);
+  a.href = blobUrl;
   a.download = nombre + '-' + new Date().toISOString().slice(0,10) + '.txt';
-  a.click(); URL.revokeObjectURL(a.href);
+  a.click();
+  setTimeout(()=> URL.revokeObjectURL(blobUrl), 1500);
 }
 
 document.getElementById('btnCopy').addEventListener('click', ()=>

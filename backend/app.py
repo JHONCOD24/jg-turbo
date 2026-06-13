@@ -42,6 +42,30 @@ load_env_file()
 def setup_ffmpeg_path():
     if shutil.which("ffmpeg"):
         return
+
+    rutas_candidatas = [
+        Path(__file__).parent / "bin" / "ffmpeg.exe",
+        Path(__file__).parent.parent / "bin" / "ffmpeg.exe",
+        Path("C:/ffmpeg/bin/ffmpeg.exe"),
+        Path("C:/Program Files/ffmpeg/bin/ffmpeg.exe"),
+        Path("C:/ProgramData/chocolatey/bin/ffmpeg.exe"),
+    ]
+
+    user_profile = os.getenv("USERPROFILE")
+    if user_profile:
+        rutas_candidatas.extend([
+            Path(user_profile) / "scoop" / "shims" / "ffmpeg.exe",
+            Path(user_profile) / "AppData" / "Local" / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe",
+        ])
+
+    for ffmpeg_path in rutas_candidatas:
+        if ffmpeg_path.exists():
+            bin_dir = ffmpeg_path.parent
+            if str(bin_dir) not in os.environ["PATH"]:
+                os.environ["PATH"] += os.pathsep + str(bin_dir)
+                print(f"[OK] ffmpeg agregado al PATH desde ruta comun: {bin_dir}")
+            return
+
     local_appdata = os.getenv("LOCALAPPDATA")
     if local_appdata:
         winget_path = Path(local_appdata) / "Microsoft" / "WinGet" / "Packages"
@@ -323,6 +347,14 @@ def transcribir_archivo(ruta: Path, idioma: Optional[str] = None, preview: bool 
     if not ruta.exists() or ruta.stat().st_size < 2000:
         return {"text": "", "language": "es", "segments": []}
 
+    if not shutil.which("ffmpeg"):
+        return {
+            "_error": (
+                "ffmpeg no esta disponible en el sistema. Instala ffmpeg y agrega su carpeta bin al PATH, "
+                "o colocala en C:\\ffmpeg\\bin. Luego reinicia el backend."
+            )
+        }
+
     # Paso 1: convertir a WAV mono limpio
     wav = _a_wav_mono(ruta)
     # Si la conversión falla, intentar con el archivo original
@@ -404,7 +436,7 @@ def raiz():
     """Sirve la interfaz HTML principal. Al abrirla desde el backend se garantiza
     contexto seguro (localhost) para que funcionen la API de micrófono,
     MediaRecorder y los fetch al mismo origen sin problemas de CORS."""
-    html_path = Path(__file__).parent.parent / "jg_turbo.html"
+    html_path = Path(__file__).parent.parent / "index.html"
     if html_path.exists():
         return FileResponse(str(html_path), media_type="text/html")
     # Fallback si el HTML no está junto al backend
