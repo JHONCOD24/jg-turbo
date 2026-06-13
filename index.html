@@ -1119,9 +1119,12 @@ console.log('JG Turbo v2.1');
 
 /* ── 0) Conexión con el servidor ──────────────────────────────────────── */
 
-// Auto-detect: si la app se sirve desde http://localhost:8000, usar el mismo origen.
-// Si se abre como file://, apuntar a http://localhost:8000 por defecto.
-const _defaultServer = (window.location.protocol !== 'file:' && window.location.hostname)
+// Auto-detect: si la app se sirve desde http://localhost:8000 (o 127.0.0.1), usar el
+// mismo origen. En cualquier otro caso (Netlify, file://, etc.) el backend es local,
+// así que se apunta a http://localhost:8000 por defecto. El usuario puede sobreescribirlo
+// en Configuración (ej.: con la URL de un túnel ngrok/Cloudflare).
+const _esLocalhost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+const _defaultServer = (window.location.protocol !== 'file:' && _esLocalhost)
   ? window.location.origin
   : 'http://localhost:8000';
 let SERVER_URL = localStorage.getItem('jg_server') || _defaultServer;
