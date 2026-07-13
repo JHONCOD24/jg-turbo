@@ -124,10 +124,38 @@ class ImproveRequest(BaseModel):
 
 class TranslateRequest(BaseModel):
     text: str
-    direction: str = "en-es"  # en-es | es-en
+    direction: str = "en-es"  # pares ISO: en-es, es-fr, pt-en, etc.
     provider: str = "gemini"
     api_key: str = ""
     openrouter_model: Optional[str] = None
+
+
+_LANG_NAMES = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "pt": "Portuguese",
+    "de": "German",
+    "it": "Italian",
+}
+
+
+def _parse_translate_direction(direction: str):
+    """Acepta 'en-es', 'es-fr', etc. Devuelve (src_code, trg_code, src_name, trg_name)."""
+    d = (direction or "").strip().lower().replace("_", "-")
+    if "-" not in d:
+        raise HTTPException(status_code=400, detail="direction debe ser un par ISO, ej. 'en-es' o 'es-fr'.")
+    src_code, trg_code = d.split("-", 1)
+    src_code = src_code[:2]
+    trg_code = trg_code[:2]
+    if src_code not in _LANG_NAMES or trg_code not in _LANG_NAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Idiomas soportados: {', '.join(sorted(_LANG_NAMES))}. Recibido: {direction}",
+        )
+    if src_code == trg_code:
+        raise HTTPException(status_code=400, detail="Origen y destino no pueden ser el mismo idioma.")
+    return src_code, trg_code, _LANG_NAMES[src_code], _LANG_NAMES[trg_code]
 
 
 class CorrectTranscriptionRequest(BaseModel):
@@ -986,13 +1014,7 @@ async def translate(req: TranslateRequest):
     if not txt:
         raise HTTPException(status_code=400, detail="Texto vacío.")
 
-    if req.direction not in ("en-es", "es-en"):
-        raise HTTPException(status_code=400, detail="direction debe ser 'en-es' o 'es-en'.")
-
-    src_lang = "English" if req.direction == "en-es" else "Spanish"
-    trg_lang = "Spanish" if req.direction == "en-es" else "English"
-    src_code = "en" if req.direction == "en-es" else "es"
-    trg_code = "es" if req.direction == "en-es" else "en"
+    src_code, trg_code, src_lang, trg_lang = _parse_translate_direction(req.direction)
 
     api_key = _get_ai_key(req.api_key)
     error_detail = None
@@ -1014,11 +1036,12 @@ async def translate(req: TranslateRequest):
                     "ia_used": True,
                     "provider": provider_name,
                     "model": req.openrouter_model if provider_name == "openrouter" else None,
+                    "direction": f"{src_code}-{trg_code}",
                 }
         except Exception as e:
             error_detail = str(e)
 
-    # Fallback gratuito MyMemory
+    # Fallback gratuito MyMemory (soporta la mayoría de pares ISO)
     try:
         translated_text = _translate_mymemory_chunked(txt, src_code, trg_code)
         if translated_text and translated_text.strip():
@@ -1027,6 +1050,7 @@ async def translate(req: TranslateRequest):
                 "ia_used": False,
                 "provider": None,
                 "error_detail": error_detail,
+                "direction": f"{src_code}-{trg_code}",
             }
     except Exception as e:
         if not error_detail:

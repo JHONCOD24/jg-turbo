@@ -1523,10 +1523,36 @@ def _detalle_error_ia(nombre_proveedor: str, e: Exception) -> str:
 
 class TranslateRequest(BaseModel):
     text: str
-    direction: str  # "en-es" | "es-en"
+    direction: str  # pares ISO: en-es, es-fr, pt-en, etc.
     provider: str = "gemini"
     api_key: str = ""
     openrouter_model: Optional[str] = None
+
+
+_LANG_NAMES_TR = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "pt": "Portuguese",
+    "de": "German",
+    "it": "Italian",
+}
+
+
+def _parse_translate_direction(direction: str):
+    d = (direction or "").strip().lower().replace("_", "-")
+    if "-" not in d:
+        raise HTTPException(status_code=400, detail="direction debe ser un par ISO, ej. 'en-es' o 'es-fr'.")
+    src_code, trg_code = d.split("-", 1)
+    src_code, trg_code = src_code[:2], trg_code[:2]
+    if src_code not in _LANG_NAMES_TR or trg_code not in _LANG_NAMES_TR:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Idiomas soportados: {', '.join(sorted(_LANG_NAMES_TR))}. Recibido: {direction}",
+        )
+    if src_code == trg_code:
+        raise HTTPException(status_code=400, detail="Origen y destino no pueden ser el mismo idioma.")
+    return src_code, trg_code, _LANG_NAMES_TR[src_code], _LANG_NAMES_TR[trg_code]
 
 def _translate_mymemory(text: str, src: str, trg: str) -> Optional[str]:
     """Llama a la API pública y gratuita de MyMemory para traducir un fragmento."""
@@ -1577,16 +1603,12 @@ def _translate_mymemory_chunked(text: str, src: str, trg: str) -> str:
 
 @app.post("/translate")
 async def translate_text(req: TranslateRequest, request: Request):
-    """Traduce texto de inglés a español o viceversa utilizando IA (Gemini, Claude, Mistral)
-    o mediante MyMemory como fallback gratuito."""
+    """Traduce entre pares ISO (en, es, fr, pt, de, it) con IA o MyMemory."""
     txt = req.text.strip()
     if not txt:
         raise HTTPException(status_code=400, detail="Texto vacío.")
 
-    src_lang = "English" if req.direction == "en-es" else "Spanish"
-    trg_lang = "Spanish" if req.direction == "en-es" else "English"
-    src_code = "en" if req.direction == "en-es" else "es"
-    trg_code = "es" if req.direction == "en-es" else "en"
+    src_code, trg_code, src_lang, trg_lang = _parse_translate_direction(req.direction)
 
     prompt = (
         f"Translate the following text from {src_lang} to {trg_lang}.\n"
@@ -1610,7 +1632,12 @@ async def translate_text(req: TranslateRequest, request: Request):
                 _mejorar_con_ia_sync,
                 provider_resuelto, api_key, prompt, openrouter_model,
             )
-            return {"text": translated, "ia_used": True, "provider": provider_name}
+            return {
+                "text": translated,
+                "ia_used": True,
+                "provider": provider_name,
+                "direction": f"{src_code}-{trg_code}",
+            }
         except Exception as e:
             error_detail = _detalle_error_ia(provider_resuelto, e)
 
@@ -1618,11 +1645,17 @@ async def translate_text(req: TranslateRequest, request: Request):
     try:
         translated_text = _translate_mymemory_chunked(txt, src_code, trg_code)
         if translated_text:
-            return {"text": translated_text, "ia_used": False, "provider": None, "error_detail": error_detail}
+            return {
+                "text": translated_text,
+                "ia_used": False,
+                "provider": None,
+                "error_detail": error_detail,
+                "direction": f"{src_code}-{trg_code}",
+            }
     except Exception as e:
         if not error_detail:
             error_detail = str(e)
-    
+
     raise HTTPException(status_code=500, detail=f"No se pudo realizar la traducción. Detalle: {error_detail}")
 
 

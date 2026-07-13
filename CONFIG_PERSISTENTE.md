@@ -31,7 +31,7 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_glossary`
 - `jg_whisper_model`
 - `jg_mic_quality`
-- `jg_output_lang` (idioma del texto transcrito: mismo / en / es)
+- `jg_output_lang` (idioma del texto: same / es / en / fr / pt / de)
 - `jg_config_bundle` (snapshot JSON versionado)
 - `jg_glossary_seeded` (flag: ya se sembró glosario por defecto)
 

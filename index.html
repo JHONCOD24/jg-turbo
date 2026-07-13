@@ -349,6 +349,8 @@
   /* Botón "Mejorar prompt" — estilo estrellado (skill maestro-prompts) */
   .btn.btn-prompt{background:linear-gradient(135deg,rgba(255,45,85,.10),rgba(255,122,24,.10));border-color:rgba(255,45,85,.35);color:#FFB69E}
   .btn.btn-prompt:hover{background:linear-gradient(135deg,rgba(255,45,85,.22),rgba(255,122,24,.22));border-color:rgba(255,45,85,.6);transform:translateY(-1px);box-shadow:0 4px 16px -6px rgba(255,45,85,.5)}
+  .btn.btn-translate{background:rgba(99,140,255,.12);border-color:rgba(99,140,255,.4);color:#A8C0FF}
+  .btn.btn-translate:hover{background:rgba(99,140,255,.22);border-color:rgba(99,140,255,.65);transform:translateY(-1px)}
   .btn.btn-undo{background:rgba(39,225,193,.12);border-color:var(--cyan-glow);color:var(--cyan)}
   .btn.btn-undo:hover{background:rgba(39,225,193,.22);border-color:var(--cyan);transform:translateY(-1px)}
   /* Grupo Corregir + deshacer minimalista */
@@ -657,10 +659,13 @@
             <option value="de-DE">Deutsch</option>
             <option value="pt-BR">Português (Brasil)</option>
           </select>
-          <select id="outputLang" aria-label="Texto transcrito en" title="Si el audio es en inglés, elige si quieres el texto en inglés o traducido al español">
+          <select id="outputLang" aria-label="Texto transcrito en" title="Idioma del texto resultante (traduce si el audio es otro idioma)">
             <option value="same">Texto: mismo idioma</option>
-            <option value="en">Texto: inglés</option>
             <option value="es">Texto: español</option>
+            <option value="en">Texto: inglés</option>
+            <option value="fr">Texto: francés</option>
+            <option value="pt">Texto: portugués</option>
+            <option value="de">Texto: alemán</option>
           </select>
         </div>
       </div>
@@ -713,6 +718,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
           </button>
         </span>
+        <button class="btn btn-translate" id="btnTranslate" title="Traducir el texto actual al idioma de «Texto:» sin volver a transcribir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 1 1 4 0c0 1.1-.9 3-4 5M9 8c0 1.1.9 3 4 5"/><path d="M19 12v6a2 2 0 0 1-2 2H7"/></svg>
+          <span id="translateLabel">Traducir resultado</span>
+        </button>
         <button class="btn btn-improve" id="btnImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
           <span id="improveLabel">Pulir texto</span>
@@ -756,10 +765,13 @@
             <option value="de">Alemán</option>
             <option value="pt">Portugués</option>
           </select>
-          <select id="fileOutputLang" aria-label="Texto transcrito en" title="Elige inglés original o traducido al español">
+          <select id="fileOutputLang" aria-label="Texto transcrito en" title="Idioma del texto resultante (traduce si el audio es otro idioma)">
             <option value="same">Texto: mismo idioma del audio</option>
-            <option value="en">Texto: inglés</option>
             <option value="es">Texto: español</option>
+            <option value="en">Texto: inglés</option>
+            <option value="fr">Texto: francés</option>
+            <option value="pt">Texto: portugués</option>
+            <option value="de">Texto: alemán</option>
           </select>
         </div>
 
@@ -810,6 +822,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               </button>
             </span>
+            <button class="btn btn-translate" id="btnFileTranslate" title="Traducir el texto actual al idioma de «Texto:» sin volver a transcribir">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 1 1 4 0c0 1.1-.9 3-4 5M9 8c0 1.1.9 3 4 5"/><path d="M19 12v6a2 2 0 0 1-2 2H7"/></svg>
+              <span id="fileTranslateLabel">Traducir resultado</span>
+            </button>
             <button class="btn btn-improve" id="btnFileImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
               <span id="fileImproveLabel">Pulir texto</span>
@@ -861,10 +877,13 @@
             <option value="de">Alemán</option>
             <option value="pt">Portugués</option>
           </select>
-          <select id="ytOutputLang" aria-label="Texto transcrito en" title="Elige inglés original o traducido al español">
+          <select id="ytOutputLang" aria-label="Texto transcrito en" title="Idioma del texto resultante (traduce si el audio es otro idioma)">
             <option value="same">Texto: mismo idioma del audio</option>
-            <option value="en">Texto: inglés</option>
             <option value="es">Texto: español</option>
+            <option value="en">Texto: inglés</option>
+            <option value="fr">Texto: francés</option>
+            <option value="pt">Texto: portugués</option>
+            <option value="de">Texto: alemán</option>
           </select>
           <select id="ytSubPref">
             <option value="true">Usar subtítulos del video si están disponibles</option>
@@ -905,6 +924,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               </button>
             </span>
+            <button class="btn btn-translate" id="btnYtTranslate" title="Traducir el texto actual al idioma de «Texto:» sin volver a transcribir">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 1 1 4 0c0 1.1-.9 3-4 5M9 8c0 1.1.9 3 4 5"/><path d="M19 12v6a2 2 0 0 1-2 2H7"/></svg>
+              <span id="ytTranslateLabel">Traducir resultado</span>
+            </button>
             <button class="btn btn-improve" id="btnYtImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
               <span id="ytImproveLabel">Pulir texto</span>
@@ -932,15 +955,27 @@
     <div class="card">
       <div class="file-area" style="padding:16px; height:100%; display:flex; flex-direction:column; overflow-y:auto; min-height:0; flex:1;">
         <h2>🌐 Traducción de Texto</h2>
-        <p>Traduce textos de inglés a español o de español a inglés utilizando la IA configurada o nuestro fallback gratuito.</p>
+        <p>Traduce entre español, inglés, francés, portugués y alemán con la IA configurada o el fallback gratuito.</p>
 
         <!-- Cabecera de controles -->
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; flex:none;">
           <!-- Selector de idioma -->
           <div style="display:flex; align-items:center; gap:8px;">
-            <select id="transDirection" style="background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:12.5px; padding:7px 10px; border-radius:9px; cursor:pointer; outline:none; min-width:160px;">
+            <select id="transDirection" style="background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:12.5px; padding:7px 10px; border-radius:9px; cursor:pointer; outline:none; min-width:180px;">
               <option value="en-es">Inglés ➜ Español</option>
               <option value="es-en">Español ➜ Inglés</option>
+              <option value="en-fr">Inglés ➜ Francés</option>
+              <option value="fr-es">Francés ➜ Español</option>
+              <option value="es-fr">Español ➜ Francés</option>
+              <option value="en-pt">Inglés ➜ Portugués</option>
+              <option value="pt-es">Portugués ➜ Español</option>
+              <option value="es-pt">Español ➜ Portugués</option>
+              <option value="pt-en">Portugués ➜ Inglés</option>
+              <option value="fr-en">Francés ➜ Inglés</option>
+              <option value="de-es">Alemán ➜ Español</option>
+              <option value="es-de">Español ➜ Alemán</option>
+              <option value="de-en">Alemán ➜ Inglés</option>
+              <option value="en-de">Inglés ➜ Alemán</option>
             </select>
             <button class="btn-back" id="btnTransSwap" style="padding:8px; display:inline-flex; align-items:center; justify-content:center;" title="Intercambiar direcciones e importar textos">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px; height:14px;"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l-4-4M17 20l4-4"/></svg>
@@ -2269,7 +2304,7 @@ function activarModoCodigoAuto(){
   }
 }
 
-function procesarFragmento(crudo, esInicioDeOracion = true, desdeWhisper = false){
+function procesarFragmento(crudo, esInicioDeOracion = true, desdeWhisper = false, langSalidaOverride = null){
   let s = crudo;
   if(!desdeWhisper && !opt.code && !codeModoManual && detectarModoCodigo(crudo)){
     activarModoCodigoAuto();
@@ -2282,7 +2317,10 @@ function procesarFragmento(crudo, esInicioDeOracion = true, desdeWhisper = false
   }
   s = s.trim();
   if(!s) return '';
-  if(opt.preg && esInicioDeOracion && esPregunta(s) && esSalidaEspanol()){
+  const salidaEs = langSalidaOverride != null
+    ? (String(langSalidaOverride) === 'es' || String(langSalidaOverride).startsWith('es'))
+    : esSalidaEspanol();
+  if(opt.preg && esInicioDeOracion && esPregunta(s) && salidaEs){
     s = s.replace(/[.…]+$/,'');
     if(!s.startsWith('¿')) s = '¿' + s;
     if(!/[?]$/.test(s))   s = s + '?';
@@ -2347,16 +2385,42 @@ const outputLangSel = document.getElementById('outputLang');
 const fileOutputLangSel = document.getElementById('fileOutputLang');
 const ytOutputLangSel = document.getElementById('ytOutputLang');
 let _idiomaSalidaActual = 'es';
+const _sourceLangByTa = new WeakMap();
+const LANG_LABELS = {
+  es: 'español', en: 'inglés', fr: 'francés', pt: 'portugués', de: 'alemán', it: 'italiano',
+  auto: 'auto', same: 'mismo idioma',
+};
+const LANG_CODES_SOPORTADOS = ['es', 'en', 'fr', 'pt', 'de', 'it'];
 
 function normalizarLangApi(val){
   if(!val || val === 'auto') return 'auto';
   return String(val).split('-')[0].toLowerCase();
 }
 
+function nombreIdioma(code){
+  const c = normalizarLangApi(code);
+  return LANG_LABELS[c] || c || 'desconocido';
+}
+
+function setSourceLang(ta, lang){
+  if(!ta) return;
+  const c = normalizarLangApi(lang);
+  if(c && c !== 'auto') _sourceLangByTa.set(ta, c);
+}
+
+function getSourceLang(ta, fallback = 'es'){
+  if(ta && _sourceLangByTa.has(ta)) return _sourceLangByTa.get(ta);
+  const fb = normalizarLangApi(fallback);
+  return (fb && fb !== 'auto') ? fb : 'es';
+}
+
 function langParaReconocimientoVivo(val){
   if(!val || val === 'auto'){
     const nav = (navigator.language || 'es-CO').replace('_', '-');
     if(nav.startsWith('en')) return 'en-US';
+    if(nav.startsWith('fr')) return 'fr-FR';
+    if(nav.startsWith('pt')) return 'pt-BR';
+    if(nav.startsWith('de')) return 'de-DE';
     if(nav.startsWith('es')) return nav;
     return 'es-CO';
   }
@@ -2378,6 +2442,28 @@ function esSalidaEspanol(){
   return lang === 'es' || lang.startsWith('es');
 }
 
+/** Heurística ligera cuando no hay idioma de origen conocido */
+function detectarIdiomaHeuristico(texto){
+  const t = String(texto || '').toLowerCase();
+  if(!t.trim()) return 'es';
+  const scores = { es: 0, en: 0, fr: 0, pt: 0, de: 0 };
+  if(/[áéíóúñ¿¡]/.test(t)) scores.es += 4;
+  if(/[àâæçéèêëïîôùûüÿœ]/.test(t)) scores.fr += 3;
+  if(/[ãõç]/.test(t)) scores.pt += 3;
+  if(/[äöüß]/.test(t)) scores.de += 4;
+  const count = (re) => (t.match(re) || []).length;
+  scores.es += count(/\b(el|la|de|que|y|en|los|se|del|las|un|por|con|una|para|es|al|lo|como|más|pero|su|le|ya|fue|este|ha|porque|son|muy|sin|todo|nos|me|está|hay|cuando|también)\b/g);
+  scores.en += count(/\b(the|be|to|of|and|a|in|that|have|i|it|for|not|on|with|he|as|you|do|at|this|but|his|by|from|they|we|or|an|will|my|one|all|would|there|their|is|are|was|were)\b/g);
+  scores.fr += count(/\b(le|la|les|de|un|une|et|est|en|que|des|du|dans|qui|pour|pas|sur|ce|se|ne|avec|il|sont|ou|mais|je|nous|vous|elle)\b/g);
+  scores.pt += count(/\b(de|a|o|que|e|do|da|em|um|para|é|com|não|uma|os|no|se|na|por|mais|as|dos|como|mas|foi|ao|ele|das|tem|seu|sua|ou|ser|quando|muito|já|está|eu|também)\b/g);
+  scores.de += count(/\b(der|die|das|und|ist|ich|nicht|ein|eine|zu|den|mit|auf|für|von|dem|des|sich|auch|als|es|an|er|sie|wir|was|wie|noch|nur|oder)\b/g);
+  let best = 'es', bestScore = -1;
+  Object.keys(scores).forEach((k) => {
+    if(scores[k] > bestScore){ bestScore = scores[k]; best = k; }
+  });
+  return best;
+}
+
 function syncOutputLang(value, sourceEl){
   jgCfgSet('jg_output_lang', value);
   jgCfgSnapshot();
@@ -2387,9 +2473,13 @@ function syncOutputLang(value, sourceEl){
 }
 
 function initOutputLangSelectors(){
-  const guardado = jgCfgGet('jg_output_lang', 'same') || 'same';
+  let guardado = jgCfgGet('jg_output_lang', 'same') || 'same';
+  // Migración suave: valores viejos siguen válidos; si no está en el select, usar same
   [outputLangSel, fileOutputLangSel, ytOutputLangSel].forEach((el) => {
-    if(el) el.value = guardado;
+    if(!el) return;
+    const ok = Array.from(el.options).some((o) => o.value === guardado);
+    if(!ok) guardado = 'same';
+    el.value = guardado;
   });
   _idiomaSalidaActual = resolverIdiomaSalida(guardado, '', langSel ? langSel.value : 'es');
 }
@@ -2404,11 +2494,14 @@ function initOutputLangSelectors(){
 initOutputLangSelectors();
 
 async function traducirTranscripcion(texto, origen, destino){
-  if(!texto || !texto.trim() || origen === destino) return texto;
-  let direction = null;
-  if(origen === 'en' && destino === 'es') direction = 'en-es';
-  else if(origen === 'es' && destino === 'en') direction = 'es-en';
-  else return texto;
+  if(!texto || !texto.trim()) return texto;
+  const src = normalizarLangApi(origen);
+  const dst = normalizarLangApi(destino);
+  if(!src || !dst || src === 'auto' || dst === 'auto' || src === dst) return texto;
+  if(!LANG_CODES_SOPORTADOS.includes(src) || !LANG_CODES_SOPORTADOS.includes(dst)){
+    throw new Error('Par de idiomas no soportado: ' + src + ' → ' + dst);
+  }
+  const direction = src + '-' + dst;
 
   const provider = localStorage.getItem('jg_ai_provider') || sessionIA.provider || 'gemini';
   const openrouterModel = localStorage.getItem('jg_openrouter_model') || sessionIA.openrouterModel || 'qwen/qwen3-coder:free';
@@ -2437,9 +2530,12 @@ async function aplicarIdiomaSalida(texto, opts = {}){
   const inputLang = opts.inputLang || '';
   const destino = resolverIdiomaSalida(outputLang, detectedLang, inputLang);
   const det = normalizarLangApi(detectedLang);
-  const origen = (det && det !== 'auto')
+  let origen = (det && det !== 'auto')
     ? det
-    : (normalizarLangApi(inputLang) === 'auto' ? 'es' : normalizarLangApi(inputLang));
+    : (normalizarLangApi(inputLang) === 'auto' ? '' : normalizarLangApi(inputLang));
+  if(!origen || origen === 'auto'){
+    origen = detectarIdiomaHeuristico(texto);
+  }
 
   _idiomaSalidaActual = destino;
 
@@ -2470,11 +2566,11 @@ async function aplicarIdiomaSalida(texto, opts = {}){
 function etiquetaIdiomaResultado(data, salida){
   const partes = [];
   if(data && data.sourceLanguage && salida && data.sourceLanguage !== salida){
-    partes.push('audio: ' + data.sourceLanguage + ' → texto: ' + salida);
+    partes.push('audio: ' + nombreIdioma(data.sourceLanguage) + ' → texto: ' + nombreIdioma(salida));
   }else if(salida){
-    partes.push('idioma: ' + salida);
+    partes.push('idioma: ' + nombreIdioma(salida));
   }else if(data && data.language){
-    partes.push('idioma: ' + data.language);
+    partes.push('idioma: ' + nombreIdioma(data.language));
   }
   if(data && data.translated) partes.push('traducido');
   if(data && data.translationError) partes.push('traducción fallida');
@@ -2485,10 +2581,80 @@ async function finalizarTextoTranscrito(textoCrudo, opts = {}){
   const salida = await aplicarIdiomaSalida(textoCrudo, opts);
   let texto = salida.text || '';
   if(opts.procesar !== false && texto){
-    const frag = procesarFragmento(texto, true, true);
+    const frag = procesarFragmento(texto, true, true, salida.language);
     texto = frag || texto;
   }
   return { ...salida, text: texto };
+}
+
+/**
+ * Traduce el texto ya escrito (sin re-transcribir).
+ * Destino = selector «Texto:» si no es «same»; si es same, en↔es según origen.
+ */
+async function traducirResultadoActual(ta, opts = {}){
+  if(!ta) return;
+  const txt = (ta.value || '').trim();
+  if(!txt){
+    if(typeof _mostrarToastMejora === 'function') _mostrarToastMejora('No hay texto para traducir.', false);
+    return;
+  }
+  const outSel = opts.outputLangEl || outputLangSel;
+  const inSel = opts.inputLangEl || langSel;
+  let origen = getSourceLang(ta, inSel ? inSel.value : 'es');
+  if(!origen || origen === 'auto') origen = detectarIdiomaHeuristico(txt);
+
+  let destino;
+  if(outSel && outSel.value && outSel.value !== 'same'){
+    destino = normalizarLangApi(outSel.value);
+  }else{
+    destino = origen === 'es' ? 'en' : 'es';
+  }
+  if(destino === origen){
+    if(typeof _mostrarToastMejora === 'function'){
+      _mostrarToastMejora('Elige otro idioma en «Texto:» (ahora mismo ya está en ' + nombreIdioma(origen) + ').', false);
+    }
+    return;
+  }
+
+  const btn = opts.btnEl;
+  const labelEl = opts.labelEl;
+  const origHTML = btn ? btn.innerHTML : '';
+  if(btn){
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span><span>' + (labelEl ? 'Traduciendo…' : 'Traduciendo…') + '</span>';
+  }
+  try{
+    // Guardar original para ↩ si aún no hay snapshot
+    if(!_origTranscription.get(ta)){
+      registrarTranscripcionOriginal(ta, txt, opts.undoBtn || _resolverUndoBtn(ta));
+    }
+    const traducido = await traducirTranscripcion(txt, origen, destino);
+    if(!traducido || traducido === txt){
+      if(typeof _mostrarToastMejora === 'function') _mostrarToastMejora('La traducción no cambió el texto.', false);
+      return;
+    }
+    ta.value = traducido;
+    ta.dispatchEvent(new Event('input'));
+    setSourceLang(ta, destino);
+    _idiomaSalidaActual = destino;
+    marcarCambioDesdeOriginal(ta);
+    if(typeof activeTextarea !== 'undefined' && activeTextarea === ta && textModalTextarea){
+      textModalTextarea.value = traducido;
+      textModalTextarea.dispatchEvent(new Event('input'));
+    }
+    if(typeof _mostrarToastMejora === 'function'){
+      _mostrarToastMejora('✓ Traducido a ' + nombreIdioma(destino), true);
+    }
+    if(opts.statusFn) opts.statusFn('✓ Traducido a ' + nombreIdioma(destino));
+  }catch(e){
+    if(typeof _mostrarToastMejora === 'function') _mostrarToastMejora('⚠ ' + (e.message || 'Error al traducir'), false);
+    if(opts.statusFn) opts.statusFn('✗ ' + (e.message || 'Error al traducir'));
+  }finally{
+    if(btn){
+      btn.disabled = false;
+      btn.innerHTML = origHTML;
+    }
+  }
 }
 
 
@@ -2498,6 +2664,59 @@ let reinicios = 0;
 let backoffMs = 200;
 let textoEnVivoAcumulado = '';
 let fallbackWhisperPorRed = false;
+let _liveTranslateQueue = Promise.resolve();
+let _liveTranslatePending = 0;
+
+function origenAudioVivo(){
+  const src = normalizarLangApi(langSel ? langSel.value : 'es');
+  if(src && src !== 'auto') return src;
+  try{
+    if(recog && recog.lang) return normalizarLangApi(recog.lang);
+  }catch(_){}
+  return normalizarLangApi(navigator.language || 'es') || 'es';
+}
+
+function destinoSalidaVivo(){
+  const out = outputLangSel ? outputLangSel.value : 'same';
+  if(!out || out === 'same') return null;
+  return normalizarLangApi(out);
+}
+
+function necesitaTraduccionViva(){
+  const dest = destinoSalidaVivo();
+  if(!dest) return false;
+  const src = origenAudioVivo();
+  return src !== dest;
+}
+
+function appendFragmentoEnVivo(frag){
+  if(!frag) return;
+  if(textoEnVivoAcumulado && !/\s$/.test(textoEnVivoAcumulado) && !/^\s/.test(frag)){
+    textoEnVivoAcumulado += ' ';
+  }
+  textoEnVivoAcumulado += frag;
+  textoEnVivoAcumulado = arreglarEspacios(textoEnVivoAcumulado);
+  if(opt.caps) textoEnVivoAcumulado = mayusculas(textoEnVivoAcumulado);
+  const panel = document.getElementById('livePanel');
+  if(panel){
+    interimEl.textContent = textoParaVistaLive();
+    panel.classList.add('live-panel--active');
+  }
+  const labelEl = document.getElementById('livePanelLabel');
+  if(labelEl && _liveTranslatePending > 0){
+    labelEl.textContent = 'En vivo — Traduciendo…';
+  }else if(labelEl && grabando){
+    labelEl.textContent = necesitaTraduccionViva()
+      ? ('En vivo — → ' + nombreIdioma(destinoSalidaVivo()))
+      : 'En vivo — Escuchando…';
+  }
+}
+
+async function esperarTraduccionesVivas(){
+  if(_liveTranslatePending <= 0) return;
+  setEstado('Traduciendo lo dictado…', true);
+  try{ await _liveTranslateQueue; }catch(_){}
+}
 
 // ── Variables para MediaRecorder (audio guardado) ──
 let mediaRecorder      = null;
@@ -2721,14 +2940,36 @@ function crearRecog(){
           }
         }
         const esInicioDeOracion = !textoEnVivoAcumulado.trim() || /[.!?…\n]/.test(textoEnVivoAcumulado.trim().slice(-1));
-        const frag = procesarFragmento(transcript, esInicioDeOracion);
+        // Procesar con idioma de audio (no ¿? españoles si el destino será otro)
+        const srcLive = origenAudioVivo();
+        const destLive = destinoSalidaVivo();
+        const frag = procesarFragmento(transcript, esInicioDeOracion, false, srcLive);
         if(frag) {
-          if(textoEnVivoAcumulado && !/\s$/.test(textoEnVivoAcumulado) && !/^\s/.test(frag)) {
-            textoEnVivoAcumulado += ' ';
+          if(necesitaTraduccionViva() && serverInfo.online && destLive){
+            _liveTranslatePending++;
+            const fragOrig = frag;
+            _liveTranslateQueue = _liveTranslateQueue.then(async () => {
+              try{
+                const traducido = await traducirTranscripcion(fragOrig, srcLive, destLive);
+                let out = (traducido || fragOrig).trim();
+                if(out){
+                  out = procesarFragmento(out, esInicioDeOracion, true, destLive) || out;
+                  appendFragmentoEnVivo(out);
+                }
+              }catch(err){
+                console.warn('Traducción en vivo:', err);
+                appendFragmentoEnVivo(fragOrig);
+              }finally{
+                _liveTranslatePending = Math.max(0, _liveTranslatePending - 1);
+                const labelEl = document.getElementById('livePanelLabel');
+                if(labelEl && grabando && _liveTranslatePending === 0){
+                  labelEl.textContent = 'En vivo — → ' + nombreIdioma(destLive);
+                }
+              }
+            });
+          }else{
+            appendFragmentoEnVivo(frag);
           }
-          textoEnVivoAcumulado += frag;
-          textoEnVivoAcumulado = arreglarEspacios(textoEnVivoAcumulado);
-          if(opt.caps) textoEnVivoAcumulado = mayusculas(textoEnVivoAcumulado);
         }
         backoffMs = 200;
       }else{
@@ -3025,8 +3266,9 @@ async function transcribirGrabacionAutomatica(blob) {
         if (actionsEl) actionsEl.style.display = 'none';
         panel.classList.remove('live-panel--active');
         let msgEstado = '✓ Whisper transcribió con éxito.';
-        if(finalizado.translated) msgEstado += ' Texto traducido al ' + (finalizado.language === 'es' ? 'español' : 'inglés') + '.';
+        if(finalizado.translated) msgEstado += ' Texto traducido al ' + nombreIdioma(finalizado.language) + '.';
         else if(finalizado.translationError) msgEstado += ' (traducción no disponible: ' + finalizado.translationError + ')';
+        setSourceLang(output, finalizado.language || finalizado.sourceLanguage);
         setEstado(msgEstado, false);
         // Liberar spinner / botón antes de abrir el modal
         if (btn) {
@@ -3090,6 +3332,8 @@ function arrancarUI(){
   // Limpiar el texto acumulado del dictado anterior
   textoEnVivoAcumulado = '';
   textoWhisperConfirmado = '';
+  _liveTranslateQueue = Promise.resolve();
+  _liveTranslatePending = 0;
   _idiomaSalidaActual = resolverIdiomaSalida(
     outputLangSel ? outputLangSel.value : 'same',
     '',
@@ -3173,9 +3417,14 @@ async function toggleGrabacion(){
 
     if (!usarWhisperAlFinal) {
       setTimeout(async () => {
+        await esperarTraduccionesVivas();
         const capturado = textoBaseLive();
         if (!capturado) return;
         anexar(capturado);
+        const destLive = destinoSalidaVivo() || origenAudioVivo();
+        setSourceLang(output, destLive);
+        _idiomaSalidaActual = destLive;
+        registrarTranscripcionOriginal(output, output.value.trim(), document.getElementById('btnCorrectUndo'));
         textoEnVivoAcumulado = '';
         textoWhisperConfirmado = '';
         interimEl.textContent = '';
@@ -3186,7 +3435,9 @@ async function toggleGrabacion(){
 
         // Corrección contextual post-transcripción (texto completo para mejor contexto)
         if (opt.contexto) {
-          await _corregirTranscripcionConIA(output, output.value.trim());
+          await _corregirTranscripcionConIA(output, output.value.trim(), {
+            langEl: { value: destLive },
+          });
         }
 
         abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
@@ -3325,8 +3576,9 @@ document.getElementById('pbTranscribe').addEventListener('click', async ()=>{
       const textoMic = output.value.trim();
       registrarTranscripcionOriginal(output, textoMic, document.getElementById('btnCorrectUndo'));
       let avisoMic = mensajeConfianza(data);
-      if(finalizado.translated) avisoMic = (avisoMic ? avisoMic + ' · ' : '') + 'traducido al ' + (finalizado.language === 'es' ? 'español' : 'inglés');
+      if(finalizado.translated) avisoMic = (avisoMic ? avisoMic + ' · ' : '') + 'traducido al ' + nombreIdioma(finalizado.language);
       else if(finalizado.translationError) avisoMic = (avisoMic ? avisoMic + ' · ' : '') + 'traducción fallida';
+      setSourceLang(output, finalizado.language || finalizado.sourceLanguage);
       setEstado(avisoMic ? '✓ Whisper terminó · ' + avisoMic : '✓ Whisper terminó. Texto añadido abajo.', false);
       btn.innerHTML = orig;
       btn.disabled = false;
@@ -3580,6 +3832,7 @@ document.getElementById('btnFileTranscribe').addEventListener('click', async ()=
     });
     const textoCrudo = finalizado.text || '';
     fileOutput.value = textoCrudo;
+    setSourceLang(fileOutput, finalizado.language || finalizado.sourceLanguage || fileLangEl.value);
     registrarTranscripcionOriginal(fileOutput, textoCrudo, document.getElementById('btnFileCorrectUndo'));
     document.getElementById('fileCount').textContent =
       contarPalabras(textoCrudo) + ' palabras · ' + etiquetaIdiomaResultado(finalizado, finalizado.language);
@@ -3701,6 +3954,7 @@ document.getElementById('ytBtn').addEventListener('click', async ()=>{
     });
     const textoYt = finalizado.text || '';
     ytOutput.value = textoYt;
+    setSourceLang(ytOutput, finalizado.language || finalizado.sourceLanguage || ytLangEl.value);
     registrarTranscripcionOriginal(ytOutput, textoYt, document.getElementById('btnYtCorrectUndo'));
     document.getElementById('ytCount').textContent =
       contarPalabras(textoYt) + ' palabras · ' + etiquetaIdiomaResultado(finalizado, finalizado.language);
@@ -4364,6 +4618,41 @@ document.getElementById('btnYtImprove').addEventListener('click', function() {
   mejorarTexto(document.getElementById('ytOutput'), this, 'ytImproveLabel', 'ytLang');
 });
 
+/* Botones Traducir resultado (sin re-transcribir) */
+document.getElementById('btnTranslate')?.addEventListener('click', function() {
+  traducirResultadoActual(document.getElementById('output'), {
+    btnEl: this,
+    outputLangEl: outputLangSel,
+    inputLangEl: langSel,
+    undoBtn: document.getElementById('btnCorrectUndo'),
+    statusFn: (msg) => setEstado(msg, false),
+  });
+});
+document.getElementById('btnFileTranslate')?.addEventListener('click', function() {
+  traducirResultadoActual(document.getElementById('fileOutput'), {
+    btnEl: this,
+    outputLangEl: fileOutputLangSel,
+    inputLangEl: document.getElementById('fileLang'),
+    undoBtn: document.getElementById('btnFileCorrectUndo'),
+    statusFn: (msg) => {
+      const c = document.getElementById('fileCount');
+      if(c) c.textContent = contarPalabras(fileOutput.value) + ' palabras · ' + msg;
+    },
+  });
+});
+document.getElementById('btnYtTranslate')?.addEventListener('click', function() {
+  traducirResultadoActual(document.getElementById('ytOutput'), {
+    btnEl: this,
+    outputLangEl: ytOutputLangSel,
+    inputLangEl: document.getElementById('ytLang'),
+    undoBtn: document.getElementById('btnYtCorrectUndo'),
+    statusFn: (msg) => {
+      const c = document.getElementById('ytCount');
+      if(c) c.textContent = contarPalabras(ytOutput.value) + ' palabras · ' + msg;
+    },
+  });
+});
+
 /* ── 9) Mejorar prompt (skill maestro-prompts) ───────────────────────── */
 const promptImproveModal = document.getElementById('promptImproveModal');
 const promptImproveBackdrop = document.getElementById('promptImproveBackdrop');
@@ -4641,11 +4930,34 @@ if (btnTransImportOpen && transImportMenu) {
   });
 }
 
+const TRANS_DIR_LABELS = {
+  en: 'Inglés', es: 'Español', fr: 'Francés', pt: 'Portugués', de: 'Alemán', it: 'Italiano',
+};
+
+function actualizarEtiquetasTransDirection(){
+  const dir = (transDirection.value || 'en-es').toLowerCase();
+  const parts = dir.split('-');
+  const src = parts[0] || 'en';
+  const trg = parts[1] || 'es';
+  const srcName = TRANS_DIR_LABELS[src] || src;
+  const trgName = TRANS_DIR_LABELS[trg] || trg;
+  if(lblTransSrc) lblTransSrc.textContent = 'Texto original (' + srcName + ')';
+  if(lblTransTrg) lblTransTrg.textContent = 'Traducción (' + trgName + ')';
+  if(transSrc) transSrc.placeholder = 'Introduce el texto en ' + srcName.toLowerCase() + ' aquí o impórtalo desde otra pestaña...';
+}
+
 // Intercambiar idiomas y textos
 btnTransSwap.addEventListener('click', () => {
-  const dir = transDirection.value;
-  const newDir = dir === 'en-es' ? 'es-en' : 'en-es';
-  transDirection.value = newDir;
+  const dir = (transDirection.value || 'en-es').toLowerCase();
+  const parts = dir.split('-');
+  const newDir = (parts[1] || 'es') + '-' + (parts[0] || 'en');
+  const existe = Array.from(transDirection.options).some((o) => o.value === newDir);
+  if(existe){
+    transDirection.value = newDir;
+  }else{
+    // Si el inverso no está en la lista, crear temporalmente no; solo avisar
+    _mostrarToastMejora('No hay opción inversa para este par. Elige otra dirección.', false);
+  }
   transDirection.dispatchEvent(new Event('change'));
 
   const srcVal = transSrc.value;
@@ -4659,18 +4971,8 @@ btnTransSwap.addEventListener('click', () => {
 });
 
 // Cambiar etiquetas de idioma
-transDirection.addEventListener('change', () => {
-  const dir = transDirection.value;
-  if (dir === 'en-es') {
-    lblTransSrc.textContent = 'Texto original (Inglés)';
-    lblTransTrg.textContent = 'Traducción (Español)';
-    transSrc.placeholder = 'Introduce el texto en inglés aquí o impórtalo desde otra pestaña...';
-  } else {
-    lblTransSrc.textContent = 'Texto original (Español)';
-    lblTransTrg.textContent = 'Traducción (Inglés)';
-    transSrc.placeholder = 'Introduce el texto en español aquí o impórtalo desde otra pestaña...';
-  }
-});
+transDirection.addEventListener('change', actualizarEtiquetasTransDirection);
+actualizarEtiquetasTransDirection();
 
 // Traducir mediante API
 btnTransTranslate.addEventListener('click', async () => {
