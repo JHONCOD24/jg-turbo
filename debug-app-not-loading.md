@@ -1,4 +1,4 @@
-[OPEN] Debug Session: app-not-loading
+[RESOLVED] Debug Session: app-not-loading
 
 ## Síntoma
 - La app “no carga” y aparece error.
@@ -20,3 +20,16 @@
 
 ## Runs
 - pre: confirmado H1 (el backend no arranca porque el entorno no tiene pip/uvicorn)
+
+## Estado
+- RESUELTO (2026-06-17, revisión doctor-codigo): causa raíz real encontrada. Un intento
+  previo de borrar `.venv` con `Remove-Item -Recurse -Force` falló a mitad de camino
+  (archivos bloqueados, posiblemente por sync de Google Drive ya que el proyecto vive
+  bajo "Mi unidad"), dejando el entorno corrupto (paquetes a medio borrar, ej. "sympy"
+  truncado a "~ympy"). Como workaround se creó un venv alterno en
+  `%USERPROFILE%\.jg_turbo_venv`, y quedaron además 10 procesos uvicorn duplicados
+  corriendo desde 3 entornos distintos en los puertos 8000/8001.
+  Acciones aplicadas: se cerraron todos los procesos duplicados, se borró el `.venv`
+  corrupto y se recreó limpio con Python 3.12 + todas las dependencias (incluye
+  pytest/httpx de requirements-dev.txt). `iniciar.bat` ahora prioriza el `.venv` del
+  proyecto. Verificado con un servidor único levantado desde el `.venv` reparado.

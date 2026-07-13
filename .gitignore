@@ -22,6 +22,11 @@ __pycache__/
 .agents/
 .codestral/
 .vscode/
+.edge-debug/
+terminals/
+agent-tools/
+Skills/
+.pytest_tmp/
 
 # Archivos temporales de procesamiento de audio
 backend/temp/
@@ -29,3 +34,11 @@ backend/temp/
 *.wav
 *.mp3
 *.webm
+
+# Binarios pesados y logs locales (no van a Git/Vercel)
+bin/
+install_torch*.txt
+temp.js
+*.lnk
+_prueba.lnk
+_skill_inspect/

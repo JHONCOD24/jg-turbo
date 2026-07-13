@@ -4,12 +4,12 @@
     "affiliate-marketing-2026": {
       "source": "Skills/affiliate-marketing-2026.skill",
       "sourceType": "local",
-      "computedHash": "44a795cefeec9f3982477425bcecedadeef3ffa8d2bfbe207c90945b83b752c8"
+      "computedHash": "6fada9e41fea2e7f106cdeaed900d6350e50b0982fb91f090effa8dbdbaefaac"
     },
     "arquitecto-fullstack": {
       "source": "Skills/arquitecto-fullstack (1).skill",
       "sourceType": "local",
-      "computedHash": "6cf759e8183dcafe275c87098be7ff84447479cae604b27ef36d4722cd65357f"
+      "computedHash": "13b594e0cf2a957a7444f8dac98d9797c3ebe1ddc1fa115afd5cb188aa8243b1"
     },
     "brandkit": {
       "source": "Leonxlnx/taste-skill",
@@ -20,7 +20,7 @@
     "conversion-web": {
       "source": "Skills/conversion-web.skill",
       "sourceType": "local",
-      "computedHash": "ffcf04fa2be7a57a85a9cff8d3512e68e2665a1dea207c0f03ad5fbf980e416a"
+      "computedHash": "8a297ce3410ad1f73ae15901d0ffa70ed15204621c2dfd8369d07dcbbd411304"
     },
     "design-taste-frontend": {
       "source": "Leonxlnx/taste-skill",
@@ -37,7 +37,7 @@
     "diseno-ui-responsive": {
       "source": "Skills/diseno-ui-responsive.skill",
       "sourceType": "local",
-      "computedHash": "89df46c0751031a2d7c718e2bbeefb5ff89758f47841b80d35bd55bfe7dadfb3"
+      "computedHash": "1e69f83d3fd36c43786d1f1a086c395115073aded29463d2cdc7aa3c36c46dc6"
     },
     "full-output-enforcement": {
       "source": "Leonxlnx/taste-skill",
@@ -84,7 +84,7 @@
     "lanzador-meta-ads": {
       "source": "Skills/lanzador-meta-ads.skill",
       "sourceType": "local",
-      "computedHash": "6786808c0d76186b1f686374eb34be69b4893ed58b26673cccb9c08b67034018"
+      "computedHash": "013f994f2cad6dcf304888e6caa652f70fd5ce6f6d3305cf657af7aafa0d08d2"
     },
     "minimalist-ui": {
       "source": "Leonxlnx/taste-skill",
@@ -95,7 +95,7 @@
     "redactor-maestro": {
       "source": "Skills/redactor-maestro.skill",
       "sourceType": "local",
-      "computedHash": "14d9f84371cb5a1d36f1487f780595bcb2b20341d0b820561f9c602f8e821ad6"
+      "computedHash": "44e2219708836af6351376721e173d02607b0f93bdfde7f0c5ea8b5942a9d45e"
     },
     "redesign-existing-projects": {
       "source": "Leonxlnx/taste-skill",
@@ -108,6 +108,11 @@
       "sourceType": "github",
       "skillPath": "skills/stitch-skill/SKILL.md",
       "computedHash": "acf2921a7e50c06e637f072ba52e36a994cbb44ecbe6e31435bc113b894f5499"
+    },
+    "doctor-codigo": {
+      "source": "Skills/doctor-codigo.skill",
+      "sourceType": "local",
+      "computedHash": "e67a7443fb01c6b3bb00ecdfdf8b8ff444f0a945d87fc5cbf682be765ffed308"
     }
   }
 }

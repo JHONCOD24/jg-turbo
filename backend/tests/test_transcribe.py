@@ -69,6 +69,20 @@ def test_transcribe_audio_valido(client, audio_prueba):
     assert "needs_review" in data
 
 
+def test_transcribe_audio_fast_mode(client, audio_prueba):
+    _esperar_modelo()
+    with open(audio_prueba, "rb") as f:
+        resp = client.post(
+            "/transcribe",
+            files={"file": ("tono.wav", f, "audio/wav")},
+            data={"language": "auto", "fast": "true"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "text" in data
+    assert "segments" in data
+
+
 def test_transcribe_formato_no_soportado(client):
     resp = client.post(
         "/transcribe",

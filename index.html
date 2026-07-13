@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JG Turbo · Voz a texto en segundos</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FF7A18'/%3E%3Cstop offset='100%25' stop-color='%23FF2D55'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M16 6a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V9a3 3 0 0 0-3-3z' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M23 14v1a7 7 0 0 1-14 0v-1' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cline x1='16' y1='22' x2='16' y2='26' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -54,10 +54,7 @@
     color:var(--text); min-height:100dvh; line-height:1.55; -webkit-font-smoothing:antialiased;
     display:flex;flex-direction:column;
   }
-  body::before{
-    content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;z-index:0;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
+
   .wrap{
     position:relative;z-index:1;max-width:980px;width:100%;margin:0 auto;
     padding:16px 16px 12px;min-height:100dvh;display:flex;flex-direction:column;
@@ -244,9 +241,10 @@
     }
   }
 
-  .lang{margin-left:auto}
-  .lang select{background:var(--bg-2);border:1px solid var(--line);color:var(--text);font-family:inherit;
-    font-size:12px;padding:6px 8px;border-radius:9px;cursor:pointer;outline:none}
+  .lang,.lang-row{margin-left:auto}
+  .lang-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .lang select,.lang-row select{background:var(--bg-2);border:1px solid var(--line);color:var(--text);font-family:inherit;
+    font-size:12px;padding:6px 8px;border-radius:9px;cursor:pointer;outline:none;max-width:100%}
 
   .out-head{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--line);flex:none}
   .out-head h3{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:14px}
@@ -348,8 +346,34 @@
   .btn.danger:hover{background:rgba(255,59,92,.2);border-color:rgba(255,59,92,.5)}
   .btn.btn-improve{background:linear-gradient(135deg,rgba(255,122,24,.15),rgba(255,45,85,.15));border-color:rgba(255,122,24,.45);color:#FFC79A}
   .btn.btn-improve:hover{background:linear-gradient(135deg,rgba(255,122,24,.28),rgba(255,45,85,.28));border-color:rgba(255,122,24,.7);transform:translateY(-1px)}
+  /* Botón "Mejorar prompt" — estilo estrellado (skill maestro-prompts) */
+  .btn.btn-prompt{background:linear-gradient(135deg,rgba(255,45,85,.10),rgba(255,122,24,.10));border-color:rgba(255,45,85,.35);color:#FFB69E}
+  .btn.btn-prompt:hover{background:linear-gradient(135deg,rgba(255,45,85,.22),rgba(255,122,24,.22));border-color:rgba(255,45,85,.6);transform:translateY(-1px);box-shadow:0 4px 16px -6px rgba(255,45,85,.5)}
   .btn.btn-undo{background:rgba(39,225,193,.12);border-color:var(--cyan-glow);color:var(--cyan)}
   .btn.btn-undo:hover{background:rgba(39,225,193,.22);border-color:var(--cyan);transform:translateY(-1px)}
+  /* Grupo Corregir + deshacer minimalista */
+  .correct-group{display:inline-flex;align-items:center;gap:4px}
+  .btn.btn-undo-mini{
+    width:38px;min-width:38px;padding:0;justify-content:center;
+    background:transparent;border:1px solid var(--line);color:var(--muted);
+    border-radius:10px;opacity:.45;pointer-events:none;transition:all .15s;
+  }
+  .btn.btn-undo-mini svg{width:15px;height:15px}
+  .btn.btn-undo-mini.is-on{
+    opacity:1;pointer-events:auto;color:var(--cyan);
+    border-color:rgba(39,225,193,.4);background:rgba(39,225,193,.08);
+  }
+  .btn.btn-undo-mini.is-on:hover{
+    background:rgba(39,225,193,.18);border-color:var(--cyan);transform:translateY(-1px);
+  }
+  .mini-btn.btn-undo-mini{
+    width:32px;min-width:32px;padding:5px 0;justify-content:center;
+    opacity:.4;pointer-events:none;
+  }
+  .mini-btn.btn-undo-mini.is-on{
+    opacity:1;pointer-events:auto;color:var(--cyan);
+    border-color:rgba(39,225,193,.45);background:rgba(39,225,193,.1);
+  }
 
   /* Optimización responsiva para viewport locked: ocultar controles al mostrar resultados */
   .file-area.has-results > p,
@@ -543,7 +567,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Servidor e IA
     </button>
-    <span class="badge" id="topBadge">v2.1 · Dictado en vivo</span>
+    <span class="badge" id="topBadge">v2.1 · faster-whisper ⚡</span>
   </header>
 
   <div class="tabs-row">
@@ -551,6 +575,7 @@
       <button class="tab active" data-tab="mic"><span class="em">🎤</span><span class="lbl">Micrófono</span></button>
       <button class="tab" data-tab="file"><span class="em">🎧</span><span class="lbl">Archivo de audio</span></button>
       <button class="tab" data-tab="yt"><span class="em">▶️</span><span class="lbl">YouTube</span></button>
+      <button class="tab" data-tab="trans"><span class="em">🌐</span><span class="lbl">Traducción</span></button>
     </nav>
     <button class="btn-cheat" id="btnCheat" title="Comandos de voz disponibles">🗣️</button>
   </div>
@@ -618,8 +643,10 @@
         <div class="chip" data-opt="code" data-tooltip="Convierte «abrir paréntesis» o «etiqueta div» en símbolos de código. Se activa solo al detectar que dictas código; tócalo para fijarlo manualmente."><span class="sw"></span>Modo código { } ( )</div>
         <div class="chip on" data-opt="caps" data-tooltip="Pone en mayúscula la primera letra de cada oración y tras signos finales (. ! ?)."><span class="sw"></span>Mayúsculas auto</div>
         <div class="chip on" data-opt="auto" data-tooltip="Corrige términos técnicos y marcas (ej.: javascript → JavaScript, github → GitHub)."><span class="sw"></span>Autocorrección</div>
-        <div class="lang">
-          <select id="lang" aria-label="Idioma de reconocimiento">
+        <div class="chip on" data-opt="contexto" data-tooltip="Interpreta y corrige palabras mal transcritas según el contexto. Con IA (Gemini/OpenRouter en Servidor e IA) reconstruye frases incoherentes; sin API aplica corrección fonética y de términos técnicos."><span class="sw"></span>Corrección contextual</div>
+        <div class="lang-row">
+          <select id="lang" aria-label="Idioma del audio" title="Idioma que se escucha (auto detecta con Whisper)">
+            <option value="auto">Detectar idioma</option>
             <option value="es-CO" selected>Español (Colombia)</option>
             <option value="es-MX">Español (México)</option>
             <option value="es-ES">Español (España)</option>
@@ -629,6 +656,11 @@
             <option value="fr-FR">Français</option>
             <option value="de-DE">Deutsch</option>
             <option value="pt-BR">Português (Brasil)</option>
+          </select>
+          <select id="outputLang" aria-label="Texto transcrito en" title="Si el audio es en inglés, elige si quieres el texto en inglés o traducido al español">
+            <option value="same">Texto: mismo idioma</option>
+            <option value="en">Texto: inglés</option>
+            <option value="es">Texto: español</option>
           </select>
         </div>
       </div>
@@ -672,13 +704,22 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           <span id="copyLabel">Copiar todo</span>
         </button>
-        <button class="btn" id="btnCorrect" title="Corregir ortografía, tildes y gramática">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-          <span id="correctLabel">Corregir</span>
-        </button>
+        <span class="correct-group">
+          <button class="btn" id="btnCorrect" title="Corregir ortografía, tildes y gramática">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            <span id="correctLabel">Corregir</span>
+          </button>
+          <button type="button" class="btn btn-undo-mini" id="btnCorrectUndo" title="Volver a la transcripción original" aria-label="Deshacer corrección">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          </button>
+        </span>
         <button class="btn btn-improve" id="btnImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
           <span id="improveLabel">Pulir texto</span>
+        </button>
+        <button class="btn btn-prompt" id="btnPrompt" title="Aplicar la skill maestro-prompts: audita y reescribe tu prompt con técnicas 2025-2026">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L9.5 8.5 2 9.5l5.5 4.5L6 22l6-3.5 6 3.5-1.5-8 5.5-4.5-7.5-1z"/></svg>
+          <span id="promptLabel">Mejorar prompt</span>
         </button>
         <button class="btn" id="btnTxt">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -707,13 +748,18 @@
         </div>
 
         <div class="file-opts">
-          <select id="fileLang">
+          <select id="fileLang" aria-label="Idioma del audio" title="Detecta inglés, español u otros idiomas">
             <option value="auto">Detectar idioma automáticamente</option>
             <option value="es">Español</option>
             <option value="en">Inglés</option>
             <option value="fr">Francés</option>
             <option value="de">Alemán</option>
             <option value="pt">Portugués</option>
+          </select>
+          <select id="fileOutputLang" aria-label="Texto transcrito en" title="Elige inglés original o traducido al español">
+            <option value="same">Texto: mismo idioma del audio</option>
+            <option value="en">Texto: inglés</option>
+            <option value="es">Texto: español</option>
           </select>
         </div>
 
@@ -755,13 +801,22 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               <span id="fileCopyLabel">Copiar todo</span>
             </button>
-            <button class="btn" id="btnFileCorrect" title="Corregir ortografía, tildes y gramática">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-              <span id="fileCorrectLabel">Corregir</span>
-            </button>
+            <span class="correct-group">
+              <button class="btn" id="btnFileCorrect" title="Corregir ortografía, tildes y gramática">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                <span id="fileCorrectLabel">Corregir</span>
+              </button>
+              <button type="button" class="btn btn-undo-mini" id="btnFileCorrectUndo" title="Volver a la transcripción original" aria-label="Deshacer corrección">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              </button>
+            </span>
             <button class="btn btn-improve" id="btnFileImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
               <span id="fileImproveLabel">Pulir texto</span>
+            </button>
+            <button class="btn btn-prompt" id="btnFilePrompt" title="Aplicar la skill maestro-prompts: audita y reescribe tu prompt con técnicas 2025-2026">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L9.5 8.5 2 9.5l5.5 4.5L6 22l6-3.5 6 3.5-1.5-8 5.5-4.5-7.5-1z"/></svg>
+              <span id="filePromptLabel">Mejorar prompt</span>
             </button>
             <button class="btn" id="btnFileTxt">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -798,13 +853,18 @@
         </div>
 
         <div class="yt-opts">
-          <select id="ytLang">
+          <select id="ytLang" aria-label="Idioma del audio" title="Detecta inglés, español u otros idiomas">
             <option value="auto">Detectar idioma automáticamente</option>
             <option value="es">Español</option>
             <option value="en">Inglés</option>
             <option value="fr">Francés</option>
             <option value="de">Alemán</option>
             <option value="pt">Portugués</option>
+          </select>
+          <select id="ytOutputLang" aria-label="Texto transcrito en" title="Elige inglés original o traducido al español">
+            <option value="same">Texto: mismo idioma del audio</option>
+            <option value="en">Texto: inglés</option>
+            <option value="es">Texto: español</option>
           </select>
           <select id="ytSubPref">
             <option value="true">Usar subtítulos del video si están disponibles</option>
@@ -836,13 +896,22 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               <span id="ytCopyLabel">Copiar todo</span>
             </button>
-            <button class="btn" id="btnYtCorrect" title="Corregir ortografía, tildes y gramática">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-              <span id="ytCorrectLabel">Corregir</span>
-            </button>
+            <span class="correct-group">
+              <button class="btn" id="btnYtCorrect" title="Corregir ortografía, tildes y gramática">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                <span id="ytCorrectLabel">Corregir</span>
+              </button>
+              <button type="button" class="btn btn-undo-mini" id="btnYtCorrectUndo" title="Volver a la transcripción original" aria-label="Deshacer corrección">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              </button>
+            </span>
             <button class="btn btn-improve" id="btnYtImprove" title="Pulir redacción, claridad y estilo sin cambiar el sentido">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
               <span id="ytImproveLabel">Pulir texto</span>
+            </button>
+            <button class="btn btn-prompt" id="btnYtPrompt" title="Aplicar la skill maestro-prompts: audita y reescribe tu prompt con técnicas 2025-2026">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L9.5 8.5 2 9.5l5.5 4.5L6 22l6-3.5 6 3.5-1.5-8 5.5-4.5-7.5-1z"/></svg>
+              <span id="ytPromptLabel">Mejorar prompt</span>
             </button>
             <button class="btn" id="btnYtTxt">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -858,7 +927,92 @@
     </div>
   </section>
 
-  <footer>JG Turbo v2.1 · dictado en vivo en <b>Chrome</b> o <b>Edge</b> · archivos y YouTube requieren el servidor</footer>
+  <!-- ========== PANEL TRADUCCIÓN ========== -->
+  <section class="panel" data-panel="trans">
+    <div class="card">
+      <div class="file-area" style="padding:16px; height:100%; display:flex; flex-direction:column; overflow-y:auto; min-height:0; flex:1;">
+        <h2>🌐 Traducción de Texto</h2>
+        <p>Traduce textos de inglés a español o de español a inglés utilizando la IA configurada o nuestro fallback gratuito.</p>
+
+        <!-- Cabecera de controles -->
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; flex:none;">
+          <!-- Selector de idioma -->
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="transDirection" style="background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:12.5px; padding:7px 10px; border-radius:9px; cursor:pointer; outline:none; min-width:160px;">
+              <option value="en-es">Inglés ➜ Español</option>
+              <option value="es-en">Español ➜ Inglés</option>
+            </select>
+            <button class="btn-back" id="btnTransSwap" style="padding:8px; display:inline-flex; align-items:center; justify-content:center;" title="Intercambiar direcciones e importar textos">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px; height:14px;"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l-4-4M17 20l4-4"/></svg>
+            </button>
+          </div>
+
+          <!-- Botón de importación rápida -->
+          <div style="position:relative; display:inline-block;">
+            <button class="mini-btn" id="btnTransImportOpen" style="padding: 6px 12px; font-weight: 600; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--text); display: flex; align-items: center; gap: 6px;" title="Importar texto de otras pestañas">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px; height:13px;"><path d="M12 5v14M5 12h14"/></svg>
+              Importar de...
+            </button>
+            <div id="transImportMenu" style="display:none; position:absolute; top:120%; right:0; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); z-index:99; min-width:200px; padding:6px; flex-direction:column; gap:4px;">
+              <button class="mini-btn" id="btnImportMic" style="text-align:left; justify-content:flex-start; width:100%; border:0; background:transparent;">🎤 Micrófono</button>
+              <button class="mini-btn" id="btnImportFile" style="text-align:left; justify-content:flex-start; width:100%; border:0; background:transparent;">🎧 Archivo de audio</button>
+              <button class="mini-btn" id="btnImportYt" style="text-align:left; justify-content:flex-start; width:100%; border:0; background:transparent;">▶️ YouTube</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Columnas del editor de traducción -->
+        <div style="display:flex; gap:16px; flex:1; min-height:0; flex-wrap:wrap;">
+          <!-- Columna Izquierda: Origen -->
+          <div style="flex:1; min-width:280px; display:flex; flex-direction:column; min-height:180px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex:none;">
+              <span id="lblTransSrc" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);">Texto original (Inglés)</span>
+              <span id="transSrcCount" style="font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--muted-2);">0 palabras · 0 car.</span>
+            </div>
+            <textarea id="transSrc" style="width:100%; flex:1; min-height:0; resize:none; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--bg-2); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:13.5px; line-height:1.6; outline:none; transition:border-color .15s;" placeholder="Introduce el texto aquí o impórtalo desde otra pestaña..." spellcheck="true"></textarea>
+          </div>
+
+          <!-- Columna Derecha: Destino -->
+          <div style="flex:1; min-width:280px; display:flex; flex-direction:column; min-height:180px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex:none;">
+              <span id="lblTransTrg" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--cyan);">Traducción (Español)</span>
+              <span id="transTrgCount" style="font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--muted-2);">0 palabras · 0 car.</span>
+            </div>
+            <textarea id="transTrg" style="width:100%; flex:1; min-height:0; resize:none; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--bg-2); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:13.5px; line-height:1.6; outline:none; transition:border-color .15s;" placeholder="La traducción aparecerá aquí..." spellcheck="true" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Barra de progreso/estado -->
+        <div id="transProgArea" style="display:none; margin-top:14px; flex:none;">
+          <div class="prog-bar"><div class="prog-fill" id="transProg"></div></div>
+          <div class="prog-label" id="transProgLabel">Traduciendo…</div>
+        </div>
+
+        <!-- Botones de pie -->
+        <div class="actions" style="padding:14px 0 0; margin-top:14px; border-top:1px solid var(--line); flex:none; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn primary" id="btnTransTranslate" style="min-width:140px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span id="transBtnLabel">Traducir</span>
+          </button>
+          <button class="btn" id="btnTransCopy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span id="transCopyLabel">Copiar traducción</span>
+          </button>
+          <button class="btn" id="btnTransTxt">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar .txt
+          </button>
+          <button class="btn ghost" id="btnTransClear">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Limpiar
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <footer>JG Turbo v2.1 · faster-whisper int8 · dictado en vivo en <b>Chrome</b> o <b>Edge</b></footer>
 </div>
 
 <!-- Modal de Comandos de Voz -->
@@ -902,13 +1056,22 @@
     <div class="modal-header">
       <h3 id="textModalTitle">📝 Editor de texto</h3>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="mini-btn" id="btnTextModalCorrect" style="padding:5px 11px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-          <span id="textModalCorrectLabel">Corregir</span>
-        </button>
+        <span class="correct-group">
+          <button class="mini-btn" id="btnTextModalCorrect" style="padding:5px 11px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            <span id="textModalCorrectLabel">Corregir</span>
+          </button>
+          <button type="button" class="mini-btn btn-undo-mini" id="btnTextModalCorrectUndo" title="Volver a la transcripción original" aria-label="Deshacer corrección">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          </button>
+        </span>
         <button class="mini-btn mini-btn-improve" id="btnTextModalImprove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></svg>
           <span id="textModalImproveLabel">✦ Pulir texto</span>
+        </button>
+        <button class="mini-btn" id="btnTextModalPrompt" style="padding:5px 11px;background:linear-gradient(135deg,rgba(255,122,24,.18),rgba(255,45,85,.18));border-color:rgba(255,122,24,.55);color:#FFC79A;font-weight:600;" title="Aplicar la skill maestro-prompts para mejorar el prompt que tienes en el editor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M12 2L9.5 8.5 2 9.5l5.5 4.5L6 22l6-3.5 6 3.5-1.5-8 5.5-4.5-7.5-1z"/></svg>
+          <span id="textModalPromptLabel">✦ Mejorar prompt</span>
         </button>
         <button class="mini-btn" id="btnTextModalCopy" style="padding:5px 11px;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -958,6 +1121,45 @@
   </div>
 </div>
 
+<!-- Modal de Mejorar Prompt (skill maestro-prompts) -->
+<div class="modal" id="promptImproveModal">
+  <div class="modal-backdrop" id="promptImproveBackdrop"></div>
+  <div class="modal-content" style="max-width: 880px; max-height: 88vh; height: 88vh; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <h3 style="display: flex; align-items: center; gap: 8px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#FFB69E" stroke-width="2" style="width:18px;height:18px;"><path d="M12 2L9.5 8.5 2 9.5l5.5 4.5L6 22l6-3.5 6 3.5-1.5-8 5.5-4.5-7.5-1z"/></svg>
+        <span>✦ Mejorar prompt</span>
+        <span id="promptImproveBadge" style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:rgba(255,122,24,.15);color:#FFC79A;border:1px solid rgba(255,122,24,.35);padding:3px 8px;border-radius:999px;"></span>
+      </h3>
+      <button class="modal-close" id="promptImproveClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; flex: 1; overflow: hidden;">
+      <!-- Aviso (heurística local sin IA / error de API) -->
+      <div id="promptImproveNotice" class="notice warn" style="margin: 0; display: none;"></div>
+      <!-- Columna: prompt original (referencia) -->
+      <div style="display: flex; flex-direction: column; min-height: 100px; max-height: 22%;">
+        <label style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Tu prompt original</span>
+          <span id="promptImproveChars" style="font-family:'JetBrains Mono',monospace;color:var(--muted-2);text-transform:none;letter-spacing:0;font-weight:400;font-size:10px;"></span>
+        </label>
+        <div id="promptImproveOriginal" style="flex: 1; overflow-y: auto; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; word-break: break-word;"></div>
+      </div>
+      <!-- Columna: prompt mejorado (editable) -->
+      <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+        <label style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #FFC79A; margin-bottom: 6px;">Prompt mejorado (puedes editarlo antes de aplicar)</label>
+        <textarea id="promptImproveSuggested" style="width: 100%; flex: 1; min-height: 0; resize: none; border: 1px solid rgba(255,122,24,.45); border-radius: 10px; outline: none; background: rgba(255,122,24,.03); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; padding: 12px 16px; overflow-y: auto; transition: border-color 0.15s;" onfocus="this.style.borderColor='rgba(255,45,85,.85)'" onblur="this.style.borderColor='rgba(255,122,24,.45)'"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; background: var(--bg-2); flex: none; gap: 8px; flex-wrap: wrap;">
+      <span id="promptImproveMode" style="font-size: 11px; color: var(--muted); font-style: italic;"></span>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn ghost" id="btnPromptImproveCancel" style="max-width:140px; padding: 8px 16px;">Descartar</button>
+        <button class="btn" id="btnPromptImproveAccept" style="max-width:200px; padding: 8px 20px; background: linear-gradient(135deg, #FF7A18, #FF2D55); border: 0; color: #fff; font-weight: 700; box-shadow: 0 4px 15px -4px rgba(255,45,85,.6);">✦ Usar prompt mejorado</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal de Configuración y Claves de API -->
 <div class="modal" id="settingsModal">
   <div class="modal-backdrop" id="settingsModalBackdrop"></div>
@@ -983,16 +1185,40 @@
         <select id="settingsAiProvider" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13.5px; padding: 10px 12px; border-radius: 10px; outline: none; cursor: pointer;">
           <option value="none">Desactivada (corrección básica local)</option>
           <option value="gemini" selected>Google Gemini (rápida y gratuita)</option>
+          <option value="openrouter">OpenRouter (Modelos Gratuitos)</option>
           <option value="mistral">Mistral (buena para texto largo)</option>
           <option value="anthropic">Anthropic Claude (máxima calidad)</option>
         </select>
       </div>
 
-      <!-- API Key -->
+      <!-- API Key (IA: Gemini/OpenRouter/etc. para traducir y pulir) -->
       <div id="settingsApiKeyContainer" style="display: flex; flex-direction: column; gap: 6px;">
         <label id="settingsApiKeyLabel" style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em;">Clave de API de Gemini (API Key)</label>
         <input type="password" id="settingsApiKey" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 10px 12px; border-radius: 10px; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--line)'" placeholder="Pega tu clave de API aquí">
         <span id="settingsApiKeyHelp" style="font-size: 11px; color: var(--muted); line-height: 1.4;"></span>
+        <span id="settingsApiKeyState" style="font-size: 11px; color: var(--muted-2); line-height: 1.4;">Se guarda en tu navegador y se usa para traducir, pulir y corregir con IA.</span>
+      </div>
+
+      <!-- Clave Groq (transcripción en la nube / Vercel) -->
+      <div id="settingsGroqKeyContainer" style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em;">Clave Groq (transcripción en la nube)</label>
+        <input type="password" id="settingsGroqKey" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 10px 12px; border-radius: 10px; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--line)'" placeholder="gsk_… (console.groq.com)">
+        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">Necesaria en producción (Vercel) para Micrófono y Archivo. Gratis en <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color: var(--cyan); text-decoration: underline;">console.groq.com/keys</a>. En local con Whisper no es obligatoria.</span>
+      </div>
+
+      <!-- OpenRouter Model Selection -->
+      <div id="settingsOpenRouterModelContainer" style="display: none; flex-direction: column; gap: 6px;">
+        <label style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em;">Modelo de OpenRouter</label>
+        <select id="settingsOpenRouterModel" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13.5px; padding: 10px 12px; border-radius: 10px; outline: none; cursor: pointer;">
+          <option value="qwen/qwen3-coder:free" selected>Qwen 3 Coder (Gratis)</option>
+          <option value="google/gemma-4-31b-it:free">Gemma 4 31B IT (Gratis)</option>
+          <option value="openai/gpt-oss-120b:free">GPT OSS 120B (Gratis)</option>
+          <option value="google/gemma-4-26b-a4b-it:free">Gemma 4 26B A4B IT (Gratis)</option>
+          <option value="qwen/qwen3-next-80b-a3b-instruct:free">Qwen 3 Next 80B A3B Instruct (Gratis)</option>
+          <option value="nousresearch/hermes-3-llama-3.1-405b:free">Hermes 3 Llama 3.1 405B (Gratis)</option>
+          <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Gratis)</option>
+        </select>
+        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">Selecciona un modelo gratuito de OpenRouter para procesar y pulir tu texto.</span>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -1001,16 +1227,44 @@
         <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">Palabras o frases que la app corregirá al dictar (ideal para términos técnicos en inglés).</span>
       </div>
 
-      <!-- Modelo de Whisper (Carga Local) -->
-      <div style="display: flex; flex-direction: column; gap: 6px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Modelo Whisper (transcripción local)</label>
+      <!-- Modelo de Whisper (solo backend local) / info cloud -->
+      <div id="settingsWhisperLocalBox" style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Modelo Whisper (solo en PC local)</label>
         <select id="settingsWhisperModel" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13.5px; padding: 10px 12px; border-radius: 10px; outline: none; cursor: pointer;">
-          <option value="tiny">Tiny (muy rápido, menos preciso)</option>
-          <option value="base">Base (equilibrio velocidad/precisión — recomendado)</option>
+          <option value="tiny">Tiny (más rápido — recomendado)</option>
+          <option value="base">Base (equilibrio velocidad/precisión)</option>
           <option value="small">Small (más lento, más preciso)</option>
           <option value="medium">Medium (lento, máxima precisión)</option>
         </select>
-        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">Modelos más grandes captan mejor términos técnicos e inglés, pero consumen más CPU y memoria.</span>
+        <span id="settingsWhisperHelp" style="font-size: 11px; color: var(--muted); line-height: 1.4;">Usa Tiny para velocidad. Sube a Base o Small si necesitas más precisión en términos técnicos. En Vercel (nube) el modelo es fijo: Groq whisper-large-v3-turbo.</span>
+      </div>
+      <div id="settingsWhisperCloudBox" style="display: none; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(39,225,193,.25); background: rgba(39,225,193,.06);">
+        <label style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em;">Motor de transcripción (nube)</label>
+        <div style="font-size: 13.5px; color: var(--text); font-weight: 600;">Groq · whisper-large-v3-turbo</div>
+        <span style="font-size: 11px; color: var(--muted); line-height: 1.45;">En producción el modelo es fijo (rápido y de buena calidad). No se puede cambiar a Tiny/Base/Small aquí — eso solo existe en el backend local de tu PC. Los errores puntuales de palabras se corrigen con <b>Corregir</b> / <b>Pulir</b> + clave de Gemini.</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Calidad del micrófono</label>
+        <select id="settingsMicQuality" style="width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13.5px; padding: 10px 12px; border-radius: 10px; outline: none; cursor: pointer;">
+          <option value="rapido">Rápido · 32 kbps</option>
+          <option value="precision" selected>Preciso · 64 kbps</option>
+          <option value="dictado">Dictado profesional · 96 kbps</option>
+        </select>
+        <span style="font-size: 11px; color: var(--muted); line-height: 1.4;">A mayor bitrate, Whisper recibe más detalle de voz. El modo preciso es el equilibrio recomendado.</span>
+      </div>
+
+    </div>
+      <!-- Respaldo de configuración (persiste entre actualizaciones del código) -->
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg-2);">
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">Respaldo de ajustes</label>
+        <span style="font-size:11px;color:var(--muted);line-height:1.45;">Tus claves, glosario y preferencias viven en <b>este navegador</b> y no se borran al desplegar código nuevo. Exporta un respaldo por si cambias de PC o limpias el historial.</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="btn ghost" id="btnConfigExport" style="max-width:none;padding:8px 12px;font-size:12px;">Exportar config</button>
+          <button type="button" class="btn ghost" id="btnConfigImport" style="max-width:none;padding:8px 12px;font-size:12px;">Importar config</button>
+          <input type="file" id="configImportFile" accept="application/json,.json" style="display:none">
+        </div>
+        <span id="configPersistStatus" style="font-size:11px;color:var(--muted-2);line-height:1.4;"></span>
       </div>
 
     </div>
@@ -1115,7 +1369,107 @@
      más potente en la grabación del mic
    ============================================================ */
 
-console.log('JG Turbo v2.1');
+console.log('JG Turbo v2.2');
+
+/* ── Persistencia de configuración (sobrevive deploys y actualizaciones) ──
+ * REGLA PARA AGENTES/LLM: no renombrar las claves jg_* sin migración.
+ * No borrar localStorage del usuario. No sobrescribir glosario/claves con vacío.
+ * Ver CONFIG_PERSISTENTE.md en el proyecto.
+ */
+const JG_CONFIG_VERSION = 1;
+const JG_BUNDLE_KEY = 'jg_config_bundle';
+const JG_CONFIG_KEYS = [
+  'jg_server',
+  'jg_ai_provider',
+  'jg_api_key',
+  'jg_groq_api_key',
+  'jg_openrouter_model',
+  'jg_glossary',
+  'jg_whisper_model',
+  'jg_mic_quality',
+  'jg_output_lang',
+];
+const JG_GLOSSARY_DEFAULT = [
+  'Claude', 'Anthropic', 'Gemini', 'OpenAI', 'ChatGPT', 'GPT-4', 'GPT-4o', 'Grok', 'xAI',
+  'DeepSeek', 'Mistral', 'Qwen', 'Llama', 'Ollama', 'LangChain', 'Whisper', 'Groq', 'OpenRouter',
+  'API', 'LLM', 'prompt', 'prompts', 'skills', 'skill', 'token', 'embedding', 'RAG', 'JSON',
+  'JavaScript', 'TypeScript', 'Python', 'React', 'Node.js', 'Next.js', 'FastAPI', 'HTML', 'CSS',
+  'SQL', 'PostgreSQL', 'MongoDB', 'Firebase', 'Vercel', 'GitHub', 'Git', 'Docker', 'frontend',
+  'backend', 'fullstack', 'deploy', 'serverless', 'endpoint', 'webhook', 'OAuth', 'JWT',
+  'Kontento', 'Notas Pro', 'JG Turbo',
+].join('\n');
+
+function jgCfgGet(key, fallback = '') {
+  try {
+    const v = localStorage.getItem(key);
+    return v == null ? fallback : v;
+  } catch (_) {
+    return fallback;
+  }
+}
+function jgCfgSet(key, value) {
+  try {
+    if (value == null || value === '') {
+      // No borrar secretos/ajustes por accidente: solo escribe si hay valor
+      // (para borrar, usar jgCfgClearKey)
+      return;
+    }
+    localStorage.setItem(key, String(value));
+  } catch (e) {
+    console.warn('No se pudo guardar', key, e);
+  }
+}
+function jgCfgClearKey(key) {
+  try { localStorage.removeItem(key); } catch (_) {}
+}
+function jgCfgSnapshot() {
+  const data = { version: JG_CONFIG_VERSION, savedAt: new Date().toISOString(), values: {} };
+  JG_CONFIG_KEYS.forEach((k) => {
+    const v = jgCfgGet(k, null);
+    if (v != null && v !== '') data.values[k] = v;
+  });
+  try {
+    localStorage.setItem(JG_BUNDLE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('No se pudo guardar el bundle de config', e);
+  }
+  return data;
+}
+function jgCfgRestoreFromBundle() {
+  try {
+    const raw = localStorage.getItem(JG_BUNDLE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !data.values) return false;
+    let restored = 0;
+    Object.keys(data.values).forEach((k) => {
+      if (!JG_CONFIG_KEYS.includes(k)) return;
+      const actual = jgCfgGet(k, '');
+      if (!actual && data.values[k]) {
+        localStorage.setItem(k, data.values[k]);
+        restored++;
+      }
+    });
+    return restored > 0;
+  } catch (_) {
+    return false;
+  }
+}
+function jgCfgMigrateAndSeed() {
+  // 1) Recuperar desde bundle si faltan claves sueltas (tras limpiezas parciales)
+  jgCfgRestoreFromBundle();
+  // 2) Sembrar glosario técnico una sola vez (no pisa el del usuario)
+  if (!localStorage.getItem('jg_glossary_seeded')) {
+    const g = (jgCfgGet('jg_glossary', '') || '').trim();
+    if (!g) {
+      try { localStorage.setItem('jg_glossary', JG_GLOSSARY_DEFAULT); } catch (_) {}
+    }
+    try { localStorage.setItem('jg_glossary_seeded', '1'); } catch (_) {}
+  }
+  // 3) Snapshot de respaldo al arrancar
+  jgCfgSnapshot();
+}
+jgCfgMigrateAndSeed();
 
 /* ── 0) Conexión con el servidor ──────────────────────────────────────── */
 
@@ -1124,11 +1478,32 @@ console.log('JG Turbo v2.1');
 // así que se apunta a http://localhost:8000 por defecto. El usuario puede sobreescribirlo
 // en Configuración (ej.: con la URL de un túnel ngrok/Cloudflare).
 const _esLocalhost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+const _isVercel = window.location.hostname.includes('vercel.app') || window.location.hostname.includes('vercel.sh');
 const _defaultServer = (window.location.protocol !== 'file:' && _esLocalhost)
   ? window.location.origin
-  : 'http://localhost:8000';
-let SERVER_URL = localStorage.getItem('jg_server') || _defaultServer;
-let serverInfo = { online:false, modelReady:false, modelState:'desconocido', model:'base', modelError:null };
+  : (_isVercel ? window.location.origin + '/api' : 'http://localhost:8000');
+// En Vercel nunca reutilizar un SERVER_URL de localhost guardado en sesiones locales
+// (solo ignora la URL local; NO borra claves de API ni glosario)
+(function(){
+  const guardado = jgCfgGet('jg_server', '');
+  if(!guardado){ window.__JG_SERVER_INIT__ = _defaultServer; return; }
+  const esLocalGuardado = /localhost|127\.0\.0\.1|\[::1\]/.test(guardado);
+  if(_isVercel && esLocalGuardado){
+    // No usamos localhost en Vercel, pero no borramos otras preferencias
+    window.__JG_SERVER_INIT__ = _defaultServer;
+    return;
+  }
+  window.__JG_SERVER_INIT__ = guardado;
+})();
+let SERVER_URL = window.__JG_SERVER_INIT__ || _defaultServer;
+let serverInfo = { online:false, modelReady:false, modelState:'desconocido', model:'tiny', modelError:null };
+let LOCAL_TOKEN = '';
+let sessionIA = {
+  provider: jgCfgGet('jg_ai_provider', 'gemini') || 'gemini',
+  openrouterModel: jgCfgGet('jg_openrouter_model', 'qwen/qwen3-coder:free') || 'qwen/qwen3-coder:free',
+  aiConfigured: false,
+};
+let limitesServidor = { maxAudioMb:50, maxAudioMinutes:30, maxYoutubeMinutes:90 };
 
 // Fetch con timeout compatible con todos los navegadores modernos
 // (reemplaza AbortSignal.timeout() que puede fallar en algunos contextos)
@@ -1137,6 +1512,52 @@ async function fetchTimeout(url, opts={}, ms=3000){
   const t = setTimeout(()=>ctrl.abort(), ms);
   try{ return await fetch(url, {...opts, signal:ctrl.signal}); }
   finally{ clearTimeout(t); }
+}
+
+function buildAuthHeaders(extra = {}){
+  const headers = new Headers(extra);
+  if(LOCAL_TOKEN) headers.set('X-JG-Local-Token', LOCAL_TOKEN);
+  return headers;
+}
+
+async function fetchApi(path, opts = {}, ms = 8000){
+  return fetchTimeout(SERVER_URL + path, {
+    ...opts,
+    headers: buildAuthHeaders(opts.headers || {}),
+  }, ms);
+}
+
+/** Extrae un mensaje legible de errores FastAPI (string, array o objeto). */
+function extraerDetalleError(err, fallback = 'Error desconocido'){
+  if(!err) return fallback;
+  const d = err.detail !== undefined ? err.detail : err.message;
+  if(typeof d === 'string' && d.trim()) return d;
+  if(Array.isArray(d)){
+    return d.map(x => (typeof x === 'string' ? x : (x.msg || JSON.stringify(x)))).join('; ') || fallback;
+  }
+  if(d && typeof d === 'object'){
+    return d.msg || d.message || JSON.stringify(d);
+  }
+  return fallback;
+}
+
+async function sincronizarSesionServidor(){
+  try{
+    const resp = await fetchTimeout(SERVER_URL + '/session-config', {}, 3000);
+    if(!resp.ok) return;
+    const data = await resp.json();
+    if(data.token) LOCAL_TOKEN = data.token;
+    if(data.ai_provider) sessionIA.provider = data.ai_provider;
+    if(data.openrouter_model) sessionIA.openrouterModel = data.openrouter_model;
+    sessionIA.aiConfigured = !!data.ai_configured;
+    if(data.limits){
+      limitesServidor.maxAudioMb = data.limits.max_audio_mb || limitesServidor.maxAudioMb;
+      limitesServidor.maxAudioMinutes = data.limits.max_audio_minutes || limitesServidor.maxAudioMinutes;
+      limitesServidor.maxYoutubeMinutes = data.limits.max_youtube_minutes || limitesServidor.maxYoutubeMinutes;
+    }
+  }catch(e){
+    console.warn('No se pudo sincronizar la sesión local:', e);
+  }
 }
 
 // Aviso si el HTML se abre directamente como archivo local
@@ -1171,7 +1592,7 @@ async function reintentarModelo(){
   const btn = document.getElementById('btnRetryModelo');
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin"></span>&nbsp;Reintentando…'; }
   try{
-    await fetchTimeout(SERVER_URL + '/reload-model', {method:'POST'}, 5000);
+    await fetchApi('/reload-model', {method:'POST'}, 5000);
     // Re-verificar estado varias veces mientras el modelo carga
     setTimeout(checkServer, 2000);
     setTimeout(checkServer, 6000);
@@ -1258,25 +1679,28 @@ async function cargarGlosarioDesdeServidor() {
         const localGlossary = (localStorage.getItem('jg_glossary') || '').trim();
         const serverGlossary = data.glossary.trim();
         
+        // En Vercel el glosario del servidor es stub vacío: NUNCA pisar el del navegador.
+        if (_isVercel || (serverInfo.model && String(serverInfo.model).includes('groq'))) {
+          glossaryLoaded = true;
+          return;
+        }
         if (serverGlossary === '' && localGlossary !== '') {
-          // El servidor está vacío pero el cliente tiene palabras.
-          // Sincronizar el servidor con el cliente para no perder los datos del usuario.
+          // Local: servidor vacío, cliente tiene datos → subir al backend local
           try {
-            await fetch(SERVER_URL + '/glossary', {
+            await fetchApi('/glossary', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glossary: localGlossary })
-            });
+            }, 5000);
           } catch (postErr) {
             console.error('Error al inicializar glosario del servidor:', postErr);
           }
-        } else if (serverGlossary !== localGlossary) {
-          // El servidor tiene datos nuevos o diferentes, actualizar cliente.
-          localStorage.setItem('jg_glossary', data.glossary);
+        } else if (serverGlossary && serverGlossary !== localGlossary) {
+          // Solo adoptar glosario del servidor si NO está vacío
+          localStorage.setItem('jg_glossary', serverGlossary);
+          jgCfgSnapshot();
           const settingsGlossary = document.getElementById('settingsGlossary');
-          if (settingsGlossary) {
-            settingsGlossary.value = data.glossary;
-          }
+          if (settingsGlossary) settingsGlossary.value = serverGlossary;
           refrescarGlosario();
         }
         glossaryLoaded = true;
@@ -1309,11 +1733,15 @@ async function checkServer(){
         serverInfo.modelState  = h.model_state || 'desconocido';
         serverInfo.model       = h.model || serverInfo.model;
         serverInfo.modelError  = h.model_error || null;
+        // Clave en el navegador también cuenta (Vercel no guarda la sesión)
+        sessionIA.aiConfigured = !!h.ai_configured || !!(localStorage.getItem('jg_api_key') || '').trim();
       }
     }catch(_){
       // /health falló pero /ping respondió — el servidor está vivo
       serverInfo.modelReady = false;
     }
+    await sincronizarSesionServidor();
+    sessionIA.aiConfigured = sessionIA.aiConfigured || !!(localStorage.getItem('jg_api_key') || '').trim();
   }catch(_){
     serverInfo.online = false;
     serverInfo.modelReady = false;
@@ -1328,14 +1756,59 @@ const settingsAiProvider = document.getElementById('settingsAiProvider');
 const settingsApiKey = document.getElementById('settingsApiKey');
 const settingsApiKeyLabel = document.getElementById('settingsApiKeyLabel');
 const settingsApiKeyHelp = document.getElementById('settingsApiKeyHelp');
+const settingsApiKeyState = document.getElementById('settingsApiKeyState');
 const settingsGlossary = document.getElementById('settingsGlossary');
 
 const abrirConfiguracion = () => {
   settingsServerUrl.value = SERVER_URL;
-  settingsAiProvider.value = localStorage.getItem('jg_ai_provider') || 'gemini';
-  settingsApiKey.value = localStorage.getItem('jg_ai_key') || '';
-  if (settingsGlossary) settingsGlossary.value = localStorage.getItem('jg_glossary') || '';
-  document.getElementById('settingsWhisperModel').value = serverInfo.model || 'base';
+  settingsAiProvider.value = sessionIA.provider || localStorage.getItem('jg_ai_provider') || 'gemini';
+  // Rehidratar desde bundle si hace falta
+  jgCfgRestoreFromBundle();
+  settingsApiKey.value = jgCfgGet('jg_api_key', '');
+  const groqEl = document.getElementById('settingsGroqKey');
+  if (groqEl) groqEl.value = jgCfgGet('jg_groq_api_key', '');
+  if (settingsGlossary) settingsGlossary.value = jgCfgGet('jg_glossary', '');
+  // Modelo Whisper local: solo tiny/base/small/medium. En Vercel el motor es Groq (fijo).
+  const whisperSel = document.getElementById('settingsWhisperModel');
+  const localBox = document.getElementById('settingsWhisperLocalBox');
+  const cloudBox = document.getElementById('settingsWhisperCloudBox');
+  const esNube = _isVercel || (serverInfo.model && String(serverInfo.model).includes('groq'));
+  if (esNube) {
+    if (localBox) localBox.style.display = 'none';
+    if (cloudBox) cloudBox.style.display = 'flex';
+  } else {
+    if (localBox) localBox.style.display = 'flex';
+    if (cloudBox) cloudBox.style.display = 'none';
+    const guardado = jgCfgGet('jg_whisper_model', 'tiny') || 'tiny';
+    const validos = ['tiny','base','small','medium'];
+    if (whisperSel) whisperSel.value = validos.includes(guardado) ? guardado : 'tiny';
+  }
+  document.getElementById('settingsMicQuality').value = jgCfgGet('jg_mic_quality', 'precision') || 'precision';
+  
+  const orModelSelect = document.getElementById('settingsOpenRouterModel');
+  if (orModelSelect) {
+    orModelSelect.value = sessionIA.openrouterModel || jgCfgGet('jg_openrouter_model', 'qwen/qwen3-coder:free') || 'qwen/qwen3-coder:free';
+  }
+  if (settingsApiKeyState) {
+    const tieneGemini = !!(jgCfgGet('jg_api_key', '') || '').trim();
+    const tieneGroq = !!(jgCfgGet('jg_groq_api_key', '') || '').trim();
+    const tieneGlos = !!(jgCfgGet('jg_glossary', '') || '').trim();
+    settingsApiKeyState.textContent =
+      `Persistente en este navegador: IA ${tieneGemini ? '✓' : '—'} · Groq ${tieneGroq ? '✓' : '—'} · Glosario ${tieneGlos ? '✓' : '—'}. Un deploy de código NO borra esto.`;
+  }
+  const persistStatus = document.getElementById('configPersistStatus');
+  if (persistStatus) {
+    try {
+      const raw = localStorage.getItem(JG_BUNDLE_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        persistStatus.textContent = 'Respaldo automático OK · ' + (d.savedAt ? new Date(d.savedAt).toLocaleString() : '');
+      } else {
+        persistStatus.textContent = 'Al guardar se crea un respaldo automático en este navegador.';
+      }
+    } catch (_) {}
+  }
+  
   updateApiKeyFields();
   settingsModal.classList.add('show');
 };
@@ -1349,6 +1822,12 @@ if (btnSettingsOpen) {
 function updateApiKeyFields() {
   const provider = settingsAiProvider.value;
   const container = document.getElementById('settingsApiKeyContainer');
+  const orModelContainer = document.getElementById('settingsOpenRouterModelContainer');
+  
+  if (orModelContainer) {
+    orModelContainer.style.display = provider === 'openrouter' ? 'flex' : 'none';
+  }
+  
   if (provider === 'none') {
     container.style.display = 'none';
   } else {
@@ -1357,7 +1836,12 @@ function updateApiKeyFields() {
       settingsApiKeyLabel.textContent = 'Clave de API de Gemini (API Key)';
       settingsApiKeyLabel.style.color = 'var(--cyan)';
       settingsApiKey.placeholder = 'AIzaSy...';
-      settingsApiKeyHelp.innerHTML = 'Consigue una clave gratis en <a href="https://aistudio.google.com/" target="_blank" style="color: var(--cyan); text-decoration: underline;">Google AI Studio</a>.';
+      settingsApiKeyHelp.innerHTML = 'Consigue una clave gratis en <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--cyan); text-decoration: underline;">Google AI Studio</a>. Si tienes 404, lista tus modelos: <code>https://generativelanguage.googleapis.com/v1beta/models?key=TU_CLAVE</code>';
+    } else if (provider === 'openrouter') {
+      settingsApiKeyLabel.textContent = 'Clave de API de OpenRouter (API Key)';
+      settingsApiKeyLabel.style.color = 'var(--cyan)';
+      settingsApiKey.placeholder = 'sk-or-v1-...';
+      settingsApiKeyHelp.innerHTML = 'Obtén tu clave de API en <a href="https://openrouter.ai/keys" target="_blank" style="color: var(--cyan); text-decoration: underline;">OpenRouter Console</a> e ingresa saldo (o usa modelos gratuitos).';
     } else if (provider === 'mistral') {
       settingsApiKeyLabel.textContent = 'Clave de API de Mistral (API Key)';
       settingsApiKeyLabel.style.color = 'var(--cyan)';
@@ -1392,21 +1876,72 @@ btnSettingsSave.addEventListener('click', async () => {
   const serverVal = settingsServerUrl.value.trim().replace(/\/$/, '');
   if (serverVal) {
     SERVER_URL = serverVal;
-    localStorage.setItem('jg_server', SERVER_URL);
+    // En Vercel no persistir un localhost (rompe la app al recargar)
+    if (!(_isVercel && /localhost|127\.0\.0\.1|\[::1\]/.test(serverVal))) {
+      localStorage.setItem('jg_server', SERVER_URL);
+    }
   }
   localStorage.setItem('jg_ai_provider', settingsAiProvider.value);
-  localStorage.setItem('jg_ai_key', settingsApiKey.value.trim());
+  
+  const orModelSelect = document.getElementById('settingsOpenRouterModel');
+  if (orModelSelect) {
+    localStorage.setItem('jg_openrouter_model', orModelSelect.value);
+  }
+  localStorage.setItem('jg_mic_quality', document.getElementById('settingsMicQuality').value);
+  sessionIA.provider = settingsAiProvider.value;
+  sessionIA.openrouterModel = orModelSelect ? orModelSelect.value : sessionIA.openrouterModel;
+
+  // Claves: si el campo viene vacío, CONSERVAR la que ya estaba (evita borrar al guardar sin reescribir)
+  const nuevaApiKey = settingsApiKey.value.trim();
+  if (nuevaApiKey) {
+    localStorage.setItem('jg_api_key', nuevaApiKey);
+  }
+  // Solo borrar si el usuario marcó el checkbox de limpiar (si existe) — por defecto no se toca
+
+  const groqElSave = document.getElementById('settingsGroqKey');
+  if (groqElSave) {
+    const groqKey = groqElSave.value.trim();
+    if (groqKey) localStorage.setItem('jg_groq_api_key', groqKey);
+  }
+
+  sessionIA.aiConfigured = !!(jgCfgGet('jg_api_key', '') || '').trim()
+    || settingsAiProvider.value === 'none';
+
+  if (serverInfo.online) {
+    const payload = {
+      provider: settingsAiProvider.value,
+      openrouter_model: sessionIA.openrouterModel,
+      api_key: nuevaApiKey || jgCfgGet('jg_api_key', ''),
+    };
+    try {
+      const aiResp = await fetchApi('/session-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, 6000);
+      if (aiResp.ok) {
+        const aiData = await aiResp.json();
+        sessionIA.aiConfigured = !!(jgCfgGet('jg_api_key', '') || '').trim()
+          || !!aiData.ai_configured;
+      }
+    } catch (e) {
+      console.error('No se pudo sincronizar la sesión del backend:', e);
+    }
+  }
+
   if (settingsGlossary) {
-    const glossaryVal = settingsGlossary.value.trim();
+    // Glosario sí puede guardarse aunque se edite (incluye vacío intencional)
+    const glossaryVal = settingsGlossary.value;
     localStorage.setItem('jg_glossary', glossaryVal);
+    localStorage.setItem('jg_glossary_seeded', '1');
     refrescarGlosario();
-    if (serverInfo.online) {
+    if (serverInfo.online && !_isVercel) {
       try {
-        await fetch(SERVER_URL + '/glossary', {
+        await fetchApi('/glossary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ glossary: glossaryVal })
-        });
+          body: JSON.stringify({ glossary: glossaryVal.trim() })
+        }, 5000);
         glossaryLoaded = true;
       } catch (e) {
         console.error('Error al guardar el glosario en el servidor:', e);
@@ -1414,29 +1949,115 @@ btnSettingsSave.addEventListener('click', async () => {
     }
   }
 
-  const whisperModelVal = document.getElementById('settingsWhisperModel').value;
-  if (serverInfo.online && whisperModelVal !== serverInfo.model) {
-    fetch(SERVER_URL + '/reload-model?model_name=' + whisperModelVal, {method: 'POST'})
-      .then(r => r.json())
-      .then(d => {
-        console.log('Cambio de modelo:', d);
-        setTimeout(checkServer, 1000);
-      })
-      .catch(e => console.error('Error al cambiar modelo:', e));
+  const whisperSelSave = document.getElementById('settingsWhisperModel');
+  const whisperModelVal = whisperSelSave ? whisperSelSave.value : 'tiny';
+  const esNubeSave = _isVercel || (serverInfo.model && String(serverInfo.model).includes('groq'));
+  if (!esNubeSave) {
+    localStorage.setItem('jg_whisper_model', whisperModelVal);
+    if (serverInfo.online && whisperModelVal !== serverInfo.model) {
+      fetchApi('/reload-model?model_name=' + encodeURIComponent(whisperModelVal), {method: 'POST'}, 5000)
+        .then(r => r.json())
+        .then(d => {
+          console.log('Cambio de modelo:', d);
+          setTimeout(checkServer, 1000);
+        })
+        .catch(e => console.error('Error al cambiar modelo:', e));
+    }
   }
 
+  // Bundle de respaldo (para migraciones y recuperación)
+  jgCfgSnapshot();
+
   cerrarSettingsModal();
+  if (typeof _mostrarToastMejora === 'function') {
+    const partes = [];
+    if ((jgCfgGet('jg_groq_api_key', '') || '').trim()) partes.push('Groq ✓');
+    if ((jgCfgGet('jg_api_key', '') || '').trim()) partes.push('IA ✓');
+    else partes.push('IA sin clave');
+    if ((jgCfgGet('jg_glossary', '') || '').trim()) partes.push('glosario ✓');
+    if (esNubeSave) partes.push('nube Groq');
+    else partes.push('Whisper ' + whisperModelVal);
+    _mostrarToastMejora('Ajustes guardados y respaldados · ' + partes.join(' · '), true);
+  }
   await checkServer();
 });
 
+// Exportar / importar configuración (persiste entre PCs y limpiezas)
+(function wireConfigBackup(){
+  const btnExp = document.getElementById('btnConfigExport');
+  const btnImp = document.getElementById('btnConfigImport');
+  const fileInp = document.getElementById('configImportFile');
+  const statusEl = document.getElementById('configPersistStatus');
+  function setStatus(msg){ if(statusEl) statusEl.textContent = msg; }
+
+  if (btnExp) btnExp.addEventListener('click', () => {
+    const snap = jgCfgSnapshot();
+    // Advertencia: el JSON incluye claves; solo para uso personal
+    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'jg-turbo-config-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    setStatus('Exportado. Guárdalo en un lugar privado (contiene claves de API).');
+    if (typeof _mostrarToastMejora === 'function') _mostrarToastMejora('Config exportada', true);
+  });
+
+  if (btnImp && fileInp) {
+    btnImp.addEventListener('click', () => fileInp.click());
+    fileInp.addEventListener('change', async () => {
+      const f = fileInp.files && fileInp.files[0];
+      if (!f) return;
+      try {
+        const text = await f.text();
+        const data = JSON.parse(text);
+        const values = (data && data.values) ? data.values : data;
+        if (!values || typeof values !== 'object') throw new Error('JSON inválido');
+        let n = 0;
+        JG_CONFIG_KEYS.forEach((k) => {
+          if (values[k] != null && String(values[k]).trim() !== '') {
+            localStorage.setItem(k, String(values[k]));
+            n++;
+          }
+        });
+        localStorage.setItem('jg_glossary_seeded', '1');
+        jgCfgSnapshot();
+        // Refrescar campos visibles
+        if (settingsApiKey) settingsApiKey.value = jgCfgGet('jg_api_key', '');
+        const groqEl = document.getElementById('settingsGroqKey');
+        if (groqEl) groqEl.value = jgCfgGet('jg_groq_api_key', '');
+        if (settingsGlossary) settingsGlossary.value = jgCfgGet('jg_glossary', '');
+        if (settingsAiProvider) settingsAiProvider.value = jgCfgGet('jg_ai_provider', 'gemini') || 'gemini';
+        sessionIA.provider = jgCfgGet('jg_ai_provider', 'gemini') || 'gemini';
+        sessionIA.aiConfigured = !!(jgCfgGet('jg_api_key', '') || '').trim();
+        refrescarGlosario();
+        setStatus('Importadas ' + n + ' preferencias. Pulsa Guardar para confirmar.');
+        if (typeof _mostrarToastMejora === 'function') _mostrarToastMejora('Config importada · ' + n + ' campos', true);
+      } catch (e) {
+        setStatus('No se pudo importar: ' + (e.message || e));
+      }
+      fileInp.value = '';
+    });
+  }
+
+  // Mensaje de estado de persistencia al cargar
+  try {
+    const snap = localStorage.getItem(JG_BUNDLE_KEY);
+    if (snap && statusEl) {
+      const d = JSON.parse(snap);
+      statusEl.textContent = 'Último respaldo automático: ' + (d.savedAt ? new Date(d.savedAt).toLocaleString() : 'sí');
+    }
+  } catch (_) {}
+})();
+
 checkServer();
-setInterval(checkServer, 15000);
+setInterval(checkServer, 30000);
 
 /* ── 1) Navegación por pestañas ──────────────────────────────────────── */
 const tabs = document.querySelectorAll('.tab');
 const panels = document.querySelectorAll('.panel');
 const badge = document.getElementById('topBadge');
-const badgeText = {mic:'v2.1 · Dictado en vivo', file:'Whisper · Archivos', yt:'Whisper · YouTube'};
+const badgeText = {mic:'v2.1 · faster-whisper ⚡', file:'Whisper · Archivos', yt:'Whisper · YouTube', trans:'IA · Traducción'};
 tabs.forEach(t=>t.addEventListener('click',()=>{
   tabs.forEach(x=>x.classList.remove('active'));
   panels.forEach(x=>x.classList.remove('active'));
@@ -1446,7 +2067,7 @@ tabs.forEach(t=>t.addEventListener('click',()=>{
 }));
 
 /* ── 2) Opciones inteligentes ───────────────────────────────────────── */
-const opt = { punt:true, preg:true, code:false, caps:true, auto:true };
+const opt = { punt:true, preg:true, code:false, caps:true, auto:true, contexto:true };
 // Cuando el usuario toca manualmente el chip de código, respetamos su decisión
 // y dejamos de auto-activarlo/desactivarlo durante la sesión.
 let codeModoManual = false;
@@ -1648,22 +2269,20 @@ function activarModoCodigoAuto(){
   }
 }
 
-function procesarFragmento(crudo, esInicioDeOracion = true){
+function procesarFragmento(crudo, esInicioDeOracion = true, desdeWhisper = false){
   let s = crudo;
-  // Auto-activación de Modo código al detectar que se está dictando código,
-  // salvo que el usuario lo haya gestionado manualmente.
-  if(!opt.code && !codeModoManual && detectarModoCodigo(crudo)){
+  if(!desdeWhisper && !opt.code && !codeModoManual && detectarModoCodigo(crudo)){
     activarModoCodigoAuto();
   }
   if(opt.code) s = aplicar(CODE, s);
   if(opt.punt) s = aplicar(PUNT, s);
-  if(opt.auto){
+  if(opt.auto && !desdeWhisper){
     if(GLOSARIO.length) s = aplicar(GLOSARIO, s);
     s = aplicar(FIX, s);
   }
   s = s.trim();
   if(!s) return '';
-  if(opt.preg && esInicioDeOracion && esPregunta(s)){
+  if(opt.preg && esInicioDeOracion && esPregunta(s) && esSalidaEspanol()){
     s = s.replace(/[.…]+$/,'');
     if(!s.startsWith('¿')) s = '¿' + s;
     if(!/[?]$/.test(s))   s = s + '?';
@@ -1724,15 +2343,160 @@ const statusEl = document.getElementById('status');
 const statusTxt= document.getElementById('statusTxt');
 const timerEl = document.getElementById('timer');
 const langSel = document.getElementById('lang');
+const outputLangSel = document.getElementById('outputLang');
+const fileOutputLangSel = document.getElementById('fileOutputLang');
+const ytOutputLangSel = document.getElementById('ytOutputLang');
+let _idiomaSalidaActual = 'es';
+
+function normalizarLangApi(val){
+  if(!val || val === 'auto') return 'auto';
+  return String(val).split('-')[0].toLowerCase();
+}
+
+function langParaReconocimientoVivo(val){
+  if(!val || val === 'auto'){
+    const nav = (navigator.language || 'es-CO').replace('_', '-');
+    if(nav.startsWith('en')) return 'en-US';
+    if(nav.startsWith('es')) return nav;
+    return 'es-CO';
+  }
+  return val;
+}
+
+function resolverIdiomaSalida(outputLangValue, detectedLang, inputLang){
+  if(outputLangValue && outputLangValue !== 'same'){
+    return normalizarLangApi(outputLangValue);
+  }
+  const det = normalizarLangApi(detectedLang);
+  if(det && det !== 'auto') return det;
+  const inp = normalizarLangApi(inputLang);
+  return inp === 'auto' ? 'es' : inp;
+}
+
+function esSalidaEspanol(){
+  const lang = _idiomaSalidaActual || 'es';
+  return lang === 'es' || lang.startsWith('es');
+}
+
+function syncOutputLang(value, sourceEl){
+  jgCfgSet('jg_output_lang', value);
+  jgCfgSnapshot();
+  [outputLangSel, fileOutputLangSel, ytOutputLangSel].forEach((el) => {
+    if(el && el !== sourceEl) el.value = value;
+  });
+}
+
+function initOutputLangSelectors(){
+  const guardado = jgCfgGet('jg_output_lang', 'same') || 'same';
+  [outputLangSel, fileOutputLangSel, ytOutputLangSel].forEach((el) => {
+    if(el) el.value = guardado;
+  });
+  _idiomaSalidaActual = resolverIdiomaSalida(guardado, '', langSel ? langSel.value : 'es');
+}
+
+[outputLangSel, fileOutputLangSel, ytOutputLangSel].forEach((el) => {
+  if(!el) return;
+  el.addEventListener('change', () => {
+    syncOutputLang(el.value, el);
+    _idiomaSalidaActual = resolverIdiomaSalida(el.value, '', langSel ? langSel.value : 'es');
+  });
+});
+initOutputLangSelectors();
+
+async function traducirTranscripcion(texto, origen, destino){
+  if(!texto || !texto.trim() || origen === destino) return texto;
+  let direction = null;
+  if(origen === 'en' && destino === 'es') direction = 'en-es';
+  else if(origen === 'es' && destino === 'en') direction = 'es-en';
+  else return texto;
+
+  const provider = localStorage.getItem('jg_ai_provider') || sessionIA.provider || 'gemini';
+  const openrouterModel = localStorage.getItem('jg_openrouter_model') || sessionIA.openrouterModel || 'qwen/qwen3-coder:free';
+  const resp = await fetchApi('/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: texto,
+      direction,
+      provider,
+      api_key: localStorage.getItem('jg_api_key') || '',
+      openrouter_model: openrouterModel,
+    }),
+  }, 120000);
+  if(!resp.ok){
+    const err = await resp.json().catch(() => ({ detail: 'Error al traducir' }));
+    throw new Error(extraerDetalleError(err, 'No se pudo traducir el texto'));
+  }
+  const data = await resp.json();
+  return (data.text || texto).trim();
+}
+
+async function aplicarIdiomaSalida(texto, opts = {}){
+  const outputLang = opts.outputLang || 'same';
+  const detectedLang = opts.detectedLang || '';
+  const inputLang = opts.inputLang || '';
+  const destino = resolverIdiomaSalida(outputLang, detectedLang, inputLang);
+  const det = normalizarLangApi(detectedLang);
+  const origen = (det && det !== 'auto')
+    ? det
+    : (normalizarLangApi(inputLang) === 'auto' ? 'es' : normalizarLangApi(inputLang));
+
+  _idiomaSalidaActual = destino;
+
+  if(!texto || !texto.trim() || destino === origen){
+    return { text: texto, translated: false, language: destino, sourceLanguage: origen };
+  }
+
+  try{
+    const traducido = await traducirTranscripcion(texto, origen, destino);
+    return {
+      text: traducido,
+      translated: true,
+      language: destino,
+      sourceLanguage: origen,
+    };
+  }catch(e){
+    console.warn('Traducción post-transcripción:', e);
+    return {
+      text: texto,
+      translated: false,
+      language: origen,
+      sourceLanguage: origen,
+      translationError: e.message,
+    };
+  }
+}
+
+function etiquetaIdiomaResultado(data, salida){
+  const partes = [];
+  if(data && data.sourceLanguage && salida && data.sourceLanguage !== salida){
+    partes.push('audio: ' + data.sourceLanguage + ' → texto: ' + salida);
+  }else if(salida){
+    partes.push('idioma: ' + salida);
+  }else if(data && data.language){
+    partes.push('idioma: ' + data.language);
+  }
+  if(data && data.translated) partes.push('traducido');
+  if(data && data.translationError) partes.push('traducción fallida');
+  return partes.join(' · ');
+}
+
+async function finalizarTextoTranscrito(textoCrudo, opts = {}){
+  const salida = await aplicarIdiomaSalida(textoCrudo, opts);
+  let texto = salida.text || '';
+  if(opts.procesar !== false && texto){
+    const frag = procesarFragmento(texto, true, true);
+    texto = frag || texto;
+  }
+  return { ...salida, text: texto };
+}
+
 
 let recog     = null;
 let grabando  = false;
 let reinicios = 0;
 let backoffMs = 200;
 let textoEnVivoAcumulado = '';
-let previewInterval = null;
-let isTranscribingPreview = false;
-let activeWhisperController = null;
 let fallbackWhisperPorRed = false;
 
 // ── Variables para MediaRecorder (audio guardado) ──
@@ -1744,6 +2508,109 @@ let timerInterval      = null;
 let ultimaGrabacionBlob = null;
 let ultimaGrabacionURL  = null;
 let ultimaGrabacionMime = '';
+let textoWhisperConfirmado = '';
+let chunkingChunks = [];
+let chunkingTimer = null;
+let chunkingEnCurso = false;
+let ultimoChunkIndex = 0;
+let activeWhisperController = null;
+
+function obtenerBitrateMic(){
+  const modo = localStorage.getItem('jg_mic_quality') || 'precision';
+  if(modo === 'rapido') return 32000;
+  if(modo === 'dictado') return 96000;
+  return 64000;
+}
+
+function textoBaseLive(){
+  return (textoWhisperConfirmado || textoEnVivoAcumulado || '').trim();
+}
+
+function combinarTextoLive(base, nuevo){
+  const a = String(base || '').trim();
+  const b = String(nuevo || '').trim();
+  if(!a) return b;
+  if(!b) return a;
+  const aMin = a.toLowerCase();
+  const bMin = b.toLowerCase();
+  const max = Math.min(aMin.length, bMin.length, 80);
+  let solape = 0;
+  for(let len = max; len >= 8; len--){
+    if(aMin.slice(-len) === bMin.slice(0, len)){
+      solape = len;
+      break;
+    }
+  }
+  const agregado = b.slice(solape).trimStart();
+  return agregado ? `${a} ${agregado}`.replace(/\s+/g, ' ').trim() : a;
+}
+
+function textoParaVistaLive(provisional = ''){
+  let base = textoBaseLive();
+  const interino = String(provisional || '').trim();
+  if(interino){
+    if(base && !/\s$/.test(base)) base += ' ';
+    base += interino;
+  }
+  return base.trim();
+}
+
+function detenerWhisperPorBloques(){
+  if(chunkingTimer){
+    clearInterval(chunkingTimer);
+    chunkingTimer = null;
+  }
+  chunkingChunks = [];
+  chunkingEnCurso = false;
+}
+
+async function transcribirChunkAudio(blob, chunkIndex, lang){
+  const formData = new FormData();
+  formData.append('file', blob, `chunk-${chunkIndex}.webm`);
+  formData.append('language', normalizarLangApi(lang || langSel.value));
+  formData.append('chunk_index', String(chunkIndex));
+  formData.append('auto_correct', opt.contexto ? 'true' : 'false');
+  const resp = await fetchApi('/transcribe-chunk', { method: 'POST', body: formData }, 30000);
+  if(!resp.ok){
+    const err = await resp.json().catch(() => ({ detail: 'Error desconocido' }));
+    throw new Error(extraerDetalleError(err, resp.statusText));
+  }
+  return resp.json();
+}
+
+async function enviarChunkWhisper(force = false){
+  if(chunkingEnCurso || !serverInfo.online || !serverInfo.modelReady) return;
+  if(!chunkingChunks.length) return;
+  const blob = new Blob(chunkingChunks, { type: ultimaGrabacionMime || 'audio/webm' });
+  if(blob.size < 4000) return;
+  chunkingEnCurso = true;
+  const chunkIndex = ++ultimoChunkIndex;
+  const enviados = chunkingChunks.slice();
+  chunkingChunks = force ? [] : chunkingChunks.slice(-2);
+  try{
+    const data = await transcribirChunkAudio(new Blob(enviados, { type: ultimaGrabacionMime || 'audio/webm' }), chunkIndex, langSel.value);
+    if(data && data.text){
+      textoWhisperConfirmado = combinarTextoLive(textoWhisperConfirmado, data.text);
+      const panel = document.getElementById('livePanel');
+      if(panel && textoWhisperConfirmado){
+        interimEl.textContent = textoParaVistaLive();
+        panel.classList.add('live-panel--active');
+      }
+    }
+  }catch(e){
+    console.warn('Whisper por bloques:', e);
+  }finally{
+    chunkingEnCurso = false;
+  }
+}
+
+function iniciarWhisperPorBloques(){
+  detenerWhisperPorBloques();
+  if(!serverInfo.online || !serverInfo.modelReady) return;
+  chunkingTimer = setInterval(() => {
+    if(grabando) enviarChunkWhisper(false);
+  }, 3000);  // cada 3 seg en vez de 4.5 → más reactivo al dictar
+}
 
 function setEstado(txt, on){
   statusTxt.textContent = txt;
@@ -1757,6 +2624,7 @@ function fmtTiempo(seg){
 }
 
 function iniciarTimer(){
+  if(timerInterval) clearInterval(timerInterval);
   grabacionStartTs = Date.now();
   timerEl.style.display = 'inline';
   timerEl.textContent = '00:00';
@@ -1793,8 +2661,49 @@ function crearRecog(){
   const r = new SR();
   r.continuous = true;
   r.interimResults = true;
-  r.lang = langSel.value;
+  r.lang = langParaReconocimientoVivo(langSel.value);
   r.maxAlternatives = 1;
+
+  // ── Throttle para actualizar el DOM del texto interim ──
+  // Evita re-layouts en cada evento de voz (pueden ser >10/s).
+  // Acumula el texto y lo renderiza una vez por frame (~16ms).
+  let _rafPending = false;
+  let _interimCache = {texto:'', conf:0, panelActivo:false};
+
+  function _flushInterim(){
+    _rafPending = false;
+    const p = document.getElementById('livePanel');
+    const c = document.getElementById('interimConf');
+    const l = document.getElementById('livePanelLabel');
+    const a = document.getElementById('livePanelActions');
+    if (a) a.style.display = 'none';
+    if (l) l.textContent = 'En vivo — Escuchando…';
+    document.querySelector('.live-panel-dot')?.classList.add('blink');
+
+    if(_interimCache.texto.trim()){
+      interimEl.textContent = textoParaVistaLive(_interimCache.texto);
+      p.classList.add('live-panel--active');
+      const pct = _interimCache.conf > 0 ? Math.round(_interimCache.conf*100) : null;
+      if(pct && pct > 0){
+        c.style.display = 'inline-flex';
+        c.style.alignItems = 'center';
+        c.style.gap = '5px';
+        c.innerHTML = `${pct}%&nbsp;<span class="live-panel-conf-bar" style="width:${Math.max(6,pct/2)}px"></span>`;
+      } else { c.style.display = 'none'; }
+    } else if (grabando) {
+      interimEl.textContent = 'Habla ahora…';
+      p.classList.add('live-panel--active');
+      c.style.display = 'none';
+    } else {
+      interimEl.textContent = '';
+      p.classList.remove('live-panel--active');
+      c.style.display = 'none';
+    }
+  }
+
+  function _scheduleInterim(){
+    if(!_rafPending){ _rafPending = true; requestAnimationFrame(_flushInterim); }
+  }
 
   r.onresult = (e)=>{
     let interim = '';
@@ -1804,18 +2713,10 @@ function crearRecog(){
       if(res.isFinal){
         let mejor = res[0];
         for(let j=1;j<res.length;j++){ if(res[j].confidence > mejor.confidence) mejor = res[j]; }
-        const confPct = Math.round((mejor.confidence||0)*100);
-        // Filtrar según la confianza mínima derivada del control de sensibilidad del micrófono.
-        // Si el slider está en 50, se descartan los fragmentos con confianza menor al 50%.
-        const minConfidence = 100 - parseInt(sensSlider?.value || '50');
-        if(confPct < minConfidence) continue;
-        
-        // Acumular fragmento en vivo en vez de anexar al textarea directamente
         let transcript = mejor.transcript.trim();
         if (textoEnVivoAcumulado.trim()) {
           const ultimoChar = textoEnVivoAcumulado.trim().slice(-1);
           if (!/[.!?…\n]/.test(ultimoChar)) {
-            // Minúscula el primer carácter si el tramo no empieza una nueva oración
             transcript = transcript.charAt(0).toLowerCase() + transcript.slice(1);
           }
         }
@@ -1836,49 +2737,10 @@ function crearRecog(){
         interim += res[0].transcript;
       }
     }
-    const panel = document.getElementById('livePanel');
-    const confEl = document.getElementById('interimConf');
-    const labelEl = document.getElementById('livePanelLabel');
-    const actionsEl = document.getElementById('livePanelActions');
 
-    if (actionsEl) actionsEl.style.display = 'none';
-    if (labelEl) labelEl.textContent = 'En vivo — Escuchando…';
-    document.querySelector('.live-panel-dot')?.classList.add('blink');
-
-    // Combinar el texto acumulado hasta ahora con el texto interim (actualmente hablado)
-    let textoMostrar = textoEnVivoAcumulado;
-    if(interim){
-      if(textoMostrar && !/\s$/.test(textoMostrar) && !/^\s/.test(interim)) {
-        textoMostrar += ' ';
-      }
-      textoMostrar += interim;
-    }
-
-    if(textoMostrar.trim()){
-      const pct = bestConf > 0 ? Math.round(bestConf*100) : null;
-      // Mostrar texto en vivo
-      interimEl.textContent = textoMostrar;
-      // Activar panel
-      panel.classList.add('live-panel--active');
-      // Indicador de confianza
-      if(pct !== null && pct > 0){
-        confEl.style.display = 'inline-flex';
-        confEl.style.alignItems = 'center';
-        confEl.style.gap = '5px';
-        confEl.innerHTML = `${pct}%&nbsp;<span class="live-panel-conf-bar" style="width:${Math.max(6,pct/2)}px"></span>`;
-      }else{
-        confEl.style.display = 'none';
-      }
-    }else{
-      if (grabando) {
-        interimEl.textContent = 'Habla ahora…';
-        panel.classList.add('live-panel--active');
-      } else {
-        interimEl.textContent = '';
-        panel.classList.remove('live-panel--active');
-      }
-      confEl.style.display = 'none';
-    }
+    // Guardar en caché y programar actualización DOM (una por frame)
+    _interimCache = {texto: interim, conf: bestConf, panelActivo: !!textoParaVistaLive(interim).trim()};
+    _scheduleInterim();
   };
 
   let _netErrCount = 0;
@@ -1945,7 +2807,12 @@ function elegirMime(){
 async function iniciarMediaRecorder(){
   try{
     grabacionStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation:true, noiseSuppression:true }
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
     });
   }catch(e){
     let msg = 'No se pudo acceder al micrófono. Revisa los permisos del navegador.';
@@ -1961,16 +2828,27 @@ async function iniciarMediaRecorder(){
   }
   const mime = elegirMime();
   try{
-    const options = { audioBitsPerSecond: 128000 };
+    const options = { audioBitsPerSecond: obtenerBitrateMic() };
     if (mime) options.mimeType = mime;
     mediaRecorder = new MediaRecorder(grabacionStream, options);
   }catch(e){
     console.error('MediaRecorder error:', e);
+    if(grabacionStream){
+      try{ grabacionStream.getTracks().forEach(t=>t.stop()); }catch(_){}
+      grabacionStream = null;
+    }
     return false;
   }
   grabacionChunks = [];
+  chunkingChunks = [];
+  ultimoChunkIndex = 0;
   ultimaGrabacionMime = mediaRecorder.mimeType || 'audio/webm';
-  mediaRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) grabacionChunks.push(e.data); };
+  mediaRecorder.ondataavailable = (e)=>{
+    if(e.data && e.data.size>0){
+      grabacionChunks.push(e.data);
+      chunkingChunks.push(e.data);
+    }
+  };
   
   // Manual requestData flush to guarantee ondataavailable fires in Opera
   let manualFlushInterval = setInterval(()=>{
@@ -1983,6 +2861,7 @@ async function iniciarMediaRecorder(){
 
   mediaRecorder.onstop = ()=>{
     clearInterval(manualFlushInterval);
+    detenerWhisperPorBloques();
     const blob = new Blob(grabacionChunks, {type: ultimaGrabacionMime});
     mostrarGrabacion(blob);
     if(grabacionStream){ grabacionStream.getTracks().forEach(t=>t.stop()); grabacionStream=null; }
@@ -1993,6 +2872,7 @@ async function iniciarMediaRecorder(){
     }
   };
   mediaRecorder.start(250);  // chunks cada 250 ms
+  iniciarWhisperPorBloques();
   return true;
 }
 
@@ -2038,17 +2918,62 @@ function limpiarGrabacion(){
   actualizarBotonesServidor();
 }
 
+async function transcribirAudio(blob, opts = {}) {
+  // Validación temprana de tamaño (Groq/Vercel ~25 MB)
+  const maxMb = limitesServidor.maxAudioMb || 25;
+  const sizeBytes = blob && blob.size ? blob.size : 0;
+  if(sizeBytes > maxMb * 1024 * 1024){
+    throw new Error(`El audio pesa ${(sizeBytes/1024/1024).toFixed(1)} MB y el límite es ${maxMb} MB. Comprime o recorta el archivo.`);
+  }
+  if(sizeBytes > 0 && sizeBytes < 500){
+    throw new Error('El audio es demasiado corto o está vacío.');
+  }
+
+  const formData = new FormData();
+  formData.append('file', blob, opts.filename || 'grabacion.webm');
+  formData.append('language', normalizarLangApi(opts.lang || langSel.value));
+  const usarRapido = opts.fast === true;
+  formData.append('fast', usarRapido ? 'true' : 'false');
+  if (opts.autoCorrect !== false && opt.contexto) formData.append('auto_correct', 'true');
+  // Preferir clave Groq dedicada; fallback a la de IA por compatibilidad
+  const groqKey = localStorage.getItem('jg_groq_api_key') || localStorage.getItem('jg_api_key');
+  if (groqKey) formData.append('api_key', groqKey);
+  
+  // En Vercel (Groq) 2 min suele bastar; local (Whisper CPU) necesita más margen
+  const timeoutMs = opts.timeoutMs || (_isVercel ? 120000 : 300000);
+  activeWhisperController = new AbortController();
+  const timer = setTimeout(() => {
+    try { activeWhisperController.abort(); } catch(_){}
+  }, timeoutMs);
+  try{
+    const resp = await fetch(SERVER_URL + '/transcribe', {
+      method: 'POST',
+      body: formData,
+      headers: buildAuthHeaders(),
+      signal: activeWhisperController.signal,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Error desconocido' }));
+      throw new Error(extraerDetalleError(err, resp.statusText));
+    }
+    return resp.json();
+  }catch(e){
+    if(e && e.name === 'AbortError'){
+      throw new Error(`La transcripción superó el tiempo límite (${Math.round(timeoutMs/1000)}s). Prueba un audio más corto o revisa tu clave de Groq.`);
+    }
+    throw e;
+  }finally{
+    clearTimeout(timer);
+    activeWhisperController = null;
+  }
+}
+
 async function transcribirGrabacionAutomatica(blob) {
   if(!blob || blob.size < 2000) {
     setEstado('✓ Grabación finalizada (audio demasiado corto).', false);
     return;
   }
 
-  // Abort any active preview fetch
-  if (activeWhisperController) {
-    try { activeWhisperController.abort(); } catch(_) {}
-    activeWhisperController = null;
-  }
   const panel = document.getElementById('livePanel');
   const labelEl = document.getElementById('livePanelLabel');
   const actionsEl = document.getElementById('livePanelActions');
@@ -2083,25 +3008,45 @@ async function transcribirGrabacionAutomatica(blob) {
   }
   
   try{
-    const formData = new FormData();
-    formData.append('file', blob, 'grabacion.webm');
-    formData.append('language', langSel.value.split('-')[0]);
-    const resp = await fetch(SERVER_URL + '/transcribe', {method:'POST', body: formData});
-    if(!resp.ok){
-      const err = await resp.json().catch(()=>({detail:'Error desconocido'}));
-      throw new Error(err.detail || resp.statusText);
-    }
-    const data = await resp.json();
+    const data = await transcribirAudio(blob, { fast: false, autoCorrect: false });
     if(data.text){
-      const frag = procesarFragmento(data.text);
+      const finalizado = await finalizarTextoTranscrito(data.text, {
+        outputLang: outputLangSel ? outputLangSel.value : 'same',
+        detectedLang: data.language,
+        inputLang: langSel.value,
+      });
+      const frag = finalizado.text;
       if(frag) {
         anexar(frag);
+        const textoActual = output.value.trim();
+        registrarTranscripcionOriginal(output, textoActual, document.getElementById('btnCorrectUndo'));
         textoEnVivoAcumulado = '';
         interimEl.textContent = '';
         if (actionsEl) actionsEl.style.display = 'none';
         panel.classList.remove('live-panel--active');
-        setEstado('✓ Whisper transcribió con éxito.', false);
+        let msgEstado = '✓ Whisper transcribió con éxito.';
+        if(finalizado.translated) msgEstado += ' Texto traducido al ' + (finalizado.language === 'es' ? 'español' : 'inglés') + '.';
+        else if(finalizado.translationError) msgEstado += ' (traducción no disponible: ' + finalizado.translationError + ')';
+        setEstado(msgEstado, false);
+        // Liberar spinner / botón antes de abrir el modal
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
+        actualizarBotonesServidor();
         abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
+        // Corrección contextual en 2.º plano (no retrasa la ventana)
+        if (opt.contexto && textoActual) {
+          _corregirTranscripcionConIA(output, textoActual, {
+            langEl: { value: finalizado.language || resolverIdiomaSalida(outputLangSel.value, data.language, langSel.value) },
+          }).then(() => {
+            if (activeTextarea === output && textModalTextarea) {
+              textModalTextarea.value = output.value;
+              textModalTextarea.dispatchEvent(new Event('input'));
+            }
+            marcarCambioDesdeOriginal(output);
+          }).catch(() => {});
+        }
       } else {
         textoEnVivoAcumulado = '';
         interimEl.textContent = '';
@@ -2118,12 +3063,12 @@ async function transcribirGrabacionAutomatica(blob) {
     const msg = normalizarMensajeWhisperError(e && e.message ? e.message : String(e));
     setEstado('✗ Error Whisper auto: ' + msg, false);
     if (labelEl) labelEl.textContent = 'Error transcripción';
-    interimEl.innerHTML = `<span style="color:var(--rec); font-style:italic;">Error: ${msg}</span>`;
+    interimEl.innerHTML = `<span style="color:var(--rec); font-style:italic;">Error: ${escapeHtml(msg)}</span>`;
     if (actionsEl) actionsEl.style.display = 'none';
     panel.classList.add('live-panel--active');
     console.error(e);
   }finally{
-    if (btn) {
+    if (btn && btn.disabled) {
       btn.disabled = false;
       btn.innerHTML = origText;
     }
@@ -2139,82 +3084,17 @@ function normalizarMensajeWhisperError(message){
   return raw;
 }
 
-function iniciarPreviewWhisper() {
-  if (previewInterval) clearInterval(previewInterval);
-  isTranscribingPreview = false;
-  previewInterval = setInterval(async () => {
-    if (isTranscribingPreview || !grabando || grabacionChunks.length === 0) return;
-    if (!serverInfo.online || !serverInfo.modelReady) return;
-    
-    isTranscribingPreview = true;
-    
-    // Abort previous pending preview request if any
-    if (activeWhisperController) {
-      try { activeWhisperController.abort(); } catch(_) {}
-    }
-    activeWhisperController = new AbortController();
-    const signal = activeWhisperController.signal;
-    
-    try {
-      const currentBlob = new Blob(grabacionChunks, {type: ultimaGrabacionMime});
-      if (currentBlob.size < 2000) {
-        isTranscribingPreview = false;
-        return;
-      }
-      
-      const formData = new FormData();
-      formData.append('file', currentBlob, 'grabacion.webm');
-      formData.append('language', langSel.value.split('-')[0]);
-      formData.append('preview', 'true');
-      
-      const resp = await fetch(SERVER_URL + '/transcribe', {
-        method: 'POST',
-        body: formData,
-        signal: signal
-      });
-      if (resp.ok && grabando) {
-        const data = await resp.json();
-        if (data.text && grabando) {
-          const frag = procesarFragmento(data.text);
-          if (frag) {
-            textoEnVivoAcumulado = frag;
-            interimEl.textContent = textoEnVivoAcumulado;
-          }
-        }
-      }
-    } catch (e) {
-      if (e.name !== 'AbortError') {
-        console.error("Error en preview Whisper:", e);
-      }
-    } finally {
-      isTranscribingPreview = false;
-      if (activeWhisperController && activeWhisperController.signal === signal) {
-        activeWhisperController = null;
-      }
-    }
-  }, 1500);
-}
-
-function detenerPreviewWhisper() {
-  if (previewInterval) {
-    clearInterval(previewInterval);
-    previewInterval = null;
-  }
-  isTranscribingPreview = false;
-}
-
 function arrancarUI(){
-  // Limpiar el estado de grabación anterior para evitar bloqueos
   limpiarGrabacion();
-
-  // Abortar cualquier petición de transcripción Whisper activa
-  if (activeWhisperController) {
-    try { activeWhisperController.abort(); } catch(_) {}
-    activeWhisperController = null;
-  }
 
   // Limpiar el texto acumulado del dictado anterior
   textoEnVivoAcumulado = '';
+  textoWhisperConfirmado = '';
+  _idiomaSalidaActual = resolverIdiomaSalida(
+    outputLangSel ? outputLangSel.value : 'same',
+    '',
+    langSel.value
+  );
   interimEl.textContent = '';
   
   // Ocultar acciones y resetear etiqueta
@@ -2228,7 +3108,6 @@ function arrancarUI(){
   if (usarWhisperAlFinal) {
     interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Grabando tu voz. Al pulsar Detener, Whisper la transcribirá automáticamente.</span>';
     document.getElementById('livePanel').classList.add('live-panel--active');
-    iniciarPreviewWhisper();
   }
   
   // Iniciar parpadeo del dot
@@ -2278,7 +3157,6 @@ function pararUI(){
     interimEl.textContent = '';
     if (actionsEl) actionsEl.style.display = 'none';
     panel.classList.remove('live-panel--active');
-    detenerPreviewWhisper();
   }
 }
 
@@ -2288,20 +3166,29 @@ async function toggleGrabacion(){
     if (!usarWhisperAlFinal) {
       try{ recog && recog.abort(); }catch(_){}
     }
+    await enviarChunkWhisper(true);
+    detenerWhisperPorBloques();
     detenerMediaRecorder();   // genera el blob y muestra el reproductor
     pararUI();                // ← FIX: restaurar botón y estado visual al detener
 
     if (!usarWhisperAlFinal) {
-      setTimeout(() => {
-        const capturado = textoEnVivoAcumulado.trim();
+      setTimeout(async () => {
+        const capturado = textoBaseLive();
         if (!capturado) return;
         anexar(capturado);
         textoEnVivoAcumulado = '';
+        textoWhisperConfirmado = '';
         interimEl.textContent = '';
         const panel = document.getElementById('livePanel');
         const actionsEl = document.getElementById('livePanelActions');
         if (actionsEl) actionsEl.style.display = 'none';
         panel.classList.remove('live-panel--active');
+
+        // Corrección contextual post-transcripción (texto completo para mejor contexto)
+        if (opt.contexto) {
+          await _corregirTranscripcionConIA(output, output.value.trim());
+        }
+
         abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
       }, 250);
     }
@@ -2328,6 +3215,64 @@ function pararTodo(){
   pararUI();
 }
 
+function _aplicarTextoCorregido(ta, textoOriginal, textoNuevo) {
+  if (!ta || !textoNuevo || textoNuevo === textoOriginal) return false;
+  const oldText = ta.value;
+  if (textoOriginal && oldText.endsWith(textoOriginal)) {
+    ta.value = oldText.slice(0, oldText.length - textoOriginal.length) + textoNuevo;
+  } else if (textoOriginal && oldText.includes(textoOriginal)) {
+    ta.value = oldText.replace(textoOriginal, textoNuevo);
+  } else {
+    ta.value = textoNuevo;
+  }
+  ta.dispatchEvent(new Event('input'));
+  if (activeTextarea && ta === document.getElementById('output')) {
+    activeTextarea.value = ta.value;
+    activeTextarea.dispatchEvent(new Event('input'));
+  }
+  return true;
+}
+
+async function _corregirTranscripcionConIA(ta, textoOriginal, opts = {}) {
+  if (!textoOriginal || !serverInfo.online || !opt.contexto) return null;
+
+  const langEl = opts.langEl || document.getElementById('lang');
+  const lang = langEl ? langEl.value : 'es';
+  const provider = (localStorage.getItem('jg_ai_provider') || sessionIA.provider || 'gemini').trim();
+  const openrouterModel = localStorage.getItem('jg_openrouter_model') || sessionIA.openrouterModel || 'qwen/qwen3-coder:free';
+  const timeoutMs = sessionIA.aiConfigured ? 45000 : 20000;
+
+  try {
+    const resp = await fetchApi('/correct-transcription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: textoOriginal,
+        language: lang,
+        provider: provider === 'none' ? 'gemini' : provider,
+        api_key: localStorage.getItem('jg_api_key') || '',
+        openrouter_model: openrouterModel,
+      })
+    }, timeoutMs);
+
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data.text && data.text !== textoOriginal) {
+      _aplicarTextoCorregido(ta, textoOriginal, data.text);
+      if (typeof _mostrarToastMejora === 'function') {
+        if (data.ia_used) {
+          _mostrarToastMejora('✨ Corrección contextual con IA aplicada', false);
+        } else if (!sessionIA.aiConfigured) {
+          _mostrarToastMejora('Corrección local aplicada. Configura una API en Servidor e IA para interpretación contextual completa.', false);
+        }
+      }
+    }
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
 recBtn.addEventListener('click', toggleGrabacion);
 
 // Atajo de teclado: Barra espaciadora
@@ -2341,6 +3286,11 @@ document.addEventListener('keydown', (e)=>{
 });
 
 langSel.addEventListener('change', ()=>{
+  _idiomaSalidaActual = resolverIdiomaSalida(
+    outputLangSel ? outputLangSel.value : 'same',
+    '',
+    langSel.value
+  );
   if(grabando && recog){ try{ recog.abort(); }catch(_){} }
 });
 
@@ -2364,30 +3314,45 @@ document.getElementById('pbTranscribe').addEventListener('click', async ()=>{
   const orig = btn.innerHTML;
   btn.innerHTML = '<span class="spin"></span> Transcribiendo con Whisper…';
   try{
-    const formData = new FormData();
-    // filename + type deben ser compatibles con Whisper; usamos .webm
-    formData.append('file', ultimaGrabacionBlob, 'grabacion.webm');
-    formData.append('language', langSel.value.split('-')[0]);  // "es-CO" → "es"
-    const resp = await fetch(SERVER_URL + '/transcribe', {method:'POST', body: formData});
-    if(!resp.ok){
-      const err = await resp.json().catch(()=>({detail:'Error desconocido'}));
-      throw new Error(err.detail || resp.statusText);
-    }
-    const data = await resp.json();
-    // Añade el texto nuevo (procesado) a la salida
+    const data = await transcribirAudio(ultimaGrabacionBlob, { fast: false, autoCorrect: false });
     if(data.text){
-      const frag = procesarFragmento(data.text);
-      if(frag) anexar(frag);
-      abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
-      const avisoMic = mensajeConfianza(data);
+      const finalizado = await finalizarTextoTranscrito(data.text, {
+        outputLang: outputLangSel ? outputLangSel.value : 'same',
+        detectedLang: data.language,
+        inputLang: langSel.value,
+      });
+      if(finalizado.text) anexar(finalizado.text);
+      const textoMic = output.value.trim();
+      registrarTranscripcionOriginal(output, textoMic, document.getElementById('btnCorrectUndo'));
+      let avisoMic = mensajeConfianza(data);
+      if(finalizado.translated) avisoMic = (avisoMic ? avisoMic + ' · ' : '') + 'traducido al ' + (finalizado.language === 'es' ? 'español' : 'inglés');
+      else if(finalizado.translationError) avisoMic = (avisoMic ? avisoMic + ' · ' : '') + 'traducción fallida';
       setEstado(avisoMic ? '✓ Whisper terminó · ' + avisoMic : '✓ Whisper terminó. Texto añadido abajo.', false);
+      btn.innerHTML = orig;
+      btn.disabled = false;
+      actualizarBotonesServidor();
+      abrirTextModal(document.getElementById('output'), '📝 Editor · Micrófono');
+      if (opt.contexto && textoMic) {
+        _corregirTranscripcionConIA(output, textoMic, {
+          langEl: { value: finalizado.language || resolverIdiomaSalida(outputLangSel.value, data.language, langSel.value) },
+        }).then(() => {
+          if (activeTextarea === output && textModalTextarea) {
+            textModalTextarea.value = output.value;
+            textModalTextarea.dispatchEvent(new Event('input'));
+          }
+          marcarCambioDesdeOriginal(output);
+        }).catch(() => {});
+      }
     }else{
       setEstado('Whisper no devolvió texto.', false);
     }
   }catch(e){
     alert('Error: ' + e.message);
   }finally{
-    btn.innerHTML = orig;
+    if (btn.disabled) {
+      btn.innerHTML = orig;
+      btn.disabled = false;
+    }
     actualizarBotonesServidor();
   }
 });
@@ -2410,7 +3375,14 @@ async function iniciarVisualizador(){
   try{
     // Usa el stream del MediaRecorder si está activo, si no pide uno
     if(!grabacionStream){
-      micStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio:{
+          channelCount:1,
+          echoCancellation:true,
+          noiseSuppression:true,
+          autoGainControl:true
+        }
+      });
     }else{
       micStream = grabacionStream;
     }
@@ -2420,7 +3392,13 @@ async function iniciarVisualizador(){
     audioCtx.createMediaStreamSource(micStream).connect(analyser);
     dataArr = new Uint8Array(analyser.frequencyBinCount);
     dibujar();
-  }catch(_){ dibujarIdle(); }
+  }catch(_){
+    if(micStream && micStream !== grabacionStream){
+      try{ micStream.getTracks().forEach(t=>t.stop()); }catch(__){}
+    }
+    micStream = null;
+    dibujarIdle();
+  }
 }
 function detenerVisualizador(){
   cancelAnimationFrame(rafId);
@@ -2431,22 +3409,22 @@ function detenerVisualizador(){
   if(audioCtx){ audioCtx.close().catch(()=>{}); audioCtx=null; }
   dibujarIdle();
 }
+let _waveFrame = 0;
 function dibujar(){
   rafId = requestAnimationFrame(dibujar);
+  _waveFrame++;
+  if(_waveFrame % 2 !== 0) return;
   analyser.getByteFrequencyData(dataArr);
   const w = canvas.clientWidth, h = canvas.clientHeight;
   ctx.clearRect(0,0,w,h);
   const n = dataArr.length, bw = w / n;
+  const divisor = 255 - sensThreshold;
+  ctx.fillStyle = '#FF5A35';
   for(let i=0;i<n;i++){
     const raw = dataArr[i];
-    // Evitar división por cero si sensThreshold es 255 (en cuyo caso v es 0)
-    const divisor = 255 - sensThreshold;
     const v = divisor > 0 ? Math.max(0, raw - sensThreshold) / divisor : 0;
     const bh = Math.max(3, v * h * .9);
     const x = i*bw, y = (h-bh)/2;
-    const g = ctx.createLinearGradient(0,y,0,y+bh);
-    g.addColorStop(0,'#FF7A18'); g.addColorStop(1,'#FF2D55');
-    ctx.fillStyle = g;
     ctx.fillRect(x+bw*.18, y, bw*.64, bh);
   }
 }
@@ -2510,10 +3488,12 @@ btnClear.addEventListener('click', ()=>{
 });
 
 document.getElementById('btnLiveAccept').addEventListener('click', ()=>{
-  if(textoEnVivoAcumulado.trim()){
-    anexar(textoEnVivoAcumulado);
+  const capturado = textoBaseLive();
+  if(capturado){
+    anexar(capturado);
   }
   textoEnVivoAcumulado = '';
+  textoWhisperConfirmado = '';
   interimEl.textContent = '';
   document.getElementById('livePanel').classList.remove('live-panel--active');
   const actionsEl = document.getElementById('livePanelActions');
@@ -2525,7 +3505,9 @@ document.getElementById('btnLiveDiscard').addEventListener('click', ()=>{
     try { activeWhisperController.abort(); } catch(_) {}
     activeWhisperController = null;
   }
+  detenerWhisperPorBloques();
   textoEnVivoAcumulado = '';
+  textoWhisperConfirmado = '';
   interimEl.textContent = '';
   document.getElementById('livePanel').classList.remove('live-panel--active');
   const actionsEl = document.getElementById('livePanelActions');
@@ -2549,26 +3531,27 @@ fileInput.addEventListener('change', onFileSelected);
 function onFileSelected(){
   const f = fileInput.files[0];
   if(!f) return;
+  if((f.size / 1024 / 1024) > limitesServidor.maxAudioMb){
+    fname.textContent = `✗ Archivo demasiado grande. Máximo: ${limitesServidor.maxAudioMb} MB`;
+    fileInput.value = '';
+    actualizarBotonesServidor();
+    return;
+  }
   fname.textContent = '✓ ' + f.name + ' · ' + (f.size/1024/1024).toFixed(2) + ' MB';
   actualizarBotonesServidor();
 }
 
-let fileFakeInterval = null;
-function iniciarProgresoFake(labelId, fillId, areaId){
-  document.getElementById(areaId).style.display = 'block';
-  let p = 0;
-  clearInterval(fileFakeInterval);
-  fileFakeInterval = setInterval(()=>{
-    p = Math.min(p + Math.random()*3, 90);
-    document.getElementById(fillId).style.width = p + '%';
-  }, 300);
-  document.getElementById(labelId).textContent = 'Procesando con Whisper…';
-}
-function finalizarProgreso(labelId, fillId, ok, msg){
-  clearInterval(fileFakeInterval);
-  document.getElementById(fillId).style.width = ok ? '100%' : '0%';
-  document.getElementById(labelId).textContent = msg;
-  if(ok) setTimeout(()=>{ document.getElementById(fillId).style.width = '0%'; }, 2000);
+function mostrarProgreso(areaId, labelId, fillId, texto, activo = true){
+  const area = document.getElementById(areaId);
+  const label = document.getElementById(labelId);
+  const fill = document.getElementById(fillId);
+  if(!area || !label || !fill) return;
+  area.style.display = activo ? 'block' : 'none';
+  label.textContent = texto;
+  fill.style.width = activo ? '35%' : (texto.startsWith('✓') ? '100%' : '0%');
+  if(!activo && texto.startsWith('✓')){
+    setTimeout(()=>{ fill.style.width = '0%'; area.style.display = 'none'; }, 2000);
+  }
 }
 
 document.getElementById('btnFileTranscribe').addEventListener('click', async ()=>{
@@ -2577,29 +3560,57 @@ document.getElementById('btnFileTranscribe').addEventListener('click', async ()=
   const btn = document.getElementById('btnFileTranscribe');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Transcribiendo…';
-  iniciarProgresoFake('fileProgLabel','fileProg','fileProgArea');
-  const formData = new FormData();
-  formData.append('file', f);
-  formData.append('language', document.getElementById('fileLang').value);
+  mostrarProgreso('fileProgArea', 'fileProgLabel', 'fileProg', 'Transcribiendo con Whisper…');
+  const fileLangEl = document.getElementById('fileLang');
+  const fileOutLangEl = document.getElementById('fileOutputLang');
   try{
-    const resp = await fetch(SERVER_URL + '/transcribe', {method:'POST', body: formData});
-    if(!resp.ok){
-      const err = await resp.json().catch(()=>({detail:'Error desconocido'}));
-      throw new Error(err.detail || resp.statusText);
+    const data = await transcribirAudio(f, {
+      filename: f.name || 'audio',
+      lang: fileLangEl.value,
+      fast: false,
+      autoCorrect: false,
+    });
+    if(fileOutLangEl && fileOutLangEl.value !== 'same'){
+      mostrarProgreso('fileProgArea', 'fileProgLabel', 'fileProg', 'Ajustando idioma del texto…');
     }
-    const data = await resp.json();
-    fileOutput.value = data.text;
+    const finalizado = await finalizarTextoTranscrito(data.text || '', {
+      outputLang: fileOutLangEl ? fileOutLangEl.value : 'same',
+      detectedLang: data.language,
+      inputLang: fileLangEl.value,
+    });
+    const textoCrudo = finalizado.text || '';
+    fileOutput.value = textoCrudo;
+    registrarTranscripcionOriginal(fileOutput, textoCrudo, document.getElementById('btnFileCorrectUndo'));
     document.getElementById('fileCount').textContent =
-      contarPalabras(data.text) + ' palabras · idioma: ' + (data.language || '?');
+      contarPalabras(textoCrudo) + ' palabras · ' + etiquetaIdiomaResultado(finalizado, finalizado.language);
     document.getElementById('fileResultArea').style.display = 'block';
     document.querySelector('.file-area').classList.add('has-results');
     fileOutput.scrollTop = 0;
     const avisoFile = mensajeConfianza(data);
-    finalizarProgreso('fileProgLabel','fileProg', true, avisoFile ? '✓ Transcripción completa · ' + avisoFile : '✓ Transcripción completa');
+    let progMsg = avisoFile ? '✓ Transcripción completa · ' + avisoFile : '✓ Transcripción completa';
+    if(finalizado.translated) progMsg += ' · traducido';
+    else if(finalizado.translationError) progMsg += ' · traducción no disponible';
+    mostrarProgreso('fileProgArea', 'fileProgLabel', 'fileProg', progMsg, false);
+    // Restaurar botón YA (antes de abrir modal / corrección en segundo plano)
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir a texto';
+    actualizarBotonesServidor();
     abrirTextModal(document.getElementById('fileOutput'), '🎧 Editor · Archivo');
+
+    // Corrección contextual en segundo plano (no bloquea la ventana)
+    if (opt.contexto && textoCrudo) {
+      _corregirTranscripcionConIA(fileOutput, textoCrudo, {
+        langEl: { value: finalizado.language || fileLangEl.value },
+      }).then(() => {
+        if (activeTextarea === fileOutput && textModalTextarea) {
+          textModalTextarea.value = fileOutput.value;
+          textModalTextarea.dispatchEvent(new Event('input'));
+        }
+        marcarCambioDesdeOriginal(fileOutput);
+      }).catch(() => {});
+    }
   }catch(e){
-    finalizarProgreso('fileProgLabel','fileProg', false, '✗ Error: ' + e.message);
-  }finally{
+    mostrarProgreso('fileProgArea', 'fileProgLabel', 'fileProg', '✗ Error: ' + e.message, false);
     btn.disabled = false;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir a texto';
     actualizarBotonesServidor();
@@ -2653,41 +3664,86 @@ document.getElementById('ytBtn').addEventListener('click', async ()=>{
   const btn = document.getElementById('ytBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Analizando…';
-  iniciarProgresoFake('ytProgLabel','ytProg','ytProgArea');
+  mostrarProgreso('ytProgArea', 'ytProgLabel', 'ytProg', 'Procesando video…');
   document.getElementById('ytResultArea').style.display = 'none';
+  const ytLangEl = document.getElementById('ytLang');
+  const ytOutLangEl = document.getElementById('ytOutputLang');
   const body = JSON.stringify({
     url,
-    language: document.getElementById('ytLang').value,
+    language: ytLangEl.value,
     prefer_subtitles: document.getElementById('ytSubPref').value === 'true',
+    fast_mode: true,
+    api_key: localStorage.getItem('jg_groq_api_key') || localStorage.getItem('jg_api_key') || '',
   });
   try{
-    const resp = await fetch(SERVER_URL + '/youtube', {
+    // YouTube puede tardar: subtítulos ~5s, descarga+Groq hasta 2-3 min
+    const resp = await fetchApi('/youtube', {
       method:'POST', headers:{'Content-Type':'application/json'}, body,
-    });
+    }, 180000);
     if(!resp.ok){
       const err = await resp.json().catch(()=>({detail:'Error desconocido'}));
-      throw new Error(err.detail || resp.statusText);
+      throw new Error(extraerDetalleError(err, resp.statusText));
     }
     const data = await resp.json();
     const sourceLabel = data.source === 'subtitles' ? 'subtítulos' : 'Whisper';
     const sourceCls   = data.source === 'subtitles' ? 'subs' : 'whisper';
     document.getElementById('ytResultTitle').innerHTML =
-      (data.title ? data.title.slice(0,60) + (data.title.length>60?'…':'') : 'Resultado') +
+      escapeHtml(data.title ? data.title.slice(0,60) + (data.title.length>60?'…':'') : 'Resultado') +
       `<span class="yt-source-badge ${sourceCls}">${sourceLabel}</span>`;
-    ytOutput.value = data.text;
+    const textoYtCrudo = data.text || '';
+    if(ytOutLangEl && ytOutLangEl.value !== 'same'){
+      mostrarProgreso('ytProgArea', 'ytProgLabel', 'ytProg', 'Ajustando idioma del texto…');
+    }
+    const finalizado = await finalizarTextoTranscrito(textoYtCrudo, {
+      outputLang: ytOutLangEl ? ytOutLangEl.value : 'same',
+      detectedLang: data.language,
+      inputLang: ytLangEl.value,
+    });
+    const textoYt = finalizado.text || '';
+    ytOutput.value = textoYt;
+    registrarTranscripcionOriginal(ytOutput, textoYt, document.getElementById('btnYtCorrectUndo'));
     document.getElementById('ytCount').textContent =
-      contarPalabras(data.text) + ' palabras · idioma: ' + (data.language || '?');
+      contarPalabras(textoYt) + ' palabras · ' + etiquetaIdiomaResultado(finalizado, finalizado.language);
     document.getElementById('ytResultArea').style.display = 'block';
     document.querySelector('.yt-area').classList.add('has-results');
     ytOutput.scrollTop = 0;
     const avisoYt = mensajeConfianza(data);
-    finalizarProgreso('ytProgLabel','ytProg', true, '✓ Transcripción completa · fuente: ' + sourceLabel + (avisoYt ? ' · ' + avisoYt : ''));
-    abrirTextModal(document.getElementById('ytOutput'), '▶️ Editor · YouTube');
-  }catch(e){
-    finalizarProgreso('ytProgLabel','ytProg', false, '✗ Error: ' + e.message);
-  }finally{
-    actualizarBotonesServidor();
+    let progYt = '✓ Transcripción completa · fuente: ' + sourceLabel + (avisoYt ? ' · ' + avisoYt : '');
+    if(finalizado.translated) progYt += ' · traducido';
+    else if(finalizado.translationError) progYt += ' · traducción no disponible';
+    mostrarProgreso('ytProgArea', 'ytProgLabel', 'ytProg', progYt, false);
+    // Liberar UI y abrir modal ya (sin esperar corrección contextual)
+    btn.disabled = false;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir video';
+    actualizarBotonesServidor();
+    abrirTextModal(document.getElementById('ytOutput'), '▶️ Editor · YouTube');
+    if (opt.contexto && textoYt && data.source === 'whisper') {
+      _corregirTranscripcionConIA(ytOutput, textoYt, {
+        langEl: { value: finalizado.language || ytLangEl.value },
+      }).then(() => {
+        if (activeTextarea === ytOutput && textModalTextarea) {
+          textModalTextarea.value = ytOutput.value;
+          textModalTextarea.dispatchEvent(new Event('input'));
+        }
+        marcarCambioDesdeOriginal(ytOutput);
+      }).catch(() => {});
+    }
+  }catch(e){
+    let msg = (e && e.message) ? e.message : String(e);
+    // Mensaje accionable cuando YouTube bloquea servidores en la nube (anti-bot)
+    if(/bloque[oó]|bot|Sign in|datacenter|No se pudo procesar el video/i.test(msg)){
+      msg = 'YouTube bloqueó al servidor en la nube. Prueba: (1) un video con subtítulos manuales, (2) descarga el audio y súbelo en «Archivo», o (3) usa la app en local (iniciar.bat) donde YouTube suele funcionar.';
+    }
+    if(/abort|timeout|tiempo límite|signal is aborted/i.test(msg)){
+      msg = 'La petición a YouTube tardó demasiado. Intenta un video más corto o con subtítulos.';
+    }
+    mostrarProgreso('ytProgArea', 'ytProgLabel', 'ytProg', '✗ Error: ' + msg, false);
+  }finally{
+    if (btn.disabled) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir video';
+    }
+    actualizarBotonesServidor();
   }
 });
 
@@ -2762,6 +3818,15 @@ function abrirTextModal(targetTa, title) {
   document.getElementById('textModalTitle').textContent = title;
   textModal.classList.add('show');
   actualizarContadorTextModal();
+  // Heredar snapshot original del panel y activar ↩ del modal
+  const orig = _origTranscription.get(targetTa);
+  if (orig != null) {
+    _origTranscription.set(textModalTextarea, orig);
+  }
+  const modalUndo = document.getElementById('btnTextModalCorrectUndo');
+  if (modalUndo) _undoBtnByTa.set(textModalTextarea, modalUndo);
+  actualizarBotonDeshacer(textModalTextarea);
+  actualizarBotonDeshacer(targetTa);
   setTimeout(() => textModalTextarea.focus(), 150);
 }
 
@@ -2798,47 +3863,189 @@ async function corregirTexto(ta, btnEl, labelId, langSelectorId) {
 
   const labelEl = document.getElementById(labelId);
   const origText = labelEl ? labelEl.textContent : 'Corregir';
+  const origHTML = btnEl.innerHTML;
+
+  // Si aún no hay snapshot (usuario pegó texto a mano), guardar el actual como "original"
+  if (_origTranscription.get(ta) == null) {
+    registrarTranscripcionOriginal(ta, txt, _resolverUndoBtn(ta));
+  }
 
   btnEl.disabled = true;
   if (labelEl) labelEl.textContent = 'Corrigiendo…';
+  btnEl.innerHTML = '<span class="spin"></span>';
 
+  // ── Fase 1: corrección local instantánea ──
+  const corregidoLocal = _corregirTextoLocal(txt);
+  if (corregidoLocal !== txt) {
+    ta.value = corregidoLocal;
+    ta.dispatchEvent(new Event('input'));
+    if (activeTextarea && ta === textModalTextarea) {
+      activeTextarea.value = corregidoLocal;
+      activeTextarea.dispatchEvent(new Event('input'));
+    }
+  }
+
+  // ── Fase 2: corrección via LanguageTool (más precisa) ──
   try {
-    // Elegir el selector de idioma correcto según el panel
     const langEl = document.getElementById(langSelectorId || 'lang');
     let lang = langEl ? langEl.value : 'es';
-    // Si el valor es 'auto', usar español por defecto (LanguageTool necesita código ISO)
     if (lang === 'auto' || !lang) lang = 'es';
 
-    const resp = await fetch(SERVER_URL + '/correct', {
+    const resp = await fetchApi('/correct', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: txt, language: lang })
-    });
+      body: JSON.stringify({ text: corregidoLocal, language: lang })
+    }, 15000);
 
     if (!resp.ok) throw new Error('Error al conectar con el servidor de corrección');
     const data = await resp.json();
-    if (data.text) {
+    if (data.text && data.text !== corregidoLocal) {
       ta.value = data.text;
       ta.dispatchEvent(new Event('input'));
+      if (activeTextarea && ta === textModalTextarea) {
+        activeTextarea.value = data.text;
+        activeTextarea.dispatchEvent(new Event('input'));
+      }
+      if (labelEl) {
+        labelEl.textContent = data.matches > 0 ? '✓ ' + data.matches + ' correcciones' : '✓ Texto correcto';
+        setTimeout(() => { labelEl.textContent = origText; }, 1800);
+      }
+    } else if (corregidoLocal === txt) {
+      if (labelEl) {
+        labelEl.textContent = '✓ Sin cambios';
+        setTimeout(() => { labelEl.textContent = origText; }, 1400);
+      }
     }
   } catch (e) {
-    // Mostrar error de forma no bloqueante
-    const errDiv = document.createElement('div');
-    errDiv.className = 'notice err';
-    errDiv.style.cssText = 'margin:6px 0;position:relative;z-index:1';
-    errDiv.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none;width:16px;height:16px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Error al corregir: ${e.message}</span>`;
-    btnEl.closest('.actions')?.insertAdjacentElement('beforebegin', errDiv);
-    setTimeout(() => errDiv.remove(), 5000);
+    if (typeof _mostrarToastMejora === 'function') {
+      _mostrarToastMejora('Corrección local aplicada (servidor no disponible)', false);
+    }
   } finally {
     btnEl.disabled = false;
-    if (labelEl) labelEl.textContent = origText;
+    btnEl.innerHTML = origHTML;
+    if (labelEl && labelEl.textContent === 'Corrigiendo…') {
+      labelEl.textContent = origText;
+    }
+    marcarCambioDesdeOriginal(ta);
   }
 }
 
-/* ── Mejorar texto ─────────────────────────────────────────────────── */
+function _corregirTextoLocal(texto) {
+  if (!texto) return texto;
+  let t = texto;
+  // Normalizar espacios
+  t = t.replace(/[ \t]{2,}/g, ' ');
+  t = t.replace(/\s+([,.:;!?])/g, '$1');
+  t = t.replace(/([,])(?!\s)/g, '$1 ');
+  // Capitalizar inicio de oración
+  t = t.replace(/(^\s*|[.!?…]\s+|¿\s*|¡\s*)([a-záéíóúñü])/gu, (_, p, c) => p + c.toUpperCase());
+  // Tildes básicas
+  t = t.replace(/\bsólo\b/gi, 'solo');
+  // Quitar muletillas repetidas
+  t = t.replace(/\b(eh+|ah+|oh+|uh+|mm+|hmm+)\b/gi, '');
+  t = t.replace(/ {2,}/g, ' ');
+  // Asegurar punto final
+  t = t.trim();
+  if (t && !/[.!?…]$/.test(t)) t += '.';
+  return t;
+}
 
-// Guarda el texto anterior para deshacer (un nivel por textarea)
-const _improveHistory = new WeakMap();
+/* ── Historial: volver a la transcripción original ─────────────────── */
+// Guarda el texto crudo de Whisper y el estado de deshacer por textarea
+const _origTranscription = new WeakMap(); // texto original de la transcripción
+const _improveHistory = new WeakMap();    // texto antes de pulir (compat)
+const _undoBtnByTa = new WeakMap();       // botón ↩ asociado
+
+function _taKey(ta){
+  return ta && (ta.id || null);
+}
+
+/** Registra la transcripción original (al llegar de Whisper) y enlaza el botón ↩ */
+function registrarTranscripcionOriginal(ta, texto, undoBtn){
+  if(!ta) return;
+  const t = String(texto || '');
+  _origTranscription.set(ta, t);
+  if(undoBtn) _undoBtnByTa.set(ta, undoBtn);
+  // Si el modal está abierto y usa este ta como origen, copiar snapshot
+  if(typeof activeTextarea !== 'undefined' && activeTextarea === ta && textModalTextarea){
+    _origTranscription.set(textModalTextarea, t);
+    const modalUndo = document.getElementById('btnTextModalCorrectUndo');
+    if(modalUndo) _undoBtnByTa.set(textModalTextarea, modalUndo);
+  }
+  actualizarBotonDeshacer(ta);
+}
+
+/** Marca que el texto actual difiere del original → activa ↩ */
+function marcarCambioDesdeOriginal(ta){
+  if(!ta) return;
+  actualizarBotonDeshacer(ta);
+  // sincronizar modal si está abierto
+  if(typeof activeTextarea !== 'undefined' && activeTextarea === ta && textModalTextarea){
+    actualizarBotonDeshacer(textModalTextarea);
+  }
+  if(ta === textModalTextarea && typeof activeTextarea !== 'undefined' && activeTextarea){
+    actualizarBotonDeshacer(activeTextarea);
+  }
+}
+
+function actualizarBotonDeshacer(ta){
+  if(!ta) return;
+  const undoBtn = _undoBtnByTa.get(ta) || _resolverUndoBtn(ta);
+  if(!undoBtn) return;
+  const orig = _origTranscription.get(ta);
+  // Para el modal, también mirar el textarea de origen
+  let origRef = orig;
+  if(origRef == null && ta === textModalTextarea && typeof activeTextarea !== 'undefined' && activeTextarea){
+    origRef = _origTranscription.get(activeTextarea);
+    if(origRef != null) _origTranscription.set(ta, origRef);
+  }
+  const actual = (ta.value || '').trim();
+  const puede = origRef != null && actual !== String(origRef).trim() && String(origRef).trim() !== '';
+  undoBtn.classList.toggle('is-on', !!puede);
+  undoBtn.disabled = !puede;
+  undoBtn.title = puede
+    ? 'Volver a la transcripción original'
+    : 'Sin cambios que deshacer';
+}
+
+function _resolverUndoBtn(ta){
+  if(!ta) return null;
+  const map = {
+    output: 'btnCorrectUndo',
+    fileOutput: 'btnFileCorrectUndo',
+    ytOutput: 'btnYtCorrectUndo',
+    textModalTextarea: 'btnTextModalCorrectUndo',
+  };
+  const id = map[ta.id];
+  return id ? document.getElementById(id) : null;
+}
+
+function deshacerAOriginal(ta){
+  if(!ta) return false;
+  let orig = _origTranscription.get(ta);
+  if(orig == null && ta === textModalTextarea && typeof activeTextarea !== 'undefined' && activeTextarea){
+    orig = _origTranscription.get(activeTextarea);
+  }
+  if(orig == null) return false;
+  ta.value = orig;
+  ta.dispatchEvent(new Event('input'));
+  if(typeof activeTextarea !== 'undefined' && activeTextarea){
+    if(ta === textModalTextarea){
+      activeTextarea.value = orig;
+      activeTextarea.dispatchEvent(new Event('input'));
+      actualizarBotonDeshacer(activeTextarea);
+    } else if(activeTextarea === ta && textModalTextarea){
+      textModalTextarea.value = orig;
+      textModalTextarea.dispatchEvent(new Event('input'));
+      actualizarBotonDeshacer(textModalTextarea);
+    }
+  }
+  actualizarBotonDeshacer(ta);
+  if(typeof _mostrarToastMejora === 'function'){
+    _mostrarToastMejora('↩ Transcripción original restaurada', false);
+  }
+  return true;
+}
 
 function _mostrarToastMejora(msg, esIA) {
   const t = document.createElement('div');
@@ -2882,6 +4089,10 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
     if (provider === 'gemini') {
       overlayIcon.textContent = '✦';
       overlayTitle.textContent = 'Puliendo con Gemini';
+    } else if (provider === 'openrouter') {
+      overlayIcon.textContent = '🤖';
+      const selectedModel = (localStorage.getItem('jg_openrouter_model') || 'qwen/qwen3-coder:free').split('/').pop().replace(':free', '');
+      overlayTitle.textContent = 'Puliendo con ' + selectedModel;
     } else if (provider === 'anthropic') {
       overlayIcon.textContent = '✍️';
       overlayTitle.textContent = 'Puliendo con Claude';
@@ -2902,23 +4113,24 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
     let lang = langEl ? langEl.value : 'es';
     if (lang === 'auto' || !lang) lang = 'es';
 
-    const provider = localStorage.getItem('jg_ai_provider') || 'gemini';
-    const apiKey = localStorage.getItem('jg_ai_key') || '';
+    const provider = localStorage.getItem('jg_ai_provider') || sessionIA.provider || 'gemini';
+    const openrouterModel = localStorage.getItem('jg_openrouter_model') || sessionIA.openrouterModel || 'qwen/qwen3-coder:free';
 
-    const resp = await fetch(SERVER_URL + '/improve', {
+    const resp = await fetchApi('/improve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: txt, 
         language: lang,
         provider: provider,
-        api_key: apiKey
+        api_key: localStorage.getItem('jg_api_key') || '',
+        openrouter_model: openrouterModel
       })
-    });
+    }, 30000); // 30 segundos para llamadas a la IA
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: 'Error desconocido' }));
-      throw new Error(err.detail || resp.statusText);
+      throw new Error(extraerDetalleError(err, resp.statusText));
     }
 
     const data = await resp.json();
@@ -3007,8 +4219,11 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
         acceptBtn.onclick = () => {
           const finalImprovedText = sugTa.value.trim();
           if (finalImprovedText && finalImprovedText !== txt) {
-            // Guardar original para deshacer
+            // Snapshot para deshacer del pulido (además del ↩ a la transcripción original)
             _improveHistory.set(ta, txt);
+            if (_origTranscription.get(ta) == null) {
+              registrarTranscripcionOriginal(ta, txt, _resolverUndoBtn(ta));
+            }
 
             // Animación fade
             ta.style.transition = 'opacity .2s';
@@ -3023,6 +4238,7 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
                 activeTextarea.value = finalImprovedText;
                 activeTextarea.dispatchEvent(new Event('input'));
               }
+              marcarCambioDesdeOriginal(ta);
             }, 180);
 
             // Toast de confirmación
@@ -3032,33 +4248,10 @@ async function mejorarTexto(ta, btnEl, labelId, langSelectorId) {
               _mostrarToastMejora('⚡ Texto pulido', false);
             }
 
-            // Cambiar el botón original a "Deshacer" por 8 segundos
+            // El botón ↩ al lado de Corregir queda activo (transcripción original)
             btnEl.disabled = false;
-            btnEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span id="${labelId}">Deshacer</span>`;
-            btnEl.classList.add('btn-undo');
-            const undoTimer = setTimeout(() => {
-              btnEl.innerHTML = origHTML;
-              btnEl.classList.remove('btn-undo');
-            }, 8000);
-
-            btnEl.onclick = (e) => {
-              e.stopPropagation();
-              clearTimeout(undoTimer);
-              const prev = _improveHistory.get(ta);
-              if (prev !== undefined) {
-                ta.value = prev;
-                ta.dispatchEvent(new Event('input'));
-                if (activeTextarea && ta === textModalTextarea) {
-                  activeTextarea.value = prev;
-                  activeTextarea.dispatchEvent(new Event('input'));
-                }
-                _improveHistory.delete(ta);
-                _mostrarToastMejora('↩ Texto restaurado', false);
-              }
-              btnEl.innerHTML = origHTML;
-              btnEl.classList.remove('btn-undo');
-              btnEl.onclick = null;
-            };
+            btnEl.innerHTML = origHTML;
+            btnEl.classList.remove('btn-undo');
           }
           cleanup();
           resolve();
@@ -3122,9 +4315,26 @@ document.getElementById('btnTextModalCorrect').addEventListener('click', () => {
     if (activeTextarea) {
       activeTextarea.value = textModalTextarea.value;
       activeTextarea.dispatchEvent(new Event('input'));
+      marcarCambioDesdeOriginal(activeTextarea);
     }
+    marcarCambioDesdeOriginal(textModalTextarea);
   });
 });
+
+// Botones ↩ minimalistas: volver a la transcripción original
+function _wireUndoBtn(btnId, getTa){
+  const b = document.getElementById(btnId);
+  if(!b) return;
+  b.addEventListener('click', () => {
+    const ta = getTa();
+    if(!ta) return;
+    deshacerAOriginal(ta);
+  });
+}
+_wireUndoBtn('btnCorrectUndo', () => document.getElementById('output'));
+_wireUndoBtn('btnFileCorrectUndo', () => document.getElementById('fileOutput'));
+_wireUndoBtn('btnYtCorrectUndo', () => document.getElementById('ytOutput'));
+_wireUndoBtn('btnTextModalCorrectUndo', () => textModalTextarea);
 
 /* Botón Mejorar en el modal expandido */
 document.getElementById('btnTextModalImprove').addEventListener('click', function() {
@@ -3154,6 +4364,206 @@ document.getElementById('btnYtImprove').addEventListener('click', function() {
   mejorarTexto(document.getElementById('ytOutput'), this, 'ytImproveLabel', 'ytLang');
 });
 
+/* ── 9) Mejorar prompt (skill maestro-prompts) ───────────────────────── */
+const promptImproveModal = document.getElementById('promptImproveModal');
+const promptImproveBackdrop = document.getElementById('promptImproveBackdrop');
+const promptImproveClose = document.getElementById('promptImproveClose');
+const promptImproveOriginal = document.getElementById('promptImproveOriginal');
+const promptImproveSuggested = document.getElementById('promptImproveSuggested');
+const promptImproveNotice = document.getElementById('promptImproveNotice');
+const promptImproveBadge = document.getElementById('promptImproveBadge');
+const promptImproveChars = document.getElementById('promptImproveChars');
+const promptImproveMode = document.getElementById('promptImproveMode');
+const btnPromptImproveAccept = document.getElementById('btnPromptImproveAccept');
+const btnPromptImproveCancel = document.getElementById('btnPromptImproveCancel');
+
+let _promptTargetTa = null;
+let _promptTargetBtn = null;
+let _promptTargetLabelId = null;
+let _promptIAUsada = false;
+
+function cerrarPromptModal() {
+  promptImproveModal.classList.remove('show');
+  promptImproveSuggested.value = '';
+  promptImproveOriginal.textContent = '';
+  promptImproveNotice.style.display = 'none';
+  _promptTargetTa = null;
+  _promptTargetBtn = null;
+  _promptTargetLabelId = null;
+}
+
+promptImproveClose.addEventListener('click', cerrarPromptModal);
+promptImproveBackdrop.addEventListener('click', cerrarPromptModal);
+btnPromptImproveCancel.addEventListener('click', cerrarPromptModal);
+btnPromptImproveAccept.addEventListener('click', () => {
+  if (_promptTargetTa && promptImproveSuggested.value) {
+    _promptTargetTa.value = promptImproveSuggested.value;
+    const evt = new Event('input', { bubbles: true });
+    _promptTargetTa.dispatchEvent(evt);
+    if (_promptTargetBtn && _promptTargetLabelId) {
+      const labelEl = document.getElementById(_promptTargetLabelId);
+      if (labelEl) {
+        const orig = labelEl.textContent;
+        labelEl.textContent = '✓ Aplicado';
+        _promptTargetBtn.classList.add('copied');
+        setTimeout(() => {
+          labelEl.textContent = orig;
+          _promptTargetBtn.classList.remove('copied');
+        }, 1500);
+      }
+    }
+    if (typeof _mostrarToastMejora === 'function') {
+      _mostrarToastMejora(_promptIAUsada ? '✓ Prompt mejorado aplicado' : '✓ Plantilla aplicada (modo local)', _promptIAUsada);
+    }
+  }
+  cerrarPromptModal();
+});
+
+async function mejorarPrompt(targetTa, btnEl, labelId) {
+  const texto = (targetTa.value || '').trim();
+  if (!texto) {
+    if (typeof _mostrarToastMejora === 'function') {
+      _mostrarToastMejora('Escribe o transcribe primero un prompt para mejorar.', false);
+    } else {
+      alert('Escribe o transcribe primero un prompt para mejorar.');
+    }
+    return;
+  }
+  if (texto.length < 10) {
+    if (typeof _mostrarToastMejora === 'function') {
+      _mostrarToastMejora('El prompt es muy corto. Mínimo ~10 caracteres para analizar.', false);
+    }
+    return;
+  }
+
+  // Detectar modalidad automáticamente según palabras clave del prompt
+  const t = texto.toLowerCase();
+  let targetModel = 'auto';
+  if (/(midjourney|dall-?e|flux|imagen|ilustra|dibuja|--ar\b|negative prompt)/.test(t)) targetModel = 'midjourney';
+  else if (/(sora|veo|kling|runway|pika|seedance|video de|animación)/.test(t)) targetModel = 'veo';
+  else if (/(claude|sonnet|haiku|opus)/.test(t)) targetModel = 'claude';
+  else if (/(chatgpt|gpt-4|gpt-3\.5|openai)/.test(t)) targetModel = 'gpt';
+  else if (/(gemini)/.test(t)) targetModel = 'gemini';
+
+  _promptTargetTa = targetTa;
+  _promptTargetBtn = btnEl;
+  _promptTargetLabelId = labelId;
+  _promptIAUsada = false;
+
+  // Estado: cargando
+  promptImproveOriginal.textContent = texto;
+  promptImproveChars.textContent = `${texto.length} caracteres · ${texto.split(/\s+/).filter(Boolean).length} palabras`;
+  promptImproveSuggested.value = '⏳ Mejorando prompt con la skill maestro-prompts…';
+  promptImproveBadge.textContent = 'Cargando…';
+  promptImproveBadge.style.color = '#FFC79A';
+  promptImproveBadge.style.background = 'rgba(255,122,24,.15)';
+  promptImproveBadge.style.borderColor = 'rgba(255,122,24,.35)';
+  promptImproveNotice.style.display = 'none';
+  promptImproveMode.textContent = 'Aplicando skill maestro-prompts (auditoría + reescritura)…';
+  btnPromptImproveAccept.disabled = true;
+  promptImproveModal.classList.add('show');
+
+  // Tomar credenciales del localStorage (mismo esquema que /improve)
+  const provider = (localStorage.getItem('jg_ai_provider') || sessionIA.provider || 'gemini').trim();
+  const openrouterModel = (localStorage.getItem('jg_openrouter_model') || sessionIA.openrouterModel || 'qwen/qwen3-coder:free').trim();
+
+  try {
+    const apiKeyPrompt = localStorage.getItem('jg_api_key') || '';
+    const resp = await fetchApi('/improve-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: texto,
+        target_model: targetModel,
+        objetivo: '',
+        idioma_salida: 'auto',
+        // Si hay clave en el navegador, SIEMPRE pedir IA (antes se mandaba 'none' por error)
+        provider: apiKeyPrompt ? provider : (sessionIA.aiConfigured ? provider : 'none'),
+        api_key: apiKeyPrompt,
+        openrouter_model: openrouterModel,
+      }),
+    }, 45000); // 45 segundos para mejorar prompt con IA
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Error desconocido' }));
+      throw new Error(extraerDetalleError(err, resp.statusText));
+    }
+    const data = await resp.json();
+    _promptIAUsada = !!data.ia_used;
+
+    // Render del resultado en el textarea editable
+    promptImproveSuggested.value = data.improved || '';
+
+    // Badge
+    const modalidad = (data.modalidad || 'llm').toUpperCase();
+    const modelo = data.target_model || targetModel;
+    const icoBadge = data.ia_used ? '✨ IA · ' : '🛠️ Local · ';
+    promptImproveBadge.textContent = icoBadge + modalidad + ' → ' + modelo;
+    if (data.ia_used) {
+      promptImproveBadge.style.color = '#9DEBDC';
+      promptImproveBadge.style.background = 'rgba(39,225,193,.10)';
+      promptImproveBadge.style.borderColor = 'rgba(39,225,193,.35)';
+    } else {
+      promptImproveBadge.style.color = '#FFC79A';
+      promptImproveBadge.style.background = 'rgba(255,122,24,.15)';
+      promptImproveBadge.style.borderColor = 'rgba(255,122,24,.35)';
+    }
+
+    // Aviso (heurística local o error de API)
+    if (!data.ia_used) {
+      let msg = '';
+      if (sessionIA.aiConfigured && data.error_detail) {
+        msg = '<b>La IA no respondió correctamente</b> — se aplicó la mejora local sin gastar API. Detalle: ' + escapeHtml(data.error_detail);
+      } else if (!sessionIA.aiConfigured) {
+        msg = '<b>Mejora local (sin API key configurada).</b> Configura Gemini, OpenRouter, Mistral o Claude en <b>Servidor e IA</b> para usar la skill completa con IA. La mejora local detecta fallas y entrega una plantilla con la estructura de la skill.';
+      } else {
+        msg = 'Mejora local aplicada. ' + (data.error_detail ? 'Detalle: ' + escapeHtml(data.error_detail) : '');
+      }
+      promptImproveNotice.innerHTML = msg;
+      promptImproveNotice.style.display = 'flex';
+      promptImproveMode.textContent = 'Modo: heurística local (plantilla) — ' + (data.ia_used ? 'con IA' : 'sin IA');
+    } else {
+      promptImproveMode.textContent = 'Modo: IA con skill maestro-prompts · proveedor: ' + (data.provider || provider);
+    }
+    btnPromptImproveAccept.disabled = false;
+  } catch (e) {
+    promptImproveSuggested.value = '';
+    promptImproveBadge.textContent = '✗ Error';
+    promptImproveBadge.style.color = '#FF8FA3';
+    promptImproveBadge.style.background = 'rgba(255,59,92,.10)';
+    promptImproveBadge.style.borderColor = 'rgba(255,59,92,.35)';
+    promptImproveNotice.innerHTML = '<b>Error al mejorar el prompt:</b> ' + escapeHtml(e.message || String(e));
+    promptImproveNotice.style.display = 'flex';
+    promptImproveMode.textContent = 'Verifica que el servidor esté conectado y la API key configurada.';
+    btnPromptImproveAccept.disabled = true;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+/* Botones "Mejorar prompt" en los 3 paneles + editor expandido */
+document.getElementById('btnPrompt').addEventListener('click', function() {
+  mejorarPrompt(document.getElementById('output'), this, 'promptLabel');
+});
+document.getElementById('btnFilePrompt').addEventListener('click', function() {
+  mejorarPrompt(document.getElementById('fileOutput'), this, 'filePromptLabel');
+});
+document.getElementById('btnYtPrompt').addEventListener('click', function() {
+  mejorarPrompt(document.getElementById('ytOutput'), this, 'ytPromptLabel');
+});
+document.getElementById('btnTextModalPrompt').addEventListener('click', function() {
+  // En el editor expandido, el textarea es textModalTextarea
+  // pero queremos aplicar el prompt al textarea original del que vinimos.
+  if (window.activeTextarea) {
+    mejorarPrompt(window.activeTextarea, this, 'textModalPromptLabel');
+  } else {
+    mejorarPrompt(document.getElementById('textModalTextarea'), this, 'textModalPromptLabel');
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     cerrarModal();
@@ -3166,6 +4576,231 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+/* ── 9) Lógica del Panel de Traducción ────────────────────────────────── */
+const transSrc = document.getElementById('transSrc');
+const transTrg = document.getElementById('transTrg');
+const transDirection = document.getElementById('transDirection');
+const lblTransSrc = document.getElementById('lblTransSrc');
+const lblTransTrg = document.getElementById('lblTransTrg');
+const transSrcCount = document.getElementById('transSrcCount');
+const transTrgCount = document.getElementById('transTrgCount');
+
+const btnTransTranslate = document.getElementById('btnTransTranslate');
+const btnTransCopy = document.getElementById('btnTransCopy');
+const btnTransTxt = document.getElementById('btnTransTxt');
+const btnTransClear = document.getElementById('btnTransClear');
+const btnTransSwap = document.getElementById('btnTransSwap');
+
+const btnTransImportOpen = document.getElementById('btnTransImportOpen');
+const transImportMenu = document.getElementById('transImportMenu');
+
+// Actualizar contadores del panel de traducción
+function actualizarContadoresTraduccion() {
+  const srcTxt = transSrc.value;
+  const trgTxt = transTrg.value;
+  transSrcCount.textContent = contarPalabras(srcTxt) + ' palabras · ' + srcTxt.length + ' car.';
+  transTrgCount.textContent = contarPalabras(trgTxt) + ' palabras · ' + trgTxt.length + ' car.';
+}
+
+transSrc.addEventListener('input', actualizarContadoresTraduccion);
+transTrg.addEventListener('input', actualizarContadoresTraduccion);
+
+// Menú de Importación
+if (btnTransImportOpen && transImportMenu) {
+  btnTransImportOpen.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = transImportMenu.style.display === 'none' || !transImportMenu.style.display;
+    transImportMenu.style.display = isHidden ? 'flex' : 'none';
+  });
+
+  document.addEventListener('click', () => {
+    transImportMenu.style.display = 'none';
+  });
+
+  const importarTexto = (sourceTextarea) => {
+    const txt = sourceTextarea.value.trim();
+    if (txt) {
+      transSrc.value = txt;
+      transSrc.dispatchEvent(new Event('input'));
+      _mostrarToastMejora('✓ Texto importado con éxito', false);
+    } else {
+      _mostrarToastMejora('El panel de origen está vacío', false);
+    }
+  };
+
+  document.getElementById('btnImportMic').addEventListener('click', () => {
+    importarTexto(document.getElementById('output'));
+  });
+
+  document.getElementById('btnImportFile').addEventListener('click', () => {
+    importarTexto(document.getElementById('fileOutput'));
+  });
+
+  document.getElementById('btnImportYt').addEventListener('click', () => {
+    importarTexto(document.getElementById('ytOutput'));
+  });
+}
+
+// Intercambiar idiomas y textos
+btnTransSwap.addEventListener('click', () => {
+  const dir = transDirection.value;
+  const newDir = dir === 'en-es' ? 'es-en' : 'en-es';
+  transDirection.value = newDir;
+  transDirection.dispatchEvent(new Event('change'));
+
+  const srcVal = transSrc.value;
+  const trgVal = transTrg.value;
+  transSrc.value = trgVal;
+  transTrg.value = srcVal;
+
+  transSrc.dispatchEvent(new Event('input'));
+  transTrg.dispatchEvent(new Event('input'));
+  _mostrarToastMejora('⇄ Idiomas e información intercambiados', false);
+});
+
+// Cambiar etiquetas de idioma
+transDirection.addEventListener('change', () => {
+  const dir = transDirection.value;
+  if (dir === 'en-es') {
+    lblTransSrc.textContent = 'Texto original (Inglés)';
+    lblTransTrg.textContent = 'Traducción (Español)';
+    transSrc.placeholder = 'Introduce el texto en inglés aquí o impórtalo desde otra pestaña...';
+  } else {
+    lblTransSrc.textContent = 'Texto original (Español)';
+    lblTransTrg.textContent = 'Traducción (Inglés)';
+    transSrc.placeholder = 'Introduce el texto en español aquí o impórtalo desde otra pestaña...';
+  }
+});
+
+// Traducir mediante API
+btnTransTranslate.addEventListener('click', async () => {
+  const txt = transSrc.value.trim();
+  if (!txt) {
+    _mostrarToastMejora('Introduce o importa texto para traducir primero.', false);
+    return;
+  }
+
+  const origHTML = btnTransTranslate.innerHTML;
+  btnTransTranslate.disabled = true;
+  btnTransTranslate.innerHTML = '<span class="spin"></span> Traduciendo…';
+
+  const progArea = document.getElementById('transProgArea');
+  const progFill = document.getElementById('transProg');
+  const progLabel = document.getElementById('transProgLabel');
+
+  progArea.style.display = 'block';
+  progFill.style.width = '20%';
+  progLabel.textContent = 'Enviando petición de traducción…';
+
+  const provider = localStorage.getItem('jg_ai_provider') || sessionIA.provider || 'gemini';
+  const dir = transDirection.value;
+
+  // Animación suave de progreso ficticio
+  let p = 20;
+  const fakeProgInterval = setInterval(() => {
+    p = Math.min(p + Math.random() * 8, 85);
+    progFill.style.width = p + '%';
+    progLabel.textContent = 'Procesando traducción (' + Math.round(p) + '%)…';
+  }, 250);
+
+  try {
+    const openrouterModel = localStorage.getItem('jg_openrouter_model') || sessionIA.openrouterModel || 'qwen/qwen3-coder:free';
+
+    const resp = await fetchApi('/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: txt,
+        direction: dir,
+        provider: provider,
+        api_key: localStorage.getItem('jg_api_key') || '',
+        openrouter_model: openrouterModel
+      })
+    }, 60000); // 60s: IA + fallback MyMemory por chunks
+
+    clearInterval(fakeProgInterval);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Error en la traducción del servidor' }));
+      throw new Error(extraerDetalleError(err, resp.statusText));
+    }
+
+    const data = await resp.json();
+    if (data.text) {
+      transTrg.value = data.text;
+      transTrg.dispatchEvent(new Event('input'));
+
+      progFill.style.width = '100%';
+      let provName = 'Claude';
+      if (data.provider === 'gemini') provName = 'Gemini';
+      else if (data.provider === 'mistral') provName = 'Mistral';
+      else if (data.provider === 'openrouter') {
+        const m = (data.model || 'qwen/qwen3-coder:free').split('/').pop().replace(':free', '');
+        provName = 'OpenRouter (' + m + ')';
+      }
+      const provStr = data.ia_used ? `IA (${provName})` : 'Local (MyMemory)';
+      progLabel.textContent = `✓ Traducción completada con éxito via ${provStr}`;
+
+      if (data.ia_used) {
+        const label = data.provider === 'openrouter' ? provName : data.provider;
+        _mostrarToastMejora(`✦ Traducido con ${label}`, true);
+      } else {
+        _mostrarToastMejora('✓ Traducido con fallback local', false);
+      }
+
+      setTimeout(() => {
+        progArea.style.display = 'none';
+        progFill.style.width = '0%';
+      }, 3000);
+    }
+  } catch (e) {
+    clearInterval(fakeProgInterval);
+    progFill.style.width = '0%';
+    progLabel.textContent = '✗ Error: ' + e.message;
+    _mostrarToastMejora('⚠ Error al traducir: ' + e.message, false);
+  } finally {
+    btnTransTranslate.disabled = false;
+    btnTransTranslate.innerHTML = origHTML;
+  }
+});
+
+// Copiar traducción
+btnTransCopy.addEventListener('click', () => {
+  copiarTexto(transTrg, document.getElementById('transCopyLabel'), btnTransCopy);
+});
+
+// Descargar traducción
+btnTransTxt.addEventListener('click', () => {
+  const dir = transDirection.value;
+  descargarTxt(transTrg, `jg-turbo-traduccion-${dir}`);
+});
+
+// Limpiar panel con doble confirmación
+let transClearTimer = null;
+const transClearOrigHTML = btnTransClear.innerHTML;
+btnTransClear.addEventListener('click', () => {
+  const txt = transSrc.value.trim() || transTrg.value.trim();
+  if (!txt) return;
+
+  if (btnTransClear.classList.contains('danger')) {
+    clearTimeout(transClearTimer);
+    transSrc.value = '';
+    transTrg.value = '';
+    transSrc.dispatchEvent(new Event('input'));
+    transTrg.dispatchEvent(new Event('input'));
+    btnTransClear.classList.remove('danger');
+    btnTransClear.innerHTML = transClearOrigHTML;
+  } else {
+    btnTransClear.classList.add('danger');
+    btnTransClear.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> ¿Seguro?`;
+    transClearTimer = setTimeout(() => {
+      btnTransClear.classList.remove('danger');
+      btnTransClear.innerHTML = transClearOrigHTML;
+    }, 3000);
+  }
+});
+
+actualizarContadoresTraduccion();
 actualizarContador();
 </script>
 </body>

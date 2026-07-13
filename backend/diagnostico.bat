@@ -6,22 +6,22 @@ echo   JG Turbo - Diagnostico
 echo  ==========================================
 echo.
 
-REM Activar entorno virtual si existe
-if exist "%USERPROFILE%\.jg_turbo_venv\Scripts\activate.bat" (
-    call "%USERPROFILE%\.jg_turbo_venv\Scripts\activate.bat"
-    echo  [OK] Entorno virtual local %USERPROFILE%\.jg_turbo_venv activado.
-) else if exist "..\.venv\Scripts\activate.bat" (
+REM Activar entorno virtual (misma prioridad que iniciar.bat: proyecto primero)
+if exist "..\.venv\Scripts\activate.bat" (
     call "..\.venv\Scripts\activate.bat"
-    echo  [OK] Entorno virtual .venv parent activado.
+    echo  [OK] Entorno virtual del proyecto (.venv) activado.
+) else if exist ".venv\Scripts\activate.bat" (
+    call ".venv\Scripts\activate.bat"
+    echo  [OK] Entorno virtual local .venv activado.
 ) else if exist "venv\Scripts\activate.bat" (
     call "venv\Scripts\activate.bat"
     echo  [OK] Entorno virtual venv activado.
-) else if exist ".venv\Scripts\activate.bat" (
-    call ".venv\Scripts\activate.bat"
-    echo  [OK] Entorno virtual .venv activado.
+) else if exist "%USERPROFILE%\.jg_turbo_venv\Scripts\activate.bat" (
+    call "%USERPROFILE%\.jg_turbo_venv\Scripts\activate.bat"
+    echo  [OK] Entorno virtual alterno %USERPROFILE%\.jg_turbo_venv activado.
 ) else (
     echo  [ERROR] No se encontro el entorno virtual.
-    echo  Asegurate de que existe el entorno virtual .venv en la raiz o venv en backend.
+    echo  Ejecuta iniciar.bat para crear y configurar el entorno automaticamente.
     echo.
     pause
     exit /b 1
@@ -62,9 +62,13 @@ echo.
 
 echo  Verificando ffmpeg...
 ffmpeg -version >nul 2>&1 && echo  [OK] ffmpeg encontrado en PATH || (
-    echo  [AVISO] ffmpeg NO encontrado en PATH.
-    echo  Descarga ffmpeg desde: https://www.gyan.dev/ffmpeg/builds/
-    echo  Extrae en C:\ffmpeg y agrega C:\ffmpeg\bin al PATH del sistema.
+    if exist "..\bin\ffmpeg.exe" (
+        echo  [OK] ffmpeg encontrado en la carpeta bin\ del proyecto.
+    ) else (
+        echo  [AVISO] ffmpeg NO encontrado en PATH ni en la carpeta bin\ del proyecto.
+        echo  Descarga ffmpeg desde: https://www.gyan.dev/ffmpeg/builds/
+        echo  Extrae en C:\ffmpeg y agrega C:\ffmpeg\bin al PATH del sistema.
+    )
 )
 echo.
 

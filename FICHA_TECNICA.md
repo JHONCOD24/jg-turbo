@@ -1,6 +1,6 @@
 # 📋 Ficha Técnica y Manual de Uso · JG Turbo
 
-Bienvenido a la documentación oficial de **JG Turbo**, una potente suite de transcripción de audio a texto que combina reconocimiento de voz nativo en tiempo real con inteligencia artificial avanzada local (OpenAI Whisper).
+Bienvenido a la documentación oficial de **JG Turbo**, una suite de transcripción de audio a texto que combina reconocimiento de voz nativo en tiempo real con transcripción local mediante **faster-whisper**.
 
 ---
 
@@ -13,10 +13,10 @@ Bienvenido a la documentación oficial de **JG Turbo**, una potente suite de tra
 ---
 
 ## 🛠️ 2. Ficha Técnica y Arquitectura
-*   **Interfaz (Frontend)**: Desarrollada en HTML5, CSS3 vanilla (con diseño glassmorphic responsivo) y JavaScript nativo. No requiere frameworks pesados. El archivo principal es [index.html](file:///g:/Mi%20unidad/App/Spech%20to%20text%20App/index.html) (compatible con Netlify).
-*   **Servidor (Backend)**: FastAPI (Python) que gestiona el procesamiento local de archivos de audio y las peticiones de YouTube en la máquina. El archivo principal es [app.py](file:///g:/Mi%20unidad/App/Spech%20to%20text%20App/backend/app.py).
-*   **Motor de IA (Local)**: **OpenAI Whisper**, ejecutado de forma local y 100% gratuita. Permite configurar dinámicamente el tamaño del modelo (`tiny`, `base`, `small`, `medium`) según las capacidades de hardware de la computadora del usuario.
-*   **Gestor de Descargas**: **yt-dlp**, configurado con un flujo de autenticación auto-sanable (fallback de cookies en Chrome y Edge) para evadir las restricciones de bots impuestas por YouTube.
+*   **Interfaz (Frontend)**: HTML5, CSS3 vanilla y JavaScript nativo en un solo archivo, con diseño responsive y enfoque local-first.
+*   **Servidor (Backend)**: FastAPI (Python) que procesa audio local, administra la sesión temporal de IA y atiende YouTube desde `localhost`.
+*   **Motor de IA (Local)**: **faster-whisper** sobre CPU con cuantización `int8`, carga temprana del modelo y soporte de glosario para mejorar nombres y términos técnicos.
+*   **Gestor de Descargas**: **yt-dlp**, con preferencia por subtítulos cuando existen y descarga de audio solo como respaldo.
 
 ---
 
@@ -93,7 +93,7 @@ La aplicación ofrece un selector de dialectos regionales (ej. *Español - Colom
 1.  Presiona **Grabar** o la barra **Espaciadora** para hablar.
 2.  Observa el visualizador de ondas y el cronómetro de grabación.
 3.  Al finalizar, puedes reproducir el audio capturado de forma local para validar que se grabó bien.
-4.  Si deseas una calidad de transcripción profesional, presiona **"Re-transcribir con Whisper"** (esto enviará tu audio local al backend para procesarlo con la IA de Whisper, ideal para grabaciones largas).
+4.  Si deseas una calidad de transcripción profesional, presiona **"Re-transcribir con Whisper"**. La app también puede ir confirmando texto por bloques mientras grabas, para dar una sensación casi en vivo con Whisper local.
 5.  Usa el botón **"Expandir"** para abrir el editor modal a pantalla completa si necesitas leer con comodidad o realizar correcciones que se sincronizan al instante en la pantalla principal.
 
 ### 🎧 Panel de Archivo de Audio
@@ -103,5 +103,5 @@ La aplicación ofrece un selector de dialectos regionales (ej. *Español - Colom
 
 ### ▶️ Panel de YouTube
 1.  Pega el enlace completo del video (ej. `https://www.youtube.com/watch?v=...`).
-2.  El backend buscará primero si el video ya cuenta con subtítulos generados por el autor o automáticos. De existir, los extraerá en 1 segundo (ahorrando tiempo y recursos).
-3.  De no contar con subtítulos, el servidor descargará el audio usando las cookies de tu navegador local para identificarse y transcribirá el contenido usando Whisper.
+2.  El backend buscará primero si el video ya cuenta con subtítulos generados por el autor o automáticos. De existir, los extraerá rápido para ahorrar tiempo y recursos.
+3.  De no contar con subtítulos, el servidor descargará el audio y lo transcribirá con Whisper local, respetando límites de duración y tamaño para evitar bloqueos.

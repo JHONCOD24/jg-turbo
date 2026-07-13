@@ -1,7 +1,14 @@
+# ── Web ──
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
-openai-whisper>=20231117
-yt-dlp>=2024.3.10
 pydantic>=2.5.0
+
+# ── Transcripción (faster-whisper = 4-5x más rápido que openai-whisper) ──
+faster-whisper>=1.0.0
+
+# ── YouTube ──
+yt-dlp>=2024.3.10
+
+# ── IA para mejora de texto ──
 anthropic>=0.40.0

@@ -1,0 +1,13 @@
+.pytest_tmp/
+.pytest_cache/
+.venv/
+backend/
+__pycache__/
+.git/
+.agents/
+.codestral/
+.claude/
+agent-tools/
+terminals/
+Skills/
+_skill_inspect/
