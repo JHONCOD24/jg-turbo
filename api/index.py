@@ -1,7 +1,7 @@
 """
 JG Turbo · API Serverless (Vercel)
 =================================
-Transcripción con Groq Whisper (whisper-large-v3-turbo).
+Transcripción con Groq Whisper (whisper-large-v3).
 YouTube: subtítulos primero (rápido), audio solo como fallback.
 Traducción y pulido de texto con Gemini/OpenRouter o fallbacks gratis.
 """
@@ -24,6 +24,12 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from api.calidad_linguistica import (
+    analizar_segmentos_asr,
+    construir_prompt_asr,
+    validar_traduccion,
+)
+from api.youtube_subs import texto_desde_fetched
 
 app = FastAPI(title="JG Turbo Vercel API", version="3.0")
 app.add_middleware(
@@ -39,6 +45,7 @@ TEMP_DIR.mkdir(exist_ok=True)
 FORMATOS_AUDIO = {
     ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac",
     ".wma", ".opus", ".webm", ".mp4", ".mpeg", ".mpga",
+    ".amr", ".3gp",  # notas de voz antiguas / algunos export de WhatsApp
 }
 MIME_POR_EXT = {
     ".mp3": "audio/mpeg",
@@ -53,6 +60,8 @@ MIME_POR_EXT = {
     ".flac": "audio/flac",
     ".aac": "audio/aac",
     ".wma": "audio/x-ms-wma",
+    ".amr": "audio/amr",
+    ".3gp": "audio/3gpp",
 }
 
 # Groq free/dev: ~25 MB. Dejamos margen de seguridad.
@@ -60,6 +69,7 @@ MAX_AUDIO_MB = int(os.environ.get("MAX_AUDIO_MB", "25"))
 MAX_AUDIO_BYTES = MAX_AUDIO_MB * 1024 * 1024
 MAX_YOUTUBE_MINUTES = int(os.environ.get("MAX_YOUTUBE_MINUTES", "180"))
 GROQ_TIMEOUT_S = float(os.environ.get("GROQ_TIMEOUT_S", "90"))
+GROQ_ASR_MODEL = os.environ.get("GROQ_ASR_MODEL", "whisper-large-v3")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 YT_URL_RE = re.compile(
@@ -123,7 +133,7 @@ class ImproveRequest(BaseModel):
 
 
 class TranslateRequest(BaseModel):
-    text: str
+    text: str = Field(min_length=1, max_length=50000)
     direction: str = "en-es"  # pares ISO: en-es, es-fr, pt-en, etc.
     provider: str = "gemini"
     api_key: str = ""
@@ -169,6 +179,9 @@ class CorrectTranscriptionRequest(BaseModel):
 class CorrectRequest(BaseModel):
     text: str
     language: str = "es"
+    provider: str = "gemini"
+    api_key: str = ""
+    openrouter_model: Optional[str] = None
 
 
 class ImprovePromptRequest(BaseModel):
@@ -191,21 +204,182 @@ def _limpiar(path: Path):
         pass
 
 
+def _parece_clave_groq(key: str) -> bool:
+    """Groq usa gsk_… — no confundir con Grok/xAI (xai-…) u otros proveedores."""
+    k = (key or "").strip()
+    if not k:
+        return False
+    low = k.lower()
+    if low.startswith(("xai-", "sk-or-", "sk-ant-", "aiza")):
+        return False
+    return low.startswith("gsk_") or len(k) > 20
+
+
+def _mensaje_clave_equivocada(client_key: str) -> Optional[str]:
+    k = (client_key or "").strip()
+    if not k:
+        return None
+    low = k.lower()
+    if low.startswith("xai-"):
+        return (
+            "Esa clave es de Grok (xAI: xai-…), no de Groq. "
+            "La transcripción en la nube usa Groq (gratis en console.groq.com/keys, formato gsk_…). "
+            "Grok/xAI solo sirve para pulir texto si lo eliges como proveedor de IA."
+        )
+    if low.startswith("sk-or-"):
+        return (
+            "Esa clave es de OpenRouter, no de Groq. "
+            "Para Micrófono/Archivo en Vercel pega una clave Groq (gsk_…) o configúrala en el servidor."
+        )
+    if low.startswith("aiza"):
+        return (
+            "Esa clave parece de Gemini, no de Groq. "
+            "La transcripción necesita GROQ (gsk_… en console.groq.com)."
+        )
+    return None
+
+
 def _get_groq_api_key(client_key: Optional[str] = None) -> Optional[str]:
     if client_key and client_key.strip():
-        return client_key.strip()
+        k = client_key.strip()
+        # Si el cliente mandó una clave claramente de otro servicio, no la usamos como Groq
+        if _mensaje_clave_equivocada(k):
+            return None
+        if _parece_clave_groq(k):
+            return k
+        # Clave desconocida: intentar igual (por si Groq cambia prefijo)
+        return k
     key = os.environ.get("GROQ_API_KEY")
     return key.strip() if key else None
 
 
-def _get_ai_key(client_key: str = "") -> Optional[str]:
+def _get_ai_key(client_key: str = "", provider: str = "") -> Optional[str]:
     if client_key and client_key.strip():
         return client_key.strip()
-    for env in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"):
+    p = (provider or "").strip().lower()
+    # Orden según proveedor preferido, luego fallbacks del servidor
+    env_por_prov = {
+        "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+        "openrouter": ("OPENROUTER_API_KEY",),
+        "mistral": ("MISTRAL_API_KEY",),
+        "xai": ("XAI_API_KEY", "GROK_API_KEY"),
+        "grok": ("XAI_API_KEY", "GROK_API_KEY"),
+        "anthropic": ("ANTHROPIC_API_KEY",),
+    }
+    orden = list(env_por_prov.get(p, ()))
+    for env in (
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "OPENROUTER_API_KEY",
+        "MISTRAL_API_KEY",
+        "XAI_API_KEY",
+        "GROK_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ):
+        if env not in orden:
+            orden.append(env)
+    for env in orden:
         val = os.environ.get(env)
         if val and val.strip():
             return val.strip()
     return None
+
+
+def _proveedor_ia_servidor() -> str:
+    """Detecta qué proveedor de IA está configurado en el servidor (sin clave de cliente)."""
+    if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+        return "gemini"
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return "openrouter"
+    if os.environ.get("MISTRAL_API_KEY"):
+        return "mistral"
+    if os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY"):
+        return "xai"
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    return "none"
+
+
+def _inferir_proveedor_por_clave(key: str) -> Optional[str]:
+    low = (key or "").strip().lower()
+    if not low:
+        return None
+    if low.startswith("xai-"):
+        return "xai"
+    if low.startswith("sk-or-"):
+        return "openrouter"
+    if low.startswith("sk-ant"):
+        return "anthropic"
+    if low.startswith("aiza"):
+        return "gemini"
+    return None
+
+
+def _resolver_ia(client_key: str = "", provider: str = "") -> tuple:
+    """Devuelve (api_key, provider_efectivo).
+
+    Si el cliente no manda clave, usa la del servidor y su proveedor real
+    (evita llamar a Gemini con una clave Mistral).
+    """
+    p = (provider or "").strip().lower() or "gemini"
+    if p == "none":
+        return None, "none"
+
+    if client_key and client_key.strip():
+        k = client_key.strip()
+        inferido = _inferir_proveedor_por_clave(k)
+        return k, (inferido or p)
+
+    # Sin clave en el navegador → clave + proveedor del servidor
+    sp = _proveedor_ia_servidor()
+    if sp == "none":
+        return None, "none"
+    return _get_ai_key("", sp), sp
+
+
+def _limpiar_respuesta_ia(texto: str) -> str:
+    """Quita markdown/envoltorios típicos para dejar texto listo para pegar."""
+    if not texto:
+        return ""
+    t = texto.strip()
+    # Bloque de código completo
+    m = re.search(r"```(?:[a-zA-Z0-9_+-]*)\s*\n([\s\S]*?)```", t)
+    if m and m.group(1).strip():
+        t = m.group(1).strip()
+    # Prefijos tipo "Texto corregido:"
+    t = re.sub(
+        r"^(aquí tienes|texto corregido|versión mejorada|prompt mejorado)\s*[:：-]?\s*",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = t.strip().strip("`").strip()
+    return t
+
+
+def _extraer_prompt_listo(texto: str) -> str:
+    """Extrae solo el prompt copiable de una respuesta con secciones markdown."""
+    if not texto:
+        return ""
+    t = texto.strip()
+    # Preferir bloque bajo "## Prompt mejorado"
+    m = re.search(
+        r"##\s*Prompt mejorado\s*\n+```(?:[a-zA-Z0-9_+-]*)?\s*\n([\s\S]*?)```",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        return m.group(1).strip()
+    m2 = re.search(
+        r"##\s*Prompt mejorado\s*\n+([\s\S]*?)(?=\n##\s|\Z)",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m2 and m2.group(1).strip():
+        bloque = m2.group(1).strip()
+        # si hay fence suelto, limpiarlo
+        return _limpiar_respuesta_ia(bloque)
+    return _limpiar_respuesta_ia(t)
 
 
 def _mime_for(path: str, filename: str = "") -> str:
@@ -235,6 +409,8 @@ def _resultado_transcripcion(texto: str, language: str) -> dict:
         "low_confidence_segments": 0,
         "removed_hallucinations": 0,
         "needs_review": False,
+        "requires_confirmation": False,
+        "review_segments": [],
     }
 
 
@@ -243,13 +419,21 @@ async def transcribe_with_groq(
     language: str = "auto",
     client_key: Optional[str] = None,
     original_name: str = "",
+    context: str = "",
 ) -> dict:
+    msg_eq = _mensaje_clave_equivocada(client_key or "")
+    if msg_eq and not os.environ.get("GROQ_API_KEY"):
+        return {"_error": msg_eq}
     api_key = _get_groq_api_key(client_key)
     if not api_key:
+        if msg_eq:
+            return {"_error": msg_eq}
         return {
             "_error": (
-                "No hay clave de Groq. En Configuración pega tu GROQ_API_KEY "
-                "(gratis en console.groq.com) o configúrala en Vercel → Environment Variables."
+                "No hay clave de Groq (transcripción). "
+                "No es lo mismo que Grok de xAI. "
+                "En Configuración pega tu clave Groq (gsk_…, gratis en console.groq.com/keys) "
+                "o pide que la configuren en Vercel → Environment Variables → GROQ_API_KEY."
             )
         }
 
@@ -270,24 +454,17 @@ async def transcribe_with_groq(
 
     try:
         data = {
-            "model": "whisper-large-v3-turbo",
-            "response_format": "json",
+            "model": GROQ_ASR_MODEL,
+            "response_format": "verbose_json",
+            "temperature": "0",
+            "timestamp_granularities[]": "segment",
         }
         lang_code = None
         if language and language != "auto":
             lang_code = language.split("-")[0].lower()
             data["language"] = lang_code
 
-        if lang_code == "en":
-            data["prompt"] = (
-                "Clear English transcription. Technology, programming, and AI. "
-                "Terms: JavaScript, Python, React, API, Claude, Gemini, Whisper."
-            )
-        else:
-            data["prompt"] = (
-                "Transcripción clara. Tecnología, programación e IA. "
-                "Términos: JavaScript, Python, React, API, Claude, Gemini, Whisper."
-            )
+        data["prompt"] = construir_prompt_asr(lang_code or language, context)
 
         timeout = httpx.Timeout(GROQ_TIMEOUT_S, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -313,7 +490,19 @@ async def transcribe_with_groq(
         result = resp.json()
         texto = (result.get("text") or "").strip()
         lang_out = language if language != "auto" else (result.get("language") or "es")
-        return _resultado_transcripcion(texto, lang_out)
+        segmentos = result.get("segments") or []
+        if segmentos:
+            analisis = analizar_segmentos_asr(
+                texto,
+                segmentos,
+                limpiar_texto=_postprocess_texto,
+            )
+            analisis["language"] = lang_out
+            analisis["model"] = GROQ_ASR_MODEL
+            return analisis
+        resultado = _resultado_transcripcion(texto, lang_out)
+        resultado["model"] = GROQ_ASR_MODEL
+        return resultado
     except httpx.TimeoutException:
         return {
             "_error": (
@@ -365,33 +554,32 @@ def _subtitulos_via_transcript_api(video_id: str, idioma_corto: Optional[str]):
             langs.append(l)
 
     # --- Método A: youtube-transcript-api (innertube) ---
+    # API 1.x (Context7 / jdepoix): instancia + fetch/list; 0.x: get_transcript estático.
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
 
         # API 1.x (instancia)
         try:
             api = YouTubeTranscriptApi()
+            fetched = None
             try:
                 fetched = api.fetch(video_id, languages=langs)
             except Exception:
-                listing = api.list(video_id)
-                fetched = None
-                for t in listing:
-                    try:
-                        fetched = t.fetch()
-                        break
-                    except Exception:
-                        continue
+                try:
+                    listing = api.list(video_id)
+                    for t in listing:
+                        try:
+                            fetched = t.fetch()
+                            break
+                        except Exception:
+                            continue
+                except Exception:
+                    fetched = None
             if fetched is not None:
-                snippets = getattr(fetched, "snippets", None) or []
-                partes = []
-                for s in snippets:
-                    txt = (getattr(s, "text", None) or "").replace("\n", " ").strip()
-                    if txt:
-                        partes.append(txt)
-                texto = " ".join(partes).strip()
-                if texto and len(texto) > 15:
-                    lang = getattr(fetched, "language_code", None) or idioma_corto or "es"
+                texto, lang = texto_desde_fetched(
+                    fetched, idioma_fallback=idioma_corto or "es"
+                )
+                if texto:
                     return texto, lang
         except Exception:
             pass
@@ -639,11 +827,83 @@ def _call_openrouter(api_key: str, prompt: str, model: Optional[str] = None) -> 
     return (choices[0].get("message", {}).get("content") or "").strip()
 
 
+def _call_openai_compatible(
+    base_url: str,
+    api_key: str,
+    prompt: str,
+    model: str,
+    extra_headers: Optional[dict] = None,
+    label: str = "IA",
+) -> str:
+    url = base_url.rstrip("/") + "/chat/completions"
+    payload = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+        "max_tokens": 4096,
+    }).encode()
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="ignore")[:400]
+        raise Exception(f"{label} HTTP {e.code}: {body}") from e
+    if "error" in data:
+        err = data["error"]
+        if isinstance(err, dict):
+            raise Exception(err.get("message") or err.get("error") or str(err))
+        raise Exception(str(err))
+    choices = data.get("choices") or []
+    if not choices:
+        raise Exception(f"Respuesta vacía de {label}")
+    return (choices[0].get("message", {}).get("content") or "").strip()
+
+
+def _call_mistral(api_key: str, prompt: str) -> str:
+    model = os.environ.get("MISTRAL_MODEL", "mistral-small-latest")
+    return _call_openai_compatible(
+        "https://api.mistral.ai/v1",
+        api_key,
+        prompt,
+        model,
+        label="Mistral",
+    )
+
+
+def _call_xai(api_key: str, prompt: str) -> str:
+    model = os.environ.get("XAI_MODEL", "grok-3-mini")
+    return _call_openai_compatible(
+        "https://api.x.ai/v1",
+        api_key,
+        prompt,
+        model,
+        label="Grok/xAI",
+    )
+
+
 def _llamar_ia(provider: str, api_key: str, prompt: str, openrouter_model: Optional[str]) -> tuple:
     p = (provider or "gemini").strip().lower()
     if p == "openrouter":
         return _call_openrouter(api_key, prompt, openrouter_model), "openrouter"
-    # gemini por defecto (también si mandan "anthropic"/"mistral" sin SDK en serverless)
+    if p == "mistral":
+        return _call_mistral(api_key, prompt), "mistral"
+    if p in ("xai", "grok"):
+        return _call_xai(api_key, prompt), "xai"
+    # gemini por defecto (anthropic sin SDK dedicado cae a gemini si la clave lo permite)
+    if p == "anthropic":
+        # Sin SDK Anthropic en serverless: redirigir a OpenAI-compatible solo si la clave no es sk-ant
+        if (api_key or "").strip().lower().startswith("sk-ant"):
+            raise Exception(
+                "Anthropic Claude requiere integración dedicada. "
+                "Usa Gemini, OpenRouter, Mistral o Grok (xAI) en Configuración."
+            )
     return _call_gemini(api_key, prompt), "gemini"
 
 
@@ -724,6 +984,27 @@ def _translate_mymemory_chunked(text: str, src: str, trg: str) -> str:
     return "\n".join(out_paras)
 
 
+def _respuesta_traduccion(
+    original: str,
+    traducido: str,
+    src_code: str,
+    trg_code: str,
+    provider: Optional[str],
+    ia_used: bool,
+    model: Optional[str] = None,
+    error_detail: Optional[str] = None,
+) -> dict:
+    return {
+        "text": traducido,
+        "ia_used": ia_used,
+        "provider": provider,
+        "model": model,
+        "error_detail": error_detail,
+        "direction": f"{src_code}-{trg_code}",
+        "validation": validar_traduccion(original, traducido, src_code, trg_code),
+    }
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/ping")
@@ -739,24 +1020,34 @@ def health():
         yt_transcript = True
     except Exception:
         yt_transcript = False
+    groq_ok = bool(_get_groq_api_key())
+    ai_ok = bool(_get_ai_key())
     return {
         "status": "ok",
         "server": "vercel",
-        "model": "groq-whisper-large-v3-turbo",
+        "model": GROQ_ASR_MODEL,
         "model_state": "listo",
         "model_ready": True,
-        "ai_configured": bool(_get_groq_api_key() or _get_ai_key()),
+        # Compat: antes se mezclaba Groq con IA
+        "ai_configured": ai_ok or groq_ok,
+        "groq_configured": groq_ok,
+        "ia_configured": ai_ok,
+        "ai_provider_server": _proveedor_ia_servidor(),
         "youtube_transcript_api": yt_transcript,
     }
 
 
 @app.get("/api/session-config")
 def session_config():
+    groq_ok = bool(_get_groq_api_key())
+    ai_ok = bool(_get_ai_key())
     return {
         "token": "vercel-bypass",
         "auth_header": "x-jg-local-token",
-        "ai_provider": "gemini",
-        "ai_configured": bool(_get_groq_api_key() or _get_ai_key()),
+        "ai_provider": _proveedor_ia_servidor() if ai_ok else "gemini",
+        "ai_configured": ai_ok or groq_ok,
+        "groq_configured": groq_ok,
+        "ia_configured": ai_ok,
         "limits": {
             "max_audio_mb": MAX_AUDIO_MB,
             "max_audio_minutes": MAX_YOUTUBE_MINUTES,
@@ -778,6 +1069,7 @@ async def transcribe(
     fast: bool = Form(False),
     auto_correct: bool = Form(False),
     api_key: Optional[str] = Form(None),
+    context: str = Form("", max_length=4000),
 ):
     nombre = file.filename or "audio.tmp"
     sufijo = Path(nombre).suffix.lower() or ".webm"
@@ -804,7 +1096,7 @@ async def transcribe(
                 f.write(chunk)
 
         resultado = await transcribe_with_groq(
-            str(tmp_path), language, api_key, original_name=nombre
+            str(tmp_path), language, api_key, original_name=nombre, context=context
         )
         if "_error" in resultado:
             raise HTTPException(status_code=500, detail=resultado["_error"])
@@ -974,29 +1266,36 @@ async def improve(req: ImproveRequest):
         raise HTTPException(status_code=400, detail="Texto vacío.")
 
     lang = req.language if req.language and req.language != "auto" else "es"
-    api_key = _get_ai_key(req.api_key)
+    # Normalizar códigos tipo es-CO → es
+    lang_base = (lang or "es").split("-")[0].lower()
+    api_key, provider_ef = _resolver_ia(req.api_key or "", req.provider or "")
     error_detail = None
 
-    if api_key and (req.provider or "gemini") != "none":
+    if api_key and provider_ef != "none":
         prompt = (
-            f"EDITOR ESTRICTO DE TEXTOS — Idioma: {lang}\n\n"
-            "Tu ÚNICO trabajo es corregir el texto. NO inventes contenido.\n"
-            "1. Corrige ortografía, tildes, puntuación y mayúsculas.\n"
-            "2. Elimina muletillas y repeticiones exactas.\n"
-            "3. NO cambies el significado ni el orden de ideas.\n"
-            "4. Devuelve SOLO el texto corregido, sin explicaciones.\n\n"
-            f"TEXTO A CORREGIR:\n{txt}"
+            f"Eres un editor profesional de textos en idioma «{lang_base}».\n"
+            "Recibes una transcripción de voz a texto (puede tener errores de Whisper).\n\n"
+            "REGLAS OBLIGATORIAS:\n"
+            "1) Corrige ortografía, tildes, puntuación y mayúsculas.\n"
+            "2) Mejora claridad y fluidez sin cambiar el sentido ni inventar datos.\n"
+            "3) Elimina muletillas (eh, este, o sea) y repeticiones inútiles.\n"
+            "4) Conserva nombres propios, términos técnicos y el tono del autor.\n"
+            "5) Devuelve ÚNICAMENTE el texto final listo para copiar y pegar.\n"
+            "6) PROHIBIDO: markdown, comillas envolventes, títulos, explicaciones o listas.\n\n"
+            f"TEXTO:\n{txt}"
         )
         try:
             improved, provider_name = _llamar_ia(
-                req.provider, api_key, prompt, req.openrouter_model
+                provider_ef, api_key, prompt, req.openrouter_model
             )
             if improved:
-                return {
-                    "text": improved,
-                    "ia_used": True,
-                    "provider": provider_name,
-                }
+                limpio = _limpiar_respuesta_ia(improved)
+                if limpio:
+                    return {
+                        "text": limpio,
+                        "ia_used": True,
+                        "provider": provider_name,
+                    }
         except Exception as e:
             error_detail = str(e)
 
@@ -1016,28 +1315,33 @@ async def translate(req: TranslateRequest):
 
     src_code, trg_code, src_lang, trg_lang = _parse_translate_direction(req.direction)
 
-    api_key = _get_ai_key(req.api_key)
+    api_key, provider_ef = _resolver_ia(req.api_key or "", req.provider or "")
     error_detail = None
 
-    if api_key and (req.provider or "gemini") != "none":
+    if api_key and provider_ef != "none":
         prompt = (
             f"Translate the following text from {src_lang} to {trg_lang}.\n"
-            "Maintain the exact formatting, paragraph breaks, and style. "
-            "Do not add explanations. Output only the translation.\n\n"
+            "Translate every sentence faithfully and in the same order. Preserve paragraph "
+            "breaks, names, technical terms, URLs, emails, numbers, units, and uncertainty. "
+            "Never infer missing context, add facts, summarize, explain, or improve the ideas. "
+            "Before answering, silently compare source and target sentence by sentence. "
+            "Output only the translation.\n\n"
             f"Original text:\n{txt}"
         )
         try:
             translated, provider_name = _llamar_ia(
-                req.provider, api_key, prompt, req.openrouter_model
+                provider_ef, api_key, prompt, req.openrouter_model
             )
             if translated:
-                return {
-                    "text": translated,
-                    "ia_used": True,
-                    "provider": provider_name,
-                    "model": req.openrouter_model if provider_name == "openrouter" else None,
-                    "direction": f"{src_code}-{trg_code}",
-                }
+                return _respuesta_traduccion(
+                    txt,
+                    translated,
+                    src_code,
+                    trg_code,
+                    provider_name,
+                    True,
+                    model=req.openrouter_model if provider_name == "openrouter" else GEMINI_MODEL,
+                )
         except Exception as e:
             error_detail = str(e)
 
@@ -1045,13 +1349,15 @@ async def translate(req: TranslateRequest):
     try:
         translated_text = _translate_mymemory_chunked(txt, src_code, trg_code)
         if translated_text and translated_text.strip():
-            return {
-                "text": translated_text,
-                "ia_used": False,
-                "provider": None,
-                "error_detail": error_detail,
-                "direction": f"{src_code}-{trg_code}",
-            }
+            return _respuesta_traduccion(
+                txt,
+                translated_text,
+                src_code,
+                trg_code,
+                None,
+                False,
+                error_detail=error_detail,
+            )
     except Exception as e:
         if not error_detail:
             error_detail = str(e)
@@ -1069,29 +1375,38 @@ async def correct_transcription(req: CorrectTranscriptionRequest):
         raise HTTPException(status_code=400, detail="Texto vacío.")
 
     corregido = _corregir_transcripcion_local(txt)
-    api_key = _get_ai_key(req.api_key)
+    api_key, provider_ef = _resolver_ia(req.api_key or "", req.provider or "")
     error_detail = None
 
-    if api_key and (req.provider or "gemini") != "none":
-        lang = req.language if req.language != "auto" else "es"
+    if api_key and provider_ef != "none":
+        lang = req.language if req.language and req.language != "auto" else "es"
+        lang_base = lang.split("-")[0]
         prompt = (
-            f"Eres un especialista en corrección de transcripciones de voz a texto en {lang}.\n"
-            "Corrige errores de Whisper (palabras inventadas, confusiones fonéticas, "
-            "ortografía y puntuación). NO resumas ni agregues ideas nuevas. "
-            "Devuelve SOLO el texto corregido.\n\n"
-            f"TEXTO A CORREGIR:\n{corregido}"
+            f"Eres un corrector de transcripciones de voz a texto en «{lang_base}».\n"
+            "El texto viene de un reconocimiento de voz y puede tener errores fonéticos, "
+            "palabras mal oídas, tildes faltantes y puntuación rota.\n\n"
+            "TAREA: devolver el mismo contenido, ya corregido y legible.\n"
+            "REGLAS:\n"
+            "- Corrige ortografía, tildes, mayúsculas y puntuación.\n"
+            "- Corrige confusiones típicas de Whisper sin cambiar el mensaje.\n"
+            "- No resumas, no agregues ideas, no uses markdown.\n"
+            "- Responde SOLO con el texto corregido, listo para copiar y pegar.\n\n"
+            f"TEXTO:\n{corregido}"
         )
         try:
             improved, provider_name = _llamar_ia(
-                req.provider, api_key, prompt, req.openrouter_model
+                provider_ef, api_key, prompt, req.openrouter_model
             )
             if improved:
-                return {
-                    "text": improved,
-                    "ia_used": True,
-                    "provider": provider_name,
-                    "method": "ia",
-                }
+                limpio = _limpiar_respuesta_ia(improved)
+                if limpio:
+                    return {
+                        "text": limpio,
+                        "ia_used": True,
+                        "provider": provider_name,
+                        "method": "ia",
+                        "matches": 1 if limpio != txt else 0,
+                    }
         except Exception as e:
             error_detail = str(e)
 
@@ -1100,17 +1415,45 @@ async def correct_transcription(req: CorrectTranscriptionRequest):
         "ia_used": False,
         "provider": None,
         "method": "local" if corregido != txt else "none",
+        "matches": 1 if corregido != txt else 0,
         "error_detail": error_detail,
     }
 
 
 @app.post("/api/correct")
 async def correct_text(req: CorrectRequest):
-    """Ortografía/gramática vía LanguageTool (gratis) o fallback local."""
+    """Corrección de texto: IA del servidor (preferida) + LanguageTool de respaldo."""
     txt = (req.text or "").strip()
     if not txt:
         raise HTTPException(status_code=400, detail="Texto vacío.")
 
+    # 1) IA (Mistral/Gemini/etc. del servidor o del cliente)
+    api_key, provider_ef = _resolver_ia(req.api_key or "", req.provider or "")
+    if api_key and provider_ef != "none":
+        lang = req.language if req.language and req.language != "auto" else "es"
+        lang_base = lang.split("-")[0]
+        prompt = (
+            f"Corrige este texto en «{lang_base}» (ortografía, tildes, puntuación, mayúsculas).\n"
+            "No cambies el significado. No uses markdown. Solo el texto corregido.\n\n"
+            f"{txt}"
+        )
+        try:
+            improved, provider_name = _llamar_ia(
+                provider_ef, api_key, prompt, getattr(req, "openrouter_model", None)
+            )
+            limpio = _limpiar_respuesta_ia(improved or "")
+            if limpio:
+                return {
+                    "text": limpio,
+                    "matches": 1 if limpio != txt else 0,
+                    "ia_used": True,
+                    "provider": provider_name,
+                    "method": "ia",
+                }
+        except Exception:
+            pass
+
+    # 2) LanguageTool (gratis)
     lt_map = {
         "es": "es", "es-ES": "es", "es-MX": "es", "es-CO": "es", "es-AR": "es", "es-419": "es",
         "en": "en-US", "en-US": "en-US", "en-GB": "en-GB",
@@ -1139,10 +1482,21 @@ async def correct_text(req: CorrectRequest):
             end = start + m["length"]
             corregido = corregido[:start] + replacements[0]["value"] + corregido[end:]
             aplicados += 1
-        return {"text": corregido, "matches": aplicados}
+        return {
+            "text": corregido,
+            "matches": aplicados,
+            "ia_used": False,
+            "method": "languagetool",
+        }
     except Exception as e:
         corregido = _mejorar_heuristico(txt)
-        return {"text": corregido, "matches": 0, "error_detail": str(e)}
+        return {
+            "text": corregido,
+            "matches": 1 if corregido != txt else 0,
+            "ia_used": False,
+            "method": "local",
+            "error_detail": str(e),
+        }
 
 
 @app.post("/api/improve-prompt")
@@ -1167,35 +1521,30 @@ async def improve_prompt(req: ImprovePromptRequest):
     if target == "auto":
         target = {"imagen": "midjourney", "video": "veo"}.get(modalidad, "gemini")
 
-    api_key = _get_ai_key(req.api_key)
+    api_key, provider_ef = _resolver_ia(req.api_key or "", req.provider or "")
     error_detail = None
 
-    if api_key and (req.provider or "gemini") != "none":
+    if api_key and provider_ef != "none":
         system = (
-            "Eres un experto en ingeniería de prompts (skill maestro-prompts).\n"
-            f"Modalidad detectada: {modalidad}. Modelo destino: {target}.\n"
-            "Entrega SIEMPRE este formato (en español), sin omitir secciones:\n\n"
-            "## Diagnóstico\n"
-            "- 3 a 6 fallas concretas del prompt original (vago, sin rol, sin formato, etc.)\n\n"
-            "## Prompt mejorado\n"
-            "```\n"
-            "(el prompt reescrito listo para copiar y pegar)\n"
-            "```\n\n"
-            "## Por qué funciona\n"
-            "- 3 razones técnicas\n\n"
-            "## Cómo iterar\n"
-            "- 2-3 variaciones o mejoras siguientes\n\n"
-            "Reglas: no inventes datos del usuario; mantén la intención original; "
-            "el prompt mejorado debe ser autocontenido y accionable."
+            "Eres un experto en ingeniería de prompts.\n"
+            f"Modalidad: {modalidad}. Destino sugerido: {target}.\n"
+            "Reescribe el prompt del usuario para que quede listo para copiar y pegar.\n"
+            "REGLAS:\n"
+            "- Devuelve SOLO el prompt mejorado en texto plano.\n"
+            "- Sin markdown (#, **, ```), sin títulos, sin diagnósticos ni explicaciones.\n"
+            "- Mantén la intención original; hazlo claro, con rol, tarea y formato de salida.\n"
+            "- Idioma: español.\n"
         )
-        user_msg = f"Prompt original a mejorar:\n\n```\n{prompt}\n```"
+        user_msg = f"Prompt original:\n{prompt}"
         try:
             improved, provider_name = _llamar_ia(
-                req.provider, api_key, system + "\n\n" + user_msg, req.openrouter_model
+                provider_ef, api_key, system + "\n\n" + user_msg, req.openrouter_model
             )
             if improved:
+                listo = _extraer_prompt_listo(improved)
                 return {
-                    "improved": improved,
+                    "improved": listo,
+                    "prompt_listo": listo,
                     "ia_used": True,
                     "provider": provider_name,
                     "modalidad": modalidad,
@@ -1205,41 +1554,18 @@ async def improve_prompt(req: ImprovePromptRequest):
         except Exception as e:
             error_detail = str(e)
 
-    # Fallback local: plantilla reutilizable
+    # Fallback local: prompt plano listo para pegar (sin markdown)
     plantilla = (
-        f"## Diagnóstico\n"
-        f"- El prompt original es corto o genérico y no define rol, contexto ni formato.\n"
-        f"- Falta criterio de calidad (qué se considera un buen resultado).\n"
-        f"- No indica idioma, tono ni longitud.\n\n"
-        f"## Prompt mejorado\n"
-        f"```\n"
-        f"[ROL]\n"
         f"Eres un experto que ayuda a completar esta tarea con precisión.\n\n"
-        f"[CONTEXTO]\n"
         f"Pedido del usuario: {prompt}\n\n"
-        f"[TAREA]\n"
-        f"Resuelve el pedido de forma completa y práctica.\n\n"
-        f"[CRITERIOS DE CALIDAD]\n"
-        f"- Respuesta clara y accionable\n"
-        f"- Sin inventar datos\n"
-        f"- Estructura fácil de copiar\n\n"
-        f"[FORMATO DE SALIDA]\n"
-        f"- Idioma: español\n"
-        f"- Secciones con títulos\n"
-        f"- Tono profesional y cercano\n\n"
-        f"[LÍMITES]\n"
-        f"- Si falta información clave, pregunta antes de asumir.\n"
-        f"```\n\n"
-        f"## Por qué funciona\n"
-        f"- Define rol y criterios (reduce ambigüedad).\n"
-        f"- Fija formato de salida (fácil de usar).\n"
-        f"- Conserva la intención del pedido original.\n\n"
-        f"## Cómo iterar\n"
-        f"- Añade ejemplos de entrada/salida.\n"
-        f"- Configura una clave Gemini en Configuración para reescritura con IA completa.\n"
+        f"Resuelve el pedido de forma completa y práctica.\n"
+        f"Criterios: respuesta clara y accionable, sin inventar datos, fácil de copiar.\n"
+        f"Formato: español, secciones cortas, tono profesional y cercano.\n"
+        f"Si falta información clave, pregunta antes de asumir."
     )
     return {
         "improved": plantilla,
+        "prompt_listo": plantilla,
         "ia_used": False,
         "provider": None,
         "modalidad": modalidad,
@@ -1250,14 +1576,14 @@ async def improve_prompt(req: ImprovePromptRequest):
 
 @app.post("/api/reload-model")
 def reload_model(model_name: Optional[str] = None):
-    """En Vercel el motor es siempre Groq whisper-large-v3-turbo (no hay modelos locales)."""
+    """En Vercel el motor es siempre Groq Whisper de máxima precisión."""
     return {
         "status": "ok",
         "message": (
-            "En la nube el modelo de transcripción es fijo: groq-whisper-large-v3-turbo. "
+            f"En la nube el modelo de transcripción es fijo: {GROQ_ASR_MODEL}. "
             "No se puede cambiar a tiny/base/small (eso solo aplica en el backend local)."
         ),
-        "model": "groq-whisper-large-v3-turbo",
+        "model": GROQ_ASR_MODEL,
     }
 
 
@@ -1269,3 +1595,256 @@ def get_glossary():
 @app.post("/api/glossary")
 def set_glossary():
     return {"status": "ok"}
+
+
+# ── TTS neural bilingüe (Microsoft Edge voices, sin API key) ────────────
+TTS_VOICE_CATALOG = {
+    "es-CO": {
+        "label": "Colombia",
+        "female": "es-CO-SalomeNeural",
+        "male": "es-CO-GonzaloNeural",
+    },
+    "es-MX": {
+        "label": "México",
+        "female": "es-MX-DaliaNeural",
+        "male": "es-MX-JorgeNeural",
+    },
+    "es-AR": {
+        "label": "Argentina",
+        "female": "es-AR-ElenaNeural",
+        "male": "es-AR-TomasNeural",
+    },
+    "es-US": {
+        "label": "Latino de Estados Unidos",
+        "female": "es-US-PalomaNeural",
+        "male": "es-US-AlonsoNeural",
+    },
+    "en-US": {
+        "label": "English (United States)",
+        # Aria (mujer) y Andrew (hombre): neural inglés monoidioma, claro en tech.
+        # Misma calidad percibida; no usar Multilingual para fragmentos cortos.
+        "female": "en-US-AriaNeural",
+        "male": "en-US-AndrewNeural",
+    },
+}
+TTS_FALLBACK_VOICES = {
+    "es": {
+        # Mujer: Dalia (MX) primero — más natural que Salomé para muchos oídos
+        # Hombre: Gonzalo (CO) primero — acento de la zona; Jorge/Alonso de respaldo
+        "female": ["es-MX-DaliaNeural", "es-CO-SalomeNeural", "es-US-PalomaNeural"],
+        "male": ["es-CO-GonzaloNeural", "es-MX-JorgeNeural", "es-US-AlonsoNeural"],
+    },
+    "en": {
+        "female": ["en-US-AriaNeural", "en-US-JennyNeural", "en-US-AvaMultilingualNeural"],
+        "male": [
+            "en-US-AndrewNeural",
+            "en-US-BrianNeural",
+            "en-US-ChristopherNeural",
+            "en-US-GuyNeural",
+        ],
+    },
+}
+
+# Palabras funcionales españolas: si aparecen, no forzamos inglés en el servidor
+_TTS_ES_FUNC = {
+    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "en", "y", "o",
+    "que", "por", "para", "con", "es", "son", "se", "al", "lo", "su", "sus", "como",
+    "más", "mas", "pero", "si", "no", "ya", "muy", "también", "tambien", "este", "esta",
+    "estos", "estas", "eso", "esa", "hola", "gracias", "usa", "usar", "funciona", "puede",
+}
+TTS_ALLOWED_VOICES = {
+    voice
+    for item in TTS_VOICE_CATALOG.values()
+    for key, voice in item.items()
+    if key in {"female", "male"}
+}
+TTS_ALLOWED_VOICES.update(
+    voice
+    for language in TTS_FALLBACK_VOICES.values()
+    for voices in language.values()
+    for voice in voices
+)
+TTS_MAX_CHARS = 2800
+
+
+class TtsRequest(BaseModel):
+    text: str = Field(..., description="Texto a leer en voz alta")
+    voice: str = Field("female", description="female | male")
+    rate: float = Field(1.0, description="Velocidad 0.8–2.0")
+    language: str = Field("es", description="Idioma del fragmento: es | en")
+    locale: str = Field("es-MX", description="Acento español BCP-47 (es-MX recomendado para mujer)")
+    tone: str = Field("neutral", description="neutral | warm | energetic")
+
+
+def _tts_gender(voice: str) -> str:
+    return "male" if (voice or "").strip().lower() in {"male", "m", "hombre", "masculina"} else "female"
+
+
+def _tts_language(language: str) -> str:
+    return "en" if (language or "").strip().lower().startswith("en") else "es"
+
+
+def _tts_fragment_is_english(text: str) -> bool:
+    """Red de seguridad: tramos solo-tech/EN no deben sintetizarse con voz española."""
+    raw = re.sub(r"[ \t]+", " ", (text or "")).strip()
+    if not raw:
+        return False
+    if re.search(r"[áéíóúüñ¿¡]", raw, re.IGNORECASE):
+        return False
+    words = re.findall(r"[A-Za-z][A-Za-z0-9+.'#-]*", raw)
+    if not words:
+        return False
+    es_hits = sum(1 for w in words if w.lower() in _TTS_ES_FUNC)
+    if es_hits:
+        return False
+    # Sin español funcional y con al menos una palabra latina/tech ASCII → inglés
+    return True
+
+
+def _tts_resolve_language(language: str, text: str) -> str:
+    lang = _tts_language(language)
+    if lang == "en":
+        return "en"
+    if _tts_fragment_is_english(text):
+        return "en"
+    return "es"
+
+
+def _tts_locale(locale: str) -> str:
+    # Predeterminado México (Dalia) si el cliente no envía acento válido
+    value = (locale or "es-MX").strip()
+    return value if value in TTS_VOICE_CATALOG and value != "en-US" else "es-MX"
+
+
+def _tts_pick_voice(voice: str, language: str, locale: str) -> tuple[str, str, str]:
+    requested = (voice or "").strip()
+    gender = _tts_gender(requested)
+    lang = _tts_language(language)
+    selected_locale = "en-US" if lang == "en" else _tts_locale(locale)
+    if requested in TTS_ALLOWED_VOICES:
+        return requested, selected_locale, gender
+    return TTS_VOICE_CATALOG[selected_locale][gender], selected_locale, gender
+
+
+def _tts_prosody(rate: float, tone: str) -> tuple[str, str, str, str]:
+    value = max(0.8, min(2.0, float(rate or 1.0)))
+    rate_pct = int(round((value - 1.0) * 100))
+    normalized_tone = (tone or "neutral").strip().lower()
+    if normalized_tone == "warm":
+        rate_pct -= 4
+        pitch = "-2Hz"
+        volume = "+1%"
+    elif normalized_tone == "energetic":
+        rate_pct += 4
+        pitch = "+2Hz"
+        volume = "+2%"
+    else:
+        normalized_tone = "neutral"
+        pitch = "+0Hz"
+        volume = "+0%"
+    rate_pct = max(-25, min(100, rate_pct))
+    return f"{rate_pct:+d}%", pitch, volume, normalized_tone
+
+
+async def _tts_synthesize(text: str, voice_id: str, rate: str, pitch: str, volume: str) -> bytes:
+    import edge_tts
+
+    communicate = edge_tts.Communicate(
+        text,
+        voice_id,
+        rate=rate,
+        pitch=pitch,
+        volume=volume,
+    )
+    audio = bytearray()
+    async for chunk in communicate.stream():
+        if chunk.get("type") == "audio" and chunk.get("data"):
+            audio.extend(chunk["data"])
+    return bytes(audio)
+
+
+@app.post("/api/tts")
+async def tts_neural(req: TtsRequest):
+    """Sintetiza fragmentos con voz neural latina o inglesa según el idioma."""
+    from fastapi.responses import Response
+
+    text = re.sub(r"[ \t]+", " ", (req.text or "")).strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="No hay texto para leer.")
+    if len(text) > TTS_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Texto demasiado largo para un bloque (máx. {TTS_MAX_CHARS} caracteres).",
+        )
+    try:
+        import edge_tts  # noqa: F401
+    except ImportError as error:
+        raise HTTPException(status_code=503, detail="edge-tts no está instalado en el servidor.") from error
+
+    language = _tts_resolve_language(req.language, text)
+    voice_id, selected_locale, gender = _tts_pick_voice(req.voice, language, req.locale)
+    rate, pitch, volume, tone = _tts_prosody(req.rate, req.tone)
+    candidates = [voice_id] + [
+        candidate
+        for candidate in TTS_FALLBACK_VOICES[language][gender]
+        if candidate != voice_id
+    ]
+    last_error = None
+    for candidate in candidates:
+        try:
+            audio = await _tts_synthesize(text, candidate, rate, pitch, volume)
+            if not audio:
+                raise RuntimeError("El servicio no devolvió audio.")
+            actual_locale = candidate.split("-")[0] + "-" + candidate.split("-")[1]
+            return Response(
+                content=audio,
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-TTS-Voice": candidate,
+                    "X-TTS-Rate": rate,
+                    "X-TTS-Pitch": pitch,
+                    "X-TTS-Tone": tone,
+                    "X-TTS-Language": language,
+                    "X-TTS-Locale": actual_locale,
+                    "X-TTS-Engine": "edge-neural-bilingual",
+                },
+            )
+        except Exception as error:
+            last_error = error
+
+    detail = str(last_error or "servicio no disponible")[:180]
+    raise HTTPException(status_code=502, detail=f"No se pudo sintetizar la voz: {detail}")
+
+
+@app.get("/api/tts-voices")
+def tts_voices_info():
+    return {
+        "engine": "edge-neural-bilingual",
+        "default_locale": "es-MX",
+        "recommended": {
+            "female_locale": "es-MX",
+            "female_voice": "es-MX-DaliaNeural",
+            "male_locale": "es-CO",
+            "male_voice": "es-CO-GonzaloNeural",
+            "english_female": "en-US-AriaNeural",
+            "english_male": "en-US-AndrewNeural",
+        },
+        "bilingual": True,
+        "accents": {
+            locale: {
+                "label": data["label"],
+                "female": data["female"],
+                "male": data["male"],
+            }
+            for locale, data in TTS_VOICE_CATALOG.items()
+            if locale.startswith("es-")
+        },
+        "english": {
+            "female": TTS_VOICE_CATALOG["en-US"]["female"],
+            "male": TTS_VOICE_CATALOG["en-US"]["male"],
+        },
+        "tones": ["neutral", "warm", "energetic"],
+        "rate_range": [0.8, 2.0],
+        "max_chars": TTS_MAX_CHARS,
+    }

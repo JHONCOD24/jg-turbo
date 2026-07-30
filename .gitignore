@@ -42,3 +42,8 @@ temp.js
 *.lnk
 _prueba.lnk
 _skill_inspect/
+
+# Corpus y reportes privados de precisión
+backend/corpus/manifest.jsonl
+backend/corpus/audio/
+benchmark-report*.json

@@ -1,11 +1,17 @@
 # 📋 Ficha Técnica y Manual de Uso · JG Turbo
 
-Bienvenido a la documentación oficial de **JG Turbo**, una suite de transcripción de audio a texto que combina reconocimiento de voz nativo en tiempo real con transcripción local mediante **faster-whisper**.
+Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
+
+## Actualización de audio y lenguaje del 23 de julio de 2026
+
+La aplicación ahora verifica la calidad real del micrófono, mide ruido, procesa la grabación final con Whisper y marca fragmentos ambiguos. La traducción inglés ↔ español conserva invariantes y alerta ante posibles omisiones o invenciones.
+
+Consulta [Cómo funciona la captura, transcripción y traducción mejoradas](PRECISION_AUDIO.md) para conocer el inventario completo, las pruebas y los límites. El benchmark de 100 audios reales está preparado, pero sigue pendiente por falta de un corpus autorizado.
 
 ---
 
 ## 🔍 1. Descripción General del Producto
-**JG Turbo** es una aplicación web de transcripción universal diseñada bajo una arquitectura ágil, optimizada para ejecutarse en una sola pantalla (sin scroll) y con un diseño oscuro *premium*. Permite transcribir:
+**JG Turbo** es una aplicación web de transcripción universal diseñada con una interfaz oscura, responsive y editable. En celular permite desplazamiento para evitar que el editor se superponga con las acciones. Permite transcribir:
 1.  **Voz en vivo (Micrófono)**: Ideal para dictados rápidos y transcripciones inmediatas con formateo inteligente.
 2.  **Archivos locales**: Procesa grabaciones largas, reuniones o notas de voz subidas en formatos de audio común (MP3, WAV, M4A, etc.).
 3.  **Videos de YouTube**: Extrae el contenido de cualquier enlace público de YouTube usando subtítulos o procesando su audio mediante IA.
@@ -14,8 +20,8 @@ Bienvenido a la documentación oficial de **JG Turbo**, una suite de transcripci
 
 ## 🛠️ 2. Ficha Técnica y Arquitectura
 *   **Interfaz (Frontend)**: HTML5, CSS3 vanilla y JavaScript nativo en un solo archivo, con diseño responsive y enfoque local-first.
-*   **Servidor (Backend)**: FastAPI (Python) que procesa audio local, administra la sesión temporal de IA y atiende YouTube desde `localhost`.
-*   **Motor de IA (Local)**: **faster-whisper** sobre CPU con cuantización `int8`, carga temprana del modelo y soporte de glosario para mejorar nombres y términos técnicos.
+*   **Servidor (Backend)**: FastAPI (Python) con una versión local y otra para Vercel. La versión local procesa audio con `faster-whisper`; Vercel usa Groq.
+*   **Motores de transcripción**: `faster-whisper` en el backend local y `whisper-large-v3` mediante Groq en Vercel. Ambos reciben el glosario como contexto.
 *   **Gestor de Descargas**: **yt-dlp**, con preferencia por subtítulos cuando existen y descarga de audio solo como respaldo.
 
 ---
@@ -93,7 +99,7 @@ La aplicación ofrece un selector de dialectos regionales (ej. *Español - Colom
 1.  Presiona **Grabar** o la barra **Espaciadora** para hablar.
 2.  Observa el visualizador de ondas y el cronómetro de grabación.
 3.  Al finalizar, puedes reproducir el audio capturado de forma local para validar que se grabó bien.
-4.  Si deseas una calidad de transcripción profesional, presiona **"Re-transcribir con Whisper"**. La app también puede ir confirmando texto por bloques mientras grabas, para dar una sensación casi en vivo con Whisper local.
+4.  Al detener, la app envía la grabación completa a Whisper cuando el backend está disponible. Si ese proceso falla, conserva el texto en vivo. Usa **"Re-transcribir con Whisper"** cuando quieras repetir el análisis del audio guardado.
 5.  Usa el botón **"Expandir"** para abrir el editor modal a pantalla completa si necesitas leer con comodidad o realizar correcciones que se sincronizan al instante en la pantalla principal.
 
 ### 🎧 Panel de Archivo de Audio
@@ -105,3 +111,22 @@ La aplicación ofrece un selector de dialectos regionales (ej. *Español - Colom
 1.  Pega el enlace completo del video (ej. `https://www.youtube.com/watch?v=...`).
 2.  El backend buscará primero si el video ya cuenta con subtítulos generados por el autor o automáticos. De existir, los extraerá rápido para ahorrar tiempo y recursos.
 3.  De no contar con subtítulos, el servidor descargará el audio y lo transcribirá con Whisper local, respetando límites de duración y tamaño para evitar bloqueos.
+
+## Lectura en voz alta con acentos e inglés
+
+**Versión actual del módulo: TTS 2.6.3** (23 jul 2026).
+
+La app lee el texto desde una consola dedicada. El motor neural cambia de voz por fragmento: usa el acento latino elegido para español y una voz inglesa para oraciones o términos técnicos en inglés. **No reescribe el texto en pantalla**: solo elige qué voz lo pronuncia (y prepara la pronunciación del audio EN).
+
+- **Acentos**: Colombia, México, Argentina y español latino de Estados Unidos
+- **Voces**: femenina y masculina para cada acento
+- **Recomendado (auto)**: mujer **Dalia (México)** · hombre **Gonzalo (Colombia)**
+- **Inglés automático (igual de claro en ambos géneros)**: mujer **Aria** · hombre **Andrew** (EE. UU.)
+- **Pronunciación bilingüe**: automática (predeterminada) o desactivada
+- **Tonos**: neutral, cálido y enérgico (español hombre más calmado; inglés siempre neutro para no distorsionar)
+- **Controles**: Escuchar, Pausar, Reanudar, Detener y velocidad de `1×` a `2×`
+- **Respaldo**: voces del navegador cuando la red o el motor neural fallan
+- **Persistencia**: preferencias `jg_tts_*` en el navegador (un deploy no las borra)
+- **2.6.2–2.6.3**: no partir `Node.js`; listas técnicas en un tramo EN; force-EN si un tramo tech se etiquetó mal; guías de pronunciación (OpenAI, API, ChatGPT…) para **mujer y hombre**
+
+Consulta el documento maestro [Lectura en voz alta (TTS)](CAMBIOS_TTS.md) para: arquitectura, flujo paso a paso, historial 2.6→2.6.3, decisiones, API, guías de pronunciación, proceso de deploy, IDs de producción, pruebas y límites. Consulta [Cómo conservar la configuración](CONFIG_PERSISTENTE.md) antes de modificar una clave `jg_*`. Deploy: [DOCUMENTACION_DESPLIEGUE.md](DOCUMENTACION_DESPLIEGUE.md).

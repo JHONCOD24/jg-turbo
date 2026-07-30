@@ -1,0 +1,85 @@
+{
+  "name": "JG Turbo · Voz a texto",
+  "short_name": "JG Turbo",
+  "description": "Transcribe notas de voz, audios de WhatsApp y archivos con Whisper.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0B0D12",
+  "theme_color": "#0B0D12",
+  "lang": "es",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "audio",
+          "accept": [
+            "audio/*",
+            "video/mp4",
+            "video/webm",
+            ".ogg",
+            ".opus",
+            ".m4a",
+            ".mp3",
+            ".wav",
+            ".aac",
+            ".webm",
+            ".mp4",
+            ".flac",
+            ".caf",
+            ".amr",
+            ".3gp"
+          ]
+        }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/?open=file",
+      "accept": {
+        "audio/*": [".mp3", ".wav", ".m4a", ".ogg", ".opus", ".aac", ".webm", ".flac", ".amr", ".caf"],
+        "video/mp4": [".mp4", ".m4a"],
+        "video/webm": [".webm"]
+      },
+      "launch_type": "single-client"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Transcribir archivo",
+      "short_name": "Archivo",
+      "description": "Abrir pestaña de archivo / WhatsApp",
+      "url": "/?tab=file",
+      "icons": [{ "src": "/favicon-32.png", "sizes": "32x32" }]
+    }
+  ]
+}

@@ -13,11 +13,21 @@ Documento para **humanos y agentes de IA**. Objetivo: que las actualizaciones de
 | Modelo OpenRouter | `jg_openrouter_model` | **Sí** |
 | Calidad micrófono | `jg_mic_quality` | **Sí** |
 | Idioma del texto transcrito | `jg_output_lang` | **Sí** |
+| Voz TTS (femenina/masculina) | `jg_tts_gender` | **Sí** |
+| Acento TTS | `jg_tts_locale` | **Sí** |
+| Pronunciación bilingüe TTS | `jg_tts_bilingual` | **Sí** |
+| Tono TTS | `jg_tts_tone` | **Sí** |
+| Velocidad TTS | `jg_tts_rate` | **Sí** |
+| Motor TTS (neural/browser) | `jg_tts_engine` | **Sí** |
 | Modelo Whisper local | `jg_whisper_model` | **Sí** (solo aplica en PC) |
 | Bundle de respaldo | `jg_config_bundle` (JSON) | **Sí** |
 | `GROQ_API_KEY` en servidor | Variables de entorno de Vercel | **Sí**, si se configura en el dashboard |
 
-**Importante:** Vercel **no** tiene hoy variables de entorno configuradas en el proyecto. La transcripción en la nube depende de la clave Groq en el **navegador** del usuario, salvo que alguien agregue `GROQ_API_KEY` en Vercel → Settings → Environment Variables.
+**Importante (2026-07-26):** En Vercel hay `MISTRAL_API_KEY` (IA de pulido en servidor). **Sigue faltando** `GROQ_API_KEY` para Whisper en la nube: sin ella, el celular depende de la clave `gsk_…` en el navegador o del reconocimiento en vivo del navegador.
+
+**Grok ≠ Groq:**
+- **Groq** (`gsk_…`, console.groq.com) → transcripción de audio (mic/archivo).
+- **Grok / xAI** (`xai-…`, console.x.ai) → solo IA de texto (pulir/traducir), no Whisper.
 
 ## Claves de `localStorage` (NO renombrar sin migración)
 
@@ -32,6 +42,12 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_whisper_model`
 - `jg_mic_quality`
 - `jg_output_lang` (idioma del texto: same / es / en / fr / pt / de)
+- `jg_tts_gender` (female / male)
+- `jg_tts_locale` (auto / es-CO / es-MX / es-AR / es-US; otros BCP-47 quedan para voces del navegador)
+- `jg_tts_bilingual` (auto / off)
+- `jg_tts_tone` (neutral / warm / energetic)
+- `jg_tts_rate` (0.8–2.0)
+- `jg_tts_engine` (neural / browser)
 - `jg_config_bundle` (snapshot JSON versionado)
 - `jg_glossary_seeded` (flag: ya se sembró glosario por defecto)
 
@@ -45,7 +61,7 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 3. **No sobrescribir** glosario o claves con cadena vacía que venga del servidor (en Vercel `/api/glossary` es stub vacío).
 4. Al **Guardar** ajustes: si el campo de API key viene vacío, **conservar** la clave ya guardada (no borrarla).
 5. Tras cualquier cambio de preferencias: llamar `jgCfgSnapshot()` (o el equivalente) para actualizar `jg_config_bundle`.
-6. Deploy de producción: carpeta `vercel_deploy/` (sincronizar `index.html` + `api/` desde `Spech to text App/`).
+6. Deploy de producción: sincronizar `index.html`, toda la carpeta `api/` y `vercel.json` hacia `vercel_deploy/`.
 7. No commitear claves reales ni meter secretos en el HTML.
 
 ## Exportar / importar (UI)
@@ -63,18 +79,29 @@ En **Configuración** hay:
 - Historial de deshacer ↩ (solo en memoria de la pestaña).
 - Token de sesión del backend local (se regenera al reiniciar el servidor local).
 
+
+## Despliegue obligatorio
+
+**Siempre desplegar en Vercel** al cerrar mejoras de código de la app (no dejar solo local). Tras editar:
+
+1. Sync a `vercel_deploy/`
+2. `npx vercel --prod --yes` desde `vercel_deploy/`
+3. Comprobar https://jg-turbo.vercel.app
+
+Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md` (**v2.6.3** — Gonzalo CO + Andrew EN, force-EN, prep pronunciación paritaria; 2026-07-23/24). Las versiones **2.6.x no** añaden ni renombran claves `jg_tts_*` (salvo `jg_tts_bilingual` introducida en 2.6 base).
+
 ## Checklist antes de un deploy
 
 - [ ] ¿Cambié nombres de `localStorage`? → migración obligatoria.
 - [ ] ¿El servidor devuelve glosario vacío en la nube? → no pisar el del cliente.
 - [ ] ¿Probé abrir Configuración y ver “IA ✓ · Groq ✓ · Glosario ✓”?
-- [ ] ¿Sincronicé `Spech to text App/index.html` → `vercel_deploy/index.html`?
+- [ ] ¿Sincronicé `index.html`, `api/index.py`, `api/calidad_linguistica.py`, `api/requirements.txt` y `vercel.json`?
 
 ## Proyecto y producción
 
-- Workspace: `B:\PROYECTS\JG Turbo\`
-- App local + git: `B:\PROYECTS\JG Turbo\Spech to text App\`
-- Deploy CLI: `B:\PROYECTS\JG Turbo\vercel_deploy\`
+- Workspace: `G:\Mi unidad\PROYECTS\JG Turbo\`
+- App local + git: `G:\Mi unidad\PROYECTS\JG Turbo\Spech to text App\`
+- Deploy CLI: `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\`
 - GitHub: `JHONCOD24/jg-turbo` (raíz del repo = esta carpeta app)
 - URL: https://jg-turbo.vercel.app
 - Cuenta Vercel: `jhoncod24` / email `juanloras35@gmail.com`

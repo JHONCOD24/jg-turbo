@@ -108,7 +108,8 @@ except Exception:
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from calidad_linguistica import construir_prompt_asr, validar_traduccion
 
 # ── Configuración ─────────────────────────────────────────────────────────────
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base").lower()
@@ -486,11 +487,11 @@ def _leer_glosario_usuario() -> str:
         pass
     return ""
 
-def _prompt_con_glosario(base: str) -> str:
-    glosario = _leer_glosario_usuario()
-    if not glosario:
-        return base
-    return f"{base} Términos importantes del usuario: {glosario}."
+def _prompt_asr(idioma: str, contexto: str = "") -> str:
+    glosario = "\n".join(
+        parte for parte in (_leer_glosario_usuario(), (contexto or "").strip()) if parte
+    )
+    return construir_prompt_asr(idioma, glosario)
 
 def _config_ia_sesion(request: Request) -> dict:
     if not _es_peticion_local(request):
@@ -748,6 +749,7 @@ def transcribir_archivo(
     idioma: Optional[str] = None,
     preview: bool = False,
     fast: bool = False,
+    contexto: str = "",
 ) -> dict:
     if not modelo_listo():
         if modelo_estado == "cargando":
@@ -771,7 +773,7 @@ def transcribir_archivo(
             "without_timestamps": True,
             "word_timestamps": False,
             "vad_filter": True,              # salta silencios → más rápido
-            "initial_prompt": _prompt_con_glosario("Transcripción clara en español."),
+            "initial_prompt": _prompt_asr(idioma or "auto", contexto),
         }
     else:
         # ── normal mode: equilibrio precisión/velocidad (beam 3 ≈ 40% más rápido que beam 5) ──
@@ -788,14 +790,7 @@ def transcribir_archivo(
                 min_speech_duration_ms=200,
                 min_silence_duration_ms=350,
             ),
-            "initial_prompt": _prompt_con_glosario(
-                "Esta es una transcripción clara y precisa de una conversación en español. "
-                "Se habla sobre tecnología, programación, inteligencia artificial y desarrollo "
-                "de software. Términos frecuentes: JavaScript, TypeScript, Python, React, "
-                "Node.js, API, JSON, HTML, CSS, Git, Docker, Kubernetes, AWS, Azure, "
-                "machine learning, LLM, prompt, token, FastAPI, PostgreSQL. "
-                "Nombres: OpenAI, ChatGPT, GPT-4, Claude, Anthropic, Gemini, DeepSeek, Mistral."
-            ),
+            "initial_prompt": _prompt_asr(idioma or "auto", contexto),
         }
 
     if idioma and idioma != "auto":
@@ -858,7 +853,9 @@ def transcribir_archivo(
         texto_limpio = " ".join(partes_texto) if partes_texto else ""
 
         total = len(segmentos)
-        needs_review = alucinaciones > 0 or (total > 0 and baja_confianza / total > 0.25)
+        proporcion_dudosa = baja_confianza / total if total else 0.0
+        needs_review = alucinaciones > 0 or baja_confianza > 0
+        requires_confirmation = alucinaciones >= 2 or proporcion_dudosa > 0.35
 
         return {
             "text": texto_limpio,
@@ -867,6 +864,8 @@ def transcribir_archivo(
             "low_confidence_segments": baja_confianza,
             "removed_hallucinations": alucinaciones,
             "needs_review": needs_review,
+            "requires_confirmation": requires_confirmation,
+            "review_segments": [s for s in segmentos if s["low_confidence"]],
         }
 
     except Exception as e:
@@ -1025,6 +1024,7 @@ def transcribe_audio(
     preview: bool = Form(False),
     fast: bool = Form(False),
     auto_correct: bool = Form(False),
+    context: str = Form("", max_length=4000),
 ):
     """Recibe un archivo de audio y devuelve el texto transcrito."""
     _require_local_token(request)
@@ -1049,7 +1049,13 @@ def transcribe_audio(
         _copiar_upload_con_limite(file, tmp_path, MAX_AUDIO_FILE_BYTES)
         _validar_audio_temporal(tmp_path, MAX_AUDIO_FILE_BYTES, MAX_AUDIO_DURATION_SECONDS)
 
-        resultado = transcribir_archivo(tmp_path, language, preview=preview, fast=fast)
+        resultado = transcribir_archivo(
+            tmp_path,
+            language,
+            preview=preview,
+            fast=fast,
+            contexto=context,
+        )
         if "_error" in resultado:
             raise HTTPException(status_code=500, detail=resultado["_error"])
         if auto_correct and resultado.get("text"):
@@ -1079,6 +1085,7 @@ def transcribe_chunk(
     language: str = Form("auto"),
     chunk_index: int = Form(0),
     auto_correct: bool = Form(False),
+    context: str = Form("", max_length=4000),
 ):
     _require_local_token(request)
     sufijo = Path(file.filename or "chunk.webm").suffix.lower() or ".webm"
@@ -1091,7 +1098,7 @@ def transcribe_chunk(
     try:
         _copiar_upload_con_limite(file, tmp_path, MAX_CHUNK_FILE_BYTES)
         _validar_audio_temporal(tmp_path, MAX_CHUNK_FILE_BYTES, MAX_CHUNK_DURATION_SECONDS)
-        resultado = transcribir_archivo(tmp_path, language, preview=True, fast=True)
+        resultado = transcribir_archivo(tmp_path, language, preview=True, fast=True, contexto=context)
         if "_error" in resultado:
             raise HTTPException(status_code=500, detail=resultado["_error"])
         texto_final = resultado.get("text", "")
@@ -1522,7 +1529,7 @@ def _detalle_error_ia(nombre_proveedor: str, e: Exception) -> str:
 # ── /translate ──────────────────────────────────────────────────────────────────
 
 class TranslateRequest(BaseModel):
-    text: str
+    text: str = Field(min_length=1, max_length=50000)
     direction: str  # pares ISO: en-es, es-fr, pt-en, etc.
     provider: str = "gemini"
     api_key: str = ""
@@ -1601,6 +1608,26 @@ def _translate_mymemory_chunked(text: str, src: str, trg: str) -> str:
             
     return "\n".join(translated_paragraphs)
 
+
+def _respuesta_traduccion_local(
+    original: str,
+    traducido: str,
+    src_code: str,
+    trg_code: str,
+    provider: Optional[str],
+    ia_used: bool,
+    error_detail: Optional[str] = None,
+) -> dict:
+    return {
+        "text": traducido,
+        "ia_used": ia_used,
+        "provider": provider,
+        "error_detail": error_detail,
+        "direction": f"{src_code}-{trg_code}",
+        "validation": validar_traduccion(original, traducido, src_code, trg_code),
+    }
+
+
 @app.post("/translate")
 async def translate_text(req: TranslateRequest, request: Request):
     """Traduce entre pares ISO (en, es, fr, pt, de, it) con IA o MyMemory."""
@@ -1612,9 +1639,11 @@ async def translate_text(req: TranslateRequest, request: Request):
 
     prompt = (
         f"Translate the following text from {src_lang} to {trg_lang}.\n"
-        f"Maintain the exact formatting, paragraph breaks, and style of the original text. "
-        f"Do not add any explanations, commentary, notes, or introductory text. "
-        f"Translate all sentences accurately and naturally.\n\n"
+        "Translate every sentence faithfully and in the same order. Preserve paragraph "
+        "breaks, names, technical terms, URLs, emails, numbers, units, and uncertainty. "
+        "Never infer missing context, add facts, summarize, explain, or improve the ideas. "
+        "Before answering, silently compare source and target sentence by sentence. "
+        "Output only the translation.\n\n"
         f"Original text:\n{txt}"
     )
 
@@ -1632,12 +1661,9 @@ async def translate_text(req: TranslateRequest, request: Request):
                 _mejorar_con_ia_sync,
                 provider_resuelto, api_key, prompt, openrouter_model,
             )
-            return {
-                "text": translated,
-                "ia_used": True,
-                "provider": provider_name,
-                "direction": f"{src_code}-{trg_code}",
-            }
+            return _respuesta_traduccion_local(
+                txt, translated, src_code, trg_code, provider_name, True
+            )
         except Exception as e:
             error_detail = _detalle_error_ia(provider_resuelto, e)
 
@@ -1645,13 +1671,15 @@ async def translate_text(req: TranslateRequest, request: Request):
     try:
         translated_text = _translate_mymemory_chunked(txt, src_code, trg_code)
         if translated_text:
-            return {
-                "text": translated_text,
-                "ia_used": False,
-                "provider": None,
-                "error_detail": error_detail,
-                "direction": f"{src_code}-{trg_code}",
-            }
+            return _respuesta_traduccion_local(
+                txt,
+                translated_text,
+                src_code,
+                trg_code,
+                None,
+                False,
+                error_detail=error_detail,
+            )
     except Exception as e:
         if not error_detail:
             error_detail = str(e)
@@ -2380,3 +2408,251 @@ async def improve_prompt(req: ImprovePromptRequest, request: Request):
     resultado = _mejorar_prompt_heuristico(prompt, modalidad, target_model)
     resultado["error_detail"] = error_detail
     return resultado
+
+
+# ── TTS neural bilingüe (Microsoft Edge voices, sin API key) ────────────
+TTS_VOICE_CATALOG = {
+    "es-CO": {
+        "label": "Colombia",
+        "female": "es-CO-SalomeNeural",
+        "male": "es-CO-GonzaloNeural",
+    },
+    "es-MX": {
+        "label": "México",
+        "female": "es-MX-DaliaNeural",
+        "male": "es-MX-JorgeNeural",
+    },
+    "es-AR": {
+        "label": "Argentina",
+        "female": "es-AR-ElenaNeural",
+        "male": "es-AR-TomasNeural",
+    },
+    "es-US": {
+        "label": "Latino de Estados Unidos",
+        "female": "es-US-PalomaNeural",
+        "male": "es-US-AlonsoNeural",
+    },
+    "en-US": {
+        "label": "English (United States)",
+        # Aria (mujer) y Andrew (hombre): neural inglés monoidioma, claro en tech
+        "female": "en-US-AriaNeural",
+        "male": "en-US-AndrewNeural",
+    },
+}
+TTS_FALLBACK_VOICES = {
+    "es": {
+        # Mujer: Dalia (MX) · Hombre: Gonzalo (CO) de la zona
+        "female": ["es-MX-DaliaNeural", "es-CO-SalomeNeural", "es-US-PalomaNeural"],
+        "male": ["es-CO-GonzaloNeural", "es-MX-JorgeNeural", "es-US-AlonsoNeural"],
+    },
+    "en": {
+        "female": ["en-US-AriaNeural", "en-US-JennyNeural", "en-US-AvaMultilingualNeural"],
+        "male": [
+            "en-US-AndrewNeural",
+            "en-US-BrianNeural",
+            "en-US-ChristopherNeural",
+            "en-US-GuyNeural",
+        ],
+    },
+}
+
+_TTS_ES_FUNC = {
+    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "en", "y", "o",
+    "que", "por", "para", "con", "es", "son", "se", "al", "lo", "su", "sus", "como",
+    "más", "mas", "pero", "si", "no", "ya", "muy", "también", "tambien", "este", "esta",
+    "estos", "estas", "eso", "esa", "hola", "gracias", "usa", "usar", "funciona", "puede",
+}
+TTS_ALLOWED_VOICES = {
+    voice
+    for item in TTS_VOICE_CATALOG.values()
+    for key, voice in item.items()
+    if key in {"female", "male"}
+}
+TTS_ALLOWED_VOICES.update(
+    voice
+    for language in TTS_FALLBACK_VOICES.values()
+    for voices in language.values()
+    for voice in voices
+)
+TTS_MAX_CHARS = 2800
+
+
+class TtsRequest(BaseModel):
+    text: str = Field(..., description="Texto a leer en voz alta")
+    voice: str = Field("female", description="female | male")
+    rate: float = Field(1.0, description="Velocidad 0.8–2.0")
+    language: str = Field("es", description="Idioma del fragmento: es | en")
+    locale: str = Field("es-MX", description="Acento español BCP-47 (es-MX recomendado para mujer)")
+    tone: str = Field("neutral", description="neutral | warm | energetic")
+
+
+def _tts_gender(voice: str) -> str:
+    return "male" if (voice or "").strip().lower() in {"male", "m", "hombre", "masculina"} else "female"
+
+
+def _tts_language(language: str) -> str:
+    return "en" if (language or "").strip().lower().startswith("en") else "es"
+
+
+def _tts_fragment_is_english(text: str) -> bool:
+    """Red de seguridad: tramos solo-tech/EN no deben sintetizarse con voz española."""
+    raw = re.sub(r"[ \t]+", " ", (text or "")).strip()
+    if not raw:
+        return False
+    if re.search(r"[áéíóúüñ¿¡]", raw, re.IGNORECASE):
+        return False
+    words = re.findall(r"[A-Za-z][A-Za-z0-9+.'#-]*", raw)
+    if not words:
+        return False
+    es_hits = sum(1 for w in words if w.lower() in _TTS_ES_FUNC)
+    if es_hits:
+        return False
+    return True
+
+
+def _tts_resolve_language(language: str, text: str) -> str:
+    lang = _tts_language(language)
+    if lang == "en":
+        return "en"
+    if _tts_fragment_is_english(text):
+        return "en"
+    return "es"
+
+
+def _tts_locale(locale: str) -> str:
+    value = (locale or "es-MX").strip()
+    return value if value in TTS_VOICE_CATALOG and value != "en-US" else "es-MX"
+
+
+def _tts_pick_voice(voice: str, language: str, locale: str) -> tuple[str, str, str]:
+    requested = (voice or "").strip()
+    gender = _tts_gender(requested)
+    lang = _tts_language(language)
+    selected_locale = "en-US" if lang == "en" else _tts_locale(locale)
+    if requested in TTS_ALLOWED_VOICES:
+        return requested, selected_locale, gender
+    return TTS_VOICE_CATALOG[selected_locale][gender], selected_locale, gender
+
+
+def _tts_prosody(rate: float, tone: str) -> tuple[str, str, str, str]:
+    value = max(0.8, min(2.0, float(rate or 1.0)))
+    rate_pct = int(round((value - 1.0) * 100))
+    normalized_tone = (tone or "neutral").strip().lower()
+    if normalized_tone == "warm":
+        rate_pct -= 4
+        pitch = "-2Hz"
+        volume = "+1%"
+    elif normalized_tone == "energetic":
+        rate_pct += 4
+        pitch = "+2Hz"
+        volume = "+2%"
+    else:
+        normalized_tone = "neutral"
+        pitch = "+0Hz"
+        volume = "+0%"
+    rate_pct = max(-25, min(100, rate_pct))
+    return f"{rate_pct:+d}%", pitch, volume, normalized_tone
+
+
+async def _tts_synthesize(text: str, voice_id: str, rate: str, pitch: str, volume: str) -> bytes:
+    import edge_tts
+
+    communicate = edge_tts.Communicate(
+        text,
+        voice_id,
+        rate=rate,
+        pitch=pitch,
+        volume=volume,
+    )
+    audio = bytearray()
+    async for chunk in communicate.stream():
+        if chunk.get("type") == "audio" and chunk.get("data"):
+            audio.extend(chunk["data"])
+    return bytes(audio)
+
+
+@app.post("/tts")
+async def tts_neural(req: TtsRequest):
+    """Sintetiza fragmentos con voz neural latina o inglesa según el idioma."""
+    from fastapi.responses import Response
+
+    text = re.sub(r"[ \t]+", " ", (req.text or "")).strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="No hay texto para leer.")
+    if len(text) > TTS_MAX_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Texto demasiado largo para un bloque (máx. {TTS_MAX_CHARS} caracteres).",
+        )
+    try:
+        import edge_tts  # noqa: F401
+    except ImportError as error:
+        raise HTTPException(status_code=503, detail="edge-tts no está instalado en el servidor.") from error
+
+    language = _tts_resolve_language(req.language, text)
+    voice_id, selected_locale, gender = _tts_pick_voice(req.voice, language, req.locale)
+    rate, pitch, volume, tone = _tts_prosody(req.rate, req.tone)
+    candidates = [voice_id] + [
+        candidate
+        for candidate in TTS_FALLBACK_VOICES[language][gender]
+        if candidate != voice_id
+    ]
+    last_error = None
+    for candidate in candidates:
+        try:
+            audio = await _tts_synthesize(text, candidate, rate, pitch, volume)
+            if not audio:
+                raise RuntimeError("El servicio no devolvió audio.")
+            actual_locale = candidate.split("-")[0] + "-" + candidate.split("-")[1]
+            return Response(
+                content=audio,
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-TTS-Voice": candidate,
+                    "X-TTS-Rate": rate,
+                    "X-TTS-Pitch": pitch,
+                    "X-TTS-Tone": tone,
+                    "X-TTS-Language": language,
+                    "X-TTS-Locale": actual_locale,
+                    "X-TTS-Engine": "edge-neural-bilingual",
+                },
+            )
+        except Exception as error:
+            last_error = error
+
+    detail = str(last_error or "servicio no disponible")[:180]
+    raise HTTPException(status_code=502, detail=f"No se pudo sintetizar la voz: {detail}")
+
+
+@app.get("/tts-voices")
+def tts_voices_info():
+    return {
+        "engine": "edge-neural-bilingual",
+        "default_locale": "es-MX",
+        "recommended": {
+            "female_locale": "es-MX",
+            "female_voice": "es-MX-DaliaNeural",
+            "male_locale": "es-CO",
+            "male_voice": "es-CO-GonzaloNeural",
+            "english_female": "en-US-AriaNeural",
+            "english_male": "en-US-AndrewNeural",
+        },
+        "bilingual": True,
+        "accents": {
+            locale: {
+                "label": data["label"],
+                "female": data["female"],
+                "male": data["male"],
+            }
+            for locale, data in TTS_VOICE_CATALOG.items()
+            if locale.startswith("es-")
+        },
+        "english": {
+            "female": TTS_VOICE_CATALOG["en-US"]["female"],
+            "male": TTS_VOICE_CATALOG["en-US"]["male"],
+        },
+        "tones": ["neutral", "warm", "energetic"],
+        "rate_range": [0.8, 2.0],
+        "max_chars": TTS_MAX_CHARS,
+    }

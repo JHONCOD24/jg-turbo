@@ -1,14 +1,20 @@
-# ── Web ──
-fastapi>=0.110.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.9
-pydantic>=2.5.0
+# Web
+fastapi>=0.141.0,<1.0
+uvicorn[standard]>=0.52.0,<1.0
+python-multipart>=0.0.32,<1.0
+pydantic>=2.13.0,<3.0
 
-# ── Transcripción (faster-whisper = 4-5x más rápido que openai-whisper) ──
-faster-whisper>=1.0.0
+# Transcripción
+faster-whisper>=1.2.1,<2.0
+# av 18.x en algunos Windows con WDAC/App Control bloquea la DLL (import fails).
+# Mantener 17.x hasta que av publique builds firmados o se ajuste la política local.
+av>=17.0.0,<18
 
-# ── YouTube ──
-yt-dlp>=2024.3.10
+# YouTube
+yt-dlp>=2026.7.4
 
-# ── IA para mejora de texto ──
-anthropic>=0.40.0
+# IA para mejora manual de texto
+anthropic>=0.120.0,<1.0
+
+# TTS neural latino
+edge-tts>=7.2.0,<8.0

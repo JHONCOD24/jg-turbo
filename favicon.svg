@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="JG Turbo">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7A18"/>
+      <stop offset="100%" stop-color="#FF2D55"/>
+    </linearGradient>
+  </defs>
+  <!-- Marco blanco: contraste en pestañas moradas -->
+  <rect width="32" height="32" rx="7.5" fill="#fff"/>
+  <!-- Baldosa marca (como .logo del header) -->
+  <rect x="3" y="3" width="26" height="26" rx="5.5" fill="url(#g)"/>
+  <!-- Micrófono relleno (símbolo de la app) -->
+  <rect x="10.4" y="6.6" width="5.2" height="8.8" rx="2.6" fill="#fff"/>
+  <rect x="8.6" y="14" width="2" height="5" rx="1" fill="#fff"/>
+  <rect x="15.4" y="14" width="2" height="5" rx="1" fill="#fff"/>
+  <rect x="8.6" y="17.4" width="8.8" height="2" rx="1" fill="#fff"/>
+  <rect x="12" y="18.8" width="2" height="4.8" rx="1" fill="#fff"/>
+  <rect x="10" y="23" width="6" height="2" rx="1" fill="#fff"/>
+  <!-- Barras de audio cyan (acento app) -->
+  <rect x="19.2" y="13.4" width="1.7" height="5.2" rx="0.85" fill="#27E1C1"/>
+  <rect x="21.6" y="11.8" width="1.7" height="8.5" rx="0.85" fill="#27E1C1"/>
+  <rect x="24" y="9.8" width="1.7" height="12.5" rx="0.85" fill="#27E1C1"/>
+</svg>

@@ -1,104 +1,124 @@
-# JG Turbo · Backend Whisper
-
-Servidor local que activa las pestañas **Archivo de audio** y **YouTube** de la app.
-
+---
+meta:
+  title: Cómo ejecutar el backend local de JG Turbo
+  navLabel: Backend local
+  contentType: How-to
+  category: Desarrollo local
+  audience: Mantenimiento y desarrollo
+  goal: Instalar, iniciar y comprobar el servidor local
+lastUpdated: 2026-07-29
 ---
 
-## Requisitos previos
+# Cómo ejecutar el backend local de JG Turbo
 
-### 1. Python 3.9 o superior
-Descarga desde https://www.python.org/downloads/
+Este servidor activa transcripción de archivos, YouTube, traducción y mejora manual sin depender de la función de Vercel. Usa `faster-whisper` para procesar audio local.
 
-### 2. ffmpeg (obligatorio para Whisper y YouTube)
-**Windows:**
-1. Descarga el build estático desde https://www.gyan.dev/ffmpeg/builds/
-   (elige `ffmpeg-release-essentials.zip`)
-2. Extrae y copia la carpeta a `C:\ffmpeg`
-3. Agrega `C:\ffmpeg\bin` al PATH del sistema:
-   - Busca "Variables de entorno" en el menú inicio
-   - En "Variables del sistema" → PATH → Editar → Nuevo → `C:\ffmpeg\bin`
-4. Verifica en una terminal nueva: `ffmpeg -version`
+## Requisitos
 
----
+Instala:
 
-## Instalación del servidor
+- Python 3.10 o superior
+- FFmpeg disponible en `PATH`
+- Entre 1 GB y 10 GB de memoria, según el modelo
 
-```bash
-# 1. Abre una terminal en esta carpeta (backend/)
-cd "G:\Mi unidad\App\Spech to text App\backend"
+Comprueba FFmpeg:
 
-# 2. Crea un entorno virtual (recomendado)
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Mac/Linux
-
-# 3. Instala las dependencias
-pip install -r requirements.txt
-
-# La primera vez que instales openai-whisper descargará el modelo (~150 MB para "base")
+```powershell
+ffmpeg -version
 ```
 
----
+## Instalar
 
-## Arrancar el servidor
+Abre PowerShell en `Spech to text App/` y ejecuta:
 
-```bash
-# Con el entorno virtual activo:
-uvicorn app:app --reload --host 0.0.0.0 --port 8000
+```powershell
+python -m venv backend\.venv
+backend\.venv\Scripts\Activate.ps1
+python -m pip install -r backend\requirements.txt
 ```
 
-Verás algo como:
-```
-⏳ Cargando modelo Whisper 'base'…
-✅ Modelo 'base' listo.
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
+El primer uso descarga el modelo seleccionado. Usa `small` o `medium` cuando evalúes precisión.
 
-Abre `jg_turbo.html` en Chrome/Edge. El indicador arriba derecha cambiará a **verde** automáticamente.
+### Dependencias (actualizado 2026-07-29)
 
----
+Pisos verificados con Context7 + PyPI:
 
-## Modelos disponibles
+| Paquete | Piso en requirements | Notas |
+|---|---|---|
+| `fastapi` | `>=0.141.0` | Requiere Pydantic v2 |
+| `uvicorn` | `>=0.52.0` | Con extras `[standard]` |
+| `faster-whisper` | `>=1.2.1` | API `WhisperModel` sin cambios |
+| `anthropic` | `>=0.120.0` | Modelo local: `claude-haiku-4-5-20251001` |
+| `edge-tts` | `>=7.2.0` | `Communicate` + `stream()` |
+| `yt-dlp` | `>=2026.7.4` | Extracción YouTube |
+| `av` | `>=17,<18` | 18.x puede fallar por WDAC en Windows |
 
-Cambia la variable `WHISPER_MODEL` en `app.py` o con variable de entorno:
+Tras actualizar: `python -m pip install -U -r backend\requirements.txt`.
 
-```bash
-WHISPER_MODEL=small uvicorn app:app --reload
-```
+## Iniciar
 
-| Modelo  | Tamaño  | RAM aprox. | Velocidad | Calidad  |
-|---------|---------|------------|-----------|----------|
-| tiny    | 39 MB   | ~1 GB      | Muy rápido | Básica  |
-| base    | 74 MB   | ~1 GB      | Rápido    | Buena    |
-| small   | 244 MB  | ~2 GB      | Moderado  | Muy buena|
-| medium  | 769 MB  | ~5 GB      | Lento     | Alta     |
-| large   | 1.5 GB  | ~10 GB     | Muy lento | Máxima   |
-
-**Recomendación:** empieza con `base`. Si necesitas más precisión en español, usa `small` o `medium`.
-
----
-
-## Script de arranque rápido (Windows)
-
-Crea un archivo `iniciar.bat` en esta carpeta con:
-
-```bat
-@echo off
-call venv\Scripts\activate
-uvicorn app:app --host 0.0.0.0 --port 8000
-pause
+```powershell
+Set-Location backend
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Doble clic en `iniciar.bat` para arrancar el servidor sin abrir la terminal manualmente.
+Abre `index.html` en Chrome o Edge. El indicador del servidor debe cambiar a verde.
 
----
+## Seleccionar un modelo
 
-## Endpoints de la API
+Configura `WHISPER_MODEL` antes de iniciar:
 
-| Método | Ruta         | Descripción                              |
-|--------|-------------|------------------------------------------|
-| GET    | `/health`    | Verifica estado del servidor y modelo    |
-| POST   | `/transcribe`| Sube un archivo de audio → texto         |
-| POST   | `/youtube`   | URL de YouTube → texto                   |
+```powershell
+$env:WHISPER_MODEL='small'
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
+```
 
-Documentación interactiva disponible en: http://localhost:8000/docs
+| Modelo | RAM aproximada | Prioridad |
+|---|---:|---|
+| `tiny` | 1 GB | Velocidad |
+| `base` | 1 GB | Pruebas funcionales |
+| `small` | 2 GB | Precisión recomendada |
+| `medium` | 5 GB | Mayor precisión |
+| `large` | 10 GB | Máxima calidad local |
+
+El consumo real depende del equipo y la duración del audio.
+
+## Endpoints principales
+
+| Método | Ruta | Uso |
+|---|---|---|
+| `GET` | `/ping` | Verifica el servidor |
+| `GET` | `/health` | Informa modelo, límites y estado |
+| `GET` | `/session-config` | Entrega el token de la sesión local |
+| `POST` | `/transcribe` | Transcribe un archivo completo |
+| `POST` | `/transcribe-chunk` | Transcribe un fragmento durante la captura |
+| `POST` | `/translate` | Traduce y valida el resultado |
+| `POST` | `/youtube` | Extrae o transcribe contenido de YouTube |
+| `POST` | `/improve` | Genera una mejora manual del texto |
+| `POST` | `/correct-transcription` | Corrige una transcripción |
+| `GET/POST` | `/glossary` | Consulta o guarda términos locales |
+
+La documentación interactiva está en [API local de JG Turbo](http://127.0.0.1:8000/docs) mientras el servidor está activo.
+
+## Probar
+
+Instala las dependencias de desarrollo y ejecuta:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
+
+Para el benchmark con audios reales, sigue [Cómo funciona la captura, transcripción y traducción mejoradas](../PRECISION_AUDIO.md).
+
+## Resolver fallos comunes
+
+| Fallo | Acción |
+|---|---|
+| `ffmpeg` no existe | Instálalo y abre una terminal nueva |
+| El modelo no carga | Reduce `WHISPER_MODEL` y revisa la memoria disponible |
+| El entorno virtual no responde en la unidad sincronizada | Crea el entorno en una ruta local y reinstala dependencias |
+| La interfaz muestra servidor desconectado | Confirma el puerto 8000 y revisa `/ping` |
+| Una petición devuelve 401 | Actualiza la sesión desde `/session-config` |
+
+No guardes claves ni grabaciones personales dentro del repositorio.
