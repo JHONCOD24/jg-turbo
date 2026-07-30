@@ -22,7 +22,7 @@
 <style>
   :root{
     --bg:#0B0D12; --bg-2:#0F131B; --surface:#161B26; --surface-2:#1C2230;
-    --line:rgba(255,255,255,.08); --text:#E9EDF6; --muted:#9098AC; --muted-2:#6C7488;
+    --line:rgba(255,255,255,.08); --text:#E9EDF6; --muted:#9098AC; --muted-2:#848EA6;
     --hot-1:#FF7A18; --hot-2:#FF2D55; --cyan:#27E1C1; --cyan-glow:rgba(39,225,193,.35);
     --rec:#FF3B5C; --ok:#27E1C1; --radius:18px; --shadow:0 18px 50px -20px rgba(0,0,0,.8);
     /* Escala de espaciado (múltiplos de 4) */
@@ -135,7 +135,7 @@
   .recBtn svg{width:22px;height:22px}
   .recBtn.live{background:linear-gradient(135deg,#1C2230,#262d3d);animation:pulse 1.8s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,59,92,.55)}70%{box-shadow:0 0 0 22px rgba(255,59,92,0)}100%{box-shadow:0 0 0 0 rgba(255,59,92,0)}}
-  .kbd-hint{font-size:10px;color:var(--muted-2);text-align:center;margin-top:3px;letter-spacing:.03em}
+  .kbd-hint{font-size:11px;color:var(--muted-2);text-align:center;margin-top:3px;letter-spacing:.03em}
   .kbd-hint kbd{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 4px;font-family:'JetBrains Mono',monospace;font-size:9px}
 
   .meter-area{flex:1;min-width:200px;display:flex;flex-direction:column;justify-content:center}
@@ -202,7 +202,7 @@
     color: var(--muted);
   }
   .tts-console-engine{
-    font-family:'JetBrains Mono',monospace; font-size:10px; color: var(--muted-2);
+    font-family:'JetBrains Mono',monospace; font-size:11px; color: var(--muted-2);
     padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); background: rgba(0,0,0,.12);
   }
   .tts-console-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
@@ -269,7 +269,7 @@
   }
   .tts-field{ display:flex; flex-direction:column; gap: 5px; min-width: 0; flex: 0 1 auto; }
   .tts-field-label{
-    font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: var(--muted-2);
   }
   .tts-pills{
@@ -782,7 +782,7 @@
   /* Grupo Corregir + deshacer minimalista */
   .correct-group{display:inline-flex;align-items:center;gap:4px}
   .btn.btn-undo-mini{
-    width:38px;min-width:38px;padding:0;justify-content:center;
+    width:38px;min-width:38px;min-height:37px;padding:0;justify-content:center;
     background:transparent;border:1px solid var(--line);color:var(--muted);
     border-radius:10px;opacity:.45;pointer-events:none;transition:opacity .15s,border-color .15s,background-color .15s,color .15s;
   }
@@ -795,7 +795,7 @@
     background:rgba(39,225,193,.18);border-color:var(--cyan);transform:translateY(-1px);
   }
   .mini-btn.btn-undo-mini{
-    width:32px;min-width:32px;padding:5px 0;justify-content:center;
+    width:32px;min-width:32px;min-height:32px;padding:5px 0;justify-content:center;
     opacity:.4;pointer-events:none;
   }
   .mini-btn.btn-undo-mini.is-on{
@@ -1156,8 +1156,10 @@
   .file-opts select, .yt-opts select{background:var(--bg-2);border:1px solid var(--line);color:var(--text);font-family:inherit;
     font-size:12.5px;padding:7px 10px;border-radius:9px;cursor:pointer;outline:none;flex:1;min-width:140px}
 
-  /* selectores dinámicos para que los paneles de resultados usen flexbox cuando se muestren */
-  #fileResultArea[style*="block"], #ytResultArea[style*="block"] {
+  /* Los paneles de resultados usan flexbox cuando se muestran.
+     Se enganchan a la clase has-results del contenedor (que el JS pone junto al display),
+     no al texto del atributo style: así no se rompe si algún día cambia a otro display. */
+  .file-area.has-results #fileResultArea, .yt-area.has-results #ytResultArea {
     display: flex !important;
     flex-direction: column;
     flex: 1;
@@ -1170,7 +1172,7 @@
     display:inline-flex;align-items:center;gap:5px;
     background:transparent;border:1px solid var(--line);
     color:var(--muted);font-family:inherit;font-size:11px;font-weight:600;
-    padding:4px 10px;border-radius:8px;cursor:pointer;transition:.15s;
+    padding:4px 10px;min-height:28px;border-radius:8px;cursor:pointer;transition:.15s;
   }
   .btn-back:hover{border-color:rgba(255,255,255,.2);color:var(--text);background:var(--surface-2)}
   .btn-back svg{width:12px;height:12px;flex:none}
@@ -1312,13 +1314,13 @@
     #transDirection{font-size:15px !important}
     .recBtn{width:76px;height:76px;font-size:10px}
     .actions .btn{font-size:12px;padding:10px 8px;min-height:44px}
-    .actions > .correct-group .btn-undo-mini{flex:0 0 42px;min-width:42px;min-height:42px}
+    .actions > .correct-group .btn-undo-mini{flex:0 0 44px;min-width:44px;min-height:44px}
     .file-opts,.yt-opts{flex-direction:column}
     .file-opts select,.yt-opts select{min-height:44px;font-size:15px;min-width:0}
     .mic-top{gap:10px;padding:10px 12px 8px}
     .out-head{padding:8px 12px;flex-wrap:wrap;gap:6px}
     .out-head h3{font-size:13px}
-    textarea.output{font-size:16px;padding:10px 12px;min-height:140px;flex:0 0 auto}
+    textarea.output{font-size:16px;padding:10px 12px;min-height:clamp(140px, 27vh, 240px);flex:0 0 auto}
     .file-area, .yt-area{padding:12px}
     .drop{padding:16px 12px}
     .ytrow{gap:6px;flex-direction:column}
@@ -1585,7 +1587,7 @@
   .select-labeled .select-label{
     position:absolute;
     top:5px;left:11px;
-    font-size:9px;
+    font-size:10.5px;
     font-weight:700;
     letter-spacing:.06em;
     text-transform:uppercase;
@@ -1734,7 +1736,7 @@
   @media (max-width:640px){
     .out-head .mini-btn[id*="ShowText"],
     .out-head .mini-btn[title*="pantalla completa"]{
-      min-height:36px;
+      min-height:44px;
       padding:7px 14px;
       font-size:12.5px;
     }
@@ -1788,11 +1790,13 @@
     background:linear-gradient(180deg,rgba(39,225,193,.055),transparent);
   }
   .result-title-group{display:flex;flex-direction:column;gap:1px;min-width:0}
-  .result-kicker{color:var(--cyan);font-size:9px;font-weight:700;letter-spacing:.11em;text-transform:uppercase}
+  .result-kicker{color:var(--cyan);font-size:10.5px;font-weight:700;letter-spacing:.11em;text-transform:uppercase}
   .result-expand{flex:none;min-height:34px;padding:6px 10px !important;border-color:rgba(39,225,193,.25);color:#B8F4E9}
   .result-hint{margin:0 16px 8px;color:var(--muted);font-size:11.5px;line-height:1.45;flex:none}
   .panel[data-panel="mic"] textarea.output{
-    flex:1 0 150px;min-height:150px;width:calc(100% - 32px);margin:0 16px;
+    /* La altura sigue al alto de la pantalla: en celular se leen ~9 líneas
+       sin tener que abrir «Editar en grande». */
+    flex:1 1 auto;min-height:clamp(150px, 28vh, 300px);width:calc(100% - 32px);margin:0 16px;
     border:1px solid var(--line);border-radius:12px;background:var(--bg-2);padding:13px 15px;
   }
   .result-listen{margin:8px 16px 10px;flex:none;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);overflow:hidden}
@@ -1881,11 +1885,68 @@
     .result-head .count{order:3;width:100%;margin-left:0;text-align:center}
     .result-expand{min-height:38px}
     .result-hint{margin:0 12px 8px}
-    .panel[data-panel="mic"] textarea.output{width:calc(100% - 24px);margin:0 12px;min-height:150px}
+    .panel[data-panel="mic"] textarea.output{width:calc(100% - 24px);margin:0 12px;min-height:clamp(150px, 27vh, 240px)}
     .result-listen{margin:8px 12px 10px}
     .result-promise{min-height:74px;margin-top:12px;padding:13px}
     .trans-secondary{grid-template-columns:repeat(3,minmax(0,1fr))}
     .trans-secondary .btn{min-height:46px;font-size:12px;justify-content:center;padding:10px 6px}
+  }
+  
+  /* Arreglo para superposición en Translate: evitar que el grid colapse y superponga botones */
+  .trans-workspace {
+    min-height: max-content !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* Ajustar validation si es muy largo */
+  .trans-editor .translation-validation {
+    max-height: none !important;
+  }
+
+  /* ── Áreas de toque cómodas en celular y tablet (mínimo 44px de alto) ──
+     Cada control de esta lista comparte fila con otro que ya mide 44px,
+     así que crecer no le roba altura al texto transcrito.
+     Llega hasta 1024px porque las tablets son táctiles; 44px también
+     resulta cómodo con ratón, así que no estorba en portátiles. */
+  @media (max-width:1024px){
+    .server-pill,
+    .btn-back,
+    .result-expand,
+    .trans-chip-btn,
+    .btn.btn-tts,
+    .tts-pill,
+    .tts-rate-select,
+    #btnSettingsOpen{
+      min-height:44px;
+    }
+    .server-pill,
+    .btn-back{
+      padding-top:0;
+      padding-bottom:0;
+    }
+    /* Deshacer corrección: es un botón solo de icono, necesita cuadrado cómodo */
+    .btn.btn-undo-mini,
+    .mini-btn.btn-undo-mini{
+      width:44px;
+      min-width:44px;
+      min-height:44px;
+    }
+    .skip-link{
+      min-height:44px;
+    }
+    /* Estos ya se agrandan por debajo de 640px; aquí se extiende a tablet.
+       Se repite el selector exacto de «Editar en grande» porque el original
+       es más específico y si no, gana él. */
+    .actions .btn,
+    .tab,
+    .out-head .mini-btn[id*="ShowText"],
+    .out-head .mini-btn[title*="pantalla completa"]{
+      min-height:44px;
+    }
+    .btn-cheat{
+      min-width:44px;
+      min-height:44px;
+    }
   }
 </style>
 </head>
@@ -2463,7 +2524,7 @@
             </button>
             <span class="count" id="ytCount" style="margin-left:auto">0 palabras</span>
           </div>
-          <textarea id="ytOutput" class="output" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--bg-2)" spellcheck="true"></textarea>
+          <textarea id="ytOutput" class="output" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--bg-2)" placeholder="Aquí verás el texto del video. Puedes editarlo antes de copiarlo." spellcheck="true"></textarea>
 
         <details class="result-listen" style="margin-left:0;margin-right:0">
           <summary><span>Escuchar transcripción</span><span>Opcional · voz neural</span></summary>
@@ -4381,6 +4442,17 @@ function mensajeConfianza(data){
 function actualizarContador(){
   const t = output.value.trim();
   countEl.textContent = contarPalabras(t) + ' palabras · ' + output.value.length + ' caracteres';
+  sincronizarAccionesMic(!!t);
+}
+
+// Las acciones que operan sobre la transcripción se apagan si no hay texto,
+// igual que en el panel Traducir. Evita copiar el vacío o pulir la nada.
+function sincronizarAccionesMic(hayTexto){
+  const ids = ['btnCopy','btnCorrect','btnTranslate','btnImprove','btnPrompt','btnTxt','btnClear'];
+  for (const id of ids){
+    const b = document.getElementById(id);
+    if (b) b.disabled = !hayTexto;
+  }
 }
 output.addEventListener('input', actualizarContador);
 function anexar(fragmento){
@@ -4809,6 +4881,8 @@ let chunkingEnCurso = false;
 let ultimoChunkIndex = 0;
 let activeWhisperController = null;
 let usarWhisperFinalGrabacion = false;
+/** Texto en vivo insertado como respaldo mientras Whisper termina (se reemplaza al llegar Whisper). */
+let _textoProvisionalLive = '';
 let resumenCapturaAudio = '';
 let muestrasRmsAudio = [];
 
@@ -5234,13 +5308,20 @@ async function iniciarMediaRecorder(){
   mediaRecorder.onstop = ()=>{
     clearInterval(manualFlushInterval);
     detenerWhisperPorBloques();
-    const blob = new Blob(grabacionChunks, {type: ultimaGrabacionMime});
+    const blob = new Blob(grabacionChunks, {type: ultimaGrabacionMime || 'audio/webm'});
     mostrarGrabacion(blob);
     if(grabacionStream){ grabacionStream.getTracks().forEach(t=>t.stop()); grabacionStream=null; }
-    
-    // Whisper final es la fuente de verdad; Web Speech queda como vista previa/fallback.
-    if (usarWhisperFinalGrabacion || usarWhisperAlFinal || fallbackWhisperPorRed) {
+
+    // Whisper final: re-evaluar al detener (no solo con el flag del inicio).
+    // Web Speech queda como vista previa / respaldo inmediato en toggleGrabacion.
+    if (debeTranscribirConWhisperAlDetener()) {
       transcribirGrabacionAutomatica(blob);
+    } else if (blob && blob.size >= 2000 && serverInfo.online && serverInfo.modelReady) {
+      // Servidor listo pero sin flag: igual intentar Whisper (mejor que dejar vacío)
+      usarWhisperFinalGrabacion = true;
+      transcribirGrabacionAutomatica(blob);
+    } else if (blob && blob.size < 2000) {
+      setEstado('Audio muy corto o vacío. Mantén pulsado Grabar y habla un poco más.', false);
     }
   };
   mediaRecorder.start(250);  // chunks cada 250 ms
@@ -5350,8 +5431,16 @@ async function transcribirAudio(blob, opts = {}) {
 }
 
 async function transcribirGrabacionAutomatica(blob) {
-  if(!blob || blob.size < 2000) {
-    setEstado('✓ Grabación finalizada (audio demasiado corto).', false);
+  // Umbral bajo: en móvil a veces el blob es pequeño pero usable
+  if(!blob || blob.size < 800) {
+    const respaldo = textoBaseLive();
+    if(respaldo && !(output.value || '').trim()){
+      anexar(respaldo);
+      jgMostrarResultadoInline(output);
+      setEstado('Audio muy corto; se guardó el texto en vivo si lo había.', false);
+    } else {
+      setEstado('✓ Grabación finalizada (audio demasiado corto o vacío).', false);
+    }
     return;
   }
 
@@ -5360,20 +5449,39 @@ async function transcribirGrabacionAutomatica(blob) {
   const actionsEl = document.getElementById('livePanelActions');
   const confEl = document.getElementById('interimConf');
 
+  // Un reintento de health si el pill aún no está listo
+  if ((!serverInfo.online || !serverInfo.modelReady) && _isVercel) {
+    try{ await checkServer(); }catch(_){}
+  }
+
   if (!serverInfo.online) {
-    setEstado('⚠️ Grabación guardada localmente, pero el servidor backend está desconectado.', false);
+    setEstado('⚠️ Grabación guardada, pero no hay conexión con el servidor. Revisa tu red o pulsa «Re-transcribir con Whisper».', false);
     if (labelEl) labelEl.textContent = 'Servidor desconectado';
     interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Servidor desconectado. Conéctalo y pulsa «Re-transcribir con Whisper».</span>';
     if (actionsEl) actionsEl.style.display = 'none';
-    panel.classList.add('live-panel--active');
+    if (panel) panel.classList.add('live-panel--active');
     return;
   }
   if (!serverInfo.modelReady) {
-    setEstado('⏳ Whisper se está cargando…', false);
-    if (labelEl) labelEl.textContent = 'Whisper cargando';
-    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Whisper aún se carga. Espera unos segundos y pulsa «Re-transcribir con Whisper».</span>';
+    setEstado('⏳ Whisper no está listo. Espera un momento y pulsa «Re-transcribir con Whisper».', false);
+    if (labelEl) labelEl.textContent = 'Whisper no listo';
+    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Whisper aún no responde. Espera y pulsa «Re-transcribir con Whisper».</span>';
     if (actionsEl) actionsEl.style.display = 'none';
-    panel.classList.add('live-panel--active');
+    if (panel) panel.classList.add('live-panel--active');
+    return;
+  }
+  if (_isVercel && !tieneClaveGroqDisponible()) {
+    setEstado('⚠️ Falta clave Groq (gsk_…) para transcribir en la nube. Ábrela en Configuración o en console.groq.com/keys.', false);
+    if (labelEl) labelEl.textContent = 'Falta clave Groq';
+    interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Configura Groq (gsk_…, no es Grok de xAI) en Servidor e IA. Si ya hay texto en vivo, se conservó abajo.</span>';
+    if (actionsEl) actionsEl.style.display = 'none';
+    if (panel) panel.classList.add('live-panel--active');
+    // Conservar texto en vivo si lo hay
+    const respaldo = textoBaseLive();
+    if(respaldo && !(output.value || '').trim()){
+      anexar(respaldo);
+      jgMostrarResultadoInline(output);
+    }
     return;
   }
   
@@ -5398,6 +5506,20 @@ async function transcribirGrabacionAutomatica(blob) {
       });
       const frag = finalizado.text;
       if(frag) {
+        // Quitar el texto en vivo provisional para no duplicar con Whisper
+        if(_textoProvisionalLive){
+          const prov = _textoProvisionalLive.trim();
+          let cur = output.value || '';
+          if(prov && cur.trim() === prov){
+            output.value = '';
+          }else if(prov && cur.includes(prov)){
+            cur = cur.replace(prov, '');
+            cur = cur.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+            output.value = cur ? (cur + (/[.!?\n]$/.test(cur) ? '\n' : ' ')) : '';
+          }
+          _textoProvisionalLive = '';
+          actualizarContador();
+        }
         anexar(frag);
         const textoActual = output.value.trim();
         registrarTranscripcionOriginal(output, textoActual, document.getElementById('btnCorrectUndo'));
@@ -5405,7 +5527,7 @@ async function transcribirGrabacionAutomatica(blob) {
         textoWhisperConfirmado = '';
         interimEl.textContent = '';
         if (actionsEl) actionsEl.style.display = 'none';
-        panel.classList.remove('live-panel--active');
+        if (panel) panel.classList.remove('live-panel--active');
         let msgEstado = data.needs_review
           ? `⚠ Whisper terminó; revisa ${data.low_confidence_segments || 1} fragmento(s) ambiguo(s) en el editor.`
           : '✓ Whisper transcribió con éxito.';
@@ -5568,62 +5690,110 @@ async function toggleGrabacion(){
     }
     if(!_isVercel) await enviarChunkWhisper(true);
     detenerWhisperPorBloques();
-    detenerMediaRecorder();   // genera el blob y muestra el reproductor
-    pararUI();                // ← FIX: restaurar botón y estado visual al detener
+    // Re-evaluar Whisper al detener (por si el health llegó tarde o el dictado en vivo falló)
+    if(serverInfo.online && serverInfo.modelReady && tieneClaveGroqDisponible()){
+      usarWhisperFinalGrabacion = true;
+    }
+    detenerMediaRecorder();   // onstop → Whisper y/o muestra el audio
+    pararUI();
 
-    if (!usarWhisperFinalGrabacion && !usarWhisperAlFinal && !fallbackWhisperPorRed) {
-      setTimeout(async () => {
-        await esperarTraduccionesVivas();
-        const capturado = textoBaseLive();
-        if (!capturado) return;
+    // Insertar texto en vivo ya (respaldo). Si Whisper llega, lo reemplaza sin duplicar.
+    const irAWhisper = debeTranscribirConWhisperAlDetener();
+    setTimeout(async () => {
+      try{ await esperarTraduccionesVivas(); }catch(_){}
+      const capturado = textoBaseLive();
+      if(!capturado){
+        if(!irAWhisper){
+          setEstado('No se capturó voz. Habla más cerca del micrófono y vuelve a grabar.', false);
+        }
+        return;
+      }
+      const cur = (output.value || '').trim();
+      const yaEnEditor = cur && (cur === capturado.trim() || cur.includes(capturado.slice(0, Math.min(40, capturado.length))));
+      if(!yaEnEditor){
         anexar(capturado);
+        _textoProvisionalLive = capturado;
         const destLive = destinoSalidaVivo() || origenAudioVivo();
         setSourceLang(output, destLive);
         _idiomaSalidaActual = destLive;
         registrarTranscripcionOriginal(output, output.value.trim(), document.getElementById('btnCorrectUndo'));
+        jgMostrarResultadoInline(document.getElementById('output'));
+        setEstado(
+          irAWhisper
+            ? 'Texto en vivo listo. Mejorando con Whisper…'
+            : '✓ Transcripción en vivo lista. Puedes editarla abajo.',
+          !!irAWhisper
+        );
+      }
+      if(!irAWhisper){
+        _textoProvisionalLive = '';
         textoEnVivoAcumulado = '';
         textoWhisperConfirmado = '';
         interimEl.textContent = '';
         const panel = document.getElementById('livePanel');
         const actionsEl = document.getElementById('livePanelActions');
         if (actionsEl) actionsEl.style.display = 'none';
-        panel.classList.remove('live-panel--active');
-
-        // Corrección contextual post-transcripción (texto completo para mejor contexto)
+        if (panel) panel.classList.remove('live-panel--active');
         if (opt.contexto) {
           await _corregirTranscripcionConIA(output, output.value.trim(), {
-            langEl: { value: destLive },
+            langEl: { value: destinoSalidaVivo() || origenAudioVivo() },
           });
         }
-
-        jgMostrarResultadoInline(document.getElementById('output'));
-      }, 250);
-    }
+      }
+    }, 280);
   }else{
     if (typeof ttsDetener === 'function') ttsDetener();
     grabando = true; reinicios = 0; backoffMs = 200;
     fallbackWhisperPorRed = false;
-    // Solo forzar Whisper final si hay clave Groq (navegador o servidor).
-    // En móvil sin clave, usamos reconocimiento en vivo del navegador.
+    _textoProvisionalLive = '';
+    // Forzar Whisper final si hay servidor + Groq (en navegador o en Vercel).
     usarWhisperFinalGrabacion = !!(serverInfo.online && serverInfo.modelReady && tieneClaveGroqDisponible());
+    // Si el health aún no respondió, reintentar una vez antes de grabar
+    if(!usarWhisperFinalGrabacion && _isVercel){
+      try{ await checkServer(); }catch(_){}
+      usarWhisperFinalGrabacion = !!(serverInfo.online && serverInfo.modelReady && tieneClaveGroqDisponible());
+    }
     const okRec = await iniciarMediaRecorder();
     if(!okRec){
       grabando = false;
-      setEstado('No se pudo acceder al micrófono. Revisa los permisos.', false);
+      setEstado('No se pudo acceder al micrófono. Revisa los permisos del navegador (candado → Micrófono).', false);
       return;
     }
-    if (!usarWhisperAlFinal) {
+    if (!usarWhisperAlFinal && SR) {
       recog = crearRecog();
-      try{ recog.start(); arrancarUI(); }
-      catch(err){ grabando = false; pararTodo(); setEstado('No se pudo iniciar el reconocimiento.', false); }
+      try{
+        recog.start();
+        arrancarUI();
+      }catch(err){
+        // No abortar la grabación: seguimos con audio + Whisper al detener
+        console.warn('Dictado en vivo no arrancó; se usará Whisper al detener.', err);
+        usarWhisperFinalGrabacion = true;
+        fallbackWhisperPorRed = true;
+        arrancarUI();
+        setEstado('Grabando audio… al detener, Whisper transcribirá (dictado en vivo no disponible).', true);
+      }
     } else {
+      // Sin Web Speech (p. ej. algunos móviles) o modo forzado: solo audio → Whisper
+      usarWhisperFinalGrabacion = true;
       arrancarUI();
+      if(!tieneClaveGroqDisponible() && _isVercel){
+        setEstado('Grabando… Al detener se necesita clave Groq (gsk_…) si el servidor no la tiene.', true);
+      }
     }
   }
 }
 
 function pararTodo(){
+  try{ recog && recog.abort(); }catch(_){}
+  detenerWhisperPorBloques();
+  detenerMediaRecorder();
   pararUI();
+}
+
+/** ¿Se puede / se debe usar Whisper al terminar la grabación? (re-evalúa en el momento) */
+function debeTranscribirConWhisperAlDetener(){
+  if(usarWhisperAlFinal || fallbackWhisperPorRed || usarWhisperFinalGrabacion) return true;
+  return !!(serverInfo.online && serverInfo.modelReady && tieneClaveGroqDisponible());
 }
 
 function _aplicarTextoCorregido(ta, textoOriginal, textoNuevo) {
