@@ -7,16 +7,56 @@ meta:
   audience: Personas usuarias, mantenimiento y desarrollo
   goal: Explicar los cambios, verificarlos y mantener su precisión
   status: Implementado con benchmark real pendiente
-lastUpdated: 2026-07-29
+lastUpdated: 2026-08-01
 ---
 
 # Cómo funciona la captura, transcripción y traducción mejoradas
 
 Este documento registra la optimización integral de audio y lenguaje de JG Turbo. Explica qué cambió, cómo responde el sistema, qué pruebas pasaron y qué falta validar con grabaciones reales.
 
+## Grabaciones largas (4–10+ min) — fix 2026-08-01
+
+### Causa raíz del fallo con ~4 minutos en producción
+
+1. Al detener el micrófono, `acondicionarAudioParaWhisper()` convierte el audio a **WAV PCM 16 kHz mono 16-bit** (~**1,92 MB por minuto**).
+2. **4 min ≈ 7,7 MB**.
+3. En **Vercel Functions** el body de la request tiene un techo de ~**4,5 MB**. El POST a `/api/transcribe` se rechaza (**413 / payload too large**) **antes** de llegar a Groq.
+4. El límite de Groq (25 MB) y el de la API (`MAX_AUDIO_MB`) **no** eran el cuello de botella: fallaba la plataforma.
+
+### Solución (frontend)
+
+| Pieza | Comportamiento |
+|---|---|
+| `_decodificarYAcondicionar` | Remuestrea, recorta silencio, normaliza; devuelve muestras + WAV |
+| `_audioPuntoCorte` | Valle RMS en **±6 s** alrededor del corte (no partir palabras) |
+| `_segmentarMuestrasEnWav` | Tramos de **~100 s** (~3,2 MB), solape **0,4 s** |
+| `prepararSegmentosTranscripcion` | 1 parte si WAV ≤ techo; si no, N partes |
+| Techo nube | `AUDIO_LIMITE_SUBIDA_NUBE` = **3,6 MB** (bajo 4,5 MB de Vercel) |
+| Techo local | `(maxMb-1)` ≈ 49 MB → 10–15 min suelen ir **enteros** (más rápido) |
+| `transcribirAudio` | Cada parte: timeout propio + **1 reintento** (1,5 s). Si falla parte 2+: conserva texto ya hecho |
+| UI | «Hasta 15 min en la nube»; progreso «parte X de Y» (y «reintento» si aplica) |
+
+Límites prácticos:
+
+- **Partes automáticas** de ~100 s en la nube (no cortar a mano).
+- **15 min** acondicionables en el navegador (`AUDIO_MAX_SEG = 900`).
+- **~25 MB** por trozo hacia Groq.
+
+### Evidencia medida (prod, 2026-08-01)
+
+| Audio sintético | Tamaño | Respuesta |
+|---|---:|---|
+| 1 min WAV 16 kHz | 1,83 MB | **HTTP 200** |
+| 5 min WAV 16 kHz | 9,16 MB | **HTTP 413** (plataforma, sin llegar a la app) |
+
+### Pruebas
+
+- `backend/tests/test_segmentacion_upload.py` — techos y conteo (4/5/10 min, 100 s).
+- Manual: grabar ≥4 min en https://jg-turbo.vercel.app → «parte 1 de N…».
+
 ## Estado de la implementación
 
-La aplicación ya incluye captura reforzada, transcripción final con Whisper, contexto técnico, traducción bidireccional y validación independiente. El benchmark con 100 audios reales sigue pendiente porque el repositorio no contiene grabaciones autorizadas ni referencias humanas.
+La aplicación ya incluye captura reforzada, transcripción final con Whisper, contexto técnico, traducción bidireccional, **transcripción por segmentos en la nube** y validación independiente. El benchmark con 100 audios reales sigue pendiente porque el repositorio no contiene grabaciones autorizadas ni referencias humanas.
 
 | Área | Estado | Evidencia |
 |---|---|---|
@@ -64,11 +104,51 @@ La aplicación pide estas condiciones mediante `getUserMedia`:
 - **Canal**: mono
 - **Frecuencia de muestreo**: mínimo 16 kHz e ideal 48 kHz, cuando el navegador admite la restricción
 - **Profundidad de muestra**: mínimo e ideal 16 bits, cuando está disponible
-- **Cancelación de eco**: activa
-- **Supresión de ruido**: activa
+- **Cancelación de eco**: desactivada
+- **Supresión de ruido**: desactivada
 - **Control automático de ganancia**: activo
 
+> **Por qué el eco y el ruido van desactivados** (cambiado el 2026-07-30). Esos dos filtros del
+> navegador están afinados para llamadas telefónicas, no para dictado: recortan las frecuencias
+> altas y se comen las consonantes sordas del español (/s/, /f/, /x/), que es justo lo que
+> Whisper necesita para distinguir palabras. Con un micrófono cerca de la boca, el audio crudo
+> da mejor resultado. La limpieza que sí ayuda se hace después, en la propia app (ver más abajo).
+
 Si el navegador rechaza una restricción avanzada, la aplicación repite la solicitud con una configuración compatible. Este segundo intento mantiene audio mono y los controles acústicos básicos.
+
+### Acondicionamiento antes de enviar (añadido el 2026-07-30)
+
+Whisper trabaja internamente a 16 kHz mono, así que la app prepara el audio antes de subirlo
+en lugar de mandar la grabación tal cual. La función `acondicionarAudioParaWhisper()` en
+`index.html`:
+
+1. **Remuestrea a 16 kHz mono** con `OfflineAudioContext`. Es el formato que el modelo va a
+   usar de todas formas, y de paso el archivo pesa bastante menos.
+2. **Recorta el silencio** del principio y del final. El umbral no es fijo: estima el piso de
+   ruido con el percentil 20 de ventanas RMS de 20 ms, de modo que se adapta a un cuarto
+   silencioso o a una calle ruidosa. Deja 150 ms de aire a cada lado para no cortar la primera
+   consonante ni la última sílaba.
+3. **Empareja el volumen**: lleva el pico a −1 dBFS, con un tope de ganancia de ×8 para no
+   amplificar el ruido de fondo de una grabación casi muda.
+4. **Serializa a WAV PCM de 16 bits**, sin pérdida.
+
+Los silencios largos son el disparador principal de las frases inventadas de Whisper
+(«gracias por ver el video», «subtítulos por Amara.org»). El filtro anti-alucinación del
+servidor sigue existiendo, pero es mejor no generarlas.
+
+**Salvaguardas.** Si el formato no se puede decodificar, se envía el audio original sin tocar.
+El techo de acondicionamiento es **15 min** / **20 MB** de origen; más allá se intenta el
+original. Nunca se pierde una grabación por culpa de este paso. Tras acondicionar, si el WAV
+no cabe en un solo POST a Vercel (techo 3,6 MB), se **parte en tramos de ~100 s** (ver
+«Grabaciones largas»).
+
+**Medición** con una grabación sintética de 1,5 s de silencio + 2 s de voz floja + 1,5 s de
+silencio: 5 s → 2,3 s de duración, ganancia ×8 y 468 KB → 72 KB (−85 % de peso).
+
+**Sobre el selector «Calidad del micrófono»** (64 / 96 / 128 kbps): afecta al peso de la
+grabación, no a la precisión. Opus mono de voz ya es transparente alrededor de 48 kbps, y
+además el audio se reconvierte a 16 kHz antes de enviarse. El texto de ayuda en la interfaz
+se corrigió para no prometer una mejora de precisión que no ocurre.
 
 ### Verificación de la captura real
 
@@ -205,6 +285,19 @@ La API devuelve:
 Una anomalía crítica cambia `status` a `alert` y activa `requires_confirmation`. La interfaz solicita confirmación antes de reemplazar texto.
 
 Una puntuación de 100 significa que pasaron las reglas implementadas. No certifica equivalencia semántica perfecta ni reemplaza una revisión humana especializada.
+
+### Corrección adicional del flujo de traducción · 2026-08-01
+
+La revisión completa encontró dos fallos que no cubrían las pruebas anteriores:
+
+- El backend local reutilizaba como resultado el trozo original cuando MyMemory fallaba; una traducción larga podía quedar mezclada en inglés y español.
+- La interfaz conservaba una alerta de integridad después de cambiar o borrar el texto, aunque ya no describiera el contenido actual.
+
+La corrección aplica la misma regla en local y en Vercel: cada trozo debe traducirse o la operación falla de forma visible. También limpia marcas SRT/VTT y horas de YouTube antes de traducir, divide textos largos para la IA, elimina preámbulos como «Here is the translation:» y rechaza respuestas vacías. En el panel, la alerta se invalida al editar, intercambiar idiomas o limpiar.
+
+La prueba de regresión confirma que un fallo de MyMemory ya no devuelve el original como si fuera traducción. El texto original se conserva para que la persona pueda reintentar, pero nunca se presenta como resultado traducido.
+
+El cambio quedó publicado en producción con deployment `dpl_7x7c2yKjhyzFV98wF3s83huPoZ8B` (Ready) y alias `https://jg-turbo.vercel.app`.
 
 ## Mejoras en la interfaz
 

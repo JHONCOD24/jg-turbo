@@ -44,7 +44,7 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_output_lang` (idioma del texto: same / es / en / fr / pt / de)
 - `jg_tts_gender` (female / male)
 - `jg_tts_locale` (auto / es-CO / es-MX / es-AR / es-US; otros BCP-47 quedan para voces del navegador)
-- `jg_tts_bilingual` (auto / off)
+- `jg_tts_bilingual` (unified / auto / off — por defecto `unified`; el valor antiguo `auto` migra a `unified`)
 - `jg_tts_tone` (neutral / warm / energetic)
 - `jg_tts_rate` (0.8–2.0)
 - `jg_tts_engine` (neural / browser)
@@ -88,7 +88,7 @@ En **Configuración** hay:
 2. `npx vercel --prod --yes` desde `vercel_deploy/`
 3. Comprobar https://jg-turbo.vercel.app
 
-Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md` (**v2.6.3** — Gonzalo CO + Andrew EN, force-EN, prep pronunciación paritaria; 2026-07-23/24). Las versiones **2.6.x no** añaden ni renombran claves `jg_tts_*` (salvo `jg_tts_bilingual` introducida en 2.6 base).
+Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md` (**v2.7.0** — «Misma voz» multilingüe por defecto: Ava/Andrew leen español fluido y dicen el inglés con la misma voz; 2026-08-09. Previo: v2.6.3 — Gonzalo CO + Andrew EN, force-EN, prep pronunciación paritaria; 2026-07-23/24). **v2.7.0 no** añade ni renombran claves `jg_tts_*`: `jg_tts_bilingual` ahora acepta `unified | auto | off` y el valor antiguo `auto` migra a `unified` al leerlo.
 
 ## Checklist antes de un deploy
 

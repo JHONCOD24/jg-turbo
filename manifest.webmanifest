@@ -1,15 +1,19 @@
 {
   "name": "JG Turbo · Voz a texto",
   "short_name": "JG Turbo",
-  "description": "Transcribe notas de voz, audios de WhatsApp y archivos con Whisper.",
+  "description": "Transcribe notas de voz, audios de WhatsApp y archivos con Whisper. App instalable en escritorio y móvil.",
+  "id": "/",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "display_override": ["standalone", "window-controls-overlay", "browser"],
+  "orientation": "any",
   "background_color": "#0B0D12",
   "theme_color": "#0B0D12",
   "lang": "es",
+  "dir": "ltr",
   "categories": ["productivity", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/apple-touch-icon.png",

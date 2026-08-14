@@ -6,7 +6,7 @@ meta:
   category: Operación
   audience: Mantenimiento y desarrollo
   goal: Sincronizar, validar y desplegar la aplicación sin perder configuración
-lastUpdated: 2026-07-29
+lastUpdated: 2026-08-02
 ---
 
 # Cómo desplegar JG Turbo en Vercel
@@ -16,7 +16,80 @@ Esta guía explica la arquitectura productiva, los archivos obligatorios y el pr
 
 ## Política de despliegue
 
-**Siempre desplegar en Vercel** al cerrar una mejora de la aplicación. No entregar solo el cambio local. Tras sincronizar `vercel_deploy/`, ejecutar `npx vercel --prod --yes`.
+**Siempre desplegar en Vercel** al cerrar una mejora de la aplicación. No entregar solo el cambio local. Tras sincronizar `vercel_deploy/`, desplegar **solo** el contenido de esa carpeta al proyecto **`jg-turbo`**.
+
+```bash
+# Forma segura (recomendada):
+npx vercel --prod --yes --cwd vercel_deploy
+
+# Equivalente:
+cd vercel_deploy
+npx vercel link --project jg-turbo --yes   # si hace falta
+rm -f .env.local
+npx vercel --prod --yes
+```
+
+**Nunca** desde la raíz del monorepo (`JG Turbo/`): sube ~1000 archivos y deja **404** en https://jg-turbo.vercel.app.
+
+### Estado real del repositorio
+
+Antes de desplegar conviene saber esto, porque no es evidente:
+
+- **Git puede ir por detrás de producción.** Varias mejoras (UX, audio, YouTube,
+  TTS UI) se publicaron vía CLI desde `vercel_deploy/` sin commit intermedio.
+  Comparar marcadores del HTML servido vs local antes de lanzar.
+- **Últimas entregas UX (2026-08-01)** en prod `jg-turbo`:
+  - v3.1 «Más acciones» móvil → deploy `H3wGeFciRqyyYRMnPwgE974X55yy`
+  - v3.2 franja TTS horizontal → deploy `CD7GVazANst7gZCovnGZRrYAq1A3`
+  - Detalle: `CAMBIOS_UX.md` · TTS UI: `CAMBIOS_TTS.md` §0
+- **Documentar siempre** el cambio en el MD del feature **antes o al cerrar** el
+  deploy (pedido, solución, pruebas, ID de deployment).
+- La integración MCP de Vercel puede no alcanzar este proyecto; usar la CLI.
+
+### ⚠️ Corrección importante: `vercel_deploy/` NO publica en producción
+
+El procedimiento que estaba documentado (`cd vercel_deploy` →
+`npx vercel --prod --yes`) **publica en un proyecto distinto al de producción**.
+Comprobado el 31 de julio de 2026: ese comando creó
+`dpl_B1e8dWsiaDUgU8sXRzkMEk1FT6v2` en el proyecto **`vercel_deploy`**, y
+https://jg-turbo.vercel.app siguió sirviendo la versión anterior.
+
+Los dominios pertenecen a proyectos diferentes:
+
+| Proyecto Vercel | Dominio |
+|---|---|
+| `jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`) | **https://jg-turbo.vercel.app** ← producción real |
+| `vercel_deploy` (`prj_1lNARR6bNqHH67YDPYQbtVeS6E90`) | `verceldeploy-*.vercel.app` (además responde 302 por Deployment Protection) |
+
+**Procedimiento correcto:** desplegar el contenido de `vercel_deploy/` desde una
+carpeta vinculada al proyecto `jg-turbo` (o con `--cwd`).
+
+```bash
+# Opción A — sin cambiar de directorio (evita errores de cwd en agentes):
+npx vercel --prod --yes --cwd vercel_deploy
+
+# Opción B — clásico:
+cd vercel_deploy
+npx vercel link --project jg-turbo --yes   # una sola vez; corrige la vinculación
+rm -f .env.local                           # el link genera un token OIDC: no subirlo
+npx vercel --prod --yes
+```
+
+Comprueba que el CLI diga **«Downloading N deployment files»** con N bajo
+(decenas, no miles). Si ves ~1000 archivos, **abortaste mal el cwd**.
+
+Después, **verificar siempre contra el dominio real**, no contra la URL que
+imprime el CLI:
+
+```bash
+# PowerShell
+(Invoke-WebRequest https://jg-turbo.vercel.app -UseBasicParsing).Content.Contains('btnYtPasteClip')
+(Invoke-WebRequest https://jg-turbo.vercel.app/api/health -UseBasicParsing).Content
+```
+
+Pendiente recomendado: commitear el árbol de trabajo para que git deje de estar
+desfasado respecto a lo que ya está publicado, y decidir si `vercel_deploy/` se
+revincula de forma permanente a `jg-turbo` o se conserva como entorno aparte.
 
 Feature TTS **v2.6.3** (Gonzalo CO + Andrew EN, force-EN, prep pronunciación paritaria mujer/hombre, 2026-07-23/24): documentada de forma completa en `CAMBIOS_TTS.md`. Requiere sincronizar al menos `index.html`, `api/index.py` y `api/requirements.txt` (y docs: `CAMBIOS_TTS.md`, `FICHA_TECNICA.md`, `Agents.md`, `CONFIG_PERSISTENTE.md`).
 
@@ -44,7 +117,10 @@ La carpeta `vercel_deploy/` debe contener estas copias actualizadas:
 | `Spech to text App/index.html` | `vercel_deploy/index.html` |
 | `Spech to text App/api/index.py` | `vercel_deploy/api/index.py` |
 | `Spech to text App/api/calidad_linguistica.py` | `vercel_deploy/api/calidad_linguistica.py` |
+| `Spech to text App/api/youtube_subs.py` | `vercel_deploy/api/youtube_subs.py` |
+| `Spech to text App/api/supadata.py` | `vercel_deploy/api/supadata.py` |
 | `Spech to text App/api/requirements.txt` | `vercel_deploy/api/requirements.txt` |
+| `Spech to text App/sw.js` | `vercel_deploy/sw.js` |
 | `Spech to text App/vercel.json` | `vercel_deploy/vercel.json` |
 
 Copia también iconos o imágenes cuando cambien. No copies el corpus privado, el entorno virtual ni archivos `.env`.
@@ -80,6 +156,10 @@ Variables admitidas en Vercel:
 
 | Variable | Uso | Valor predeterminado |
 |---|---|---|
+| `SUPADATA_API_KEY` | **Transcripción automática de YouTube.** Sin ella la app funciona, pero YouTube vuelve a exigir pegado manual | Sin valor |
+| `SUPADATA_BASE_URL` | Solo si Supadata cambia de dominio | `https://api.supadata.ai/v1` |
+| `SUPADATA_TIMEOUT_S` | Tiempo máximo por petición a Supadata | `30` |
+| `SUPADATA_ESPERA_SERVIDOR_S` | Cuánto espera la función un video largo antes de delegar en el navegador | `22` |
 | `GROQ_API_KEY` | Clave de transcripción compartida (**obligatoria** para mic/archivo en todos los dispositivos) | Sin valor |
 | `GROQ_ASR_MODEL` | Modelo de transcripción | `whisper-large-v3` |
 | `GROQ_TIMEOUT_S` | Tiempo máximo de Groq | Definido en la API |
@@ -96,9 +176,16 @@ Ejecuta desde la raíz `JG Turbo`:
 Copy-Item 'Spech to text App\index.html' 'vercel_deploy\index.html' -Force
 Copy-Item 'Spech to text App\api\index.py' 'vercel_deploy\api\index.py' -Force
 Copy-Item 'Spech to text App\api\calidad_linguistica.py' 'vercel_deploy\api\calidad_linguistica.py' -Force
+Copy-Item 'Spech to text App\api\youtube_subs.py' 'vercel_deploy\api\youtube_subs.py' -Force
+Copy-Item 'Spech to text App\api\supadata.py' 'vercel_deploy\api\supadata.py' -Force
 Copy-Item 'Spech to text App\api\requirements.txt' 'vercel_deploy\api\requirements.txt' -Force
 Copy-Item 'Spech to text App\vercel.json' 'vercel_deploy\vercel.json' -Force
 ```
+
+> **Variables de entorno nuevas:** Vercel solo se las entrega a la función en el
+> **siguiente** despliegue. Si añades `SUPADATA_API_KEY` en el panel, hay que
+> volver a desplegar para que surta efecto. Verifícalo con
+> `GET /api/health` → `youtube_auto: true`.
 
 Compara los archivos antes de continuar:
 
@@ -166,6 +253,124 @@ No borres `localStorage` para recuperar una versión. El código debe adaptarse 
 ## Registro de esta actualización
 
 Esta documentación reemplaza referencias antiguas a `whisper-large-v3-turbo`. También incorpora el módulo lingüístico requerido por la API y el TTS neural bilingüe **v2.6.3**.
+
+### UX móvil y opciones de dictado v3.5 (2026-08-02) — actual
+
+- **Dominio**: [JG Turbo](https://jg-turbo.vercel.app)
+- **Proyecto**: `jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`)
+- **Deployment**: `dpl_3ox2F8Pgk5m1JS21MGGQBHxBM4ij` · **READY** · production
+- **Pedido**: conservar el botón de grabar a mano en móviles con textos largos, aclarar las opciones de dictado, corregir el desborde de sensibilidad y revisar Archivo, idiomas y YouTube sin alterar el diseño de escritorio.
+- **Archivos modificados**: `index.html`, `CAMBIOS_UX.md`, `DOCUMENTACION_DESPLIEGUE.md`, `FICHA_TECNICA.md`.
+- **Archivos de backend sin cambios**: `api/index.py`, `api/supadata.py`, `api/calidad_linguistica.py`, `backend/app.py` y `backend/calidad_linguistica.py`.
+- **Cambios funcionales**:
+  - La vista previa en vivo del micrófono tiene altura máxima y scroll interno en móvil.
+  - El botón `#recBtn` pasa a ser flotante solo durante la grabación móvil.
+  - La animación del panel se desactiva durante la grabación para que `position: fixed` use el viewport real.
+  - La fila `#sensSlider` se reorganiza en móvil y ya no sale de la tarjeta.
+  - Las seis opciones de `data-opt` se presentan en dos columnas con etiquetas cortas y tooltips completos.
+  - El modo código automático sincroniza también `aria-checked` y el resumen de opciones.
+  - `#btnCheatInline` abre el modal de comandos de voz en móvil.
+- **Calidad preservada**: audio acondicionado, segmentos de aproximadamente 100 segundos, reintentos por parte, `whisper-large-v3`, glosario y corrección contextual opcional.
+- **Pruebas**:
+  - JavaScript embebido de `index.html`: sintaxis válida con `new Function`.
+  - Playwright móvil 360×732: sin overflow horizontal, slider dentro de la tarjeta, rejilla de opciones, interruptor y modal de comandos correctos.
+  - Playwright escritorio 1280×900: botón en posición normal y sin estilos móviles.
+  - `test_segmentacion_upload.py`: 5 passed.
+  - `test_calidad_linguistica.py`: 4 passed.
+  - `test_supadata_youtube.py`: 25 passed.
+  - `test_transcribe.py`: timeout del entorno local al cargar el stack; pendiente de una ejecución en un entorno de transcripción estable.
+- **Sincronización**: `Spech to text App/index.html` y documentación copiadas a `vercel_deploy/`. Los hashes de `index.html` y `CAMBIOS_UX.md` coinciden entre ambas carpetas.
+- **Verificación productiva**: alias `https://jg-turbo.vercel.app` responde con la nueva interfaz; `/api/health` devuelve `status: ok`, `model_ready: true`, `groq_configured: true` y `youtube_auto: true`.
+
+### Traducción de textos largos (2026-08-01) — actual
+
+- **Dominio**: [JG Turbo](https://jg-turbo.vercel.app)
+- **Qué se publicó** (detalle completo en `CAMBIOS_TRADUCCION.md`):
+  - **Traducir textos de cualquier tamaño.** El navegador trocea en bloques de
+    6 000 caracteres y hace varias peticiones cortas (2 en paralelo), con progreso
+    «Traduciendo… N de M» y reintento automático.
+  - `TranslateRequest.prefer_fast` pasa a `Optional[bool]`: un `false` explícito
+    ahora significa **calidad (IA primero)**; antes se ignoraba pasando de 1200
+    caracteres y toda transcripción larga salía por MyMemory.
+  - **Validador de cifras sin falsas alarmas**: dejaba traducciones correctas
+    marcadas como «Integridad 6/100» con un popup de confirmación.
+  - Service Worker **`jg-turbo-shell-v10`** (antes v9).
+- **Archivos**: `index.html`, `sw.js`, `api/index.py`, `api/calidad_linguistica.py`
+  (y su copia `backend/calidad_linguistica.py`).
+- **El fallo que se corrigió**: 39 732 caracteres → `HTTP 504
+  FUNCTION_INVOCATION_TIMEOUT` a los 60,4 s, con cero texto. Vercel corta la
+  función a los 60 s y el tiempo crecía con el texto.
+- **Verificado en producción**: los 7 bloques del mismo texto → **200 OK**,
+  ninguno por encima de 25 s, **7 227 de 7 277 palabras (99,3 %)**, sin bloques
+  vacíos ni mezcla de idiomas.
+
+### YouTube automático con Supadata (2026-08-01) — anterior
+
+- **Dominio**: [JG Turbo](https://jg-turbo.vercel.app)
+- **Deployment**: `dpl_3aJ8j4FVq5AcCgNPDgF2MyK3Dvjo` · `jg-turbo-iytq9t8lh-…` · **READY** · production
+- **Deployment previo del mismo día**: `dpl_34yXmSrubcBY7zeSBadFzSnNLxrh` · `jg-turbo-pf0ek3413-…`
+- **Proyecto**: `jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`)
+- **Qué se publicó** (detalle en `CAMBIOS_YOUTUBE.md`):
+  - **La transcripción de YouTube vuelve a ser automática.** Vía principal: **Supadata**
+    (`api/supadata.py`, nuevo). Cadena: gratis → Supadata → yt-dlp + Whisper → pegado manual.
+  - **Endpoint nuevo `GET /api/youtube-job`** para videos de más de 20 minutos
+    (`POST /api/youtube` puede responder **`202`** con `job_id`).
+  - `GET /api/health` añade **`youtube_auto`** (booleano; nunca la clave).
+  - `POST /api/youtube` responde **`402`** cuando la cuenta de Supadata se queda sin créditos.
+  - El pegado manual pasa a **red de seguridad** (plegado, sin el rótulo «siempre funciona»).
+  - Service Worker **`jg-turbo-shell-v9`** (antes v8).
+- **Archivo nuevo a sincronizar**: `api/supadata.py` (y `api/youtube_subs.py`, que faltaba en la tabla).
+- **Variable nueva**: `SUPADATA_API_KEY`. **Sin ella la app no se rompe**: se comporta
+  como antes y `/api/health` responde `youtube_auto: false`.
+- **Validado antes de desplegar**: pytest **46 passed, 2 skipped, 0 failed** ·
+  `py_compile` OK · `node --check` del JS embebido OK · 11 pares de archivos con hash idéntico ·
+  búsqueda de secretos (`sd_`, `sk-`, `gsk_`, `AIza`) sin coincidencias.
+- **Verificado en prod** (dominio real, no la URL del CLI): HTTP 200 · 482 105 bytes ·
+  marcadores `jgEsperarTrabajoYoutube`, `youtube-job?id=`, `ytPasteInput` presentes ·
+  «Pegar transcripción de YouTube (siempre funciona)» **ausente** · `sw.js` → `jg-turbo-shell-v9` ·
+  `/api/health` ok · **sin regresiones** en `/api/translate` (integridad 100),
+  `/api/tts-voices` (v2.6.3) y `/api/session-config`.
+- **Pendiente**: ejecutar las 4 pruebas de video (§ 8.4 de `CAMBIOS_YOUTUBE.md`); requiere
+  `SUPADATA_API_KEY` en Vercel **y un nuevo despliegue** para que la función la reciba.
+
+### Corrección del flujo de traducción (2026-08-01)
+
+- **Pedido**: la traducción mostraba error o mezclaba el original con el resultado, especialmente al usar el backend local o textos largos.
+- **Solución**: MyMemory ahora trabaja con política todo-o-nada; se limpian marcas de tiempo, se trocean textos largos, se eliminan preámbulos de IA y se rechazan respuestas vacías. La interfaz borra alertas obsoletas al editar, cambiar idiomas o limpiar.
+- **Pruebas previas**: `python -m pytest backend\tests -q` → **57 passed, 2 skipped**; `py_compile` OK; `node --check` OK; prueba de navegador de limpieza de alerta OK.
+- **Archivos**: `index.html`, `api/index.py`, `backend/app.py`, `backend/tests/test_translate_completo.py`, `backend/tests/test_translate_local.py`.
+- **Deploy**: `dpl_7x7c2yKjhyzFV98wF3s83huPoZ8B` · **READY** · alias `https://jg-turbo.vercel.app`.
+
+### Bookmarklet eliminado + docs (2026-07-31) — anterior
+
+- **Dominio**: [JG Turbo](https://jg-turbo.vercel.app)
+- **Deployment**: `dpl_7rJqUX9CTxVgbLgb8bZiGS5wTVCg` · inspect `7rJqUX9CTxVgbLgb8bZiGS5wTVCg` · `jg-turbo-b0f347cc2-…` · **READY** · production
+- **Proyecto**: `jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`) · **44** archivos (no ~1000)
+- **Qué se publicó** (detalle en `CAMBIOS_YOUTUBE.md`):
+  - **Eliminado por completo el bookmarklet** «Arrastrar a favoritos» (HTML + CSS + JS): confundía al usuario y era redundante con «Pegar del portapapeles».
+  - Vía única y clara: copiar en YouTube → **Pegar del portapapeles** → traducir / escuchar / descargar.
+  - Service Worker **`jg-turbo-shell-v8`** (antes v7): refresca el shell PWA.
+- **Verificado en prod** (dominio real, no la URL temporal del CLI):
+  - `btnYtPasteClip` presente · `ytBookmarklet` / `yt-manual-advanced` / «Arrastrar a favoritos» **ausentes**
+  - `index.html` = 476 890 bytes · `sw.js` → `jg-turbo-shell-v8` · `GET /api/health` → `status: ok`, Groq listo
+- **Continuidad**: parte del trabajo previo (portapapeles + fix scroll, ya en prod); esta entrega solo retira el bookmarklet.
+
+### YouTube UX pegar + scroll (2026-07-31) — anterior
+
+- **Dominio**: [JG Turbo](https://jg-turbo.vercel.app)
+- **Inspect / build (actual)**: `HpXBnyKNvCKHbS2NYtWvNSD8aRpP` · `jg-turbo-f00desh03-…` · Ready  
+- **Inspect / build (código UX)**: `SDxcNRfUS6tTEZDspBv3Ap8Lciwq` · `jg-turbo-o2inaftkp-…` · Ready  
+
+- **Qué se publicó** (detalle en `CAMBIOS_YOUTUBE.md`):
+  - Flujo **Pegar del portapapeles** (sin JavaScript confuso a la vista)
+  - Guía al **Abrir en YouTube**; bookmarklet solo como atajo opcional
+  - Fix scroll: `overflow-y: auto` + ocultar bloque pegar con resultados
+  - SW **`jg-turbo-shell-v7`**
+- **Marcadores en prod**: `btnYtPasteClip`, `ytGuide`, `jgAplicarTextoPegadoYt`, `yt-manual-advanced`
+- **Tamaño HTML alineado**: local = deploy = prod = **480 421** bytes
+- **API**: `/api/health` → ok · Groq listo
+- **TTS producto**: sigue **v2.6.3** (no tocado)
+- **Lección deploy**: un deploy desde la raíz del monorepo dejó 404; se recuperó con `--cwd vercel_deploy` al proyecto `jg-turbo`
 
 ### Precisión de audio (referencia anterior)
 

@@ -39,6 +39,16 @@ def load_env_file():
 
 load_env_file()
 
+# Supadata (vía automática de YouTube). Vive en api/ para no duplicarlo: es el
+# mismo cliente que usa la función de Vercel. Si no está, el backend local
+# simplemente se queda sin respaldo y sigue con yt-dlp.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+try:
+    from api import supadata
+except Exception as _exc_supadata:  # pragma: no cover - entorno local incompleto
+    supadata = None
+    print(f"[AVISO] Supadata no disponible en local: {_exc_supadata}")
+
 # Buscar ffmpeg en WinGet o rutas comunes y agregarlo al PATH
 def setup_ffmpeg_path():
     if shutil.which("ffmpeg"):
@@ -109,7 +119,28 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
-from calidad_linguistica import construir_prompt_asr, validar_traduccion
+from calidad_linguistica import (
+    construir_prompt_asr,
+    validar_texto_transformado,
+    validar_traduccion,
+)
+
+
+def _aviso_integridad(validacion: dict):
+    """Mensaje corto en español si el resultado parece haber perdido contenido."""
+    if not validacion:
+        return None
+    codigos = {p.get("code") for p in validacion.get("issues") or []}
+    if "possible_omission" in codigos or "empty_translation" in codigos:
+        return (
+            "El resultado quedó bastante más corto que tu texto original. "
+            "Revísalo antes de reemplazarlo: puede haberse cortado."
+        )
+    if {"missing_numbers", "missing_urls", "missing_emails"} & codigos:
+        return "Faltan cifras, enlaces o correos que sí estaban en tu texto. Revisa el resultado."
+    if "possible_invention" in codigos or "invented_numbers" in codigos:
+        return "El resultado agregó contenido que no estaba en tu texto. Revísalo antes de usarlo."
+    return None
 
 # ── Configuración ─────────────────────────────────────────────────────────────
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base").lower()
@@ -147,7 +178,56 @@ def _list_gemini_models(api_key: str):
     except Exception:
         return []
 
-def _call_gemini(api_key: str, prompt: str, model: str = None, temperature: float = 0.3) -> str:
+IA_MAX_TOKENS_TECHO = int(os.getenv("IA_MAX_TOKENS", "8192"))
+IA_CHUNK_CHARS = int(os.getenv("IA_CHUNK_CHARS", "3500"))
+# Modelo de Claude por defecto (endpoint /v1/messages).
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+
+
+def _max_tokens_ia(texto: str, factor: float = 1.8, minimo: int = 1024) -> int:
+    """Presupuesto de salida proporcional a la entrada (~3.2 caracteres/token)."""
+    aprox = int(len(texto or "") / 3.2 * factor) + 256
+    return max(minimo, min(IA_MAX_TOKENS_TECHO, aprox))
+
+
+def _dividir_en_bloques_ia(texto: str, limite: int = IA_CHUNK_CHARS) -> list:
+    """Divide por párrafos acumulando bloques bajo el límite de caracteres."""
+    texto = (texto or "").strip()
+    if not texto:
+        return []
+    if len(texto) <= limite:
+        return [texto]
+    bloques, actual = [], ""
+    for parrafo in re.split(r"\n\s*\n", texto):
+        parrafo = parrafo.strip("\n")
+        if not parrafo.strip():
+            continue
+        if len(parrafo) > limite:
+            if actual:
+                bloques.append(actual)
+                actual = ""
+            trozo = ""
+            for oracion in re.split(r"(?<=[.!?…])\s+", parrafo):
+                if trozo and len(trozo) + len(oracion) + 1 > limite:
+                    bloques.append(trozo.strip())
+                    trozo = oracion
+                else:
+                    trozo = f"{trozo} {oracion}".strip() if trozo else oracion
+            if trozo.strip():
+                bloques.append(trozo.strip())
+            continue
+        if actual and len(actual) + len(parrafo) + 2 > limite:
+            bloques.append(actual)
+            actual = parrafo
+        else:
+            actual = f"{actual}\n\n{parrafo}" if actual else parrafo
+    if actual.strip():
+        bloques.append(actual)
+    return bloques or [texto]
+
+
+def _call_gemini(api_key: str, prompt: str, model: str = None, temperature: float = 0.3,
+                 max_tokens: int = None) -> str:
     """Llama a Gemini usando REST. Auto-descubre modelos si el configurado falla."""
     import json as _json
     import urllib.request as _ur
@@ -174,7 +254,10 @@ def _call_gemini(api_key: str, prompt: str, model: str = None, temperature: floa
                 "generationConfig": {
                     "temperature": temperature,
                     "topP": 0.8,
-                    "topK": 40
+                    "topK": 40,
+                    # Sin maxOutputTokens Gemini corta en su default y se
+                    # pierde texto del usuario sin avisar.
+                    "maxOutputTokens": int(max_tokens or IA_MAX_TOKENS_TECHO),
                 }
             }).encode()
             http_req = _ur.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
@@ -243,7 +326,7 @@ def _call_gemini(api_key: str, prompt: str, model: str = None, temperature: floa
     raise Exception("Gemini no disponible. Ningún modelo funcionó con tu clave.")
 
 
-def _call_openrouter(api_key: str, prompt: str, model: str = None) -> str:
+def _call_openrouter(api_key: str, prompt: str, model: str = None, max_tokens: int = None) -> str:
     """Llama a OpenRouter usando REST."""
     import json as _json
     import urllib.request as _ur
@@ -255,6 +338,7 @@ def _call_openrouter(api_key: str, prompt: str, model: str = None) -> str:
         "model": model_name,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.2,
+        "max_tokens": int(max_tokens or IA_MAX_TOKENS_TECHO),
     }).encode()
     
     headers = {
@@ -624,7 +708,6 @@ _CORRECCIONES_TECNICAS = [
     (re.compile(r"\b(agile|ayail)\b", re.IGNORECASE), "Agile"),
     (re.compile(r"\b(scrum|escrot|escrum)\b", re.IGNORECASE), "Scrum"),
     (re.compile(r"\b(llm|llms|l ?l ?m|l ?l ?ms)\b", re.IGNORECASE), "LLM"),
-    (re.compile(r"\b(prompt|pront|promts|pronts)\b", re.IGNORECASE), "prompt"),
     (re.compile(r"\bme llueves\b", re.IGNORECASE), "me ayudes"),
     (re.compile(r"\boguito\b", re.IGNORECASE), "loguito"),
     (re.compile(r"\bfabicon\b", re.IGNORECASE), "favicon"),
@@ -663,6 +746,23 @@ _REP_BUCLE_PALABRA = re.compile(r"\b(\w+)(?:[\s,.;]+?\1){3,}\b", re.IGNORECASE)
 _REP_BUCLE_PAR = re.compile(r"\b(\w+[\s,.;]+?\w+)(?:[\s,.;]+?\1){2,}\b", re.IGNORECASE)
 
 
+# "prompt" se corrige aparte: forzar minúscula rompía el inicio de frase
+# («Pront claro» → «. prompt claro»).
+_RE_PROMPT_ASR = re.compile(r"\b(prompt|pront|promt)(s)?\b", re.IGNORECASE)
+
+
+def _normalizar_prompt(texto: str) -> str:
+    """Escribe «prompt» bien, respetando la mayúscula si abre la frase."""
+    def reemplazo(m):
+        base = "prompt" + (m.group(2).lower() if m.group(2) else "")
+        anterior = texto[: m.start()].rstrip()
+        if not anterior or anterior[-1] in ".!?…:¿¡\n":
+            return base.capitalize()
+        return base
+
+    return _RE_PROMPT_ASR.sub(reemplazo, texto)
+
+
 def corregir_terminos_tecnicos(texto: str) -> str:
     """Post-procesamiento del texto transcrito con patrones pre-compilados (5-10x más
     rápido que compilar regex en cada llamada)."""
@@ -675,7 +775,7 @@ def corregir_terminos_tecnicos(texto: str) -> str:
     for patron, reemplazo in _CORRECCIONES_TECNICAS:
         texto = patron.sub(reemplazo, texto)
 
-    return texto
+    return _normalizar_prompt(texto)
 
 # ── Anti-alucinación de Whisper ─────────────────────────────────────────────────
 # Frases que Whisper "inventa" típicamente sobre silencios, música o ruido de fondo.
@@ -705,12 +805,19 @@ def _confianza_segmento(seg) -> float:
     conf = (logprob + 1.5) / 1.4
     return round(max(0.0, min(1.0, conf)), 3)
 
+def _es_segmento_vacio(seg) -> bool:
+    """Un segmento sin texto no es una alucinación: simplemente no aporta nada."""
+    return not (getattr(seg, "text", "") or "").strip()
+
+
 def _es_alucinacion(seg) -> bool:
     """Detecta segmentos probablemente alucinados por Whisper (audio difuso o silencio).
     Balanceado: descarta basura clara, marca como dudosa la zona gris."""
     texto = (getattr(seg, "text", "") or "").strip().lower()
     if not texto:
-        return True
+        # Antes devolvía True y un solo hueco de silencio ya disparaba
+        # "⚠️ Audio poco claro" en audios perfectos.
+        return False
     no_speech = getattr(seg, "no_speech_prob", 0.0)
     logprob = getattr(seg, "avg_logprob", 0.0)
     comp = getattr(seg, "compression_ratio", 1.0)
@@ -729,6 +836,14 @@ def _es_alucinacion(seg) -> bool:
         if re.search(patron, texto):
             return True
     return False
+
+def _es_frase_alucinada(seg) -> bool:
+    """True solo si el texto coincide con una frase inventada conocida."""
+    texto = (getattr(seg, "text", "") or "").strip().lower()
+    if not texto:
+        return False
+    return any(re.search(patron, texto) for patron in _FRASES_ALUCINACION)
+
 
 def _es_segmento_dudoso(seg) -> bool:
     """Marca segmentos que no son alucinación clara pero tienen baja calidad.
@@ -827,10 +942,19 @@ def transcribir_archivo(
         partes_texto = []
         baja_confianza = 0
         alucinaciones = 0
+        alucinaciones_patron = 0
+        vacios = 0
+        total_entrada = 0
 
         for s in segmentos_raw:
+            total_entrada += 1
+            if _es_segmento_vacio(s):
+                vacios += 1
+                continue
             if _es_alucinacion(s):
                 alucinaciones += 1
+                if _es_frase_alucinada(s):
+                    alucinaciones_patron += 1
                 continue
             texto_seg = corregir_terminos_tecnicos(
                 (getattr(s, "text", "") or "").strip()
@@ -854,10 +978,40 @@ def transcribir_archivo(
 
         total = len(segmentos)
         proporcion_dudosa = baja_confianza / total if total else 0.0
-        needs_review = alucinaciones > 0 or baja_confianza > 0
-        requires_confirmation = alucinaciones >= 2 or proporcion_dudosa > 0.35
+        proporcion_retirada = alucinaciones / total_entrada if total_entrada else 0.0
+        todo_filtrado = bool(total_entrada and not partes_texto and alucinaciones)
+        aviso = None
+        if todo_filtrado:
+            if alucinaciones_patron >= alucinaciones:
+                aviso = (
+                    "No se detectó voz utilizable: todo el audio produjo frases que Whisper "
+                    "suele inventar sobre silencio o música. Revisa el archivo o graba de nuevo."
+                )
+            else:
+                # Devolver el texto sin filtrar sería mentir sobre su calidad:
+                # lo entregamos, pero marcado.
+                texto_limpio = " ".join(
+                    corregir_terminos_tecnicos((getattr(s, "text", "") or "").strip())
+                    for s in segmentos_raw
+                ).strip()
+                aviso = (
+                    "Todos los fragmentos salieron con baja calidad. Se muestra la "
+                    "transcripción sin filtrar: revísala antes de usarla."
+                )
 
-        return {
+        # Umbral proporcional: antes bastaba un segmento dudoso para gritar
+        # "audio poco claro" y la gente aprendió a ignorar el aviso.
+        needs_review = bool(
+            alucinaciones_patron > 0
+            or todo_filtrado
+            or proporcion_retirada > 0.15
+            or proporcion_dudosa > 0.25
+        )
+        requires_confirmation = bool(
+            alucinaciones_patron > 0 or proporcion_retirada > 0.25 or proporcion_dudosa > 0.35
+        )
+
+        resultado = {
             "text": texto_limpio,
             "language": idioma_detectado,
             "segments": segmentos,
@@ -866,7 +1020,14 @@ def transcribir_archivo(
             "needs_review": needs_review,
             "requires_confirmation": requires_confirmation,
             "review_segments": [s for s in segmentos if s["low_confidence"]],
+            # Campos nuevos (aditivos)
+            "empty_segments": vacios,
+            "hallucination_patterns": alucinaciones_patron,
+            "all_segments_filtered": todo_filtrado,
         }
+        if aviso:
+            resultado["aviso"] = aviso
+        return resultado
 
     except Exception as e:
         import traceback
@@ -1201,6 +1362,27 @@ def transcribe_youtube(req: YouTubeRequest, request: Request):
         with yt_dlp.YoutubeDL({**ydl_common, "skip_download": True}) as ydl:
             info = ydl.extract_info(req.url, download=False)
     except Exception as e:
+        # Desde casa yt-dlp suele funcionar (IP residencial); cuando no, cae a
+        # Supadata igual que producción, para que el espejo local sea fiel.
+        if supadata is not None and supadata.configurado():
+            try:
+                resultado_sd = supadata.transcribir(req.url, idioma_corto)
+                if resultado_sd.get("job_id"):
+                    listo = supadata.esperar(resultado_sd["job_id"], 90)
+                    if listo:
+                        resultado_sd = listo
+                if resultado_sd.get("texto"):
+                    return JSONResponse({
+                        "text": corregir_terminos_tecnicos(resultado_sd["texto"]),
+                        "language": resultado_sd.get("lang") or idioma_corto or "es",
+                        "title": "",
+                        "source": "subtitles",
+                    })
+            except Exception as exc_sd:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"No se pudo procesar el video (YouTube y Supadata fallaron): {exc_sd}",
+                )
         raise HTTPException(status_code=400, detail=f"No se pudo procesar el video (YouTube/Google): {e}")
 
     titulo = info.get("title", "")
@@ -1280,20 +1462,39 @@ class ImproveRequest(BaseModel):
     api_key: str = ""
     openrouter_model: Optional[str] = None
 
+_REPETICIONES_VALIDAS = {
+    "casi", "nada", "poco", "apenas", "vamos", "corre", "lento", "despacio",
+    "ahora", "nunca", "siempre", "bien", "mira", "vale",
+}
+_RE_REPETICION_LEGITIMA = re.compile(r"\b(\w{4,})(\s+)\1\b", re.IGNORECASE)
+
+
+def _sin_repeticion(m) -> str:
+    """Colapsa «palabra palabra» salvo cuando la repetición es intencional."""
+    if m.group(1).lower() in _REPETICIONES_VALIDAS:
+        return m.group(0)
+    return m.group(1)
+
+
 def _mejorar_heuristico(texto: str) -> str:
     """Mejora local sin IA: elimina muletillas, limpia repeticiones, mejora puntuación y estructura."""
     # 1. Normalizar espacios y saltos
     texto = re.sub(r"\r\n|\r", "\n", texto)
     texto = re.sub(r" {2,}", " ", texto).strip()
 
-    # 2. Eliminar muletillas y sonidos de relleno (español e inglés)
+    # 2. Eliminar muletillas y sonidos de relleno.
+    #    OJO: la muletilla es el alargamiento («esteee»), no el demostrativo
+    #    «este»: `este+` con \b borraba palabras del usuario
+    #    («Este documento es clave» → «. documento es clave»).
+    #    Igual con «bueno»/«pues»: solo se borran cuando abren la frase.
     muletillas = [
         r"\b(eh+|ah+|oh+|uh+|mm+|hmm+|eeh+|aah+|uhh+|umm+)\b",
-        r"\b(bueno pues|bueno|pues bueno|pues|a ver|o sea|este+|entonces este)\b",
-        r"\b(o sea que|es que|la verdad es que|la verdad)\b",
+        r"\b(bueno pues|pues bueno|a ver|o sea|estee+|entonces estee+)\b",
+        r"(?:(?<=^)|(?<=[.!?…]\s))\s*(bueno|pues)\s*,\s*",
+        r"\b(o sea que|es que|la verdad es que)\b",
         r"\b(¿no\?|¿verdad\?|¿sí\?|¿entiendes\?)\s*",
-        r"\b(no sé|o algo así|y tal|y eso)\b",
-        r"\b(como que|o cómo|como|digamos)\b(?=\s+[^,])",
+        r"\b(o algo así|y tal|y eso)\b",
+        r"\b(como que|digamos)\b(?=\s+[^,])",
         r"\b(literalmente|básicamente|obviamente)\b(?=\s)",
     ]
     for patron in muletillas:
@@ -1317,16 +1518,20 @@ def _mejorar_heuristico(texto: str) -> str:
     # 2c. Simplificar "el cual / la cual / los cuales / las cuales" -> "que"
     texto = re.sub(r"\b(el|la|los|las)\s+(cual|cuales)\b", "que", texto, flags=re.IGNORECASE)
 
-    # 3. Eliminar repeticiones de palabras consecutivas (ej: "que que", "y y", "de de")
-    texto = re.sub(r"\b(\w{2,})\s+\1\b", r"\1", texto, flags=re.IGNORECASE)
-    # Repeticiones de frases cortas (hasta 4 palabras)
-    texto = re.sub(r"\b(\w+(?: \w+){0,3})[,.]?\s+\1\b", r"\1", texto, flags=re.IGNORECASE)
+    # 3. Repeticiones consecutivas. El español repite a propósito («muy muy»,
+    #    «no no», «sí sí», «casi casi»), así que solo colapsamos palabras de
+    #    4+ letras y con lista de excepciones.
+    texto = _RE_REPETICION_LEGITIMA.sub(_sin_repeticion, texto)
+    # Repeticiones de frases de 2 a 4 palabras (ahí sí siempre es tartamudeo)
+    texto = re.sub(r"\b(\w+(?: \w+){1,3})[,.]?\s+\1\b", r"\1", texto, flags=re.IGNORECASE)
 
     # 4. Limpiar comas y puntos extra
     texto = re.sub(r"[,،]{2,}", ",", texto)
     texto = re.sub(r"\s+([,.:;!?])", r"\1", texto)
     texto = re.sub(r"([,])(?!\s)", r"\1 ", texto)
     # Quitar comas/puntuación colgante al inicio o tras saltos de línea (por frases eliminadas)
+    texto = re.sub(r"(?:[,;:]\s*){2,}", ", ", texto)
+    texto = re.sub(r"([.!?…])\s*[,;:]+\s*", r"\1 ", texto)
     texto = re.sub(r"^[\s,;:.]+", "", texto)
     texto = re.sub(r"(\n)[\s,;:.]+", r"\1", texto)
 
@@ -1397,21 +1602,36 @@ def _agregar_signos_apertura(texto: str) -> str:
     return " ".join(resultado)
 
 def _mejorar_con_ia_sync(provider_resuelto: str, api_key: str, prompt: str, openrouter_model: str) -> tuple:
-    """Ejecución síncrona de la llamada IA (se usa en thread pool para no bloquear asyncio)."""
+    """Ejecución síncrona de la llamada IA (se usa en thread pool para no bloquear asyncio).
+
+    El presupuesto de salida se calcula aquí a partir del prompt: con un tope
+    fijo de 2048 tokens los textos largos volvían truncados y reemplazaban el
+    original del usuario.
+    """
+    max_tokens = _max_tokens_ia(prompt)
     if provider_resuelto == "anthropic":
         import anthropic as _ant
         client = _ant.Anthropic(api_key=api_key)
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2048,
+            model=ANTHROPIC_MODEL,
+            max_tokens=min(16000, max_tokens),
+            # Claude Sonnet 5 rechaza temperature/top_p; y para editar texto el
+            # razonamiento extendido solo gastaría presupuesto de salida.
+            thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
-        return msg.content[0].text.strip(), "anthropic"
+        if getattr(msg, "stop_reason", None) == "refusal":
+            raise Exception("Claude rechazó procesar este texto por sus filtros de seguridad.")
+        partes = [b.text for b in msg.content if getattr(b, "type", "") == "text"]
+        texto = "\n".join(p for p in partes if p).strip()
+        if not texto:
+            raise Exception("Respuesta vacía de Anthropic")
+        return texto, "anthropic"
     elif provider_resuelto == "gemini":
-        improved = _call_gemini(api_key, prompt, temperature=0.2)
+        improved = _call_gemini(api_key, prompt, temperature=0.2, max_tokens=max_tokens)
         return improved, "gemini"
     elif provider_resuelto == "openrouter":
-        improved = _call_openrouter(api_key, prompt, openrouter_model)
+        improved = _call_openrouter(api_key, prompt, openrouter_model, max_tokens=max_tokens)
         return improved, "openrouter"
     elif provider_resuelto == "mistral":
         import json as _json
@@ -1420,7 +1640,7 @@ def _mejorar_con_ia_sync(provider_resuelto: str, api_key: str, prompt: str, open
         payload = _json.dumps({
             "model": "mistral-small-latest",
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 2048,
+            "max_tokens": max_tokens,
             "temperature": 0.2,
         }).encode()
         http_req = _ur.Request(
@@ -1447,37 +1667,73 @@ async def improve_text(req: ImproveRequest, request: Request):
         request, req.provider, req.api_key, req.openrouter_model
     )
 
-    prompt = (
-        f"EDITOR ESTRICTO DE TEXTOS — Idioma: {lang}\n\n"
-        "Tu ÚNICO trabajo es corregir el texto que te paso. NO puedes inventar nada.\n\n"
-        "REGLAS OBLIGATORIAS (no las rompas):\n"
-        "1. CORRIGE solo: ortografía, tildes, puntuación (¿¡), mayúsculas al inicio de oración.\n"
-        "2. ELIMINA solo: muletillas (eh, este, o sea), repeticiones exactas de palabras, muletillas vacías (\"es importante mencionar\").\n"
-        "3. NO CAMBIES: el significado, las ideas, el orden de las ideas, la voz del autor.\n"
-        "4. NO AGREGUES: datos, cifras, ejemplos, explicaciones, información nueva, frases inventadas.\n"
-        "5. NO REESCRIBAS: si una frase es correcta, déjala igual. No la \"mejores\" a tu manera.\n"
-        "6. NO RESUMAS: si el autor dijo algo largo, déjalo largo. No acortes.\n"
-        "7. CONSERVA: jerga, tecnicismos, regionalismos del autor. No los cambies por palabras \"más bonitas\".\n\n"
-        "FORMATO DE RESPUESTA:\n"
-        "- Devuelve SOLO el texto corregido.\n"
-        "- Sin explicaciones, sin comillas, sin \"Aquí tienes\", sin nada extra.\n"
-        "- Si el texto ya está bien, devuélvelo exactamente igual.\n\n"
-        f"TEXTO A CORREGIR:\n{txt}"
-    )
+    def _prompt_mejora(bloque: str) -> str:
+        return (
+            f"EDITOR ESTRICTO DE TEXTOS — Idioma: {lang}\n\n"
+            "Tu ÚNICO trabajo es corregir el texto que te paso. NO puedes inventar nada.\n\n"
+            "REGLAS OBLIGATORIAS (no las rompas):\n"
+            "1. CORRIGE solo: ortografía, tildes, puntuación (¿¡), mayúsculas al inicio de oración.\n"
+            "2. ELIMINA solo: muletillas (eh, esteee, o sea), repeticiones exactas de palabras, muletillas vacías (\"es importante mencionar\").\n"
+            "3. NO CAMBIES: el significado, las ideas, el orden de las ideas, la voz del autor.\n"
+            "4. NO AGREGUES: datos, cifras, ejemplos, explicaciones, información nueva, frases inventadas.\n"
+            "5. NO REESCRIBAS: si una frase es correcta, déjala igual. No la \"mejores\" a tu manera.\n"
+            "6. NO RESUMAS: si el autor dijo algo largo, déjalo largo. No acortes.\n"
+            "7. CONSERVA: jerga, tecnicismos, regionalismos del autor. No los cambies por palabras \"más bonitas\".\n"
+            "8. DEVUELVE EL TEXTO COMPLETO: nunca cortes ni escribas \"…\" o \"[continúa]\".\n\n"
+            "FORMATO DE RESPUESTA:\n"
+            "- Devuelve SOLO el texto corregido.\n"
+            "- Sin explicaciones, sin comillas, sin \"Aquí tienes\", sin nada extra.\n"
+            "- Si el texto ya está bien, devuélvelo exactamente igual.\n\n"
+            f"TEXTO A CORREGIR:\n{bloque}"
+        )
 
     if api_key:
         try:
             loop = asyncio.get_event_loop()
-            improved, provider_name = await loop.run_in_executor(
-                _IA_EXECUTOR,
-                _mejorar_con_ia_sync,
-                provider_resuelto, api_key, prompt, openrouter_model,
-            )
-            return {"text": improved, "ia_used": True, "provider": provider_name}
+            bloques = _dividir_en_bloques_ia(txt)
+            salidas = []
+            provider_name = None
+            for bloque in bloques:
+                parcial, provider_name = await loop.run_in_executor(
+                    _IA_EXECUTOR,
+                    _mejorar_con_ia_sync,
+                    provider_resuelto, api_key, _prompt_mejora(bloque), openrouter_model,
+                )
+                parcial = (parcial or "").strip()
+                if not parcial:
+                    raise Exception("La IA devolvió una respuesta vacía para parte del texto.")
+                salidas.append(parcial)
+            improved = "\n\n".join(salidas)
+            validacion = validar_texto_transformado(txt, improved, "pulido")
+            respuesta = {
+                "text": improved,
+                "ia_used": True,
+                "provider": provider_name,
+                # Campos nuevos (aditivos)
+                "validation": validacion,
+                "chunks": len(bloques),
+            }
+            aviso = _aviso_integridad(validacion)
+            if aviso:
+                respuesta["aviso"] = aviso
+            return respuesta
         except Exception as e:
             error_detail = _detalle_error_ia(provider_resuelto, e)
 
-    return {"text": _mejorar_heuristico(txt), "ia_used": False, "provider": None, "error_detail": error_detail}
+    local = _mejorar_heuristico(txt)
+    validacion = validar_texto_transformado(txt, local, "pulido")
+    respuesta = {
+        "text": local,
+        "ia_used": False,
+        "provider": None,
+        "error_detail": error_detail,
+        "validation": validacion,
+        "chunks": 1,
+    }
+    aviso = _aviso_integridad(validacion)
+    if aviso:
+        respuesta["aviso"] = aviso
+    return respuesta
 
 
 def _detalle_error_ia(nombre_proveedor: str, e: Exception) -> str:
@@ -1534,6 +1790,7 @@ class TranslateRequest(BaseModel):
     provider: str = "gemini"
     api_key: str = ""
     openrouter_model: Optional[str] = None
+    prefer_fast: bool = False
 
 
 _LANG_NAMES_TR = {
@@ -1561,52 +1818,235 @@ def _parse_translate_direction(direction: str):
         raise HTTPException(status_code=400, detail="Origen y destino no pueden ser el mismo idioma.")
     return src_code, trg_code, _LANG_NAMES_TR[src_code], _LANG_NAMES_TR[trg_code]
 
+_RE_TS_SOLO = re.compile(
+    r"^\[?(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?\]?$")
+_RE_TS_INLINE = re.compile(
+    r"(?:^|\s)\[?(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?\]?(?=\s|$)")
+
+
+def _limpiar_transcripcion_youtube_cruda(texto: str) -> str:
+    """Quita marcas SRT/VTT y horas del texto antes de traducirlo."""
+    if not texto:
+        return ""
+    crudo = str(texto).replace("\r", "")
+    if (
+        not re.search(r"(?m)^\s*\d{1,2}:\d{2}\b", crudo)
+        and "-->" not in crudo
+        and "WEBVTT" not in crudo.upper()
+        and len(re.findall(r"\b\d{1,2}:\d{2}\b", crudo)) < 3
+    ):
+        return texto.strip()
+
+    partes = []
+    anterior = ""
+    for linea in crudo.split("\n"):
+        linea = linea.strip()
+        if not linea or re.match(r"^WEBVTT", linea, re.IGNORECASE):
+            continue
+        if "-->" in linea or re.match(r"^\d+$", linea):
+            continue
+        if re.match(r"^(Kind|Language|NOTE)\s*:", linea, re.IGNORECASE):
+            continue
+        if _RE_TS_SOLO.match(linea):
+            continue
+        linea = re.sub(r"<[^>]+>", "", linea)
+        linea = re.sub(
+            r"^\[?(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?\]?\s*[-–—]?\s*",
+            "",
+            linea,
+        )
+        linea = _RE_TS_INLINE.sub(" ", linea)
+        linea = re.sub(r"\s{2,}", " ", linea).strip()
+        if not linea or linea == anterior:
+            continue
+        partes.append(linea)
+        anterior = linea
+
+    limpio = re.sub(r"\s{2,}", " ", " ".join(partes)).strip()
+    return limpio or texto.strip()
+
+
+def _chunk_fallo_traduccion(original: str, traducido: Optional[str]) -> bool:
+    """Detecta un trozo vacío, idéntico o devuelto sin traducir."""
+    if not traducido or not str(traducido).strip():
+        return True
+    origen = re.sub(r"\s+", " ", (original or "").strip()).lower()
+    salida = re.sub(r"\s+", " ", str(traducido).strip()).lower()
+    if not salida or origen == salida:
+        return True
+    return bool(
+        len(origen) >= 12
+        and (origen in salida or salida in origen)
+        and abs(len(origen) - len(salida)) < max(8, len(origen) * 0.12)
+    )
+
+
+def _traduccion_parece_incompleta(original: str, traducido: str, src: str, trg: str) -> bool:
+    """Rechaza ecos del original y respuestas que mezclan idiomas."""
+    if not (traducido or "").strip():
+        return True
+    origen = (original or "").strip()
+    salida = (traducido or "").strip()
+    if not origen:
+        return False
+    if origen == salida:
+        return True
+
+    palabras_origen = set(re.findall(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]{4,}", origen.lower()))
+    palabras_salida = set(re.findall(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]{4,}", salida.lower()))
+    if palabras_origen:
+        solapamiento = len(palabras_origen & palabras_salida) / max(1, len(palabras_origen))
+        if solapamiento >= 0.45 and len(palabras_origen) >= 12:
+            return True
+
+    marcadores = {
+        "en-es": ((" the ", " and ", " you ", " that ", " with ", " this ", " for ", " are ", " have ", " from ", " your ", " about ", " just ", " like "), (" el ", " la ", " de ", " que ", " y ", " en ", " los ", " las ", " un ", " una ", " es ", " por ", " con ", " para ", " del ", " se ")),
+        "es-en": ((" el ", " la ", " de ", " que ", " los ", " las ", " una ", " del ", " para "), (" the ", " and ", " you ", " that ", " with ", " this ", " for ", " are ")),
+    }
+    origen_markers, destino_markers = marcadores.get(f"{src}-{trg}", ((), ()))
+    if origen_markers:
+        con_espacios = f" {salida.lower()} "
+        origen_count = sum(1 for marcador in origen_markers if marcador in con_espacios)
+        destino_count = sum(1 for marcador in destino_markers if marcador in con_espacios)
+        if origen_count >= 4 and origen_count >= destino_count:
+            return True
+
+    return len(origen) > 400 and len(salida) < len(origen) * 0.45
+
+
+def _partir_texto_mymemory(texto: str) -> list[str]:
+    """Divide el texto en trozos de máximo 450 caracteres."""
+    texto = (texto or "").strip()
+    if not texto:
+        return []
+    if len(texto) <= 450:
+        return [texto]
+
+    trozos = []
+    for oracion in re.split(r"(?<=[.!?…])\s+", texto):
+        oracion = oracion.strip()
+        if not oracion:
+            continue
+        if len(oracion) <= 450:
+            trozos.append(oracion)
+            continue
+        palabras = oracion.split()
+        actual = []
+        tamano = 0
+        for palabra in palabras:
+            extra = len(palabra) + (1 if actual else 0)
+            if actual and tamano + extra > 400:
+                trozos.append(" ".join(actual))
+                actual = [palabra]
+                tamano = len(palabra)
+            else:
+                actual.append(palabra)
+                tamano += extra
+        if actual:
+            trozos.append(" ".join(actual))
+    return trozos or [texto]
+
+
 def _translate_mymemory(text: str, src: str, trg: str) -> Optional[str]:
-    """Llama a la API pública y gratuita de MyMemory para traducir un fragmento."""
-    import urllib.request as _ur
-    import urllib.parse as _up
+    """Llama a la API pública y gratuita de MyMemory para un fragmento."""
+    import html as _html
     import json as _json
+    import urllib.parse as _up
+    import urllib.request as _ur
+
+    if not text or not text.strip():
+        return text
     try:
-        encoded_text = _up.quote(text)
-        url = f"https://api.mymemory.translated.net/get?q={encoded_text}&langpair={src}|{trg}"
-        http_req = _ur.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with _ur.urlopen(http_req, timeout=10) as r:
+        params = _up.urlencode({"q": text[:450], "langpair": f"{src}|{trg}"})
+        url = f"https://api.mymemory.translated.net/get?{params}"
+        http_req = _ur.Request(url, headers={"User-Agent": "JG-Turbo/3.0"})
+        with _ur.urlopen(http_req, timeout=15) as r:
             data = _json.loads(r.read())
-        if data.get("responseStatus") == 200:
-            import html as _html
-            val = data["responseData"]["translatedText"]
-            return _html.unescape(val)
-    except Exception as e:
-        print(f"Error MyMemory translation: {e}")
+        traducido = (data.get("responseData") or {}).get("translatedText")
+        if traducido and "MYMEMORY WARNING" not in traducido.upper():
+            return _html.unescape(traducido)
+    except Exception:
+        pass
     return None
 
-def _translate_mymemory_chunked(text: str, src: str, trg: str) -> str:
-    """Divide el texto por párrafos/líneas para no superar límites de MyMemory y lo traduce."""
-    paragraphs = text.split("\n")
-    translated_paragraphs = []
-    for p in paragraphs:
-        p_strip = p.strip()
-        if not p_strip:
-            translated_paragraphs.append("")
+
+def _translate_mymemory_chunked(text: str, src: str, trg: str) -> Optional[str]:
+    """Traduce por trozos y falla completo si uno no llega traducido.
+
+    Nunca reutiliza el original como supuesto resultado: eso era lo que mezclaba
+    inglés y español cuando MyMemory fallaba en una sola petición.
+    """
+    unidades = []
+    estructura = []
+    for parrafo in (text or "").split("\n"):
+        parrafo = parrafo.strip()
+        indices = []
+        for trozo in _partir_texto_mymemory(parrafo):
+            indices.append(len(unidades))
+            unidades.append(trozo)
+        estructura.append(indices)
+
+    if not unidades:
+        return text
+
+    resultados = {}
+    max_workers = min(8, max(1, len(unidades)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futuros = {
+            pool.submit(_translate_mymemory, trozo, src, trg): indice
+            for indice, trozo in enumerate(unidades)
+        }
+        for futuro in concurrent.futures.as_completed(futuros):
+            indice = futuros[futuro]
+            try:
+                traducido = futuro.result()
+            except Exception:
+                traducido = None
+            if _chunk_fallo_traduccion(unidades[indice], traducido):
+                return None
+            resultados[indice] = str(traducido).strip()
+
+    parrafos = []
+    for indices in estructura:
+        if not indices:
+            parrafos.append("")
             continue
-        
-        # Si el párrafo es corto, traducir directo
-        if len(p_strip) < 800:
-            trans = _translate_mymemory(p_strip, src, trg)
-            translated_paragraphs.append(trans if trans else p_strip)
-        else:
-            # Si el párrafo es muy largo, dividir por oraciones de forma simple
-            sentences = re.split(r"(?<=[.!?])\s+", p_strip)
-            translated_sentences = []
-            for s in sentences:
-                s_strip = s.strip()
-                if not s_strip:
-                    continue
-                trans = _translate_mymemory(s_strip, src, trg)
-                translated_sentences.append(trans if trans else s_strip)
-            translated_paragraphs.append(" ".join(translated_sentences))
-            
-    return "\n".join(translated_paragraphs)
+        parrafos.append(" ".join(resultados[indice] for indice in indices))
+    unido = "\n".join(parrafos).strip()
+    return None if _traduccion_parece_incompleta(text, unido, src, trg) else unido
+
+
+def _limpiar_respuesta_ia(texto: str) -> str:
+    """Deja solo la traducción cuando el modelo agrega un encabezado."""
+    if not texto:
+        return ""
+    t = str(texto).strip()
+    bloque = re.search(r"```(?:[a-zA-Z0-9_+-]*)\s*\n([\s\S]*?)```", t)
+    if bloque and bloque.group(1).strip():
+        t = bloque.group(1).strip()
+    t = re.sub(
+        r"^\s*(?:here(?:'s| is) (?:the )?(?:full )?translation|translation|aquí tienes(?: la traducción)?)\s*[:：-]?\s*",
+        "",
+        t,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    return t.strip().strip("`").strip()
+
+
+def _prompt_traducir_bloque(src_lang: str, trg_lang: str, bloque: str) -> str:
+    return (
+        f"Translate the following text from {src_lang} to {trg_lang}.\n"
+        "Rules:\n"
+        "- Translate EVERY sentence to the target language. Do not leave any sentence "
+        "in the source language.\n"
+        "- Keep the same order and roughly the same length. Do not summarize or omit.\n"
+        "- Preserve paragraph breaks, names, technical terms (API, AI, PowerPoint), "
+        "URLs, emails, numbers and units.\n"
+        "- Do not add titles, notes, bilingual pairs, explanations or prefaces.\n"
+        "- Output ONLY the full translation in the target language.\n\n"
+        f"Original text:\n{bloque}"
+    )
 
 
 def _respuesta_traduccion_local(
@@ -1617,6 +2057,7 @@ def _respuesta_traduccion_local(
     provider: Optional[str],
     ia_used: bool,
     error_detail: Optional[str] = None,
+    chunks: int = 1,
 ) -> dict:
     return {
         "text": traducido,
@@ -1625,27 +2066,19 @@ def _respuesta_traduccion_local(
         "error_detail": error_detail,
         "direction": f"{src_code}-{trg_code}",
         "validation": validar_traduccion(original, traducido, src_code, trg_code),
+        "chunks": chunks,
     }
 
 
 @app.post("/translate")
 async def translate_text(req: TranslateRequest, request: Request):
     """Traduce entre pares ISO (en, es, fr, pt, de, it) con IA o MyMemory."""
-    txt = req.text.strip()
+    txt = (req.text or "").strip()
     if not txt:
         raise HTTPException(status_code=400, detail="Texto vacío.")
 
+    txt = _limpiar_transcripcion_youtube_cruda(txt)
     src_code, trg_code, src_lang, trg_lang = _parse_translate_direction(req.direction)
-
-    prompt = (
-        f"Translate the following text from {src_lang} to {trg_lang}.\n"
-        "Translate every sentence faithfully and in the same order. Preserve paragraph "
-        "breaks, names, technical terms, URLs, emails, numbers, units, and uncertainty. "
-        "Never infer missing context, add facts, summarize, explain, or improve the ideas. "
-        "Before answering, silently compare source and target sentence by sentence. "
-        "Output only the translation.\n\n"
-        f"Original text:\n{txt}"
-    )
 
     error_detail = None
 
@@ -1656,21 +2089,41 @@ async def translate_text(req: TranslateRequest, request: Request):
     if api_key and provider_resuelto != "none":
         try:
             loop = asyncio.get_event_loop()
-            translated, provider_name = await loop.run_in_executor(
-                _IA_EXECUTOR,
-                _mejorar_con_ia_sync,
-                provider_resuelto, api_key, prompt, openrouter_model,
-            )
+            bloques = _dividir_en_bloques_ia(txt) if len(txt) > 2200 else [txt]
+            salidas = []
+            provider_name = None
+            for bloque in bloques:
+                parcial, provider_name = await loop.run_in_executor(
+                    _IA_EXECUTOR,
+                    _mejorar_con_ia_sync,
+                    provider_resuelto,
+                    api_key,
+                    _prompt_traducir_bloque(src_lang, trg_lang, bloque),
+                    openrouter_model,
+                )
+                parcial = _limpiar_respuesta_ia(parcial or "")
+                if not parcial:
+                    raise Exception("La IA devolvió una respuesta vacía para parte del texto.")
+                salidas.append(parcial)
+            translated = "\n\n".join(salidas).strip()
+            if _traduccion_parece_incompleta(txt, translated, src_code, trg_code):
+                raise Exception("La IA devolvió una traducción incompleta o mezclada.")
             return _respuesta_traduccion_local(
-                txt, translated, src_code, trg_code, provider_name, True
+                txt,
+                translated,
+                src_code,
+                trg_code,
+                provider_name,
+                True,
+                chunks=len(bloques),
             )
         except Exception as e:
             error_detail = _detalle_error_ia(provider_resuelto, e)
 
-    # Fallback to MyMemory
+    # Fallback a MyMemory: completo o error; nunca mezclar con el original.
     try:
         translated_text = _translate_mymemory_chunked(txt, src_code, trg_code)
-        if translated_text:
+        if translated_text and not _traduccion_parece_incompleta(txt, translated_text, src_code, trg_code):
             return _respuesta_traduccion_local(
                 txt,
                 translated_text,
@@ -1684,7 +2137,14 @@ async def translate_text(req: TranslateRequest, request: Request):
         if not error_detail:
             error_detail = str(e)
 
-    raise HTTPException(status_code=500, detail=f"No se pudo realizar la traducción. Detalle: {error_detail}")
+    raise HTTPException(
+        status_code=500,
+        detail=(
+            error_detail
+            or "No se pudo traducir el texto completo. Revisa la conexión o la clave de IA "
+            "e inténtalo de nuevo."
+        ),
+    )
 
 
 # ── Corrección contextual de transcripciones ────────────────────────────────────
@@ -1704,18 +2164,61 @@ def _nombre_idioma_correccion(lang: str) -> str:
     return lang
 
 
-def _prompt_correccion_transcripcion(texto: str, lang_name: str) -> str:
+# Variantes regionales: es-CO ≠ es-ES (vocabulario y trato distintos).
+_NOMBRE_VARIANTE = {
+    "es-co": "español de Colombia", "es-mx": "español de México",
+    "es-ar": "español de Argentina", "es-cl": "español de Chile",
+    "es-pe": "español de Perú", "es-ve": "español de Venezuela",
+    "es-419": "español de Latinoamérica", "es-us": "español de Estados Unidos",
+    "es-es": "español de España", "en-us": "inglés de Estados Unidos",
+    "en-gb": "inglés británico", "pt-br": "portugués de Brasil",
+    "pt-pt": "portugués de Portugal",
+}
+
+# Sin ejemplos concretos, «corrige confusiones típicas» no le dice nada al modelo.
+_CONFUSIONES_PROMPT = (
+    "CONFUSIONES FONÉTICAS DEL ESPAÑOL QUE DEBES RESOLVER POR CONTEXTO "
+    "(elige la forma correcta, no las cambies al azar):\n"
+    "- haya (verbo haber) / halla (encuentra) / aya (niñera) / allá (lugar)\n"
+    "- hecho (de hacer) / echo (de echar)\n"
+    "- a ver (mirar) / haber (verbo)\n"
+    "- sino (conjunción) / si no (condición negada)\n"
+    "- porque (causa) / por qué (pregunta) / porqué (sustantivo) / por que (relativo)\n"
+    "- ahí (lugar) / hay (haber) / ay (exclamación)\n"
+    "- valla (cerca) / vaya (ir) / baya (fruto)\n"
+    "- tubo (cilindro) / tuvo (de tener)\n"
+    "- va a ser / vaser; e igual con «va a haber»\n"
+    "- solo/sólo y demostrativos: sin tilde según la RAE actual\n\n"
+)
+
+
+def _prompt_correccion_transcripcion(
+    texto: str, lang_name: str, variante: str = "", glosario: str = "", es_espanol: bool = True
+) -> str:
+    bloque_variante = (
+        f"Variante regional del hablante: {variante}. Respeta su vocabulario y su forma "
+        "de tratar (tú/usted/vos); no lo cambies a otra variante.\n"
+        if variante else ""
+    )
+    bloque_glosario = (
+        f"TÉRMINOS DEL USUARIO (escritura correcta obligatoria): {glosario}\n\n"
+        if glosario else ""
+    )
     return (
         f"Eres un especialista en corrección de transcripciones de voz a texto en {lang_name}. "
-        "El texto siguiente fue generado por Whisper (reconocimiento automático) y contiene errores.\n\n"
+        "El texto siguiente fue generado por Whisper (reconocimiento automático) y contiene errores.\n"
+        f"{bloque_variante}\n"
         "OBJETIVO PRINCIPAL: producir un texto COHERENTE y legible, como si un humano hubiera "
         "escrito lo que realmente se dijo en el audio.\n\n"
-        "Whisper comete estos errores frecuentes:\n"
+        f"{bloque_glosario}"
+        f"{_CONFUSIONES_PROMPT if es_espanol else ''}"
+        "OTROS ERRORES FRECUENTES DE WHISPER:\n"
         "- Palabras que suenan parecido pero son distintas (ej: 'casa'↔'caza', 'voto'↔'boto')\n"
         "- Palabras INVENTADAS que no existen en el idioma\n"
-        "- Palabras partidas o unidas incorrectamente\n"
+        "- Palabras partidas ('in formación') o pegadas ('enel')\n"
         "- Frases enteras sin sentido por ruido o mala calidad de audio\n"
-        "- Repeticiones y bucles de sílabas\n\n"
+        "- Repeticiones y bucles de sílabas\n"
+        "- Tildes, mayúsculas y signos ¿ ¡ ausentes\n\n"
         "INSTRUCCIONES (obligatorias):\n"
         "1. Lee TODO el texto para entender el TEMA y el CONTEXTO general.\n"
         "2. Cuando encuentres una palabra que NO EXISTE o NO ENCAJA en la frase, "
@@ -1724,7 +2227,7 @@ def _prompt_correccion_transcripcion(texto: str, lang_name: str) -> str:
         "4. Corrige ortografía, tildes, puntuación y mayúsculas.\n"
         "5. CONSERVA el significado, ideas, tono y nivel de formalidad del hablante.\n"
         "6. NO agregues información nueva, datos ni explicaciones.\n"
-        "7. NO resumas ni acortes el texto.\n\n"
+        "7. NO resumas ni acortes el texto. Devuélvelo COMPLETO, sin '…' ni '[continúa]'.\n\n"
         "FORMATO: devuelve SOLO el texto corregido, sin explicaciones, sin comillas, sin prefijos.\n\n"
         f"TEXTO A CORREGIR:\n{texto}"
     )
@@ -1736,6 +2239,32 @@ def _corregir_confusiones_foneticas(texto: str) -> str:
     for patron, reemplazo in _CONFUSIONES_FONETICAS_ES:
         texto = patron.sub(reemplazo, texto)
     return texto
+
+
+# LanguageTool mete reglas de estilo discutibles («redundancia», «coloquial»).
+# Solo aplicamos ortografía, tildes y gramática dura.
+_LT_TIPOS_SEGUROS = {"misspelling", "typographical", "grammar", "duplication", "whitespace"}
+_LT_CATEGORIAS_BLOQUEADAS = {
+    "STYLE", "REDUNDANCY", "COLLOQUIALISMS", "PLAIN_ENGLISH", "WORDINESS",
+    "CREATIVE_WRITING", "SEMANTICS", "MISC", "TYPOGRAPHY_STYLE",
+}
+
+
+def _match_languagetool_confiable(m: dict) -> bool:
+    """True solo si la sugerencia es de ortografía/gramática y es inequívoca."""
+    replacements = m.get("replacements") or []
+    if not replacements:
+        return False
+    regla = m.get("rule") or {}
+    categoria = ((regla.get("category") or {}).get("id") or "").upper()
+    if categoria in _LT_CATEGORIAS_BLOQUEADAS:
+        return False
+    tipo = (regla.get("issueType") or "").lower()
+    if tipo and tipo not in _LT_TIPOS_SEGUROS:
+        return False
+    if len(replacements) > 3:  # baja confianza: demasiadas alternativas
+        return False
+    return bool((replacements[0].get("value") or "").strip())
 
 
 def _corregir_con_languagetool_sync(texto: str, lang: str = "es") -> str:
@@ -1762,17 +2291,11 @@ def _corregir_con_languagetool_sync(texto: str, lang: str = "es") -> str:
         matches = sorted(result.get("matches", []), key=lambda m: m["offset"], reverse=True)
         corregido = texto
         for m in matches:
-            replacements = m.get("replacements", [])
-            if not replacements:
-                continue
-            issue_type = (m.get("rule") or {}).get("issueType", "")
-            if issue_type and issue_type not in (
-                "misspelling", "grammar", "typographical", "uncategorized", "duplication",
-            ):
+            if not _match_languagetool_confiable(m):
                 continue
             start = m["offset"]
             end = start + m["length"]
-            corregido = corregido[:start] + replacements[0]["value"] + corregido[end:]
+            corregido = corregido[:start] + m["replacements"][0]["value"] + corregido[end:]
         return corregido
     except Exception:
         return texto
@@ -1808,6 +2331,7 @@ def _corregir_transcripcion_contextual_sync(
     provider: str = "",
     api_key: str = "",
     openrouter_model: Optional[str] = None,
+    contexto: str = "",
 ) -> dict:
     """Pipeline unificado: heurísticas locales + IA contextual si hay API configurada."""
     txt = (texto or "").strip()
@@ -1828,38 +2352,55 @@ def _corregir_transcripcion_contextual_sync(
 
     if usar_ia and request is not None:
         lang_name = _nombre_idioma_correccion(lang)
+        variante = _NOMBRE_VARIANTE.get(lang.lower(), "")
+        glosario = " ".join(
+            p for p in (_leer_glosario_usuario(), (contexto or "").strip()) if p
+        )[:1200]
+        es_espanol = lang.split("-")[0].lower() == "es"
         provider_resuelto, api_key_final, model_final = _resolver_config_ia(
             request, provider, api_key, openrouter_model,
         )
         if api_key_final and provider_resuelto != "none":
             try:
-                prompt = _prompt_correccion_transcripcion(corregido, lang_name)
-                improved, provider_name = _mejorar_con_ia_sync(
-                    provider_resuelto, api_key_final, prompt, model_final,
-                )
-                improved = (improved or "").strip()
-                if improved:
-                    corregido = improved
-                    ia_used = True
+                bloques = _dividir_en_bloques_ia(corregido)
+                salidas = []
+                for bloque in bloques:
+                    prompt = _prompt_correccion_transcripcion(
+                        bloque, lang_name, variante, glosario, es_espanol
+                    )
+                    parcial, provider_name = _mejorar_con_ia_sync(
+                        provider_resuelto, api_key_final, prompt, model_final,
+                    )
+                    parcial = (parcial or "").strip()
+                    if not parcial:
+                        raise Exception("La IA devolvió una respuesta vacía para parte del texto.")
+                    salidas.append(parcial)
+                corregido = "\n\n".join(salidas)
+                ia_used = True
             except Exception as e:
                 error_detail = _detalle_error_ia(provider_resuelto, e)
 
     method = "ia" if ia_used else ("local" if corregido != txt else "none")
+    validacion = validar_texto_transformado(txt, corregido, "correccion")
     return {
         "text": corregido,
         "ia_used": ia_used,
         "provider": provider_name,
         "error_detail": error_detail,
         "method": method,
+        "validation": validacion,
+        "aviso": _aviso_integridad(validacion),
     }
 
 
 class CorrectTranscriptionRequest(BaseModel):
     text: str
-    language: str = "es"
+    language: str = "es"   # acepta variante regional: es-CO, es-ES, es-MX…
     provider: str = "gemini"
     api_key: str = ""
     openrouter_model: Optional[str] = None
+    # Glosario / términos del nicho (opcional, aditivo)
+    context: str = ""
 
 @app.post("/correct-transcription")
 async def correct_transcription(req: CorrectTranscriptionRequest, request: Request):
@@ -1881,14 +2422,20 @@ async def correct_transcription(req: CorrectTranscriptionRequest, request: Reque
         req.provider,
         req.api_key,
         req.openrouter_model,
+        getattr(req, "context", "") or "",
     )
-    return {
+    respuesta = {
         "text": resultado["text"],
         "ia_used": resultado["ia_used"],
         "provider": resultado.get("provider"),
         "error_detail": resultado.get("error_detail"),
         "method": resultado.get("method", "local"),
+        # Campo nuevo (aditivo)
+        "validation": resultado.get("validation"),
     }
+    if resultado.get("aviso"):
+        respuesta["aviso"] = resultado["aviso"]
+    return respuesta
 
 class CorrectRequest(BaseModel):
     text: str
@@ -1929,15 +2476,19 @@ async def correct_text(req: CorrectRequest):
         matches = sorted(result.get("matches", []), key=lambda m: m["offset"], reverse=True)
         corregido = txt
         aplicados = 0
+        omitidos = 0
         for m in matches:
-            replacements = m.get("replacements", [])
-            if replacements:
-                start = m["offset"]
-                end = start + m["length"]
-                corregido = corregido[:start] + replacements[0]["value"] + corregido[end:]
-                aplicados += 1
+            # Solo ortografía/tildes/gramática: las reglas de estilo son opinables
+            # y antes se aplicaban a ciegas.
+            if not _match_languagetool_confiable(m):
+                omitidos += 1
+                continue
+            start = m["offset"]
+            end = start + m["length"]
+            corregido = corregido[:start] + m["replacements"][0]["value"] + corregido[end:]
+            aplicados += 1
 
-        return {"text": corregido, "matches": aplicados}
+        return {"text": corregido, "matches": aplicados, "skipped_suggestions": omitidos}
     except Exception as e:
         # Fallback: correcciones normativas locales básicas
         corregido = re.sub(r"\s+([,.:;!?])", r"\1", txt)
@@ -1952,7 +2503,7 @@ async def correct_text(req: CorrectRequest):
         return {"text": corregido, "matches": 0, "error_detail": str(e)}
 
 
-# ── /improve-prompt (Skill: maestro-prompts) ───────────────────────────────
+# ── /improve-prompt (Skill por defecto: ingenieria-prompts-profesional) ──
 
 class ImprovePromptRequest(BaseModel):
     prompt: str
@@ -2001,8 +2552,10 @@ def _detectar_modalidad_prompt(texto: str) -> str:
 
 def _construir_prompt_maestro(prompt_original: str, modalidad: str,
                               target_model: str, objetivo: str, idioma_salida: str) -> str:
-    """Construye el prompt del sistema que se envía a la IA.
-    Está basado en la skill maestro-prompts (referencias/tecnicas-llm.md y mejora-prompts.md).
+    """Construye el system prompt de la IA.
+
+    Skill por defecto: ingenieria-prompts-profesional
+    (R+A+T+F, 5 pasos, catálogo de técnicas, arquitectura de agentes).
     """
     if target_model == "auto":
         if modalidad == "imagen":
@@ -2067,63 +2620,41 @@ def _construir_prompt_maestro(prompt_original: str, modalidad: str,
     else:
         idioma_bloque = "\n- Idioma: español por defecto salvo que la modalidad (imagen/video) requiera inglés."
 
-    return f"""Eres el ingeniero de prompts senior detrás de la skill "maestro-prompts" (nivel maestro, técnicas 2025-2026). Tu trabajo: auditar el prompt del usuario y entregar una versión mejorada, potente y reproducible.
+    return f"""Eres el motor unificado «prompt-maestro-unificado» (maestro-prompts + ingenieria-prompts-profesional).
+META: reescribir el prompt del usuario para que funcione a la primera al pegarlo tal cual. Debe ser coherente con la intención del original, no un formulario genérico de corchetes.
 
 # Modalidad detectada
 {modalidad.upper()}.{bloque_modelo}
 
 # Contexto del usuario
-- Prompt original a mejorar (en bloque de código):{objetivo_bloque}{idioma_bloque}
+- Prompt original a mejorar:{objetivo_bloque}{idioma_bloque}
 
-# Tu proceso (estricto, en este orden)
-1. **Auditar** el prompt original contra la rúbrica de 8 fallas comunes (objetivo difuso, contexto ausente, sin formato de salida, adjetivos vacíos, negaciones en cadena, sobrecarga, pide certeza imposible, dialecto equivocado). Identifica SOLO los 2-4 problemas de mayor impacto.
-2. **Detectar modalidad** y elegir el dialecto correcto para el modelo destino.
-3. **Reescribir** el prompt aplicando el flujo: ROL → CONTEXTO → TAREA → CRITERIOS → FORMATO → EJEMPLOS (si aporta) → RESTRICCIONES. No todas las secciones son obligatorias; usa solo las que aportan.
-4. **Validar** que el prompt produce el resultado pedido si se pega tal cual (sin editar nada salvo marcadores [COMPLETA: ...]).
-5. **Aplicar reglas de oro**: positivo > negativo, definir adjetivos subjetivos, contexto al inicio + instrucción crítica al final, 150-300 palabras es el punto dulce, anti-alucinación explícita si aplica.
-
-# Reglas duras
-- PROHIBIDO inventar parámetros, flags o sintaxis de modelos. Si dudas, marca con [VERIFICAR].
-- PROHIBIDO usar datos fabricados del usuario. Si el prompt necesita info del negocio, usa marcadores [COMPLETA: ...].
-- No hagas "teatro" en el prompt (no "eres el mejor experto del universo con 50 años de experiencia" — eso no mejora nada).
-- Si el prompt original es para imagen/video, traduce al INGLÉS y entrega además la versión en español comentada.
-- No cambies el objetivo del usuario; solo mejóralo.
-- NO agregues saludos, despedidas, ni "como ingeniero de prompts, te sugiero...". Entrega directo.
+# Proceso
+1. Conserva intención, hechos y partes útiles del original.
+2. Audita solo fallas de alto impacto (máx. 3-4): objetivo difuso, sin contexto, sin formato, adjetivos vacíos, negaciones en cadena, sobrecarga, certeza imposible, dialecto incorrecto.
+3. Elige complejidad: SIMPLE (tarea+formato+criterios) | MEDIA (rol+contexto+tarea+criterios+formato) | COMPLEJA (anatomía 7 capas) | AGENTE (+ stop rule + feedback).
+4. Positivo > negativo; define adjetivos; sin teatro; [COMPLETA] solo para datos reales faltantes.
+5. 120-320 palabras; no inventes flags de modelos.
 
 # Formato de entrega OBLIGATORIO
-Escribe las secciones DIAGNÓSTICO, CÓMO ITERAR y CHECKLIST en markdown normal.
-Pero la sección **PROMPT MEJORADO debe ir en TEXTO PLANO** (sin markdown, sin negritas, sin listas con asteriscos, sin bloques de código). El prompt mejorado debe ser texto directo, legible, que el usuario pueda copiar y pegar sin editar nada.
-
 ## Diagnóstico
-El prompt tenía N problemas principales:
-1. **[Falla]** → síntoma concreto citando la parte problemática del prompt.
-2. ...
+(2-3 fallas concretas del original)
 
 ## Prompt mejorado
-[PROMPT EN TEXTO PLANO AQUÍ — sin markdown, sin ```, sin asteriscos, sin negritas, solo texto con saltos de línea y secciones separadas por líneas en blanco. Máximo 300 palabras. Debe ser copiable y pegable directamente.]
+[TEXTO PLANO listo para pegar — sin markdown dentro, sin ```]
 
 ## Por qué funciona
-- (3-5 viñetas explicando brevemente qué técnica usa cada parte clave)
-- Si la modalidad es imagen/video: 1 variante en inglés optimizada + versión en español comentada (1 línea explicando la diferencia).
+(3 viñetas)
 
 ## Cómo iterar
-- (1-2 instrucciones concretas de qué ajustar si el resultado no convence)
-
-## Checklist de auto-revisión
-- [ ] Produce el resultado pedido pegándolo tal cual.
-- [ ] Define formato de salida exacto.
-- [ ] Sin datos inventados.
-- [ ] Idioma estratégico correcto.
-- [ ] Parámetros técnicos reales y vigentes (o marcados con [VERIFICAR]).
+(1-2 ajustes)
 
 ---
-
-**Prompt original del usuario**:
+**Prompt original**:
 ```
 {prompt_original}
 ```
-
-Entrega YA el resultado en el formato obligatorio. No escribas nada antes de "## Diagnóstico"."""
+Empieza con ## Diagnóstico."""
 
 
 def _mejorar_prompt_heuristico(prompt: str, modalidad: str, target_model: str) -> dict:
@@ -2265,13 +2796,10 @@ Salida: [ejemplo de respuesta ideal]
 
 @app.post("/improve-prompt")
 async def improve_prompt(req: ImprovePromptRequest, request: Request):
-    """Mejora un prompt aplicando la skill 'maestro-prompts'.
+    """Mejora un prompt con el skill por defecto «ingenieria-prompts-profesional».
 
-    Si hay API key configurada del proveedor → usa la IA con el formato estándar
-    de la skill (Diagnóstico + Prompt mejorado + Por qué funciona + Cómo iterar).
-
-    Si NO hay API key → aplica heurística local que detecta fallas comunes
-    y entrega una plantilla reescrita (útil para aprender, sin gastar API).
+    Con API key → IA con R+A+T+F / 5 pasos y formato Diagnóstico + Prompt mejorado.
+    Sin API key → heurística local con plantilla estructurada.
     """
     prompt = (req.prompt or "").strip()
     if not prompt:
@@ -2306,13 +2834,16 @@ async def improve_prompt(req: ImprovePromptRequest, request: Request):
                 import anthropic as _ant
                 client = _ant.Anthropic(api_key=api_key)
                 msg = client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=3500,
+                    model=ANTHROPIC_MODEL,
+                    max_tokens=4096,
+                    thinking={"type": "disabled"},
                     system=system_prompt,
                     messages=[{"role": "user", "content": user_msg}],
                 )
                 return {
-                    "improved": msg.content[0].text.strip(),
+                    "improved": "\n".join(
+                        b.text for b in msg.content if getattr(b, "type", "") == "text"
+                    ).strip(),
                     "ia_used": True,
                     "provider": "anthropic",
                     "modalidad": modalidad,
@@ -2434,14 +2965,39 @@ TTS_VOICE_CATALOG = {
     },
     "en-US": {
         "label": "English (United States)",
-        # Aria (mujer) y Andrew (hombre): neural inglés monoidioma, claro en tech
+        # Aria (mujer) y Andrew (hombre): neural inglés monoidioma, claro en tech.
+        # Misma calidad percibida; no usar Multilingual para fragmentos cortos.
         "female": "en-US-AriaNeural",
         "male": "en-US-AndrewNeural",
+    },
+    # v2.8.0 — el idioma de la voz debe coincidir SIEMPRE con el texto.
+    # Antes, un texto traducido a portugués/francés/alemán/italiano se leía con
+    # voz española y sonaba ininteligible.
+    "pt-BR": {
+        "label": "Portugués (Brasil)",
+        "female": "pt-BR-FranciscaNeural",
+        "male": "pt-BR-AntonioNeural",
+    },
+    "fr-FR": {
+        "label": "Francés",
+        "female": "fr-FR-DeniseNeural",
+        "male": "fr-FR-HenriNeural",
+    },
+    "de-DE": {
+        "label": "Alemán",
+        "female": "de-DE-KatjaNeural",
+        "male": "de-DE-ConradNeural",
+    },
+    "it-IT": {
+        "label": "Italiano",
+        "female": "it-IT-ElsaNeural",
+        "male": "it-IT-DiegoNeural",
     },
 }
 TTS_FALLBACK_VOICES = {
     "es": {
-        # Mujer: Dalia (MX) · Hombre: Gonzalo (CO) de la zona
+        # Mujer: Dalia (MX) primero — más natural que Salomé para muchos oídos
+        # Hombre: Gonzalo (CO) primero — acento de la zona; Jorge/Alonso de respaldo
         "female": ["es-MX-DaliaNeural", "es-CO-SalomeNeural", "es-US-PalomaNeural"],
         "male": ["es-CO-GonzaloNeural", "es-MX-JorgeNeural", "es-US-AlonsoNeural"],
     },
@@ -2454,8 +3010,43 @@ TTS_FALLBACK_VOICES = {
             "en-US-GuyNeural",
         ],
     },
+    "pt": {
+        "female": ["pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural", "pt-PT-RaquelNeural"],
+        "male": ["pt-BR-AntonioNeural", "pt-PT-DuarteNeural"],
+    },
+    "fr": {
+        "female": ["fr-FR-DeniseNeural", "fr-FR-VivienneMultilingualNeural", "fr-FR-EloiseNeural"],
+        "male": ["fr-FR-HenriNeural", "fr-FR-RemyMultilingualNeural", "fr-CA-JeanNeural"],
+    },
+    "de": {
+        "female": ["de-DE-KatjaNeural", "de-DE-SeraphinaMultilingualNeural", "de-DE-AmalaNeural"],
+        "male": ["de-DE-ConradNeural", "de-DE-FlorianMultilingualNeural", "de-DE-KillianNeural"],
+    },
+    "it": {
+        "female": ["it-IT-ElsaNeural", "it-IT-IsabellaNeural"],
+        "male": ["it-IT-DiegoNeural", "it-IT-GiuseppeMultilingualNeural"],
+    },
+}
+# Idioma → acento por defecto cuando el cliente no manda uno válido para ese idioma.
+TTS_LANG_DEFAULT_LOCALE = {
+    "es": "es-MX",
+    "en": "en-US",
+    "pt": "pt-BR",
+    "fr": "fr-FR",
+    "de": "de-DE",
+    "it": "it-IT",
+}
+TTS_SUPPORTED_LANGS = tuple(TTS_LANG_DEFAULT_LOCALE)
+# Modo "misma voz" (v2.7.0): una sola voz multilingüe lee todo el texto.
+# Habla español fluido y pronuncia los términos en inglés en inglés, sin
+# cambiar de voz ni de ritmo a mitad de frase (evita el efecto robótico de
+# concatenar fragmentos de dos voces distintas).
+TTS_UNIFIED_VOICES = {
+    "female": ["en-US-AvaMultilingualNeural", "en-US-EmmaMultilingualNeural"],
+    "male": ["en-US-AndrewMultilingualNeural", "en-US-BrianMultilingualNeural"],
 }
 
+# Palabras funcionales españolas: si aparecen, no forzamos inglés en el servidor
 _TTS_ES_FUNC = {
     "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "en", "y", "o",
     "que", "por", "para", "con", "es", "son", "se", "al", "lo", "su", "sus", "como",
@@ -2474,6 +3065,9 @@ TTS_ALLOWED_VOICES.update(
     for voices in language.values()
     for voice in voices
 )
+TTS_ALLOWED_VOICES.update(
+    voice for voices in TTS_UNIFIED_VOICES.values() for voice in voices
+)
 TTS_MAX_CHARS = 2800
 
 
@@ -2484,6 +3078,10 @@ class TtsRequest(BaseModel):
     language: str = Field("es", description="Idioma del fragmento: es | en")
     locale: str = Field("es-MX", description="Acento español BCP-47 (es-MX recomendado para mujer)")
     tone: str = Field("neutral", description="neutral | warm | energetic")
+    unified: bool = Field(
+        False,
+        description="Misma voz multilingüe para todo el texto (sin cambio de voz en inglés)",
+    )
 
 
 def _tts_gender(voice: str) -> str:
@@ -2491,7 +3089,8 @@ def _tts_gender(voice: str) -> str:
 
 
 def _tts_language(language: str) -> str:
-    return "en" if (language or "").strip().lower().startswith("en") else "es"
+    code = (language or "").strip().lower()[:2]
+    return code if code in TTS_LANG_DEFAULT_LOCALE else "es"
 
 
 def _tts_fragment_is_english(text: str) -> bool:
@@ -2507,28 +3106,34 @@ def _tts_fragment_is_english(text: str) -> bool:
     es_hits = sum(1 for w in words if w.lower() in _TTS_ES_FUNC)
     if es_hits:
         return False
+    # Sin español funcional y con al menos una palabra latina/tech ASCII → inglés
     return True
 
 
 def _tts_resolve_language(language: str, text: str) -> str:
     lang = _tts_language(language)
-    if lang == "en":
+    # El "force-EN" solo tiene sentido cuando el idioma base es español: en
+    # portugués/francés/alemán/italiano un tramo sin acentos NO es inglés.
+    if lang == "es" and _tts_fragment_is_english(text):
         return "en"
-    if _tts_fragment_is_english(text):
-        return "en"
-    return "es"
+    return lang
 
 
-def _tts_locale(locale: str) -> str:
-    value = (locale or "es-MX").strip()
-    return value if value in TTS_VOICE_CATALOG and value != "en-US" else "es-MX"
+def _tts_locale(locale: str, language: str = "es") -> str:
+    """Acento válido para el idioma pedido; si no encaja, el de por defecto."""
+    lang = _tts_language(language)
+    fallback = TTS_LANG_DEFAULT_LOCALE[lang]
+    value = (locale or "").strip()
+    if value in TTS_VOICE_CATALOG and value.lower().startswith(lang):
+        return value
+    return fallback
 
 
 def _tts_pick_voice(voice: str, language: str, locale: str) -> tuple[str, str, str]:
     requested = (voice or "").strip()
     gender = _tts_gender(requested)
     lang = _tts_language(language)
-    selected_locale = "en-US" if lang == "en" else _tts_locale(locale)
+    selected_locale = _tts_locale(locale, lang)
     if requested in TTS_ALLOWED_VOICES:
         return requested, selected_locale, gender
     return TTS_VOICE_CATALOG[selected_locale][gender], selected_locale, gender
@@ -2571,9 +3176,8 @@ async def _tts_synthesize(text: str, voice_id: str, rate: str, pitch: str, volum
     return bytes(audio)
 
 
-@app.post("/tts")
-async def tts_neural(req: TtsRequest):
-    """Sintetiza fragmentos con voz neural latina o inglesa según el idioma."""
+async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
+    """Sintetiza un fragmento con la voz que corresponde al idioma del texto."""
     from fastapi.responses import Response
 
     text = re.sub(r"[ \t]+", " ", (req.text or "")).strip()
@@ -2589,14 +3193,23 @@ async def tts_neural(req: TtsRequest):
     except ImportError as error:
         raise HTTPException(status_code=503, detail="edge-tts no está instalado en el servidor.") from error
 
-    language = _tts_resolve_language(req.language, text)
-    voice_id, selected_locale, gender = _tts_pick_voice(req.voice, language, req.locale)
+    gender = _tts_gender(req.voice)
+    if req.unified:
+        # Modo "misma voz": una voz multilingüe para todo el fragmento.
+        # No aplica force-EN: la propia voz detecta y pronuncia el inglés.
+        language = "multi"
+        engine = "edge-neural-unified"
+        candidates = list(TTS_UNIFIED_VOICES[gender])
+    else:
+        language = _tts_resolve_language(req.language, text)
+        engine = "edge-neural-bilingual"
+        voice_id, _, gender = _tts_pick_voice(req.voice, language, req.locale)
+        candidates = [voice_id] + [
+            candidate
+            for candidate in TTS_FALLBACK_VOICES[language][gender]
+            if candidate != voice_id
+        ]
     rate, pitch, volume, tone = _tts_prosody(req.rate, req.tone)
-    candidates = [voice_id] + [
-        candidate
-        for candidate in TTS_FALLBACK_VOICES[language][gender]
-        if candidate != voice_id
-    ]
     last_error = None
     for candidate in candidates:
         try:
@@ -2608,14 +3221,20 @@ async def tts_neural(req: TtsRequest):
                 content=audio,
                 media_type="audio/mpeg",
                 headers={
-                    "Cache-Control": "no-store",
+                    # El mismo texto con la misma voz siempre suena igual: se puede
+                    # cachear en el CDN y ahorrar la síntesis completa al repetir.
+                    "Cache-Control": (
+                        f"public, max-age={cache_seconds}, s-maxage={cache_seconds}, immutable"
+                        if cache_seconds > 0
+                        else "no-store"
+                    ),
                     "X-TTS-Voice": candidate,
                     "X-TTS-Rate": rate,
                     "X-TTS-Pitch": pitch,
                     "X-TTS-Tone": tone,
                     "X-TTS-Language": language,
                     "X-TTS-Locale": actual_locale,
-                    "X-TTS-Engine": "edge-neural-bilingual",
+                    "X-TTS-Engine": engine,
                 },
             )
         except Exception as error:
@@ -2623,6 +3242,64 @@ async def tts_neural(req: TtsRequest):
 
     detail = str(last_error or "servicio no disponible")[:180]
     raise HTTPException(status_code=502, detail=f"No se pudo sintetizar la voz: {detail}")
+
+
+@app.post("/tts")
+async def tts_neural(req: TtsRequest):
+    """Sintetiza un fragmento (POST: sin límite práctico de longitud)."""
+    return await _tts_render(req)
+
+
+@app.get("/tts")
+async def tts_neural_get(
+    text: str,
+    voice: str = "female",
+    rate: float = 1.0,
+    language: str = "es",
+    locale: str = "es-MX",
+    tone: str = "neutral",
+    unified: bool = False,
+):
+    """Misma síntesis por GET, cacheable en el navegador y en el CDN.
+
+    Reproducir dos veces el mismo texto deja de costar una síntesis nueva:
+    la segunda vez el audio sale del caché y suena de inmediato.
+    """
+    return await _tts_render(
+        TtsRequest(
+            text=text,
+            voice=voice,
+            rate=rate,
+            language=language,
+            locale=locale,
+            tone=tone,
+            unified=unified,
+        ),
+        cache_seconds=86400,
+    )
+
+
+@app.get("/tts-warmup")
+async def tts_warmup():
+    """Abre la conexión con el servicio de voz antes de que haga falta.
+
+    La primera síntesis paga el arranque (DNS, TLS y token del servicio):
+    unos segundos. Llamando aquí en cuanto el usuario se acerca al botón
+    de escuchar, ese coste ya está pagado cuando de verdad pulsa.
+    """
+    from fastapi.responses import JSONResponse
+
+    try:
+        audio = await _tts_synthesize(".", TTS_UNIFIED_VOICES["female"][0], "+0%", "+0Hz", "+0%")
+        listo = bool(audio)
+        detalle = ""
+    except Exception as error:  # el warmup nunca debe romper la página
+        listo = False
+        detalle = str(error)[:120]
+    return JSONResponse(
+        {"ok": listo, "detail": detalle},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/tts-voices")
@@ -2638,6 +3315,12 @@ def tts_voices_info():
             "english_female": "en-US-AriaNeural",
             "english_male": "en-US-AndrewNeural",
         },
+        # Modo "misma voz": una voz multilingüe para ES + EN sin cambio de voz
+        "unified": {
+            "female": TTS_UNIFIED_VOICES["female"][0],
+            "male": TTS_UNIFIED_VOICES["male"][0],
+            "fallback": TTS_UNIFIED_VOICES,
+        },
         "bilingual": True,
         "accents": {
             locale: {
@@ -2651,6 +3334,16 @@ def tts_voices_info():
         "english": {
             "female": TTS_VOICE_CATALOG["en-US"]["female"],
             "male": TTS_VOICE_CATALOG["en-US"]["male"],
+        },
+        # Idiomas con voz propia: el audio nunca se lee con acento de otro idioma
+        "languages": {
+            lang: {
+                "locale": locale,
+                "label": TTS_VOICE_CATALOG[locale]["label"],
+                "female": TTS_VOICE_CATALOG[locale]["female"],
+                "male": TTS_VOICE_CATALOG[locale]["male"],
+            }
+            for lang, locale in TTS_LANG_DEFAULT_LOCALE.items()
         },
         "tones": ["neutral", "warm", "energetic"],
         "rate_range": [0.8, 2.0],

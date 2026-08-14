@@ -8,13 +8,24 @@ La aplicación ahora verifica la calidad real del micrófono, mide ruido, proces
 
 Consulta [Cómo funciona la captura, transcripción y traducción mejoradas](PRECISION_AUDIO.md) para conocer el inventario completo, las pruebas y los límites. El benchmark de 100 audios reales está preparado, pero sigue pendiente por falta de un corpus autorizado.
 
+### Actualización UX v3.5 · 2 de agosto de 2026
+
+- En móvil, el botón **Grabar** queda flotante mientras se captura audio, aunque el texto en vivo sea extenso.
+- La vista previa del dictado se desplaza dentro de su propia caja y no empuja el resto de la aplicación.
+- Las opciones se muestran en dos columnas para reducir el alto del panel. Sus nombres cortos tienen explicación completa al mantener o enfocar el control.
+- **Sensibilidad de la onda** solo cambia el movimiento visual del medidor. No cambia la grabación ni la precisión.
+- **Puntuación**, **Preguntas** y **Código** actúan principalmente sobre el dictado en vivo del navegador. El resultado final de Whisper usa el audio completo y su puntuación propia.
+- **Términos** usa el glosario y reglas técnicas. **Contexto** habilita la corrección contextual local o con IA configurada.
+- Archivo conserva la detección automática de idioma. YouTube conserva su extracción automática y el pegado manual de respaldo.
+- Esta entrega no cambia el motor de transcripción, las claves persistentes, el backend ni la apariencia de escritorio.
+
 ---
 
 ## 🔍 1. Descripción General del Producto
 **JG Turbo** es una aplicación web de transcripción universal diseñada con una interfaz oscura, responsive y editable. En celular permite desplazamiento para evitar que el editor se superponga con las acciones. Permite transcribir:
 1.  **Voz en vivo (Micrófono)**: Ideal para dictados rápidos y transcripciones inmediatas con formateo inteligente.
 2.  **Archivos locales**: Procesa grabaciones largas, reuniones o notas de voz subidas en formatos de audio común (MP3, WAV, M4A, etc.).
-3.  **Videos de YouTube**: Extrae el contenido de cualquier enlace público de YouTube usando subtítulos o procesando su audio mediante IA.
+3.  **Videos de YouTube**: Pega el enlace y la app trae el texto sola. Si el video no tiene subtítulos, lo transcribe con IA sin que hagas nada. Ver [Transcripción de YouTube](CAMBIOS_YOUTUBE.md).
 
 ---
 
@@ -22,7 +33,7 @@ Consulta [Cómo funciona la captura, transcripción y traducción mejoradas](PRE
 *   **Interfaz (Frontend)**: HTML5, CSS3 vanilla y JavaScript nativo en un solo archivo, con diseño responsive y enfoque local-first.
 *   **Servidor (Backend)**: FastAPI (Python) con una versión local y otra para Vercel. La versión local procesa audio con `faster-whisper`; Vercel usa Groq.
 *   **Motores de transcripción**: `faster-whisper` en el backend local y `whisper-large-v3` mediante Groq en Vercel. Ambos reciben el glosario como contexto.
-*   **Gestor de Descargas**: **yt-dlp**, con preferencia por subtítulos cuando existen y descarga de audio solo como respaldo.
+*   **YouTube**: **Supadata** como vía principal (sale por su propia infraestructura, que YouTube no bloquea, y genera el texto con IA si el video no tiene subtítulos). Antes de gastar un crédito se intenta gratis con `youtube-transcript-api`; **yt-dlp + Whisper de Groq** queda como respaldo. Detalle y medición: `CAMBIOS_YOUTUBE.md`.
 
 ---
 
@@ -93,13 +104,28 @@ La aplicación ofrece un selector de dialectos regionales (ej. *Español - Colom
 
 ---
 
+## 💻 Instalar como app (escritorio y móvil)
+
+JG Turbo es una **PWA**: se instala como aplicación real (ventana propia, icono en Inicio), no solo un favorito del navegador.
+
+| Dónde | Cómo |
+|---|---|
+| **Windows (Chrome o Edge)** | Barra de direcciones → icono **Instalar**, o menú → Aplicaciones → Instalar este sitio como aplicación |
+| **Android** | Menú ⋮ → Instalar app |
+| **iPhone** | Safari → Compartir → Añadir a pantalla de inicio |
+
+En la web verás el botón **«Instalar app»** (arriba a la derecha). Guía completa: [INSTALAR_ESCRITORIO.md](INSTALAR_ESCRITORIO.md).
+
 ## 📁 5. Guía de Uso por Apartados
 
 ### 🎤 Panel de Micrófono
+
+**Límites:** hasta **~15 min** por grabación en la nube (Vercel); en PC local hasta **~30 min**. Los audios largos se envían **por partes** de ~100 s (cada envío debe caber bajo ~4,5 MB de la plataforma). No hace falta cortar a mano. Detalle: [PRECISION_AUDIO.md](PRECISION_AUDIO.md).
+
 1.  Presiona **Grabar** o la barra **Espaciadora** para hablar.
 2.  Observa el visualizador de ondas y el cronómetro de grabación.
 3.  Al finalizar, puedes reproducir el audio capturado de forma local para validar que se grabó bien.
-4.  Al detener, la app envía la grabación completa a Whisper cuando el backend está disponible. Si ese proceso falla, conserva el texto en vivo. Usa **"Re-transcribir con Whisper"** cuando quieras repetir el análisis del audio guardado.
+4.  Al detener, la app envía la grabación a Whisper (en la nube, por partes si es larga: verás «parte 2 de 6…»). Si falla, conserva el texto en vivo. Usa **"Re-transcribir con Whisper"** para repetir el análisis del audio guardado.
 5.  Usa el botón **"Expandir"** para abrir el editor modal a pantalla completa si necesitas leer con comodidad o realizar correcciones que se sincronizan al instante en la pantalla principal.
 
 ### 🎧 Panel de Archivo de Audio
@@ -108,25 +134,69 @@ La aplicación ofrece un selector de dialectos regionales (ej. *Español - Colom
 3.  Haz clic en **"Transcribir archivo"**. Una barra de progreso te indicará que la IA está transcribiendo en segundo plano.
 
 ### ▶️ Panel de YouTube
-1.  Pega el enlace completo del video (ej. `https://www.youtube.com/watch?v=...`).
-2.  El backend buscará primero si el video ya cuenta con subtítulos generados por el autor o automáticos. De existir, los extraerá rápido para ahorrar tiempo y recursos.
-3.  De no contar con subtítulos, el servidor descargará el audio y lo transcribirá con Whisper local, respetando límites de duración y tamaño para evitar bloqueos.
 
-## Lectura en voz alta con acentos e inglés
+**Pega el enlace y pulsa «Transcribir video». Eso es todo.** No tienes que abrir YouTube ni copiar nada. Detalle técnico e historial: [CAMBIOS_YOUTUBE.md](CAMBIOS_YOUTUBE.md).
 
-**Versión actual del módulo: TTS 2.6.3** (23 jul 2026).
+1. Pega el enlace del video (ej. `https://www.youtube.com/watch?v=...`).
+2. Elige el idioma del texto final si quieres traducirlo (opcional).
+3. Pulsa **«Transcribir video»**.
+4. El texto aparece listo para **Copiar, Corregir, Traducir, Escuchar y descargar .txt**.
 
-La app lee el texto desde una consola dedicada. El motor neural cambia de voz por fragmento: usa el acento latino elegido para español y una voz inglesa para oraciones o términos técnicos en inglés. **No reescribe el texto en pantalla**: solo elige qué voz lo pronuncia (y prepara la pronunciación del audio EN).
+**Qué pasa por dentro** (no necesitas saberlo, pero por si falla algo):
 
-- **Acentos**: Colombia, México, Argentina y español latino de Estados Unidos
-- **Voces**: femenina y masculina para cada acento
-- **Recomendado (auto)**: mujer **Dalia (México)** · hombre **Gonzalo (Colombia)**
-- **Inglés automático (igual de claro en ambos géneros)**: mujer **Aria** · hombre **Andrew** (EE. UU.)
-- **Pronunciación bilingüe**: automática (predeterminada) o desactivada
-- **Tonos**: neutral, cálido y enérgico (español hombre más calmado; inglés siempre neutro para no distorsionar)
-- **Controles**: Escuchar, Pausar, Reanudar, Detener y velocidad de `1×` a `2×`
+| Orden | Vía | Cuándo actúa | Costo |
+|---|---|---|---|
+| 1 | `youtube-transcript-api` | Si YouTube deja pasar la consulta (videos muy populares) | Gratis |
+| 2 | **Supadata** | Caso normal: trae los subtítulos o los genera con IA | 1 crédito (2 por minuto si usa IA) |
+| 3 | yt-dlp + Whisper de Groq | Respaldo si Supadata no está disponible | Gratis |
+| 4 | Pegado manual | Red de seguridad, solo si todo lo anterior falla | Gratis |
+
+**Videos largos (+20 min):** si el proveedor tarda, se procesan en segundo plano. Verás «Video largo: transcribiendo…» y el texto llega solo; no cierres la pestaña.
+
+**Sobre el selector «Idioma del video»:**
+
+- Si eliges un idioma concreto (Español, Inglés…), **se respeta**: el texto llega en ese idioma si el video lo tiene.
+- Si dejas **«Auto»**, la app prefiere **español**, luego **inglés**, y si no hay ninguno de los dos usa el que haya. Es a propósito: sin esa regla, un video hablado en inglés podía llegar en alemán, porque el proveedor entrega «la primera pista disponible» y esa puede ser cualquier traducción.
+- Consecuencia práctica: con «Auto», un video en inglés que tenga subtítulos en español llegará **en español**. Si quieres el original, elige el idioma en el selector.
+
+**Si un video concreto falla** (privado, restringido o con audio muy sucio) la app abre sola el bloque **«¿Este video no funcionó? Pega el texto tú mismo»**. Es una red de seguridad, no el camino normal.
+
+> **Nota (2026-08-01):** antes el pegado manual era la vía principal porque YouTube bloquea a los servidores en la nube. Ya no: la app trae el texto sola. Requiere la variable `SUPADATA_API_KEY` en Vercel (ver `DOCUMENTACION_DESPLIEGUE.md`).
+
+### 🌍 Traducir
+
+Pulsa **Traducir** y el texto pasa al idioma elegido en **«Texto:»**.
+
+**No hay límite de tamaño.** Si pegas una transcripción larga (una charla de una
+hora, por ejemplo), la app la parte sola en bloques y los traduce uno tras otro.
+Verás el avance en el botón: **«Traduciendo… 3 de 7»**. No cierres la pestaña.
+
+- Un texto normal tarda unos segundos.
+- Una transcripción de 40 000 caracteres (unas 7 000 palabras) tarda algo más de
+  un minuto y llega **completa**.
+- Si un bloque falla por un tropiezo de red, se reintenta solo.
+
+Detalle técnico e historial: [CAMBIOS_TRADUCCION.md](CAMBIOS_TRADUCCION.md).
+
+## Lectura en voz alta — misma voz, fluida y natural
+
+**Motor TTS: 2.8.0** (14 ago 2026) · **UI consola: franja horizontal** (1 ago 2026; ver [CAMBIOS_UX.md](CAMBIOS_UX.md) v3.2).
+
+La app lee el texto desde una consola dedicada. Por defecto usa el modo **«Misma
+voz»**: una sola voz multilingüe lee todo el texto con español fluido y pronuncia
+los términos en inglés **en inglés, con la misma voz y el mismo ritmo** (sin
+cambios bruscos ni pausas robóticas). **No reescribe el texto en pantalla.**
+
+- **Modo «Misma voz» (recomendado y por defecto)**: mujer **Ava** · hombre **Andrew** (voces multilingües de Microsoft)
+- **Modo «Dos voces» (opcional)**: acento latino para español + voz inglesa para frases/términos en inglés
+  - Acentos: Colombia, México, Argentina y español latino de Estados Unidos
+  - Recomendado (auto): mujer **Dalia (México)** · hombre **Gonzalo (Colombia)** · inglés **Aria/Andrew**
+- **Pronunciación bilingüe**: Misma voz (`unified`, por defecto) · Dos voces (`auto`) · Solo idioma principal (`off`)
+- **Tonos**: neutral, cálido y enérgico
+- **Controles (UI)**: una franja inferior compacta — **Escuchar**, **Mujer/Hombre**, velocidad `0.75×`–`2×` (Detener cuando está leyendo). En «Editar en grande» no apila bloques altos para dejar más espacio al texto.
+- **Barra de reproducción** (v2.8.0): mientras lee aparece **⏪ 10 s**, **⏩ 10 s**, la posición arrastrable y el tiempo (`0:35 / 1:42`). Avanzar o retroceder **no reinicia** la lectura, y cambiar la velocidad tampoco: se oye al instante. También se maneja desde la pantalla de bloqueo y los auriculares.
+- **Idioma de la voz** (v2.8.0): la voz habla en el idioma del texto — español, inglés, **portugués, francés, alemán e italiano**. Si el texto contradice al desplegable, manda el texto.
 - **Respaldo**: voces del navegador cuando la red o el motor neural fallan
-- **Persistencia**: preferencias `jg_tts_*` en el navegador (un deploy no las borra)
-- **2.6.2–2.6.3**: no partir `Node.js`; listas técnicas en un tramo EN; force-EN si un tramo tech se etiquetó mal; guías de pronunciación (OpenAI, API, ChatGPT…) para **mujer y hombre**
+- **Persistencia**: preferencias `jg_tts_*` en el navegador (un deploy no las borra). El valor antiguo `auto` migra a `unified`.
 
-Consulta el documento maestro [Lectura en voz alta (TTS)](CAMBIOS_TTS.md) para: arquitectura, flujo paso a paso, historial 2.6→2.6.3, decisiones, API, guías de pronunciación, proceso de deploy, IDs de producción, pruebas y límites. Consulta [Cómo conservar la configuración](CONFIG_PERSISTENTE.md) antes de modificar una clave `jg_*`. Deploy: [DOCUMENTACION_DESPLIEGUE.md](DOCUMENTACION_DESPLIEGUE.md).
+Consulta el documento maestro [Lectura en voz alta (TTS)](CAMBIOS_TTS.md) para: arquitectura, flujo paso a paso, historial 2.6→2.8.0, UI de consola, decisiones, API, guías de pronunciación, proceso de deploy, IDs de producción, pruebas y límites. UX reciente: [CAMBIOS_UX.md](CAMBIOS_UX.md). Config: [CONFIG_PERSISTENTE.md](CONFIG_PERSISTENTE.md). Deploy: [DOCUMENTACION_DESPLIEGUE.md](DOCUMENTACION_DESPLIEGUE.md).

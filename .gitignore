@@ -47,3 +47,9 @@ _skill_inspect/
 backend/corpus/manifest.jsonl
 backend/corpus/audio/
 benchmark-report*.json
+
+# Capturas y artefactos de pruebas en navegador (no son parte de la app)
+.playwright-cli/
+.playwright-mcp/
+desktop-check.png
+mobile-options.png
