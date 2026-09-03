@@ -685,9 +685,14 @@ export async function marcarPortadaSincronizada(id, marca = Date.now()) {
 export async function exportarParaSincronizar() {
   try {
     const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
-    return (todos || []).map(({ id, actualizado, contenidoActualizado, sincronizado, borrado, titulo }) => ({
+    return (todos || []).map(({
+      id, actualizado, contenidoActualizado, sincronizado, borrado, titulo, portadaSincronizada,
+    }) => ({
       id, actualizado: actualizado || 0, contenidoActualizado: contenidoActualizado || 0,
       sincronizado: sincronizado || 0, borrado, titulo,
+      /* Va aquí para que la decisión de subir pueda saber, sin tocar la base,
+       * a qué libros les puede faltar la carátula en la nube. */
+      portadaSincronizada: portadaSincronizada || 0,
     }));
   } catch (_) {
     return [];

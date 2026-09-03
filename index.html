@@ -1,4 +1,4 @@
-<!-- v2.28.4 · JS versionado con el HTML (JG_JS_V): adios botones muertos por cache -->
+<!-- v2.28.5 · Las caratulas de libros ya sincronizados por fin viajan; el boton Actualizar responde -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -4906,9 +4906,9 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Añadir un PDF
             </button>
-            <button type="button" class="mini-btn pdf-actualizar" id="btnPdfActualizarBiblio" title="Traer los libros de tus otros aparatos" aria-label="Actualizar biblioteca desde tus otros aparatos">
+            <button type="button" class="mini-btn pdf-actualizar" id="btnPdfActualizarBiblio" title="Traer los libros y carátulas de tus otros aparatos" aria-label="Actualizar biblioteca desde tus otros aparatos">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-              Actualizar
+              <span id="pdfActualizarBiblioLabel">Actualizar</span>
             </button>
           </header>
 
@@ -15300,7 +15300,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v64';
+const JG_JS_V = 'v65';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

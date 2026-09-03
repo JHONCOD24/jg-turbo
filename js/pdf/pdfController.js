@@ -66,6 +66,7 @@ export function inicializarLectorPdf(deps = {}) {
     salida: $('pdfOutput'), realce: $('pdfRealce'), volver: $('btnPdfBack'),
     capPrev: $('btnPdfCapPrev'), capNext: $('btnPdfCapNext'),
     actualizarBiblio: $('btnPdfActualizarBiblio'),
+    actualizarBiblioLabel: $('pdfActualizarBiblioLabel'),
     barraDoc: $('pdfProgresoDoc'), barraRelleno: $('pdfProgresoRelleno'),
     btnIndice: $('btnPdfIndice'), indice: $('pdfIndice'), indiceLista: $('pdfIndiceLista'),
     navbar: $('pdfNavbar'), prev: $('btnPdfPrev'), next: $('btnPdfNext'), navPos: $('pdfNavPos'),
@@ -2540,16 +2541,18 @@ export function inicializarLectorPdf(deps = {}) {
    * aparato aún no está vinculado, abre esa sección para vincularlo. */
   if (el.actualizarBiblio) el.actualizarBiblio.addEventListener('click', () => {
     if (!nube || !nube.estaVinculada()) {
+      /* Sin nube no hay nada que traer. Se dice con palabras Y se abre la
+       * sección: abrirla sin explicar por qué dejaba al usuario mirando un
+       * panel que no había pedido. */
+      avisar('Este aparato aún no está conectado con los otros. Conéctalo aquí abajo para traer tus libros y sus carátulas.', 'info');
       if (el.nube) {
         el.nube.hidden = false;
         el.nube.open = true;
         el.nube.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } else {
-        avisar('Conecta la nube primero para traer tus libros.', 'info');
       }
       return;
     }
-    sincronizarAhora();
+    sincronizarAhora({ desdeCabecera: true });
   });
 
   if (el.reanudarInicio) el.reanudarInicio.addEventListener('click', () => {
@@ -3328,25 +3331,47 @@ export function inicializarLectorPdf(deps = {}) {
     }
   }
 
-  async function sincronizarAhora({ silencioso = false } = {}) {
+  /**
+   * Sincroniza con la nube.
+   *
+   * `desdeCabecera` importa más de lo que parece: el aviso de esta función
+   * vive dentro de la sección plegable de la nube, al final de la página. Al
+   * pulsar el botón «Actualizar» de la cabecera —que está arriba— no se veía
+   * absolutamente nada: ni que estuviera trabajando, ni el resultado, ni el
+   * error. Parecía un botón muerto aunque estuviera sincronizando.
+   */
+  async function sincronizarAhora({ silencioso = false, desdeCabecera = false } = {}) {
     if (!nube || !nube.estaVinculada()) return;
+    /* El botón desde el que se pulsó es el que se bloquea y anuncia: así no
+     * hay dobles envíos por pulsar dos veces mientras trabaja. */
+    const boton = desdeCabecera ? el.actualizarBiblio : el.nubeSync;
+    const etiqueta = desdeCabecera ? el.actualizarBiblioLabel : el.nubeSyncLabel;
+    const contar = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     try {
-      const resultado = await conBotonOcupado(el.nubeSync, el.nubeSyncLabel, 'Actualizando…',
+      const resultado = await conBotonOcupado(boton, etiqueta, 'Actualizando…',
         () => nube.sincronizar({
-          alProgresar: (mensaje) => { if (!silencioso) avisoNube(mensaje); },
+          alProgresar: (mensaje) => {
+            if (silencioso) return;
+            avisoNube(mensaje);
+            if (desdeCabecera) avisar(mensaje, 'info');
+          },
         }));
       await refrescarInicio();
       await pintarNube();
       const nada = !resultado.subidos && !resultado.bajados;
-      avisoNube(
-        nada
-          ? 'Todo al día.'
-          : `Listo: ${resultado.bajados ? `llegaron ${resultado.bajados} libro(s)` : 'sin novedades'}` +
-            `${resultado.subidos ? ` · se enviaron ${resultado.subidos}` : ''}.`,
-        'ok'
-      );
+      const partes = [];
+      if (resultado.bajados) partes.push(`llegaron ${contar(resultado.bajados, 'libro', 'libros')}`);
+      if (resultado.subidos) partes.push(`se enviaron ${contar(resultado.subidos, 'libro', 'libros')}`);
+      const mensaje = nada ? 'Todo al día.' : `Listo: ${partes.join(' · ')}.`;
+      avisoNube(mensaje, 'ok');
+      /* Arriba también, para quien pulsó arriba. */
+      if (desdeCabecera && !silencioso) avisar(mensaje, 'ok', { efimero: true });
     } catch (error) {
-      if (!silencioso) avisoNube(error?.message || 'No se pudo sincronizar.', 'error');
+      const fallo = error?.message || 'No se pudo sincronizar.';
+      if (!silencioso) {
+        avisoNube(fallo, 'error');
+        if (desdeCabecera) avisar(fallo, 'err');
+      }
       el.nubePunto.dataset.estado = 'error';
     }
   }

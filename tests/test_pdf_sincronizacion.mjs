@@ -5,8 +5,10 @@
  * documento gana cuando el mismo libro cambió en el celular y en el PC. Un
  * error no da un mensaje de error: borra el progreso de alguien.
  */
+import { readFileSync } from 'fs';
 import {
   fusionar, decidir, aplicarRemotos, marcarBorrado, esMasNuevo, necesitaSubirContenido,
+  debeSubir, puedeFaltarPortada,
 } from '../js/pdf/sincronizacion.js';
 
 let fallos = 0;
@@ -183,6 +185,77 @@ const doc = (id, actualizado, extra = {}) => ({
   const viejo = { id: 'lib4', actualizado: 5000, sincronizado: 3000 };
   comprobar(necesitaSubirContenido(viejo) === true,
     'un documento sin la marca nueva sube todo (compatibilidad)');
+}
+
+/* ── Las carátulas de libros que ya estaban sincronizados ───────────────
+ *
+ * El caso real: alguien tenía 7 libros sincronizados desde antes de que las
+ * carátulas viajaran. Esos libros figuran como «al día», así que el filtro de
+ * subida los descartaba y su carátula NUNCA salía del aparato. Pulsar
+ * «Actualizar» no cambiaba nada porque no había nada que enviar.
+ */
+{
+  /* Un libro al día y con la carátula ya en la nube: no hay nada que hacer. */
+  const alDia = { id: 'a', actualizado: 3000, sincronizado: 3000, portadaSincronizada: 3000 };
+  comprobar(puedeFaltarPortada(alDia) === false, 'un libro con la carátula ya enviada no se revisa');
+  comprobar(debeSubir(alDia, { cursor: 'c1' }) === false, 'y no se sube');
+
+  /* Un libro al día pero SIN la marca de carátula: hay que mirarlo. */
+  const sinMarca = { id: 'b', actualizado: 3000, sincronizado: 3000 };
+  comprobar(puedeFaltarPortada(sinMarca) === true, 'un libro al día sin la marca sí se revisa');
+  comprobar(debeSubir(sinMarca, { cursor: 'c1' }) === false,
+    'pero no se sube mientras no se confirme que tiene carátula');
+  comprobar(debeSubir(sinMarca, { cursor: 'c1', faltaPortada: true }) === true,
+    'se sube en cuanto se confirma que tiene carátula pendiente');
+
+  /* Un libro borrado no manda carátulas. */
+  const borrado = { id: 'c', actualizado: 3000, sincronizado: 3000, borrado: 3000 };
+  comprobar(puedeFaltarPortada(borrado) === false, 'un libro borrado no manda carátula');
+  comprobar(debeSubir(borrado, { cursor: 'c1', faltaPortada: true }) === false,
+    'ni aunque se marque que le falta');
+
+  /* Lo que ya funcionaba debe seguir igual. */
+  const conCambios = { id: 'd', actualizado: 5000, sincronizado: 3000 };
+  comprobar(debeSubir(conCambios, { cursor: 'c1' }) === true, 'un libro con cambios se sigue subiendo');
+
+  /* Primera sincronización (sin cursor): manda la comparación con la nube. */
+  const local = { id: 'e', actualizado: 5000, sincronizado: 0 };
+  comprobar(debeSubir(local, { cursor: '', remoto: null }) === true,
+    'sin cursor, un libro que no está en la nube se sube');
+  comprobar(debeSubir(local, { cursor: '', remoto: { id: 'e', actualizado: 9000 } }) === false,
+    'sin cursor, si la nube tiene algo más nuevo no se sube');
+  comprobar(debeSubir(local, { cursor: '', remoto: { id: 'e', actualizado: 9000 }, faltaPortada: true }) === true,
+    'salvo que le falte la carátula por enviar');
+
+  /* Casos límite. */
+  comprobar(debeSubir(null, { cursor: 'c1' }) === false, 'un documento nulo no se sube');
+  comprobar(puedeFaltarPortada(null) === false, 'un documento nulo no se revisa');
+}
+
+/* ── Que el arreglo no se deshaga sin querer ───────────────────────────
+ *
+ * La regla puede estar bien y aun así no servir de nada si `nube.js` vuelve a
+ * decidir por su cuenta, que es exactamente lo que pasaba antes. Esto vigila
+ * que la decisión siga saliendo del módulo con pruebas y que la carátula se
+ * compruebe ANTES de armar la lista, no dentro del bucle.
+ */
+{
+  const fuenteNube = readFileSync(new URL('../js/pdf/nube.js', import.meta.url), 'utf8');
+  comprobar(fuenteNube.includes('debeSubir('), 'nube.js decide con debeSubir()');
+  comprobar(fuenteNube.includes('puedeFaltarPortada('), 'nube.js filtra con puedeFaltarPortada()');
+
+  const enviar = fuenteNube.slice(fuenteNube.indexOf('── Enviar'));
+  const posLista = enviar.indexOf('const paraSubir');
+  const posFalta = enviar.indexOf('faltaSubirPortada');
+  const posBucle = enviar.indexOf('for (const resumen of paraSubir)');
+  comprobar(posFalta > 0 && posBucle > 0 && posFalta < posBucle,
+    'la carátula se comprueba ANTES del bucle de envío, no dentro');
+  comprobar(posLista > 0 && posLista < posBucle, 'la lista se arma antes de recorrerla');
+
+  const fuenteBiblio = readFileSync(new URL('../js/pdf/biblioteca.js', import.meta.url), 'utf8');
+  const exporta = fuenteBiblio.slice(fuenteBiblio.indexOf('export async function exportarParaSincronizar'));
+  comprobar(exporta.slice(0, 700).includes('portadaSincronizada'),
+    'exportarParaSincronizar entrega portadaSincronizada (sin eso la decisión es ciega)');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas de sincronización pasaron.' : `\n${fallos} prueba(s) fallaron.`);

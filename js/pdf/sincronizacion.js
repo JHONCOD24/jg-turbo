@@ -122,3 +122,49 @@ export function necesitaSubirContenido(documento) {
   if (!contenido) return true;                          /* registro antiguo */
   return contenido > sincronizado;
 }
+
+/**
+ * ¿Vale la pena mirar si a este libro le falta enviar la carátula?
+ *
+ * Es un filtro barato, hecho solo con lo que ya está en memoria, para no
+ * consultar la base por cada libro en cada sincronización. Quien diga que sí
+ * todavía tiene que confirmarlo mirando si de verdad hay una imagen guardada.
+ */
+export function puedeFaltarPortada(documento) {
+  if (!documento || documento.borrado) return false;
+  return !documento.portadaSincronizada;
+}
+
+/**
+ * ¿Hay que enviar este libro a la nube?
+ *
+ * Antes esta decisión vivía suelta dentro de `nube.js` y solo miraba si el
+ * libro había cambiado. Por eso las carátulas no llegaban nunca: un libro
+ * sincronizado hace meses está «al día», así que quedaba fuera de la lista de
+ * envío y la comprobación de su carátula —que estaba DENTRO del bucle sobre
+ * esa lista— no llegaba a ejecutarse jamás. La carátula existía en el aparato,
+ * el código para enviarla existía, y aun así no salía de ahí.
+ *
+ * Ahora la regla está aquí, junto a las demás y con pruebas.
+ *
+ * @param {object|null} local – resumen del documento en este aparato
+ * @param {object} opciones
+ * @param {string} [opciones.cursor] – marca de la última sincronización
+ * @param {object|null} [opciones.remoto] – lo que la nube tiene de este libro
+ * @param {boolean} [opciones.faltaPortada] – confirmado: hay carátula sin enviar
+ * @returns {boolean}
+ */
+export function debeSubir(local, { cursor = '', remoto = null, faltaPortada = false } = {}) {
+  if (!local) return false;
+
+  /* Una carátula pendiente es motivo suficiente por sí sola, pero nunca para
+   * un libro borrado: de eso solo viaja la lápida. */
+  if (faltaPortada && !local.borrado) return true;
+
+  /* Con cursor basta comparar contra lo último que se envió desde aquí. */
+  if (cursor) return (Number(local.actualizado) || 0) > (Number(local.sincronizado) || 0);
+
+  /* Sin cursor (primera vez, o tras desvincular) manda la comparación con la
+   * nube, que es la regla de siempre. */
+  return decidir(local, remoto) === 'subir';
+}

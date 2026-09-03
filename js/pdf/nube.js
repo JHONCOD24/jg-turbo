@@ -10,7 +10,9 @@
  * proyecto respeta como configuración persistente). Nunca se envía a nadie
  * más que a la propia API.
  */
-import { decidir, marcarBorrado, necesitaSubirContenido } from './sincronizacion.js';
+import {
+  decidir, marcarBorrado, necesitaSubirContenido, debeSubir, puedeFaltarPortada,
+} from './sincronizacion.js';
 
 const CLAVE_LLAVE = 'jg_sync_llave';
 const CLAVE_CURSOR = 'jg_sync_cursor';
@@ -138,19 +140,33 @@ export function crearNube({ pedir, biblioteca }) {
         bajados += 1;
       }
 
-      /* ── Enviar ────────────────────────────────────────────────────── */
-      const paraSubir = locales.filter((local) => (cursor
-        ? (local.actualizado || 0) > (local.sincronizado || 0)
-        : decidir(local, alla.get(local.id) || null) === 'subir'));
+      /* ── Enviar ─────────────────────────────────────────────────────
+       *
+       * Ojo con el orden: la carátula pendiente se comprueba ANTES de armar la
+       * lista, no dentro del bucle. Estaba dentro, y por eso las carátulas no
+       * llegaban nunca: un libro sincronizado hace meses está «al día», así que
+       * no entraba en la lista y su comprobación no se ejecutaba jamás.
+       *
+       * Solo se consulta la base para los libros que pueden tenerla pendiente
+       * (`puedeFaltarPortada`), que son cada vez menos: en cuanto una carátula
+       * viaja queda marcada y ya no se vuelve a mirar. */
+      const paraSubir = [];
+      const portadasPendientes = new Set();
+      for (const local of locales) {
+        const faltaPortada = puedeFaltarPortada(local)
+          && await biblioteca.faltaSubirPortada(local.id);
+        if (faltaPortada) portadasPendientes.add(local.id);
+        if (debeSubir(local, { cursor, remoto: alla.get(local.id) || null, faltaPortada })) {
+          paraSubir.push(local);
+        }
+      }
 
       let subidos = 0;
       for (const resumen of paraSubir) {
         /* La carátula acompaña al contenido, nunca al registro ligero: viaja
-         * cuando el texto viaja, y una sola vez más si hay carátula local que
-         * la nube aún no tiene (libros sincronizados antes de que las
-         * carátulas viajaran). Así llega sin reenviarse cada minuto. */
-        const conPortada = necesitaSubirContenido(resumen)
-          || await biblioteca.faltaSubirPortada(resumen.id);
+         * cuando el texto viaja, y una sola vez más si la nube aún no la tiene.
+         * Así llega sin reenviarse cada minuto. */
+        const conPortada = necesitaSubirContenido(resumen) || portadasPendientes.has(resumen.id);
         const paquete = await biblioteca.paqueteParaSubir(resumen.id, { conPortada });
         if (!paquete) continue;
         avisar(`Enviando ${subidos + 1} de ${paraSubir.length}…`);

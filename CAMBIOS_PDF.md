@@ -1,5 +1,84 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v2.28.5 · Las carátulas por fin viajan, y el botón responde
+
+### Lo reportado
+«Creó un botón de Actualizar cerca de Añadir un PDF para que se sincronizaran las carátulas, pero
+no pasa nada al pulsarlo.»
+
+### Dos causas, las dos reales
+
+**A · El botón no daba ninguna señal de vida.**
+`btnPdfActualizarBiblio` sí estaba cableado a `sincronizarAhora()`, pero todo el feedback de esa
+función va a la sección de la nube, al final de la página: `conBotonOcupado(el.nubeSync, …)`
+bloquea el botón *de esa sección* y `avisoNube(…)` escribe en `#pdfNubeAviso`, dentro de un
+`<details>` que normalmente está cerrado. Pulsando el botón de la cabecera no se veía nada: ni que
+trabajara, ni el resultado, ni el error. Un botón sin respuesta es indistinguible de uno roto.
+
+**B · Las carátulas de los libros ya sincronizados no salían del aparato. Nunca.**
+En `js/pdf/nube.js` la lista de envío se armaba así:
+
+```js
+const paraSubir = locales.filter((local) => (cursor
+  ? (local.actualizado || 0) > (local.sincronizado || 0)
+  : decidir(local, alla.get(local.id) || null) === 'subir'));
+```
+
+Un libro sincronizado hace meses tiene `actualizado <= sincronizado`, así que **quedaba fuera de la
+lista**. Y la comprobación que debía rescatarlo —`biblioteca.faltaSubirPortada(id)`— estaba
+**dentro del bucle que recorre esa misma lista**, es decir, detrás de la puerta que ya lo había
+dejado fuera: no se ejecutaba jamás para los libros que la necesitaban.
+
+Lo llamativo es que la intención estaba escrita y era correcta. El comentario de
+`faltaSubirPortada()` en `biblioteca.js:647-654` describe exactamente este caso («los libros
+sincronizados antes de que las carátulas viajaran… como ya figuran como sincronizados nunca la
+reenviarían»). La función existía, funcionaba y estaba bien documentada. Solo que nadie la
+llamaba a tiempo. Por eso pulsar «Actualizar» no traía nada: no había nada que enviar.
+
+### Corrección
+
+- **`js/pdf/sincronizacion.js`** (el módulo puro, con pruebas) recibe la decisión que estaba suelta
+  en `nube.js`:
+  - `debeSubir(local, { cursor, remoto, faltaPortada })` — una carátula pendiente es motivo
+    suficiente para subir, aunque el libro esté al día. Nunca para un libro borrado: de eso solo
+    viaja la lápida.
+  - `puedeFaltarPortada(local)` — filtro barato, solo con lo que ya está en memoria, para no
+    consultar la base por cada libro en cada sincronización.
+- **`js/pdf/nube.js`** arma la lista **antes** del bucle y consulta `faltaSubirPortada()` solo para
+  los libros que pueden tenerla pendiente. En cuanto una carátula viaja queda marcada y no se
+  vuelve a mirar, así que el coste tiende a cero.
+- **`js/pdf/biblioteca.js`** — `exportarParaSincronizar()` entrega `portadaSincronizada`. Sin ese
+  dato la decisión era ciega y habría que leer la base para cada libro.
+- **`js/pdf/pdfController.js`** — `sincronizarAhora()` acepta `desdeCabecera`: bloquea y anuncia en
+  **el botón que se pulsó**, y publica progreso, resultado y errores con `avisar()`, que se ve
+  arriba. Sin nube conectada ahora lo dice con palabras antes de abrir la sección, en vez de
+  desplegar un panel que el usuario no había pedido.
+- **`index.html`** — la etiqueta del botón va en `#pdfActualizarBiblioLabel` para poder cambiarla
+  a «Actualizando…».
+
+### Pruebas
+- `tests/test_pdf_sincronizacion.mjs` ✔ **55/55** (era 42): libro al día con carátula ya enviada,
+  al día sin marca, confirmación de carátula pendiente, libro borrado, libro con cambios, primera
+  sincronización sin cursor con y sin carátula pendiente, y casos nulos.
+- Cinco comprobaciones estructurales nuevas que vigilan que el arreglo no se deshaga: que `nube.js`
+  siga decidiendo con `debeSubir()`, y que **la carátula se compruebe antes del bucle, no dentro**
+  —que era justo el error—. Sin esto, la regla podría estar perfecta y volver a no servir de nada.
+- Regresión completa ✔ **441 OK · 0 FALLOS** en los 13 archivos de `tests/`.
+- `node --check` ✔ en los cinco módulos tocados (las pruebas no cargan `nube.js` ni
+  `pdfController.js` enteros, así que un error de sintaxis ahí no lo vería nadie).
+
+### Verificado además
+`guardarDocumento()` conserva la carátula local cuando llega un documento sin ella
+(`portada || antes.portada || null`, `biblioteca.js:232`): sincronizar no borra una carátula que
+solo estaba en este aparato.
+
+### Deploy
+- `sw.js` → `jg-turbo-shell-v65` · `JG_JS_V` → `v65` (si no se sube, el HTML nuevo se emparejaría
+  con el JS viejo y el botón volvería a estar muerto)
+- `index.html` → `<!-- v2.28.5 · Las caratulas de libros ya sincronizados por fin viajan; el boton Actualizar responde -->`
+
+---
+
 ## Fix · JS versionado con el HTML (rama `fix-aviso-vacio`)
 
 Síntoma: el botón «Actualizar» aparecía pero no hacía nada (HTML nuevo + JS viejo del caché: el service worker sirve `/js/` al instante y lo refresca por detrás).
