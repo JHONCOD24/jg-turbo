@@ -1,5 +1,99 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v5.1 · Que un libro suene a libro
+
+### Lo pedido
+Al escuchar un PDF, la voz decía los números entre corchetes de las guías y referencias, y en esas
+partes «sonaba como si hablara en otro idioma». Se pidió que no los mencione y pulir la gramática
+de la lectura en general.
+
+### Causas encontradas
+
+1. **Nada quitaba las llamadas de nota.** Ni `vozTexto.js: prepararParaVoz()` ni
+   `index.html: ttsNormalizarTextoNarracion()` tocaban `[12]`, `[3, 4]`, `[ii]` ni `(12)`: llegaban
+   enteros al motor, que los pronunciaba.
+2. **El cambio de voz a inglés era real, y tenía dos disparadores** (`index.html:12367` y `:12373`,
+   dentro de `ttsPareceTokenIngles`), que es lo que se oía como «otro idioma»:
+   - `/[A-Za-z]\d|\d[A-Za-z]/` marcaba como término inglés **cualquier** palabra con un dígito
+     pegado. Al extraer un PDF los superíndices de nota quedan cosidos al texto («la evolución3»),
+     así que media frase en español se leía con acento inglés.
+   - `TTS_ES_ACRONYMS` solo tenía 24 siglas y ninguna era de uso corriente en un libro: «la ONU»,
+     «la OMS», «el PIB» o «la UNESCO» caían en la regla de acrónimos y se leían en inglés.
+3. **Las abreviaturas de aparato crítico no se expandían.** `cf.` sonaba «ce-efe», `et al.` como
+   una palabra inventada, y cada punto abría un corte de oración falso que partía la frase.
+4. **Las direcciones web y los correos se deletreaban** carácter a carácter.
+5. **Las iniciales de un nombre** («J. R. R. Tolkien») son tres puntos seguidos: el partidor de
+   oraciones veía tres frases y la voz hacía tres caídas tonales antes del apellido.
+
+### Corrección aplicada
+
+Todo vive en la **capa efímera de voz**, la que se genera justo antes de hablar y se descarta. El
+texto que se ve, se guarda, se exporta y se sincroniza no cambia ni un carácter (invariante 2 del
+plan de auditoría editorial).
+
+- `js/pdf/vozTexto.js: prepararParaVoz()` — nueva opción `limpiarReferencias` (activa por defecto):
+  - Quita `[12]`, `[3, 4, 5]`, `[12-15]`, `[ii]`, `[*]`, `(12)` y `[...]`. **Solo cuando dentro no
+    hay ninguna palabra**: `[sic]`, `[el rey]` o `(véase el mapa)` son acotaciones del autor o del
+    editor y se conservan enteras.
+  - Separa el número de nota pegado a la palabra («evolución3» → «evolución») solo si la palabra es
+    de 4+ letras y va toda en minúsculas, con lista de excepciones (`covid`, `web`, `mp`, `iso`…):
+    así «H2O», «GPT4», «MP3» y «1914» quedan intactos.
+  - Expande `op. cit.`, `loc. cit.`, `ibíd.`, `íd.`, `et al.`, `cf.`, `vid.`, `v. gr.`, `s. f.`,
+    `s. l.`, `n.º`, `núm.`, `fig.`, `tab.`, `ed.`, `trad.`, `AA. VV.`, `passim`, `pp.` y `p.`
+    a su forma hablada en español.
+  - Sustituye URLs por «enlace web» y correos por «dirección de correo».
+  - Junta las iniciales («J. R. R. Malthus» → «J.R.R. Malthus») conservando el espacio del
+    apellido, para no crear una palabra inventada.
+  - Dice `§`, `¶`, `&` y la barra con palabras, cuidando la concordancia: «el § 4» se lee
+    «el parágrafo 4», nunca «el sección 4».
+  - Cose las costuras al final (espacios dobles, signo separado, coma repetida) y repone la
+    mayúscula tras punto que se perdía al expandir una abreviatura. **Solo tras punto, nunca al
+    principio de la cadena**: el texto llega partido en bloques y uno que empieza en minúscula es
+    la continuación del anterior.
+- `index.html: ttsNormalizarTextoNarracion()` — la misma limpieza de llamadas de nota, con la misma
+  regla de «solo si no hay palabras dentro», para Micrófono, Archivo y YouTube.
+- `index.html: ttsPareceTokenIngles()` — la regla de letras+dígitos ahora exige que la parte
+  alfabética **no parezca prosa**: 4+ letras y todas minúsculas se leen en español. «GPT4», «H264»
+  y «OpenAI» siguen en inglés.
+- `index.html: TTS_ES_ACRONYMS` — ampliada de 24 a ~60 siglas: organismos (ONU, OMS, OTAN, UNESCO,
+  UNICEF, FMI, OCDE…), economía (PIB, IPC, IVA), Colombia y región (DANE, DIAN, SENA, ICBF, EPS,
+  MERCOSUR, CEPAL) y cronología (AC, DC, AAVV).
+- `js/pdf/pulido.js` — retirado un bloque de comentario JSDoc duplicado (defecto cosmético de v5.0).
+
+### Pruebas
+- `tests/test_pdf_voz.mjs` ✔ **66/66** (era 15): referencias en corchetes, paréntesis y llaves;
+  acotaciones que SÍ se conservan; notas pegadas y fórmulas que no se tocan; 7 abreviaturas
+  académicas; URLs y correos; iniciales; símbolos; concordancia; invariante de que no se pierde
+  ninguna palabra del autor; casos límite (texto que es solo una referencia, corchetes sin cerrar,
+  50 000 caracteres, referencias seguidas).
+- `tests/test_tts_narracion.mjs` ✔ **44/44** (nuevo): extrae del `index.html` las funciones reales
+  (`ttsNormalizarTextoNarracion`, `ttsPareceTokenIngles`, `TTS_ES_ACRONYMS`) y **las ejecuta** en
+  vez de comprobar que el texto esté presente. Cubre lo que debe seguir leyéndose en inglés
+  (`debugging`, `deployment`, `GPT4`, `H264`, `OpenAI`, `API`) y lo que ya no puede cambiar de voz
+  (`estudio12`, `evolucion3`, ONU, OMS, OTAN, PIB, UNESCO, DANE, RAE, FMI).
+- Regresión completa ✔ **413 OK · 0 FALLOS** en los 13 archivos `.mjs` de `tests/`.
+
+### Corrección detectada durante la propia verificación
+La primera versión ponía mayúscula también al principio de la cadena y rompía
+`test_pdf_pulido_mecanico` («Página doce» en vez de «página doce»). La prueba tenía razón: un
+bloque que empieza en minúscula es continuación del anterior y forzar la mayúscula altera la
+entonación. La regla quedó limitada a «tras punto».
+
+### Pendiente que NO viene de esta entrega
+`python -m pytest backend/tests` falla al recolectar 5 módulos
+(`test_ai_youtube`, `test_marcas_de_tiempo`, `test_pulido_subtitulos`, `test_transcribe`,
+`test_translate_local`): importan `api.subtitulos_limpieza` y `api.pulido`, que no existen **ni en
+este repo ni en el respaldo `JG Turbo_OLD`**. Verificado con `git stash` que ya fallaban antes de
+esta entrega. Son pruebas huérfanas de una refactorización anterior; hay que reescribirlas o
+retirarlas en una entrega propia.
+
+### Deploy
+- `sw.js` → `jg-turbo-shell-v60`
+- `index.html` → `<!-- v2.28.0 · Voz de libro: sin llamadas de nota, sin cambios de idioma a media frase -->`
+- Pendiente de desplegar y verificar contra https://jg-turbo.vercel.app
+
+---
+
 ## Hotfix 2026-09-03 · Biblioteca en versión 5 (rama `fix-biblioteca-v5`)
 
 Síntoma: en el celular la biblioteca aparecía vacía y al pulsar «Actualizar ahora» salía `the requested version (4) is less than the existing version (5)`, aunque la nube mostraba los 7 libros.

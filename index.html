@@ -1,4 +1,4 @@
-<!-- v2.27.1 · Hotfix biblioteca v5: abre bases en version 5 (eran inaccesibles con v4) -->
+<!-- v2.28.0 · Voz de libro: sin llamadas de nota, sin cambios de idioma a media frase -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -11675,7 +11675,22 @@ const TTS_ES_WORDS = new Set('el la los las un una unos unas y o pero es son fue
 // Cognados que suenan bien en español y NO deben forzar cambio a voz inglesa.
 // Importante: NO incluir tech (app, code, web, API, model…) — esas van en inglés real.
 const TTS_ES_SAFE = new Set('real simple normal total ideal final global local digital original personal material natural video radio hotel idea plan caso tiempo fecha color estilo grupo equipo casa página sitio precio marca control acceso estado acción opción opciones número valor valores mensaje mensajes éxito listo activo inactivo público privado general especial básico avanzado estándar premium gratis completo verdadero falso sí no ok hola gracias'.split(' '));
-const TTS_ES_ACRONYMS = new Set(['SI','NO','YA','OK','TV','PC','CD','DVD','USB','PDF','JPG','PNG','MP3','MP4','GIF','WWW','USA','UE','EEUU','LATAM','IVA','NIT','CC','ID']);
+/* Siglas que en un texto en español se leen CON VOZ ESPAÑOLA.
+ * La lista corta anterior dejaba fuera las más comunes de un libro: «la ONU»,
+ * «la OMS» o «el PIB» se pronunciaban con acento inglés a media frase, que es
+ * justo lo que hacía pensar que la voz cambiaba de idioma sola. */
+const TTS_ES_ACRONYMS = new Set([
+  'SI','NO','YA','OK','TV','PC','CD','DVD','USB','PDF','JPG','PNG','MP3','MP4','GIF','WWW',
+  'USA','UE','EEUU','LATAM','IVA','NIT','CC','ID',
+  /* Organismos y siglas de uso corriente en libros y prensa en español */
+  'ONU','OTAN','OMS','OIT','OEA','FMI','BCE','BID','CAF','UNESCO','UNICEF','ACNUR','FAO',
+  'ONG','ONGS','PIB','IPC','RAE','DNI','NIE','SA','SL','SAS','URSS','RDA','RFA','EEUU',
+  'MERCOSUR','CAN','ALADI','CEPAL','OCDE','OPEP','FIFA','COI',
+  /* Colombia y región */
+  'DANE','DIAN','SENA','ICBF','EPS','IPS','ARL','AFP','POS','SISBEN','FARC','ELN','UNAL',
+  /* Cronología y referencias que aparecen en cualquier ensayo */
+  'AC','DC','ANE','DNE','NN','AAVV','VVAA',
+]);
 
 /**
  * Palabras que existen igual en varios idiomas ("de", "sistema", "que"…).
@@ -12239,6 +12254,12 @@ function ttsNormalizarTextoNarracion(texto){
     .replace(/\[([^\]]+)\]\((?:https?:\/\/)?[^)]+\)/g, '$1')
     .replace(/```([\s\S]*?)```/g, (_, code) => String(code || '').replace(/\s+/g, ' ').trim())
     .replace(/`([^`]+)`/g, '$1')
+    // Llamadas de nota y referencias: «[12]», «[3, 4]», «[ii]», «[*]». Solo
+    // cuando dentro no hay ni una palabra, para no perder una acotación como
+    // «[sic]» o «[el rey]». Un texto pegado desde un libro las trae, y oírlas
+    // interrumpe la lectura con números sueltos.
+    .replace(/\[\s*(?:[\divxlcdmIVXLCDM*†‡]+\s*[,;–—-]?\s*)+\]/g, (m) =>
+      /[a-záéíóúüñA-ZÁÉÍÓÚÜÑ]{2,}/.test(m.replace(/[ivxlcdmIVXLCDM]/g, '')) ? m : '')
     .replace(/[*_~]+/g, '')
     .replace(/^\s*>\s?/gm, '')
     .replace(/^\s*#{1,6}\s+/gm, '')
@@ -12363,8 +12384,16 @@ function ttsPareceTokenIngles(token){
   if(TTS_ES_SAFE.has(lower)) return false;
   // CamelCase / PascalCase (OpenAI, GitHub, ChatGPT)
   if(/[a-z][A-Z]/.test(w) || /[A-Z]{2,}[a-z]/.test(w)) return true;
-  // Letras + números: GPT-4, H264, ES2024
-  if(/[A-Za-z]\d|\d[A-Za-z]/.test(w)) return true;
+  // Letras + números: GPT-4, H264, ES2024.
+  // Se exige que la parte alfabética NO parezca una palabra española: al
+  // extraer un PDF, las llamadas de nota quedan cosidas al texto («estudio12»,
+  // «evolucion3») y esta regla las mandaba a voz inglesa a media frase. Una
+  // palabra larga y toda en minúsculas es prosa, no un nombre técnico.
+  if(/[A-Za-z]\d|\d[A-Za-z]/.test(w)){
+    const soloLetras = w.replace(/[\d._+#'@-]/g, '');
+    const pareceProsa = soloLetras.length >= 4 && soloLetras === soloLetras.toLowerCase();
+    if(!pareceProsa) return true;
+  }
   // Extensiones y nombres de archivo técnicos
   if(/\.(js|ts|tsx|jsx|mjs|cjs|py|rb|go|rs|java|kt|swift|php|cs|cpp|h|json|jsonl|ya?ml|toml|md|txt|csv|sql|html?|css|scss|vue|svelte|wasm|map|lock|env|gitignore|dockerfile)$/i.test(w)) return true;
   // Acrónimos punteados (U.S.A., A.P.I.) — se leen con voz inglesa

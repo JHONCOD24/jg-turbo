@@ -109,6 +109,9 @@ export function numeroAPalabras(n) {
  *   líneas sueltas que parecen títulos, para que la voz pause antes del cuerpo.
  * @param {boolean} [opts.comasProsodicas=true] – Inserta una coma antes de
  *   conectores («pero», «aunque»…), para que las frases largas respiren.
+ * @param {boolean} [opts.limpiarReferencias=true] – Quita las llamadas de nota
+ *   («[12]», «estudio12»), las direcciones web y los símbolos de aparato
+ *   crítico, que en un audiolibro solo estorban.
  * @returns {string}
  */
 export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
@@ -116,12 +119,61 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   const neural = opts.neural !== false; // por defecto true
   const pausarTitulos = opts.pausarTitulos !== false; // por defecto true
   const comasProsodicas = opts.comasProsodicas !== false; // por defecto true
+  const limpiarReferencias = opts.limpiarReferencias !== false; // por defecto true
   let salida = texto;
 
   // Si no es español, aplicar solo limpieza básica
   if (idioma !== 'es') {
     if (!neural) salida = salida.replace(/(\d+)\s*%/g, '$1 percent');
     return salida;
+  }
+
+  /* ── 0. El aparato crítico no se lee ────────────────────────────────
+   *
+   * Un libro serio está lleno de marcas que existen para el ojo, no para el
+   * oído: llamadas de nota, referencias bibliográficas, direcciones web. Al
+   * oírlas, la lectura se interrumpe con números sueltos y, peor, el motor de
+   * voz las toma por términos técnicos y CAMBIA DE VOZ a media frase (por eso
+   * «suena como si hablara en otro idioma»).
+   *
+   * Todo esto se quita solo aquí, en la capa que se le entrega al motor. El
+   * texto que se ve en pantalla y el que se exporta conservan cada marca.
+   */
+  if (limpiarReferencias) {
+    /* Primero las direcciones: llevan puntos y barras que confundirían a las
+     * reglas de abreviaturas que vienen después. */
+    salida = salida
+      .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, 'dirección de correo')
+      .replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi, 'enlace web');
+
+    /* Elipsis editorial: «[...]» y «[…]» marcan texto omitido por el editor.
+     * Se dice con el silencio que ya deja la puntuación de alrededor. */
+    salida = salida.replace(/[[(]\s*(?:\.{3}|…)\s*[\])]/g, '');
+
+    /* Llamadas y referencias: lo que va entre corchetes, paréntesis o llaves y
+     * NO contiene ni una letra de palabra. Cubre «[12]», «[3, 4, 5]»,
+     * «[12-15]», «[ii]», «[*]» y «(12)».
+     *
+     * La condición es deliberadamente estricta: en cuanto hay una palabra de
+     * verdad dentro —«[el rey]», «[sic]», «(véase el mapa)»— es una acotación
+     * del autor o del editor y se conserva entera. Perder una acotación sería
+     * perder contenido; perder un número de nota no. */
+    salida = salida.replace(/[[{(]\s*(?:[\divxlcdmIVXLCDM*†‡§¶]+\s*[,;:–—-]?\s*)+\]?\s*[\]})]/g, (m) => (
+      /[a-záéíóúüñA-ZÁÉÍÓÚÜÑ]{2,}/.test(m.replace(/[ivxlcdmIVXLCDM]/g, '')) ? m : ''
+    ));
+
+    /* Números de nota pegados a la palabra. Al extraer un PDF, los
+     * superíndices pierden su formato y quedan cosidos al texto:
+     * «la evolución3 de la especie». El motor lee «evolución tres» y además
+     * ese token con dígitos es justo el que le hace cambiar a voz inglesa.
+     *
+     * Solo se quitan cuando la palabra es larga y va toda en minúsculas: así
+     * «H2O», «GPT4», «MP3» o «1914» quedan intactos, que son nombres y cifras
+     * de verdad. La lista de excepciones cubre lo poco que se escapa. */
+    const PALABRAS_CON_NUMERO = /^(covid|web|mp|html|css|sha|utf|iso|rgb|base|ipv|http|x)$/i;
+    salida = salida.replace(/\b([a-záéíóúüñ]{4,})(\d{1,3})(?![\w-])/g, (m, palabra) => (
+      PALABRAS_CON_NUMERO.test(palabra) ? m : palabra
+    ));
   }
 
   // 1. Siglos romanos: «S. XIX», «s. XXI», «siglo IV», «siglos XVIII y XIX»
@@ -156,14 +208,66 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     .replace(/\bSrta\./g, 'señorita')
     .replace(/\bvs\./gi, 'versus');
 
+  /* 3 bis. Abreviaturas de aparato crítico.
+   *
+   * Son latinajos que el motor no sabe leer: «cf.» sale como «ce-efe», «et
+   * al.» como una palabra inventada, «ibíd.» con el acento donde no va. Y
+   * cada punto abre un corte de oración falso que parte la frase en dos.
+   * Se dicen en español, que es como las leería una persona en voz alta. */
+  salida = salida
+    .replace(/\bop\.\s*cit\./gi, 'obra citada')
+    .replace(/\bloc\.\s*cit\./gi, 'lugar citado')
+    .replace(/\bib[íi]d(?:em)?\./gi, 'en la misma obra')
+    .replace(/\b[íi]d\./gi, 'el mismo')
+    .replace(/\bet\s*al\./gi, 'y otros')
+    .replace(/\bcf\./gi, 'compárese con')
+    .replace(/\bvid\./gi, 'véase')
+    .replace(/\bv\.\s*gr\./gi, 'por ejemplo')
+    .replace(/\bs\.\s*f\./gi, 'sin fecha')
+    .replace(/\bs\.\s*l\./gi, 'sin lugar')
+    .replace(/\bn\.\s*[ºo°]\s*/gi, 'número ')
+    .replace(/\bn[úu]m\.\s*/gi, 'número ')
+    .replace(/\bfig\.\s*/gi, 'figura ')
+    .replace(/\btab\.\s*/gi, 'tabla ')
+    .replace(/\bed\.\s*/gi, 'edición ')
+    .replace(/\btrad\.\s*/gi, 'traducción de ')
+    .replace(/\bAA\.\s*VV\./g, 'varios autores')
+    .replace(/\bpassim\b/gi, 'en varios lugares');
+
   // Las abreviaturas con número (pág., cap.) se expanden siempre porque
   // el punto dispararía un corte de oración falso.
   salida = salida
     .replace(/\bpág\.\s*(\d+)/gi, (_, n) => `página ${numeroAPalabras(parseInt(n, 10))}`)
     .replace(/\bpágs\.\s*(\d+)\s*[-–—]\s*(\d+)/gi, (_, d, h) => `páginas ${numeroAPalabras(parseInt(d, 10))} a ${numeroAPalabras(parseInt(h, 10))}`)
+    .replace(/\bpp\.\s*(\d+)\s*[-–—]\s*(\d+)/gi, (_, d, h) => `páginas ${numeroAPalabras(parseInt(d, 10))} a ${numeroAPalabras(parseInt(h, 10))}`)
+    .replace(/\bp\.\s*(\d+)/gi, (_, n) => `página ${numeroAPalabras(parseInt(n, 10))}`)
     .replace(/\bcap\.\s*(\d+)/gi, (_, n) => `capítulo ${numeroAPalabras(parseInt(n, 10))}`)
     .replace(/\bart\.\s*(\d+)/gi, (_, n) => `artículo ${numeroAPalabras(parseInt(n, 10))}`)
     .replace(/\bvol\.\s*(\d+)/gi, (_, n) => `volumen ${numeroAPalabras(parseInt(n, 10))}`);
+
+  /* 3 ter. Iniciales de nombres propios: «J. R. R. Tolkien».
+   *
+   * Tres puntos seguidos son, para el partidor de oraciones, tres frases: la
+   * voz hace tres caídas tonales y una pausa larga antes del apellido. Al
+   * juntarlas queda un solo bloque y el nombre suena de corrido. */
+  salida = salida.replace(/\b((?:[A-ZÁÉÍÓÚÑ]\.\s*){2,})(?=[A-ZÁÉÍÓÚÑ][a-záéíóúüñ])/g,
+    /* El espacio ANTES del apellido se conserva: juntarlo también daría
+     * «J.R.R.Malthus», que el motor lee como una palabra inventada. */
+    (m) => `${m.trim().replace(/\.\s+/g, '.')} `);
+
+  /* 3 quater. Símbolos que se dicen con palabras.
+   *
+   * Sueltos, el motor los ignora o los nombra en inglés. Se dicen como los
+   * diría una persona, cuidando la concordancia: «el § 4» tiene que sonar
+   * «el parágrafo 4», nunca «el sección 4». */
+  salida = salida
+    .replace(/\b(el|del|al|un|este|ese|dicho)\s+§\s*/gi, '$1 parágrafo ')
+    .replace(/§\s*/g, 'sección ')
+    .replace(/¶\s*/g, 'párrafo ')
+    .replace(/\s*&\s*/g, ' y ')
+    .replace(/(\p{L})\/(\p{L})/gu, '$1 o $2')   /* autor/lector → autor o lector */
+    .replace(/[~|_]+/g, ' ')
+    .replace(/[†‡]/g, '');
 
   // ── Reglas 4-6: conversión numérica ──
   // Edge TTS (y Azure) ya pronuncian «2024» como «dos mil veinticuatro» y
@@ -235,6 +339,32 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
       return `, ${conector} `;
     });
   }
+
+  /* ── Cerrar las costuras ────────────────────────────────────────────
+   *
+   * Quitar una referencia deja un hueco: «pronto  y nadie» con dos espacios,
+   * o «consolidó .» con el punto separado. Son huecos que el motor convierte
+   * en una vacilación audible, así que se cosen aquí, al final, cuando ya no
+   * queda ninguna regla por aplicar. */
+  salida = salida
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+([,.;:!?…»)\]])/g, '$1')
+    .replace(/([¡¿«([])[ \t]+/g, '$1')
+    .replace(/,\s*,/g, ',')
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .trim();
+
+  /* Expandir una abreviatura que abría la frase la dejaba en minúscula
+   * («Todo cambió. compárese con…»). Cambiar mayúsculas no cambia la palabra,
+   * pero sí la entonación: el motor baja el tono como si siguiera la frase
+   * anterior.
+   *
+   * Solo TRAS un punto, nunca al principio de la cadena: este texto llega
+   * partido en bloques y un bloque que empieza en minúscula es la
+   * continuación del anterior, no una frase nueva. */
+  salida = salida.replace(/([.!?…]\s+)([a-záéíóúüñ])/g,
+    (_, signo, letra) => signo + letra.toUpperCase());
 
   return salida;
 }

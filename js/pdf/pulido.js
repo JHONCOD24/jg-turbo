@@ -172,13 +172,6 @@ const SIGNOS_VALIDOS = new Set([',', '.', ';', ':', '…', '—', '–', '-', '"
  * el bloque se queda en su capa local, jamás con texto inventado).
  * Cada signo viene como { pos, tipo, texto }: pos es el índice del token;
  * «apertura» se antepone al token (¿ ¡), el resto va pegado detrás.
- */
-/**
- * Aplica los signos validados de la IA al bloque sin tocar palabras.
- * Devuelve el texto con puntuación, o null si algo no cuadra (y entonces
- * el bloque se queda en su capa local, jamás con texto inventado).
- * Cada signo viene como { pos, tipo, texto }: pos es el índice del token;
- * «apertura» se antepone al token (¿ ¡), el resto va pegado detrás.
  *
  * IMPORTANTE — la forma del texto se conserva. La versión anterior rearmaba
  * el bloque con `tokens.join(' ')`, lo que borraba todos los saltos de línea:
