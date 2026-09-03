@@ -97,6 +97,16 @@ export function mismasPalabras(original, pulido) {
       return { igual: false, parecido: parec, motivo: `${motivo}_en_${i}` };
     }
   }
+  /* Las palabras coinciden, pero un texto no es solo sus palabras: perder los
+   * saltos de párrafo pega el título al cuerpo y arruina la lectura en voz
+   * alta. Se exige que la cantidad de saltos no disminuya. Que aumente sí se
+   * permite: separar mejor un párrafo es una mejora, no una pérdida. */
+  const saltosOrig = (String(original).match(/\n/g) || []).length;
+  const saltosPul = (String(pulido).match(/\n/g) || []).length;
+  if (saltosPul < saltosOrig) {
+    return { igual: false, parecido: 0.99, motivo: 'estructura_perdida' };
+  }
+
   return { igual: true, parecido: 1, motivo: 'exacto' };
 }
 
@@ -163,9 +173,24 @@ const SIGNOS_VALIDOS = new Set([',', '.', ';', ':', '…', '—', '–', '-', '"
  * Cada signo viene como { pos, tipo, texto }: pos es el índice del token;
  * «apertura» se antepone al token (¿ ¡), el resto va pegado detrás.
  */
+/**
+ * Aplica los signos validados de la IA al bloque sin tocar palabras.
+ * Devuelve el texto con puntuación, o null si algo no cuadra (y entonces
+ * el bloque se queda en su capa local, jamás con texto inventado).
+ * Cada signo viene como { pos, tipo, texto }: pos es el índice del token;
+ * «apertura» se antepone al token (¿ ¡), el resto va pegado detrás.
+ *
+ * IMPORTANTE — la forma del texto se conserva. La versión anterior rearmaba
+ * el bloque con `tokens.join(' ')`, lo que borraba todos los saltos de línea:
+ * un título quedaba pegado a su párrafo y la voz los leía de corrido. Ahora se
+ * recorre el texto ORIGINAL y solo se insertan los signos en su sitio, así que
+ * los espacios, los saltos y la sangría siguen siendo los del autor.
+ */
 export function aplicarSignos(textoBase, tokens, signos) {
-  const toks = Array.isArray(tokens) && tokens.length ? [...tokens] : tokenizarExacto(textoBase);
+  const base = String(textoBase || '');
+  const toks = Array.isArray(tokens) && tokens.length ? [...tokens] : tokenizarExacto(base);
   if (!Array.isArray(signos)) return null;
+
   const antesDe = new Map();
   const despuesDe = new Map();
   for (const s of signos) {
@@ -177,12 +202,26 @@ export function aplicarSignos(textoBase, tokens, signos) {
     const mapa = (s?.tipo === 'apertura' || pos === -1) ? antesDe : despuesDe;
     mapa.set(pos, (mapa.get(pos) || '') + sig);
   }
+
+  /* Localizar cada token dentro del texto original, avanzando siempre hacia
+   * delante. Los tokens vienen sin signos pegados (los quita `tokenizarExacto`),
+   * así que se busca el núcleo de la palabra. */
   let salida = '';
-  toks.forEach((tok, i) => {
-    const sep = i ? ' ' : '';
-    salida += sep + (antesDe.get(i) || '') + tok + (despuesDe.get(i) || '');
-  });
-  const chequeo = mismasPalabras(textoBase, salida);
+  let cursor = 0;
+  for (let i = 0; i < toks.length; i += 1) {
+    const tok = toks[i];
+    const donde = base.indexOf(tok, cursor);
+    if (donde === -1) return null;          /* los tokens no son de este texto */
+    /* Todo lo que hay entre el token anterior y este (espacios, saltos,
+     * signos que ya estaban) se copia tal cual. */
+    salida += base.slice(cursor, donde);
+    salida += (antesDe.get(i) || '') + tok + (despuesDe.get(i) || '');
+    cursor = donde + tok.length;
+  }
+  /* Y la cola: lo que venga después del último token. */
+  salida += base.slice(cursor);
+
+  const chequeo = mismasPalabras(base, salida);
   return chequeo.igual ? salida : null;
 }
 

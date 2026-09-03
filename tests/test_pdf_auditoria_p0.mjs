@@ -104,6 +104,38 @@ console.log('\n--- 4) UI de revisión y backend presentes ---');
   comprobar(backend.includes('@app.post("/api/improve"'), 'Backend local expone el alias /api/improve');
 }
 
+console.log('--- 6) aplicarSignos conserva la forma del texto ---');
+{
+  /* Un título seguido de su párrafo. Si los saltos se pierden, la voz lee
+   * «CAPITULO PRIMERO En un lugar...» de corrido, que es exactamente lo que
+   * el usuario reporta como «se lee raro». */
+  const texto = 'CAPITULO PRIMERO\n\nEn un lugar de la Mancha vivia un hidalgo\n\nY tenia una espada';
+  const toks = tokenizarExacto(texto);
+  const res = aplicarSignos(texto, toks, [{ pos: toks.length - 1, tipo: 'punto', texto: '.' }]);
+
+  comprobar(typeof res === 'string', 'devuelve texto');
+  comprobar(res.includes('\n\n'), 'conserva los saltos de parrafo');
+  comprobar((res.match(/\n\n/g) || []).length === 2, 'conserva LOS DOS saltos, no uno');
+  comprobar(res.startsWith('CAPITULO PRIMERO\n\n'), 'el titulo sigue separado del parrafo');
+  comprobar(res.trim().endsWith('.'), 'y aun asi aplica el signo pedido');
+  comprobar(mismasPalabras(texto, res).igual, 'las palabras se conservan al 100 %');
+}
+{
+  /* El salto simple (dentro de un verso, por ejemplo) también cuenta. */
+  const texto = 'Verso primero\nVerso segundo';
+  const toks = tokenizarExacto(texto);
+  const res = aplicarSignos(texto, toks, [{ pos: 1, tipo: 'coma', texto: ',' }]);
+  comprobar(res && res.includes('\n'), 'conserva el salto simple');
+  comprobar(res && res.includes('primero,'), 'y coloca la coma donde se pidio');
+}
+{
+  /* El guardián debe DETECTAR que se perdieron los saltos, no aprobarlo. */
+  const original = 'TITULO\n\nParrafo del cuerpo';
+  const aplastado = 'TITULO Parrafo del cuerpo';
+  comprobar(mismasPalabras(original, aplastado).igual === false,
+    'mismasPalabras rechaza un texto al que le quitaron los saltos');
+}
+
 if (fallos > 0) {
   console.error(`\n❌ ${fallos} prueba(s) fallaron.`);
   process.exit(1);
