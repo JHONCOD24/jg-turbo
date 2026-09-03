@@ -87,10 +87,19 @@ este repo ni en el respaldo `JG Turbo_OLD`**. Verificado con `git stash` que ya 
 esta entrega. Son pruebas huérfanas de una refactorización anterior; hay que reescribirlas o
 retirarlas en una entrega propia.
 
-### Deploy
+### Deploy v60
 - `sw.js` → `jg-turbo-shell-v60`
 - `index.html` → `<!-- v2.28.0 · Voz de libro: sin llamadas de nota, sin cambios de idioma a media frase -->`
-- Pendiente de desplegar y verificar contra https://jg-turbo.vercel.app
+- Producción: `dpl_6B6STAnkwtrmpnPfnqpbUQ5jAssZ` → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app** el 2026-09-03: marcador `v2.28.0`, `sw.js` `v60`,
+  `/api/health` ok, y comprobado que el código servido trae de verdad los cambios
+  (`'ONU','OTAN'` en las siglas, `pareceProsa` en la detección de inglés, y en
+  `/js/pdf/vozTexto.js` las marcas `limpiarReferencias`, `obra citada` y `PALABRAS_CON_NUMERO`).
+
+### Falta por hacer (escucha real)
+Ninguna prueba automática dice si la voz *suena* bien. Queda escuchar dos o tres minutos de un
+libro con notas al pie y confirmar que no aparecen números sueltos ni cambios de acento. Si algún
+libro trae una convención de referencias distinta a las cubiertas, se añade aquí.
 
 ---
 
