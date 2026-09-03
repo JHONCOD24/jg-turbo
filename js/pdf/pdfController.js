@@ -2683,8 +2683,13 @@ export function inicializarLectorPdf(deps = {}) {
 
     /* En pausa la guía se queda donde está: quien pausa quiere justamente
      * volver a ese punto, y borrar la marca sería perderlo. Solo desaparece
-     * cuando la lectura termina o se detiene. */
-    if (datos.estado === 'paused') return;
+     * cuando la lectura termina o se detiene.
+     * Además, pausar suele significar «lo dejo aquí»: buen momento para que
+     * el punto llegue a los demás dispositivos. */
+    if (datos.estado === 'paused') {
+      guardarYaMismo().then(() => sincronizarAhora({ silencioso: true }));
+      return;
+    }
     if (!datos.sonando) { limpiarGuia(); return; }
 
     /* El progreso del libro se anota siempre que suene, se siga el texto o no.
@@ -2895,18 +2900,46 @@ export function inicializarLectorPdf(deps = {}) {
     el.askAnswer.textContent = '';
   });
 
-  /* Guardar la posición aunque se cierre la pestaña de golpe. */
-  window.addEventListener('pagehide', () => {
-    if (!estado.id) return;
+  /* ── Que no se pierda nada al desaparecer la app ────────────────────
+   *
+   * El guardado normal espera 900 ms por si llegan más cambios
+   * (`guardarProgresoPronto`). Cuando el sistema se lleva la app —el usuario
+   * cambia de aplicación, bloquea el celular, o el celular se apaga— esos
+   * 900 ms no llegan a cumplirse y el avance se pierde.
+   *
+   * `visibilitychange` es el único evento fiable en móvil: `beforeunload` no
+   * se dispara en Android ni en iOS cuando el sistema mata la pestaña.
+   */
+  async function guardarYaMismo() {
+    if (!hayDocumento() || !estado.id) return;
     clearTimeout(temporizadorGuardado);
-    almacen.guardarProgreso(estado.id, estado.progreso, estado.partes);
-  });
+    anotarPosicion();
+    try {
+      await almacen.guardarProgreso(estado.id, estado.progreso, estado.partes);
+    } catch (_) { /* si IndexedDB falla, lo local sigue en memoria */ }
+  }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
+    if (document.visibilityState === 'hidden') {
+      guardarYaMismo().then(() => sincronizarAhora({ silencioso: true }));
+    } else if (document.visibilityState === 'visible') {
+      /* Al volver a la app se trae lo que haya cambiado en otros aparatos. */
       sincronizarAhora({ silencioso: true });
     }
   });
+
+  /* Respaldo para navegadores de escritorio, donde sí es fiable. */
+  window.addEventListener('pagehide', () => { guardarYaMismo(); });
+
+  /* Mientras se lee, un latido tranquilo: si alguien lee dos horas seguidas sin
+   * salir de la app, su avance ya está en la nube por si cambia de dispositivo.
+   * Un minuto es suficiente y no molesta a la batería ni a la cuota. */
+  const LATIDO_SYNC_MS = 60000;
+  setInterval(() => {
+    if (!hayDocumento()) return;
+    if (document.visibilityState !== 'visible') return;
+    guardarYaMismo().then(() => sincronizarAhora({ silencioso: true }));
+  }, LATIDO_SYNC_MS);
 
   /* ── Sincronización entre dispositivos ───────────────────────────── */
   /*
