@@ -5124,6 +5124,12 @@
                 </div>
               </div>
               <div class="pdf-doc-acciones">
+                <button type="button" class="mini-btn" id="btnPdfCapPrev" title="Capítulo anterior" aria-label="Capítulo anterior">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:15px;height:15px"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <button type="button" class="mini-btn" id="btnPdfCapNext" title="Capítulo siguiente" aria-label="Capítulo siguiente">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:15px;height:15px"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
                 <button class="mini-btn pdf-btn-solo-icono" id="btnPdfBuscarToggle" type="button" aria-expanded="false" aria-controls="pdfSearchRow" title="Buscar en el documento" aria-label="Buscar en el documento">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 </button>
@@ -13780,13 +13786,11 @@ function ttsMontarTransporte(consoleEl){
   fila.setAttribute('data-tts-transport', '');
   fila.hidden = false;
   fila.innerHTML =
-    '<button type="button" class="tts-nav" data-tts-action="back" title="Retroceder ' + TTS_SALTO_SEG + ' segundos" aria-label="Retroceder ' + TTS_SALTO_SEG + ' segundos">' +
+    '<button type="button" class="tts-nav" data-tts-action="back" title="Frase anterior" aria-label="Frase anterior">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg>' +
-      '<span class="tts-nav-num">' + TTS_SALTO_SEG + '</span>' +
     '</button>' +
     '<input type="range" class="tts-seek" data-tts-seek min="0" max="100" step="0.1" value="0" aria-label="Posición de la lectura">' +
-    '<button type="button" class="tts-nav" data-tts-action="fwd" title="Avanzar ' + TTS_SALTO_SEG + ' segundos" aria-label="Avanzar ' + TTS_SALTO_SEG + ' segundos">' +
-      '<span class="tts-nav-num">' + TTS_SALTO_SEG + '</span>' +
+    '<button type="button" class="tts-nav" data-tts-action="fwd" title="Frase siguiente" aria-label="Frase siguiente">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg>' +
     '</button>' +
     '<span class="tts-time" data-tts-time aria-live="off">0:00 / 0:00</span>';
@@ -13850,7 +13854,13 @@ function ttsActualizarProgreso(){
       }
     }
     if(etiqueta && !ttsState.arrastrando){
-      etiqueta.textContent = ttsFormatearTiempo(tActual) + ' / ' + ttsFormatearTiempo(tTotal);
+      let txt = ttsFormatearTiempo(tActual) + ' / ' + ttsFormatearTiempo(tTotal);
+      /* En un libro, «12:30 de 48:00» no ubica a nadie. El capítulo sí. */
+      if(id === 'pdf' && window.jgPdfContexto){
+        const ctx = window.jgPdfContexto();
+        if(ctx) txt = ctx + ' · ' + txt;
+      }
+      etiqueta.textContent = txt;
       etiqueta.title = tTotal > 0
         ? ('Duración de escucha a ' + velocidad.toFixed(2) + '×')
         : 'Duración de escucha';
@@ -14097,8 +14107,21 @@ function ttsBindUI(){
     const action = actionBtn.getAttribute('data-tts-action');
     if(action === 'stop'){ ttsDetener(); return; }
     if(action === 'download'){ ttsDescargarAudio(sourceEl, sourceId, langHint, actionBtn); return; }
-    if(action === 'back'){ ttsSaltar(-TTS_SALTO_SEG); return; }
-    if(action === 'fwd'){ ttsSaltar(TTS_SALTO_SEG); return; }
+    if(action === 'back' || action === 'fwd'){
+      const haciaDelante = action === 'fwd';
+      /* En el PDF se salta por frases: es como piensa quien escucha un libro.
+       * El lector responde a este evento porque es el único que sabe dónde
+       * empieza y acaba cada frase del capítulo abierto. */
+      if(ttsState.sourceId === 'pdf'){
+        const ev = new CustomEvent('jg-tts-salto-frase', { detail: { haciaDelante } });
+        document.dispatchEvent(ev);
+        if(ev.detail.atendido) return;
+      }
+      /* Fuera del PDF (micrófono, archivo, YouTube) se conserva el salto por
+       * tiempo: ahí no hay un texto estructurado al que agarrarse. */
+      ttsSaltar(haciaDelante ? TTS_SALTO_SEG : -TTS_SALTO_SEG);
+      return;
+    }
     if(action === 'toggle'){ ttsToggleFromSource(sourceEl, sourceId, langHint); }
   });
 

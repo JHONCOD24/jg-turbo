@@ -64,6 +64,7 @@ export function inicializarLectorPdf(deps = {}) {
 
     titulo: $('pdfResultTitle'), donde: $('pdfDocDonde'), count: $('pdfCount'),
     salida: $('pdfOutput'), realce: $('pdfRealce'), volver: $('btnPdfBack'),
+    capPrev: $('btnPdfCapPrev'), capNext: $('btnPdfCapNext'),
     barraDoc: $('pdfProgresoDoc'), barraRelleno: $('pdfProgresoRelleno'),
     btnIndice: $('btnPdfIndice'), indice: $('pdfIndice'), indiceLista: $('pdfIndiceLista'),
     navbar: $('pdfNavbar'), prev: $('btnPdfPrev'), next: $('btnPdfNext'), navPos: $('pdfNavPos'),
@@ -748,6 +749,8 @@ export function inicializarLectorPdf(deps = {}) {
       el.prev.disabled = estado.parteActual === 0;
       el.next.disabled = estado.parteActual >= estado.partes.length - 1;
     }
+    if (el.capPrev) el.capPrev.disabled = estado.parteActual <= 0;
+    if (el.capNext) el.capNext.disabled = estado.parteActual + 1 >= estado.partes.length;
     el.navbar.hidden = !varias;
     if (el.audiolibroBox) el.audiolibroBox.hidden = !varias;
     if (el.resumenTodo) el.resumenTodo.hidden = !varias;
@@ -1110,6 +1113,12 @@ export function inicializarLectorPdf(deps = {}) {
     }, ms);
   }
   if (typeof window !== 'undefined') window.jgMostrarPulidoEstado = mostrarPulidoEstado;
+  if (typeof window !== 'undefined') {
+    window.jgPdfContexto = () => {
+      if (!hayDocumento() || estado.partes.length <= 1) return '';
+      return `Cap. ${estado.parteActual + 1}/${estado.partes.length}`;
+    };
+  }
 
   function actualizarEstadoAuditoria() {
     const total = estado.auditoriaProgreso.total || estado.bloques.length || 0;
@@ -2460,6 +2469,13 @@ export function inicializarLectorPdf(deps = {}) {
 
   el.volver.addEventListener('click', () => volverABiblioteca());
 
+  if (el.capPrev) el.capPrev.addEventListener('click', () => {
+    if (hayDocumento() && estado.parteActual > 0) mostrarParte(estado.parteActual - 1);
+  });
+  if (el.capNext) el.capNext.addEventListener('click', () => {
+    if (hayDocumento() && estado.parteActual + 1 < estado.partes.length) mostrarParte(estado.parteActual + 1);
+  });
+
   if (el.reanudarInicio) el.reanudarInicio.addEventListener('click', () => {
     if (!hayDocumento()) return;
     el.reanudar.hidden = true;
@@ -2810,6 +2826,41 @@ export function inicializarLectorPdf(deps = {}) {
     el.salida.scrollTop = acotado;
     sincronizarRealce();
     requestAnimationFrame(() => { voz.desplazando = false; });
+  });
+
+  /* ── Saltar de frase en frase ───────────────────────────────────────
+   *
+   * El reproductor pide el salto; aquí se resuelve, porque este módulo es el
+   * que conoce el texto del capítulo. Si no se puede atender (todavía no hay
+   * guía situada), se deja `atendido` en falso y el reproductor salta por
+   * tiempo como antes: nunca se queda sin respuesta.
+   */
+  document.addEventListener('jg-tts-salto-frase', (evento) => {
+    const detalle = evento.detail || {};
+    if (!hayDocumento()) return;
+
+    const texto = el.salida.value || '';
+    const frases = partirEnFrases(texto);
+    if (!frases.length) return;
+
+    /* De dónde partimos: de lo que suena si hay voz, de lo que se ve si no. */
+    const actual = ttsSonandoAqui() && guia.desde >= 0 ? guia.desde : caracterVisible();
+    let i = frases.findIndex(([desde, hasta]) => actual >= desde && actual < hasta);
+    if (i < 0) i = 0;
+
+    const destinoIdx = Math.max(0, Math.min(frases.length - 1, i + (detalle.haciaDelante ? 1 : -1)));
+    const caracter = frases[destinoIdx][0];
+
+    anotarPosicion({ caracter });
+    const destino = bloqueDeCaracter(caracter);
+    if (destino && typeof window.ttsIrABloque === 'function' && ttsSonandoAqui()) {
+      window.ttsIrABloque(destino.bloque, destino.dentro);
+      detalle.atendido = true;
+      return;
+    }
+    /* Sin voz sonando, el salto es visual. */
+    irAPosicion(caracter);
+    detalle.atendido = true;
   });
 
   function pintarSeguirVoz() {
