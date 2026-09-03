@@ -6,7 +6,7 @@
  * error no da un mensaje de error: borra el progreso de alguien.
  */
 import {
-  fusionar, decidir, aplicarRemotos, marcarBorrado, esMasNuevo,
+  fusionar, decidir, aplicarRemotos, marcarBorrado, esMasNuevo, necesitaSubirContenido,
 } from '../js/pdf/sincronizacion.js';
 
 let fallos = 0;
@@ -159,6 +159,30 @@ const doc = (id, actualizado, extra = {}) => ({
   const ms = Date.now() - arranque;
   comprobar(plan.bajar.length === 2500, 'detecta exactamente los que cambiaron en la nube');
   comprobar(ms < 500, `fusionar 5.000 documentos es rápido (${ms} ms)`);
+}
+
+/* ── Avanzar leyendo no es «cambió el libro» ───────────────────────── */
+{
+  /* Un documento cuyo texto no se ha tocado desde la última subida, pero
+   * cuyo progreso sí avanzó, no debe arrastrar sus capítulos otra vez. */
+  const soloProgreso = { id: 'lib1', actualizado: 5000, contenidoActualizado: 1000, sincronizado: 3000 };
+  comprobar(necesitaSubirContenido(soloProgreso) === false,
+    'avanzar en la lectura NO obliga a resubir los capitulos');
+
+  const textoEditado = { id: 'lib2', actualizado: 5000, contenidoActualizado: 4000, sincronizado: 3000 };
+  comprobar(necesitaSubirContenido(textoEditado) === true,
+    'editar el texto SI obliga a resubir los capitulos');
+
+  /* Un libro que nunca se subió sube todo, aunque no tenga la marca nueva. */
+  const nuevo = { id: 'lib3', actualizado: 5000, sincronizado: 0 };
+  comprobar(necesitaSubirContenido(nuevo) === true,
+    'un libro nunca sincronizado sube su contenido');
+
+  /* Documentos guardados antes de esta version no tienen la marca: por
+   * seguridad se comportan como antes (suben todo). */
+  const viejo = { id: 'lib4', actualizado: 5000, sincronizado: 3000 };
+  comprobar(necesitaSubirContenido(viejo) === true,
+    'un documento sin la marca nueva sube todo (compatibilidad)');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas de sincronización pasaron.' : `\n${fallos} prueba(s) fallaron.`);

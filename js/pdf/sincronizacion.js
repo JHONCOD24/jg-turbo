@@ -100,3 +100,25 @@ export function marcarBorrado(documento, ahora = Date.now()) {
     actualizado: ahora,
   };
 }
+
+/**
+ * ¿Hace falta volver a subir el TEXTO de este documento, o basta con el
+ * registro ligero?
+ *
+ * Avanzar en la lectura cambia `actualizado` (para que el progreso viaje),
+ * pero no cambia `contenidoActualizado`. Distinguirlos es lo que permite
+ * sincronizar el avance cada minuto sin resubir un libro de 40 capítulos
+ * cada minuto.
+ *
+ * Un documento sin `contenidoActualizado` es anterior a esta versión: se
+ * comporta como antes y sube todo. Preferimos gastar de más una vez a
+ * dejar un libro sin texto en el otro dispositivo.
+ */
+export function necesitaSubirContenido(documento) {
+  if (!documento) return false;
+  const sincronizado = Number(documento.sincronizado) || 0;
+  if (!sincronizado) return true;                       /* nunca se subió */
+  const contenido = Number(documento.contenidoActualizado) || 0;
+  if (!contenido) return true;                          /* registro antiguo */
+  return contenido > sincronizado;
+}

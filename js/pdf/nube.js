@@ -10,7 +10,7 @@
  * proyecto respeta como configuración persistente). Nunca se envía a nadie
  * más que a la propia API.
  */
-import { decidir, marcarBorrado } from './sincronizacion.js';
+import { decidir, marcarBorrado, necesitaSubirContenido } from './sincronizacion.js';
 
 const CLAVE_LLAVE = 'jg_sync_llave';
 const CLAVE_CURSOR = 'jg_sync_cursor';
@@ -155,7 +155,10 @@ export function crearNube({ pedir, biblioteca }) {
           body: JSON.stringify({ documentos: [paquete] }),
         });
 
-        if (!paquete.borrado) {
+        /* Los capítulos solo viajan si el texto cambió. Si lo único nuevo es
+         * por dónde va la lectura, con el registro ligero de arriba basta:
+         * así se puede sincronizar el avance cada minuto sin coste. */
+        if (!paquete.borrado && necesitaSubirContenido(resumen)) {
           const partes = await biblioteca.partesParaSubir(resumen.id);
            for (let i = 0; i < partes.length; i += 1) {
              if (partes.length > 3) {

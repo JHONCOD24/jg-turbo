@@ -193,6 +193,9 @@ export async function guardarDocumento({ meta, partes, pdf, portada }) {
         estado: meta.estado || previo.estado || 'sin-empezar',
         creado: previo.creado || meta.creado || ahora,
         actualizado: meta.actualizado || ahora,
+        /* Momento en que cambió el TEXTO (no la lectura). Guardar un documento
+         * siempre implica contenido nuevo o editado. */
+        contenidoActualizado: meta.contenidoActualizado || meta.actualizado || ahora,
         sincronizado: meta.sincronizado !== undefined ? meta.sincronizado : (previo.sincronizado || 0),
       };
       await esperar(docs.put(registro));
@@ -291,6 +294,9 @@ export async function guardarProgreso(id, progreso, partes) {
        * abrir cada libro para saber si está terminado. */
       if (partes) doc.estado = estadoDeLectura(calcularPorcentaje(progreso, partes));
       doc.actualizado = Date.now();
+      /* `contenidoActualizado` NO se toca: leer no cambia el libro. Gracias a
+       * esto la sincronización manda solo el registro ligero (unos bytes) en
+       * vez de los capítulos enteros. */
       await esperar(docs.put(doc));
       return true;
     });
@@ -326,13 +332,43 @@ export async function ultimoEnCurso() {
 
 const claveTraduccion = (id, idioma, indice) => `${id}|${idioma}|${indice}`;
 
-export async function guardarTraduccion(id, idioma, indice, texto) {
+/**
+ * Marca que el TEXTO del documento cambió (traducción o pulido nuevo, edición
+ * manual). Sin esto, la sincronización creería que solo avanzó la lectura y
+ * mandaría únicamente el registro ligero: lo traducido no llegaría jamás al
+ * otro dispositivo.
+ *
+ * Se marca `actualizado` además de `contenidoActualizado` para que el
+ * documento sea elegido al sincronizar; si solo se marcara el contenido, nada
+ * lo seleccionaría y la marca no serviría.
+ */
+export async function tocarContenido(id) {
+  if (!id) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return false;
+      const ahora = Date.now();
+      doc.actualizado = ahora;
+      doc.contenidoActualizado = ahora;
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+export async function guardarTraduccion(id, idioma, indice, texto, { marcar = true } = {}) {
   try {
     await conAlmacenes([TRADUCCIONES], 'readwrite', (t) => esperar(t.put({
       clave: claveTraduccion(id, idioma, indice),
       id, idioma, indice, texto,
       actualizado: Date.now(),
     })));
+    /* Lo importado desde la nube (marcar:false) no se marca: ya viene de allá
+     * y marcarlo provocaría que los dos aparatos se reenviaran lo mismo sin fin. */
+    if (marcar) await tocarContenido(id);
     return true;
   } catch (_) {
     return false;
@@ -365,7 +401,7 @@ export async function traduccionesDe(id, idioma) {
 
 const clavePulido = (id, indice) => `${id}|${indice}`;
 
-export async function guardarPulido(id, indice, texto) {
+export async function guardarPulido(id, indice, texto, { marcar = true } = {}) {
   try {
     await conAlmacenes([PULIDOS], 'readwrite', (t) => esperar(t.put({
       clave: clavePulido(id, indice),
@@ -375,13 +411,14 @@ export async function guardarPulido(id, indice, texto) {
       huellaOrigen: '',
       estado: 'legado',
     })));
+    if (marcar) await tocarContenido(id);
     return true;
   } catch (_) {
     return false;
   }
 }
 
-export async function guardarPulidoEstructurado(id, indice, registro) {
+export async function guardarPulidoEstructurado(id, indice, registro, { marcar = true } = {}) {
   // registro: { version, huellaOrigen, estado, progreso, textoSeguro, propuestas, decisiones, textoAprobado, advertencias, actualizado }
   try {
     await conAlmacenes([PULIDOS], 'readwrite', (t) => esperar(t.put({
@@ -391,6 +428,7 @@ export async function guardarPulidoEstructurado(id, indice, registro) {
       texto: registro.textoAprobado || registro.textoSeguro || '',
       actualizado: registro.actualizado || Date.now(),
     })));
+    if (marcar) await tocarContenido(id);
     return true;
   } catch (_) { return false; }
 }
@@ -559,8 +597,9 @@ export async function vaciarBiblioteca() {
 export async function exportarParaSincronizar() {
   try {
     const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
-    return (todos || []).map(({ id, actualizado, sincronizado, borrado, titulo }) => ({
-      id, actualizado: actualizado || 0, sincronizado: sincronizado || 0, borrado, titulo,
+    return (todos || []).map(({ id, actualizado, contenidoActualizado, sincronizado, borrado, titulo }) => ({
+      id, actualizado: actualizado || 0, contenidoActualizado: contenidoActualizado || 0,
+      sincronizado: sincronizado || 0, borrado, titulo,
     }));
   } catch (_) {
     return [];
@@ -648,10 +687,12 @@ export async function importarPartes(id, partes) {
       pagina: p.pagina || 1,
     })),
   });
-  /* Lo que ya venga traducido no hay que volver a traducirlo (ni pagarlo). */
+  /* Lo que ya venga traducido no hay que volver a traducirlo (ni pagarlo).
+   * Se importa sin marcar: ya viene de la nube y marcarlo haría que los dos
+   * aparatos se reenviaran los mismos capítulos sin fin. */
   for (const parte of ordenadas) {
-    if (parte.traduccion) await guardarTraduccion(id, 'es', parte.indice, parte.traduccion);
-    if (parte.pulido) await guardarPulido(id, parte.indice, parte.pulido);
+    if (parte.traduccion) await guardarTraduccion(id, 'es', parte.indice, parte.traduccion, { marcar: false });
+    if (parte.pulido) await guardarPulido(id, parte.indice, parte.pulido, { marcar: false });
   }
   return true;
 }
