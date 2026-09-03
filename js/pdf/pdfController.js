@@ -65,6 +65,7 @@ export function inicializarLectorPdf(deps = {}) {
     titulo: $('pdfResultTitle'), donde: $('pdfDocDonde'), count: $('pdfCount'),
     salida: $('pdfOutput'), realce: $('pdfRealce'), volver: $('btnPdfBack'),
     capPrev: $('btnPdfCapPrev'), capNext: $('btnPdfCapNext'),
+    actualizarBiblio: $('btnPdfActualizarBiblio'),
     barraDoc: $('pdfProgresoDoc'), barraRelleno: $('pdfProgresoRelleno'),
     btnIndice: $('btnPdfIndice'), indice: $('pdfIndice'), indiceLista: $('pdfIndiceLista'),
     navbar: $('pdfNavbar'), prev: $('btnPdfPrev'), next: $('btnPdfNext'), navPos: $('pdfNavPos'),
@@ -2532,6 +2533,23 @@ export function inicializarLectorPdf(deps = {}) {
   });
   if (el.capNext) el.capNext.addEventListener('click', () => {
     if (hayDocumento() && estado.parteActual + 1 < estado.partes.length) mostrarParte(estado.parteActual + 1);
+  });
+
+  /* Actualizar la biblioteca desde la cabecera: trae los libros de los otros
+   * aparatos sin tener que bajar hasta la sección de sincronización. Si este
+   * aparato aún no está vinculado, abre esa sección para vincularlo. */
+  if (el.actualizarBiblio) el.actualizarBiblio.addEventListener('click', () => {
+    if (!nube || !nube.estaVinculada()) {
+      if (el.nube) {
+        el.nube.hidden = false;
+        el.nube.open = true;
+        el.nube.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else {
+        avisar('Conecta la nube primero para traer tus libros.', 'info');
+      }
+      return;
+    }
+    sincronizarAhora();
   });
 
   if (el.reanudarInicio) el.reanudarInicio.addEventListener('click', () => {

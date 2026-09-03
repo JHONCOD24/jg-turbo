@@ -1,5 +1,14 @@
 # Lector de PDF · historial de cambios y operación
 
+## Fix · Botón Actualizar en la biblioteca (rama `fix-aviso-vacio`)
+
+Pedido: en escritorio/tablet no aparece la sección «Tus libros en todos tus aparatos» del fondo (en el móvil sí), así que no hay forma de sincronizar.
+Corrección: nuevo botón **Actualizar** en la cabecera de la biblioteca, junto a «Añadir un PDF» (`index.html: btnPdfActualizarBiblio`; `pdfController.js`): si el aparato está vinculado sincroniza; si no, abre la sección de nube para vincularlo. Funciona aunque la sección del fondo no se vea.
+Pruebas: `node --check` ✔ + regresión (`sincronizacion`) ✔. Verificación visual pendiente en escritorio/tablet del usuario.
+Deploy: `sw.js` → `jg-turbo-shell-v63`, `index.html` → `v2.28.3`.
+
+---
+
 ## Fix · Línea marrón vacía + carátulas pendientes (rama `fix-aviso-vacio`)
 
 - **Línea marrón vacía (reportada con fotos):** era la caja de avisos (`#pdfNotice`, clase `.notice`) mostrándose vacía: su `display:flex` le ganaba al atributo `hidden`. Una regla `.notice[hidden]{display:none !important}` la quita en todos los paneles. Solo aparece cuando hay un mensaje de verdad.
