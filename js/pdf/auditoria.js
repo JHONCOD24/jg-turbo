@@ -51,13 +51,22 @@ export function construirHuella(texto) {
   return String(h >>> 0);
 }
 
-export function estadoAuditoriaTexto(numBloques, completados, fallos, pendientes, consentido) {
+/**
+ * Qué decir en el indicador de la cabecera.
+ *
+ * `propuestas` es el número de sugerencias pendientes de revisar. Antes no se
+ * recibía y la función devolvía «Cambios por revisar» como caso por defecto,
+ * aunque no hubiera ninguna: el usuario buscaba cambios que no existían.
+ */
+export function estadoAuditoriaTexto(numBloques, completados, fallos, pendientes, consentido, propuestas = null) {
   if (!consentido) return 'Esperando permiso';
   if (numBloques === 0) return 'Solo local';
   if (fallos > 0 && completados + fallos < numBloques) return `Parcial ${completados} de ${numBloques}`;
-  if (completados < numBloques) return `Auditando ${completados} de ${numBloques}`;
-  // hay propuestas por revisar? lo decide el controlador según decisiones
-  return 'Cambios por revisar';
+  if (completados < numBloques) return `Revisando ${completados} de ${numBloques}`;
+  if (propuestas === 0) return 'Revisada, sin cambios';
+  if (propuestas === 1) return '1 sugerencia por revisar';
+  if (propuestas > 1) return `${propuestas} sugerencias por revisar`;
+  return 'Revisión terminada';
 }
 
 export function esCompleta(numBloques, completados, fallos) {

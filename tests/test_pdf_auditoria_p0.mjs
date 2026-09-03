@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { aplicarSignos, mismasPalabras, crearAuditorPdf, tokenizarExacto } from '../js/pdf/pulido.js';
-import { construirHuella, dividirEnBloquesSemanticos } from '../js/pdf/auditoria.js';
+import { construirHuella, dividirEnBloquesSemanticos, estadoAuditoriaTexto } from '../js/pdf/auditoria.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,6 +134,25 @@ console.log('--- 6) aplicarSignos conserva la forma del texto ---');
   const aplastado = 'TITULO Parrafo del cuerpo';
   comprobar(mismasPalabras(original, aplastado).igual === false,
     'mismasPalabras rechaza un texto al que le quitaron los saltos');
+}
+
+console.log('--- 7) estados de auditoria honestos ---');
+{
+  comprobar(estadoAuditoriaTexto(10, 0, 0, 10, false) === 'Esperando permiso',
+    'sin consentimiento lo dice claro');
+  comprobar(estadoAuditoriaTexto(0, 0, 0, 0, true) === 'Solo local',
+    'sin bloques es solo local');
+  comprobar(estadoAuditoriaTexto(10, 3, 0, 7, true).includes('3 de 10'),
+    'muestra el avance real');
+
+  /* Esto es lo que estaba mal: decia "Cambios por revisar" aunque no hubiera
+   * ninguno. Ahora hay que decirle cuantas propuestas hay. */
+  comprobar(estadoAuditoriaTexto(10, 10, 0, 0, true, 0) === 'Revisada, sin cambios',
+    'terminar sin propuestas NO dice "cambios por revisar"');
+  comprobar(estadoAuditoriaTexto(10, 10, 0, 0, true, 4) === '4 sugerencias por revisar',
+    'con propuestas dice cuantas');
+  comprobar(estadoAuditoriaTexto(10, 10, 0, 0, true, 1) === '1 sugerencia por revisar',
+    'una sola sugerencia va en singular');
 }
 
 if (fallos > 0) {

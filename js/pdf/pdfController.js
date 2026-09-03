@@ -107,6 +107,9 @@ export function inicializarLectorPdf(deps = {}) {
     revisionHoja: $('pdfRevisionHoja'), revisionTitulo: $('pdfRevisionTitulo'),
     revisionLista: $('pdfRevisionLista'), revisionVacio: $('pdfRevisionVacio'),
     revisionAceptarTodo: $('btnPdfRevisionAceptarTodo'), revisionCerrar: $('btnPdfRevisionCerrar'),
+    auditoriaHoja: $('pdfAuditoriaHoja'), auditoriaProveedor: $('pdfAuditoriaProveedor'),
+    auditoriaAceptar: $('btnPdfAuditoriaAceptar'), auditoriaRechazar: $('btnPdfAuditoriaRechazar'),
+    auditoriaCerrar: $('btnPdfAuditoriaCerrar'),
     reanudar: $('pdfReanudar'), reanudarTxt: $('pdfReanudarTxt'),
     reanudarInicio: $('btnPdfReanudarInicio'),
 
@@ -1124,29 +1127,81 @@ export function inicializarLectorPdf(deps = {}) {
     const total = estado.auditoriaProgreso.total || estado.bloques.length || 0;
     const comp = estado.auditoriaProgreso.completados || 0;
     const fallos = estado.auditoriaProgreso.fallos || 0;
-    const est = estadoAuditoriaTexto(total, comp, fallos, total - comp, estado.consentido);
-    estado.auditoriaEstado = esCompleta(total, comp, fallos) ? 'Completa' : est;
+    /* Cuántas sugerencias esperan decisión: solo así el indicador puede decir
+     * la verdad en vez de «cambios por revisar» siempre. */
+    let pendientesRevision = 0;
+    for (const [, lista] of estado.propuestasPorBloque || []) {
+      pendientesRevision += Array.isArray(lista) ? lista.length : 0;
+    }
+    for (const [, decs] of estado.decisionesPorBloque || []) {
+      pendientesRevision -= decs ? decs.size : 0;
+    }
+    pendientesRevision = Math.max(0, pendientesRevision);
+
+    const est = estadoAuditoriaTexto(total, comp, fallos, total - comp, estado.consentido,
+      comp >= total ? pendientesRevision : null);
+    estado.auditoriaEstado = est;
     if (estado.consentido === false && total > 0) estado.auditoriaEstado = 'Esperando permiso';
     else if (!estado.bloques.length) estado.auditoriaEstado = 'Solo local';
     mostrarPulidoEstado(estado.auditoriaEstado, comp === total && fallos === 0 && total ? 'ok' : '');
-    if (estado.auditoriaEstado === 'Completa') ocultarPulidoEstado(4000);
+    /* Se oculta solo cuando no queda nada por hacer. Si hay sugerencias
+     * esperando, el aviso se queda: es una tarea pendiente del usuario. */
+    if (estado.auditoriaEstado === 'Revisada, sin cambios') ocultarPulidoEstado(4000);
     actualizarBotonRevision();
   }
 
-  async function pedirConsentimientoAuditoria() {
-    if (estado.consentido) return true;
-    const prov = (typeof window.jgCfgGet === 'function' ? window.jgCfgGet('jg_provider', 'gemini') : deps.provider || 'gemini');
-    const msg = `¿Permitir que el texto extraído de este PDF se envíe a la IA (${prov}) para auditar puntuación y gramática? Se envía solo el texto extraído, no el archivo PDF. Puedes rechazar y seguir usando el modo local.`;
-    const ok = window.confirm(msg);
-    estado.consentido = !!ok;
-    try { localStorage.setItem(`jg_pdf_consent_${estado.id}`, ok ? '1' : '0'); } catch (_) {}
-    if (!ok) {
-      mostrarPulidoEstado('Solo local', 'mecanico');
-      ocultarPulidoEstado(2600);
-    } else {
-      mostrarPulidoEstado('Auditando...', '');
+  /**
+   * Pide permiso para enviar el texto a la IA, explicando de verdad qué pasa.
+   *
+   * Antes era un `window.confirm` con un párrafo dentro: bloqueante, feo en
+   * celular, y sin espacio para explicar qué se envía y qué no. Ahora es una
+   * hoja de la propia app, con el mismo aspecto que el resto.
+   */
+  function pedirConsentimientoAuditoria() {
+    if (estado.consentido) return Promise.resolve(true);
+    if (!el.auditoriaHoja) {
+      /* Sin la hoja (HTML antiguo en caché), no se envía nada: ante la duda,
+       * la opción segura es no mandar el texto a ningún sitio. */
+      return Promise.resolve(false);
     }
-    return estado.consentido;
+    const prov = (typeof window.jgCfgGet === 'function' ? window.jgCfgGet('jg_provider', 'gemini') : deps.provider || 'gemini');
+    if (el.auditoriaProveedor) el.auditoriaProveedor.textContent = prov;
+
+    return new Promise((resolver) => {
+      const cerrar = (ok) => {
+        el.auditoriaHoja.hidden = true;
+        el.auditoriaAceptar.removeEventListener('click', alAceptar);
+        el.auditoriaRechazar.removeEventListener('click', alRechazar);
+        if (el.auditoriaCerrar) el.auditoriaCerrar.removeEventListener('click', alRechazar);
+        estado.consentido = ok;
+        try { localStorage.setItem(`jg_pdf_consent_${estado.id}`, ok ? '1' : '0'); } catch (_) {}
+        if (ok) mostrarPulidoEstado('Revisando la puntuación…', '');
+        else { mostrarPulidoEstado('Solo local', 'mecanico'); ocultarPulidoEstado(2600); }
+        resolver(ok);
+      };
+      const alAceptar = () => cerrar(true);
+      const alRechazar = () => cerrar(false);
+      el.auditoriaAceptar.addEventListener('click', alAceptar);
+      el.auditoriaRechazar.addEventListener('click', alRechazar);
+      if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', alRechazar);
+      el.auditoriaHoja.hidden = false;
+      el.auditoriaAceptar.focus();
+    });
+  }
+
+  /* El chip del estado explica qué hace la revisión: pulsarlo reabre la hoja. */
+  if (el.pulidoEstado) {
+    const reabrirAuditoria = () => {
+      if (!el.auditoriaHoja) return;
+      el.auditoriaHoja.hidden = false;
+      if (el.auditoriaProveedor && typeof window.jgCfgGet === 'function') {
+        el.auditoriaProveedor.textContent = window.jgCfgGet('jg_provider', 'gemini');
+      }
+    };
+    el.pulidoEstado.addEventListener('click', reabrirAuditoria);
+    el.pulidoEstado.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reabrirAuditoria(); }
+    });
   }
 
   function prepararPulidor() {

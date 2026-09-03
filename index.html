@@ -2291,6 +2291,7 @@
     font-size:11px;font-weight:700;line-height:1;
     color:var(--cyan);background:rgba(39,225,193,.10);border:1px solid rgba(39,225,193,.28);
     padding:4px 9px;border-radius:999px;white-space:nowrap;animation:pdfPulidoIn .18s ease;
+    cursor:pointer;
   }
   .pdf-pulido-estado[hidden]{display:none !important}
   .pdf-pulido-estado::before{
@@ -2406,6 +2407,14 @@
   .pdf-rev-motivo{font-size:.78rem;color:var(--muted)}
   .pdf-rev-acciones{display:flex;gap:8px}
   .pdf-rev-vacia{color:var(--muted);font-size:.92rem;margin:0}
+  /* Hoja de consentimiento de la revisión: mismo armazón que la hoja de
+     revisión (pdf-revision-panel + pdf-hoja-cab); solo el cuerpo es propio. */
+  .pdf-aud-cuerpo{display:flex;flex-direction:column;gap:10px}
+  .pdf-aud-cuerpo p{margin:0;color:var(--text);font-size:.92rem;line-height:1.55;overflow-wrap:anywhere}
+  .pdf-aud-cuerpo .pdf-aud-nota{color:var(--muted);font-size:.85rem}
+  .pdf-aud-pie{display:flex;gap:10px;flex-wrap:wrap}
+  .pdf-aud-pie .btn{flex:1 1 200px;min-height:44px}
+  @media (max-width:640px){ .pdf-aud-cuerpo p{font-size:.88rem} }
 
   /* ── Hojas del lector: cabecera común (asa, título y cerrar) ──────── */
   .pdf-hoja-cab{
@@ -5120,7 +5129,7 @@
                 <h3 id="pdfResultTitle">Tu texto</h3>
                 <div class="pdf-doc-linea">
                   <p class="pdf-doc-donde" id="pdfDocDonde">—</p>
-                  <span class="pdf-pulido-estado" id="pdfPulidoEstado" hidden aria-live="polite"></span>
+                  <span class="pdf-pulido-estado" id="pdfPulidoEstado" hidden aria-live="polite" role="button" tabindex="0" title="Ver qué está haciendo"></span>
                 </div>
               </div>
               <div class="pdf-doc-acciones">
@@ -5322,6 +5331,42 @@
             <p class="pdf-rev-vacia" id="pdfRevisionVacio">Este capítulo ya no tiene sugerencias pendientes.</p>
             <div id="pdfRevisionLista" class="pdf-rev-lista"></div>
             <button type="button" class="btn primary" id="btnPdfRevisionAceptarTodo">Aceptar todos los cambios de este capítulo</button>
+          </div>
+
+          <!-- Hoja de consentimiento de la revisión de puntuación: qué hace,
+               qué NO hace y qué se envía, antes de mandar nada a la IA. -->
+          <div class="pdf-revision-panel" id="pdfAuditoriaHoja" hidden role="dialog" aria-modal="true" aria-labelledby="pdfAuditoriaTitulo">
+            <div class="pdf-hoja-cab">
+              <h4 class="pdf-hoja-titulo" id="pdfAuditoriaTitulo">Revisar la puntuación de este libro</h4>
+              <button type="button" class="pdf-hoja-cerrar" id="btnPdfAuditoriaCerrar" aria-label="Cerrar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="pdf-aud-cuerpo">
+              <p><strong>Qué hace.</strong> Un PDF no guarda puntos ni comas: guarda letras con
+              coordenadas. Al extraer el texto, muchas frases quedan sin puntuación y la voz las lee de
+              corrido. Esta revisión propone dónde faltan signos para que el libro se escuche bien.</p>
+
+              <p><strong>Qué NO hace.</strong> No cambia, quita ni añade ni una sola palabra del libro.
+              Solo propone signos de puntuación, y cada propuesta la apruebas tú. Si el resultado no
+              conserva exactamente tus palabras, se descarta solo.</p>
+
+              <p><strong>Qué se envía.</strong> El <em>texto</em> extraído del PDF, por trozos, al
+              proveedor de IA que tengas configurado (<span id="pdfAuditoriaProveedor">—</span>).
+              <strong>El archivo PDF nunca sale de tu dispositivo.</strong></p>
+
+              <p><strong>Cuánto tarda.</strong> Depende del tamaño del libro. Empieza por el capítulo que
+              estás leyendo, así que puedes seguir leyendo mientras trabaja. Puedes pausarla cuando
+              quieras y continuar después: lo ya revisado no se vuelve a pedir.</p>
+
+              <p class="pdf-aud-nota">Si prefieres no enviar nada, el modo local sigue funcionando: junta
+              las líneas, arregla los guiones de corte y quita cabeceras repetidas, todo en tu
+              dispositivo.</p>
+            </div>
+            <div class="pdf-aud-pie">
+              <button type="button" class="btn primary" id="btnPdfAuditoriaAceptar">Sí, revisar la puntuación</button>
+              <button type="button" class="btn ghost" id="btnPdfAuditoriaRechazar">No, solo modo local</button>
+            </div>
           </div>
 
           <section class="pdf-trad" id="pdfTradBar" hidden aria-labelledby="pdfTradTexto">
