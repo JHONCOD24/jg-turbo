@@ -1,5 +1,102 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v2.29.0 · Las carátulas llegan de verdad, y la biblioteca deja de ser una ventana
+
+### Lo reportado
+1. «Actualizo y dice que está cargando/enviando la información, pero no carga las carátulas.»
+2. «La parte de *Tu biblioteca* tiene muy mal responsive: en móvil se ve horrible y en escritorio y
+   tablet queda como una ventana emergente cuando hacemos scroll.»
+
+---
+
+### 1 · Las carátulas: llegaban al navegador y se tiraban
+
+**Comprobado antes de tocar nada** (consulta directa a la base de la sincronización): las 6
+carátulas **sí estaban en la nube**, subidas por el arreglo de la v2.28.5, entre 30 y 65 KB cada
+una, y los tres aparatos comparten la misma biblioteca. El fallo no estaba en el envío.
+
+**Causa.** El servidor (`jgt_bajar`) filtra por `sello`, el momento de la escritura, así que el
+documento con la carátula **sí viajaba de vuelta**. Lo descartaba el cliente:
+
+```js
+const aplicar = llegados.filter((remotoDoc) =>
+  decidir(aqui.get(remotoDoc.id) || null, remotoDoc) === 'bajar');
+```
+
+`decidir()` compara `actualizado`, y **enviar una carátula no cambia `actualizado`**: mandar la
+tapa de un libro no es haberlo leído. Con la misma marca en los dos lados, la respuesta era «nada
+que hacer» y el documento se descartaba entero, con la imagen dentro. La carátula llegaba hasta el
+navegador y se tiraba a la basura.
+
+**Corrección.** Una carátula no compite con nada: no pisa progreso ni texto, solo añade una imagen
+que faltaba. Ahora se aplica al margen de quién gane el documento.
+
+- `js/pdf/sincronizacion.js: portadasARescatar(llegados, locales)` — función pura, con pruebas.
+  Solo rescata lo que parece una imagen (`data:image/…`), nunca de un libro borrado, y **nunca
+  inventa un libro que este aparato no tiene** (ese lo trae la bajada normal, con su carátula).
+- `js/pdf/biblioteca.js: guardarPortadaRecibida(id, dataURL)` — guarda **solo** la imagen. No pasa
+  por `guardarDocumento()` a propósito: así una carátula que llega no puede hacer que este aparato
+  retroceda en un libro que iba leyendo.
+- `js/pdf/biblioteca.js: exportarParaSincronizar()` entrega también `tienePortada`.
+- `js/pdf/nube.js` las aplica tras la bajada, saltándose los documentos que ya bajaron por la vía
+  normal, y devuelve `caratulas` en el resultado.
+- `js/pdf/pdfController.js` lo dice en el aviso: «Listo: 6 carátulas nuevas». Antes, con solo
+  carátulas nuevas, habría dicho «Todo al día» justo cuando el usuario esperaba verlas.
+
+---
+
+### 2 · La biblioteca: por qué parecía una ventana emergente
+
+**Causa.** `.card` (`flex:1` + `overflow:hidden`) y `.pdf-area` (`height:100%` +
+`overflow-y:auto`) encerraban la biblioteca en una caja de altura fija **con scroll propio**. Al
+desplazarse, la lista se movía dentro del recuadro mientras el resto de la página seguía quieta:
+en escritorio y tablet parecía un panel flotante pegado encima, y en el celular dejaba los libros
+asomando por una rendija.
+
+**Corrección.**
+- Fuera del modo lectura, la biblioteca fluye con la página. En modo lectura el scroll interno se
+  conserva, que ahí sí hace falta (el dock de reproducción va anclado abajo).
+- `html,body{height:100%}` pasa a `min-height` en esa vista. Con una altura exacta el documento no
+  crecía, el contenido se desbordaba por debajo y **el pie de la app acababa montado sobre los
+  botones del final** — lo detectó la verificación geométrica, no el ojo.
+- Cabecera en rejilla en vez de `flex-wrap`: con flex, el título llevaba `flex:1` y empujaba los
+  botones a la línea siguiente en cuanto la pantalla se estrechaba, y `align-items:flex-end` los
+  dejaba desalineados. En un celular de 360 px eran tres alturas distintas. Ahora el título manda
+  una línea y los botones ocupan la siguiente, con «Añadir» a lo ancho por ser la acción principal.
+  Bajo 380 px la palabra «Actualizar» se va y queda el icono (`aria-label` y `title` lo explican).
+- El botón «Actualizar» pasa de **36 px a 44 px**: `.pdf-actualizar` perdía contra la regla general
+  `.chip,.tts-pill,…,.mini-btn{min-height:36px}`, que va después con la misma especificidad. Se
+  nombra también la cabecera para ganarla. Y su icono **gira mientras trabaja**: en un celular con
+  datos lentos, un botón quieto durante diez segundos parece uno que no funciona.
+
+---
+
+### Pruebas
+- `tests/test_pdf_sincronizacion.mjs` ✔ **70/70** (era 55): rescate con marcas iguales, con lo local
+  más nuevo, carátula ya presente, libro borrado, libro que aquí no existe, algo que no es imagen,
+  y listas nulas o vacías.
+- Regresión unitaria ✔ **451 OK · 0 FALLOS** en los 13 archivos de `tests/`.
+- `tests/verificar_pdf_geometria.mjs` ✔ **42/42 y sin un solo aviso** en móvil, tablet y escritorio
+  (antes avisaba del botón de 36 px). Medido además: el scroll interno del área desaparece en las
+  tres pantallas, cero desborde horizontal, botón a 44 px.
+- `tests/verificar_pdf_navegador.mjs` ✔ **103/103**.
+
+### Dos verificaciones que estaban rotas y nadie lo sabía
+Las dos daban por buena la entrega sin llegar a ejecutarse enteras:
+1. Buscaban Playwright en una única ruta (`../node_modules`) que **dejó de existir al aplanar el
+   repo**. Ahora prueban varias ubicaciones y, si no lo encuentran, lo dicen con claridad.
+2. `verificar_pdf_navegador` se cortaba en la comprobación 48 de 103 por un timeout que no explicaba
+   nada: la hoja de permiso de la IA (nueva en la v2.28.0) se abría a media prueba y tapaba la
+   pantalla. Ahora se responde «solo local» en cuanto asoma —lo correcto en una prueba: no debe
+   salir ni una petición a la IA—. **Comprobado con `git stash` que ese corte era anterior a esta
+   entrega.**
+
+### Deploy v66
+- `sw.js` → `jg-turbo-shell-v66` · `JG_JS_V` → `v66`
+- `index.html` → `<!-- v2.29.0 · Las caratulas llegan de verdad + biblioteca sin ventana emergente -->`
+
+---
+
 ## Entrega 2026-09-03 · v2.28.5 · Las carátulas por fin viajan, y el botón responde
 
 ### Lo reportado

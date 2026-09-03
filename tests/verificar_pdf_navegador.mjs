@@ -25,12 +25,22 @@ import { pintarPaginaComoImagen, pdfDeImagenes, PAGINAS_ESCANEADAS } from './gen
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(AQUI, '..');
 
-const { chromium, devices } = await import(
-  pathToFileURL(resolve(APP, '..', 'node_modules', 'playwright', 'index.mjs')).href
-).catch(() => {
-  console.error('Falta Playwright: instálalo en la raíz del repo (npm i -D playwright).');
+/* Playwright no es dependencia del proyecto: se busca donde suela estar. La
+ * ruta única anterior dejó de existir al aplanar el repo y esta verificación
+ * quedó inejecutable sin que nadie se enterara. */
+const { chromium, devices } = await (async () => {
+  const candidatos = [
+    resolve(APP, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(APP, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(APP, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) { /* siguiente */ }
+  }
+  console.error('Falta Playwright: instálalo con «npm i -D playwright».');
+  console.error('Buscado en:\n  ' + candidatos.join('\n  '));
   process.exit(1);
-});
+})();
 
 let fallos = 0;
 const comprobar = (condicion, mensaje) => {
@@ -88,6 +98,26 @@ async function abrirPestana(pagina) {
 async function nuevaPagina(opciones) {
   const contexto = await navegador.newContext(opciones);
   const pagina = await contexto.newPage();
+  /* La hoja de permiso para revisar la puntuación con IA puede aparecer en
+   * cualquier momento (al elegir el archivo, al extraer, al cambiar de
+   * capítulo). Cerrarla en un punto concreto no basta: en cuanto se abre, tapa
+   * la pantalla y el siguiente clic falla con un timeout que no explica nada.
+   * Se responde «solo local» en cuanto asoma, que además es lo que debe hacer
+   * una prueba: no mandar ni una petición a la IA. */
+  await pagina.addInitScript(() => {
+    const cerrar = () => {
+      const hoja = document.getElementById('pdfAuditoriaHoja');
+      if (!hoja || hoja.hidden) return;
+      const no = document.getElementById('btnPdfAuditoriaRechazar');
+      if (no) no.click(); else hoja.hidden = true;
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      cerrar();
+      new MutationObserver(cerrar).observe(document.body, {
+        subtree: true, attributes: true, attributeFilter: ['hidden'], childList: true,
+      });
+    });
+  });
   const errores = [];
   pagina.on('pageerror', (e) => errores.push(String(e)));
   pagina.on('console', (m) => { if (m.type() === 'error') errores.push(m.text()); });
@@ -106,9 +136,32 @@ const avisoVisible = (pagina) => pagina.evaluate(() => {
   return { texto: (activa?.textContent || '').trim(), clase: activa?.className || '' };
 });
 
+/**
+ * Cierra la hoja que pide permiso para revisar la puntuación con IA.
+ *
+ * Apareció en la v2.28.0 y esta verificación no la conocía: se quedaba abierta
+ * tapando la pantalla y todos los clics siguientes fallaban con un timeout que
+ * no decía nada del problema real. Se responde «solo local», que además es lo
+ * correcto en una prueba: no debe salir ni una petición a la IA.
+ */
+async function cerrarHojaConsentimiento(pagina) {
+  const hoja = pagina.locator('#pdfAuditoriaHoja');
+  if (!(await hoja.isVisible().catch(() => false))) return;
+  await pagina.locator('#btnPdfAuditoriaRechazar').click({ timeout: 3000 }).catch(async () => {
+    /* Si el botón no se deja pulsar, se cierra por código: aquí interesa
+     * seguir verificando la app, no pelearse con una hoja. */
+    await pagina.evaluate(() => {
+      const h = document.getElementById('pdfAuditoriaHoja');
+      if (h) h.hidden = true;
+    });
+  });
+  await pagina.waitForTimeout(200);
+}
+
 async function leer(pagina, archivo, espera = 90000) {
   await pagina.locator('#pdfInput').setInputFiles(archivo);
   await pagina.waitForTimeout(300);
+  await cerrarHojaConsentimiento(pagina);
   if (await pagina.locator('#btnPdfRead').isDisabled()) return null;
   await pagina.locator('#btnPdfRead').click();
   await pagina.waitForFunction(() => {
@@ -117,6 +170,8 @@ async function leer(pagina, archivo, espera = 90000) {
     return avisos.some((a) => a && !a.hidden) || (res && res.style.display !== 'none');
   }, null, { timeout: espera }).catch(() => {});
   await pagina.waitForTimeout(700);
+  /* Puede aparecer también al terminar de extraer, no solo al elegir. */
+  await cerrarHojaConsentimiento(pagina);
   return (await avisoVisible(pagina)).texto;
 }
 

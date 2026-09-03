@@ -663,6 +663,42 @@ export async function faltaSubirPortada(id) {
   }
 }
 
+/**
+ * Guarda SOLO la carátula que llegó de otro aparato.
+ *
+ * No pasa por `guardarDocumento()` a propósito: aquí no se toca el progreso de
+ * lectura, ni el título, ni las marcas de tiempo. Una carátula que llega no
+ * puede hacer que este aparato «retroceda» en un libro que iba leyendo.
+ *
+ * @param {string} id
+ * @param {string} dataURL – imagen en texto, tal como viaja
+ * @returns {Promise<boolean>}
+ */
+export async function guardarPortadaRecibida(id, dataURL) {
+  if (!id) return false;
+  try {
+    const portada = await dataURLABlob(dataURL);
+    if (!portada) return false;
+    await conAlmacenes([ARCHIVOS], 'readwrite', async (archivos) => {
+      const antes = (await esperar(archivos.get(id))) || { id };
+      await esperar(archivos.put({ id, pdf: antes.pdf || null, portada }));
+    });
+    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return;
+      doc.tienePortada = true;
+      /* Si la carátula llegó de la nube, la nube ya la tiene: no hay que
+       * devolvérsela. Y `actualizado` no se toca: esto no es un cambio del
+       * usuario, así que no debe competir con lo que hagan los otros aparatos. */
+      doc.portadaSincronizada = Date.now();
+      await esperar(docs.put(doc));
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /** Anota que la carátula de este libro ya está en la nube. */
 export async function marcarPortadaSincronizada(id, marca = Date.now()) {
   try {
@@ -686,13 +722,16 @@ export async function exportarParaSincronizar() {
   try {
     const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
     return (todos || []).map(({
-      id, actualizado, contenidoActualizado, sincronizado, borrado, titulo, portadaSincronizada,
+      id, actualizado, contenidoActualizado, sincronizado, borrado, titulo,
+      portadaSincronizada, tienePortada,
     }) => ({
       id, actualizado: actualizado || 0, contenidoActualizado: contenidoActualizado || 0,
       sincronizado: sincronizado || 0, borrado, titulo,
-      /* Va aquí para que la decisión de subir pueda saber, sin tocar la base,
-       * a qué libros les puede faltar la carátula en la nube. */
+      /* Van aquí para que las decisiones sobre carátulas se tomen sin volver a
+       * leer la base: a cuáles les falta enviarla, y a cuáles les falta
+       * recibirla. */
       portadaSincronizada: portadaSincronizada || 0,
+      tienePortada: Boolean(tienePortada),
     }));
   } catch (_) {
     return [];

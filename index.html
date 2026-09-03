@@ -1,4 +1,4 @@
-<!-- v2.28.5 · Las caratulas de libros ya sincronizados por fin viajan; el boton Actualizar responde -->
+<!-- v2.29.0 · Las caratulas llegan de verdad + biblioteca sin ventana emergente -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1445,6 +1445,37 @@
   @media (min-width:1024px){
     .pdf-area.has-results{max-width:1200px;margin-inline:auto;width:100%}
   }
+
+  /* ── La biblioteca fluye con la página ───────────────────────────────
+     `.card` (flex:1 + overflow:hidden) y `.pdf-area` (height:100% +
+     overflow-y:auto) encerraban la biblioteca en una caja de altura fija con
+     scroll propio. Al desplazarse, la lista se movía DENTRO del recuadro
+     mientras el resto de la página seguía quieto: en escritorio y tablet
+     parecía una ventana flotante pegada encima, y en el celular dejaba los
+     libros asomando por una rendija de pantalla.
+
+     Una biblioteca es una lista larga: tiene que crecer y dejar que baje la
+     página entera, como cualquier listado.
+
+     En modo lectura el scroll interno SÍ hace falta —el dock de reproducción
+     va anclado abajo y el texto tiene que correr por debajo—, así que esto
+     solo aplica fuera de la lectura. */
+     `flex:1 0 auto` y no `0 0 auto`: con pocos libros la tarjeta sigue
+     llenando la pantalla (si no, quedaría un recuadro corto flotando arriba,
+     que es el mismo defecto por el otro lado), y con muchos crece hacia
+     abajo y desplaza la página.
+
+     `html,body{height:100%}` tiene que ceder aquí: con una altura exacta el
+     documento no crece, el contenido se le desborda por debajo y el pie de la
+     app acaba montado sobre los botones del final. Con `min-height` la página
+     crece de verdad y cada cosa ocupa su sitio. */
+  body:not(.jg-leyendo):has(#panelPdf.active),
+  html:has(#panelPdf.active){height:auto;min-height:100%}
+  body:not(.jg-leyendo) #panelPdf{flex:1 0 auto;min-height:0}
+  body:not(.jg-leyendo) #panelPdf > .card{flex:1 0 auto;min-height:0}
+  body:not(.jg-leyendo) #panelPdf .pdf-area{
+    height:auto;min-height:0;overflow:visible;
+  }
   .pdf-area::-webkit-scrollbar{width:4px}
   .pdf-area::-webkit-scrollbar-track{background:transparent}
   .pdf-area::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px}
@@ -2110,15 +2141,63 @@
   /* Cabecera de la biblioteca */
   .pdf-biblioteca{display:flex;flex-direction:column;gap:14px}
   .pdf-biblioteca[hidden]{display:none}
-  .pdf-biblioteca-cab{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
-  .pdf-biblioteca-tit{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+
+  /* ── Cabecera de la biblioteca ───────────────────────────────────────
+     Rejilla en vez de `flex-wrap`. Con flex, el título llevaba `flex:1` y
+     empujaba los dos botones a la línea siguiente en cuanto la pantalla se
+     estrechaba; con `align-items:flex-end` quedaban además desalineados entre
+     sí. En un celular de 360 px el resultado era un escalón de tres alturas
+     distintas. La rejilla fija dónde va cada cosa en cada tamaño. */
+  .pdf-biblioteca-cab{
+    display:grid;grid-template-columns:1fr auto auto;
+    align-items:center;gap:10px 12px;
+  }
+  .pdf-biblioteca-tit{min-width:0;display:flex;flex-direction:column;gap:2px}
   .pdf-biblioteca-cab h3{
-    font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;color:var(--text);margin:0;
+    font-family:'Bricolage Grotesque',sans-serif;
+    font-size:clamp(16px,4.2vw,19px);font-weight:700;color:var(--text);margin:0;
+    line-height:1.25;
   }
   .pdf-biblioteca-conteo{color:var(--muted-2);font-size:var(--fs-xs)}
-  .pdf-anadir{flex:none;min-height:42px;padding:8px 14px}
-  .pdf-actualizar{flex:none;min-height:42px;padding:8px 14px;gap:7px}
-  .pdf-actualizar svg{width:15px;height:15px}
+  /* Con `.pdf-actualizar` a secas no basta: más abajo hay una regla general
+     (`.chip,.tts-pill,…,.mini-btn{min-height:36px}`) que, por ir después y
+     tener la misma especificidad, ganaba y dejaba el botón en 36 px. Se
+     nombra también la cabecera para que este botón sí llegue a los 44 px que
+     necesita un dedo en tablet. */
+  .pdf-biblioteca-cab .pdf-anadir{flex:none;min-height:44px;padding:8px 14px;white-space:nowrap}
+  .pdf-biblioteca-cab .pdf-actualizar{
+    flex:none;min-height:44px;padding:8px 14px;gap:7px;white-space:nowrap;font-size:12px;
+  }
+  .pdf-actualizar svg{width:15px;height:15px;flex:none}
+  /* Mientras trae los libros, el icono gira: en un celular con datos lentos,
+     un botón que no se mueve durante diez segundos parece uno que no funciona. */
+  .pdf-actualizar:disabled{opacity:.75;cursor:progress}
+  .pdf-actualizar:disabled svg{animation:pdfGirar 1s linear infinite}
+  @keyframes pdfGirar{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){
+    .pdf-actualizar:disabled svg{animation:none}
+  }
+
+  /* Celular: el título manda una línea entera y los botones ocupan la
+     siguiente, «Añadir» a lo ancho por ser la acción principal. */
+  @media (max-width:559px){
+    .pdf-biblioteca-cab{
+      grid-template-columns:1fr auto;
+      grid-template-areas:"titulo titulo" "anadir actualizar";
+    }
+    .pdf-biblioteca-tit{grid-area:titulo}
+    .pdf-anadir{grid-area:anadir;width:100%;justify-content:center}
+    .pdf-actualizar{grid-area:actualizar}
+  }
+  /* Pantalla muy estrecha (≤380 px): la palabra «Actualizar» se va y queda el
+     icono, que el `aria-label` y el `title` siguen explicando. */
+  @media (max-width:380px){
+    .pdf-actualizar{padding-inline:12px}
+    .pdf-actualizar #pdfActualizarBiblioLabel{
+      position:absolute;width:1px;height:1px;overflow:hidden;
+      clip:rect(0,0,0,0);white-space:nowrap;
+    }
+  }
 
   /* Filtros y buscador */
   .pdf-biblioteca-filtros{display:flex;flex-direction:column;gap:10px}
@@ -15300,7 +15379,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v65';
+const JG_JS_V = 'v66';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

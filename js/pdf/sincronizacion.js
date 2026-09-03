@@ -154,6 +154,42 @@ export function puedeFaltarPortada(documento) {
  * @param {boolean} [opciones.faltaPortada] – confirmado: hay carátula sin enviar
  * @returns {boolean}
  */
+/**
+ * Carátulas que llegaron de la nube y aquí hacen falta.
+ *
+ * Enviar una carátula no cambia `actualizado`: mandar la tapa de un libro no
+ * es haberlo leído. Por eso el receptor comparaba las marcas de tiempo, veía
+ * «nada que hacer» y descartaba el documento entero —con la imagen dentro—.
+ * La carátula llegaba hasta el navegador y se tiraba.
+ *
+ * Una carátula no compite con nada: no pisa progreso ni texto, solo añade una
+ * imagen que faltaba. Así que se aplica al margen de quién gane el documento.
+ * Lo único que no se hace es inventar un libro que aquí no existe: ese lo trae
+ * la bajada normal, con su carátula incluida.
+ *
+ * @param {{id:string, borrado?:number, datos?:object}[]} llegados
+ * @param {{id:string, tienePortada?:boolean}[]} locales
+ * @returns {{id:string, portadaMini:string}[]}
+ */
+export function portadasARescatar(llegados, locales) {
+  const aqui = new Map();
+  for (const documento of locales || []) {
+    if (documento && documento.id) aqui.set(documento.id, documento);
+  }
+
+  const rescate = [];
+  for (const remoto of llegados || []) {
+    if (!remoto || !remoto.id || remoto.borrado) continue;
+    const mini = remoto.datos?.portadaMini;
+    /* Tiene que parecer una imagen: lo que viene de fuera no se guarda a ciegas. */
+    if (typeof mini !== 'string' || !mini.startsWith('data:image/')) continue;
+    const local = aqui.get(remoto.id);
+    if (!local || local.tienePortada) continue;
+    rescate.push({ id: remoto.id, portadaMini: mini });
+  }
+  return rescate;
+}
+
 export function debeSubir(local, { cursor = '', remoto = null, faltaPortada = false } = {}) {
   if (!local) return false;
 

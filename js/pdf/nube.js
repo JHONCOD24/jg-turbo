@@ -12,6 +12,7 @@
  */
 import {
   decidir, marcarBorrado, necesitaSubirContenido, debeSubir, puedeFaltarPortada,
+  portadasARescatar,
 } from './sincronizacion.js';
 
 const CLAVE_LLAVE = 'jg_sync_llave';
@@ -140,6 +141,25 @@ export function crearNube({ pedir, biblioteca }) {
         bajados += 1;
       }
 
+      /* ── Rescatar carátulas ─────────────────────────────────────────
+       *
+       * Un documento cuya única novedad es la carátula NO gana la comparación
+       * de arriba: mandar la tapa de un libro no cambia su `actualizado`, así
+       * que `decidir()` dice «nada que hacer» y lo descarta con la imagen
+       * dentro. La carátula llegaba hasta aquí y se tiraba.
+       *
+       * Una carátula no compite con nada —no pisa progreso ni texto—, así que
+       * se guarda al margen de quién gane el documento. */
+      let caratulas = 0;
+      /* Los que acaban de bajarse ya guardaron su carátula por el camino
+       * normal: no hace falta volver a escribirla. */
+      const yaAplicados = new Set(aplicar.map((d) => d.id));
+      const pendientes = llegados.filter((d) => !yaAplicados.has(d.id));
+      for (const { id, portadaMini } of portadasARescatar(pendientes, locales)) {
+        if (await biblioteca.guardarPortadaRecibida(id, portadaMini)) caratulas += 1;
+      }
+      if (caratulas) avisar(`Llegaron ${caratulas} carátula(s)…`);
+
       /* ── Enviar ─────────────────────────────────────────────────────
        *
        * Ojo con el orden: la carátula pendiente se comprueba ANTES de armar la
@@ -230,7 +250,14 @@ export function crearNube({ pedir, biblioteca }) {
        * comparan las cuentas y se completa lo que falte, en los dos sentidos.
        */
       const reparados = await completarCapitulos(avisar);
-      return { subidos, bajados: bajados + reparados.bajados, reparados: reparados.total };
+      return {
+        subidos,
+        bajados: bajados + reparados.bajados,
+        reparados: reparados.total,
+        /* Se informa aparte: si solo llegaron carátulas, decir «Todo al día»
+         * sería mentir justo cuando el usuario está esperando verlas. */
+        caratulas,
+      };
     },
 
     marcarBorrado,

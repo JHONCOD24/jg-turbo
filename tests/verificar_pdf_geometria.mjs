@@ -17,9 +17,22 @@ import { crearLibro, crearLibroIngles } from './generarPdfPrueba.mjs';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(AQUI, '..');
 
-const { chromium, devices } = await import(
-  pathToFileURL(resolve(APP, '..', 'node_modules', 'playwright', 'index.mjs')).href
-);
+/* Playwright no es dependencia del proyecto: se busca donde suela estar. La
+ * ruta única anterior (`../node_modules`) dejó de existir al aplanar el repo y
+ * esta verificación quedó inejecutable sin que nadie se enterara. */
+const { chromium, devices } = await (async () => {
+  const candidatos = [
+    resolve(APP, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(APP, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(APP, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) { /* siguiente */ }
+  }
+  console.error('FALLO: no se encontró Playwright. Instálalo con «npm i -D playwright».');
+  console.error('Buscado en:\n  ' + candidatos.join('\n  '));
+  process.exit(1);
+})();
 
 let fallos = 0;
 const comprobar = (condicion, mensaje) => {

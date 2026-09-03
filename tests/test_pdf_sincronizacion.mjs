@@ -8,7 +8,7 @@
 import { readFileSync } from 'fs';
 import {
   fusionar, decidir, aplicarRemotos, marcarBorrado, esMasNuevo, necesitaSubirContenido,
-  debeSubir, puedeFaltarPortada,
+  debeSubir, puedeFaltarPortada, portadasARescatar,
 } from '../js/pdf/sincronizacion.js';
 
 let fallos = 0;
@@ -230,6 +230,54 @@ const doc = (id, actualizado, extra = {}) => ({
   /* Casos límite. */
   comprobar(debeSubir(null, { cursor: 'c1' }) === false, 'un documento nulo no se sube');
   comprobar(puedeFaltarPortada(null) === false, 'un documento nulo no se revisa');
+}
+
+/* ── La carátula que llega y se tiraba a la basura ──────────────────────
+ *
+ * Caso real, con las carátulas YA en la nube y los tres aparatos en la misma
+ * biblioteca: enviar una carátula no cambia `actualizado` (leer un libro sí,
+ * pero mandar su tapa no). El receptor comparaba `actualizado`, veía «nada que
+ * hacer» y descartaba el documento entero… con la imagen dentro. La carátula
+ * llegaba hasta el navegador y se tiraba.
+ *
+ * Una carátula no compite con nada: si aquí no hay, se guarda y ya está.
+ */
+{
+  const conTapa = (id, actualizado) => ({ id, actualizado, datos: { portadaMini: 'data:image/jpeg;base64,AAA' } });
+
+  /* El caso que fallaba: mismo timestamp en los dos lados. */
+  const llegados = [conTapa('lib1', 5000)];
+  const locales = [{ id: 'lib1', actualizado: 5000, tienePortada: false }];
+  const rescate = portadasARescatar(llegados, locales);
+  comprobar(rescate.length === 1 && rescate[0].id === 'lib1',
+    'rescata la carátula aunque el documento no «gane» la comparación');
+  comprobar(rescate[0].portadaMini.startsWith('data:image/'), 'y entrega la imagen que llegó');
+
+  /* Si aquí ya hay carátula, no se toca nada. */
+  comprobar(portadasARescatar(llegados, [{ id: 'lib1', actualizado: 5000, tienePortada: true }]).length === 0,
+    'no pisa una carátula que este aparato ya tiene');
+
+  /* Aunque este aparato vaya MÁS adelantado, la carátula igual se aprovecha:
+   * es una imagen, no compite con el progreso de lectura. */
+  comprobar(portadasARescatar(llegados, [{ id: 'lib1', actualizado: 9000, tienePortada: false }]).length === 1,
+    'la aprovecha aunque lo local sea más nuevo');
+
+  /* Lo que llega sin carátula no genera trabajo. */
+  comprobar(portadasARescatar([{ id: 'lib1', actualizado: 5000, datos: {} }], locales).length === 0,
+    'un documento sin carátula no se rescata');
+  comprobar(portadasARescatar([{ id: 'lib1', actualizado: 5000, borrado: 5000, datos: { portadaMini: 'data:image/jpeg;base64,AAA' } }], locales).length === 0,
+    'un libro borrado no resucita por su carátula');
+
+  /* Un libro que aquí no existe todavía: lo trae la bajada normal, con su
+   * carátula dentro. Rescatarlo aparte crearía un libro fantasma sin texto. */
+  comprobar(portadasARescatar(llegados, []).length === 0,
+    'no inventa un libro que este aparato no tiene');
+
+  /* Casos límite. */
+  comprobar(portadasARescatar(null, null).length === 0, 'listas nulas no rompen');
+  comprobar(portadasARescatar([], []).length === 0, 'listas vacías no rompen');
+  comprobar(portadasARescatar([{ id: 'x', datos: { portadaMini: 'no-es-una-imagen' } }], [{ id: 'x', tienePortada: false }]).length === 0,
+    'descarta algo que no parece una imagen');
 }
 
 /* ── Que el arreglo no se deshaga sin querer ───────────────────────────

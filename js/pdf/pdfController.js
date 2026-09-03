@@ -3358,9 +3358,10 @@ export function inicializarLectorPdf(deps = {}) {
         }));
       await refrescarInicio();
       await pintarNube();
-      const nada = !resultado.subidos && !resultado.bajados;
+      const nada = !resultado.subidos && !resultado.bajados && !resultado.caratulas;
       const partes = [];
       if (resultado.bajados) partes.push(`llegaron ${contar(resultado.bajados, 'libro', 'libros')}`);
+      if (resultado.caratulas) partes.push(`${contar(resultado.caratulas, 'carátula nueva', 'carátulas nuevas')}`);
       if (resultado.subidos) partes.push(`se enviaron ${contar(resultado.subidos, 'libro', 'libros')}`);
       const mensaje = nada ? 'Todo al día.' : `Listo: ${partes.join(' · ')}.`;
       avisoNube(mensaje, 'ok');
