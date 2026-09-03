@@ -19,7 +19,18 @@ const acotar = (valor, minimo, maximo) => Math.max(minimo, Math.min(maximo, valo
 
 /** Progreso de un documento recién abierto. */
 export function progresoInicial() {
-  return { parte: 0, desplazamiento: 0, maxParte: 0, actualizado: 0 };
+  return {
+    parte: 0,
+    desplazamiento: 0,
+    /* Posición exacta dentro del capítulo, portable entre dispositivos.
+     * `desplazamiento` se conserva porque los documentos guardados antes de
+     * esta versión solo tienen eso. */
+    caracter: 0,
+    cita: '',
+    antes: '',
+    maxParte: 0,
+    actualizado: 0,
+  };
 }
 
 /** Tamaño de cada capítulo, para que el porcentaje sea honesto. */
@@ -90,13 +101,24 @@ export function etiquetaProgreso(progreso, partes) {
 /**
  * Nueva posición de lectura. Conserva el capítulo más lejano alcanzado, para
  * que volver atrás a releer no borre lo que ya llevabas.
+ *
+ * `caracter`, `cita` y `antes` describen el punto exacto (ver anclaTexto.js).
+ * Si quien llama no los pasa, se conservan los anteriores en vez de borrarlos:
+ * un guardado por scroll no debe perder el punto exacto que dejó la voz.
  */
-export function avanzarProgreso(progreso, { parte, desplazamiento }) {
+export function avanzarProgreso(progreso, { parte, desplazamiento, caracter, cita, antes } = {}) {
   const anterior = progreso || progresoInicial();
   const parteLimpia = Math.max(0, Math.floor(Number(parte) || 0));
+  const cambioDeParte = parteLimpia !== (anterior.parte ?? 0);
   return {
     parte: parteLimpia,
     desplazamiento: acotar(Number(desplazamiento) || 0, 0, 1),
+    /* Al cambiar de capítulo el ancla del anterior ya no sirve. */
+    caracter: caracter != null
+      ? Math.max(0, Math.floor(Number(caracter) || 0))
+      : (cambioDeParte ? 0 : (anterior.caracter ?? 0)),
+    cita: cita != null ? String(cita) : (cambioDeParte ? '' : (anterior.cita ?? '')),
+    antes: antes != null ? String(antes) : (cambioDeParte ? '' : (anterior.antes ?? '')),
     maxParte: Math.max(anterior.maxParte ?? 0, parteLimpia),
     actualizado: Date.now(),
   };

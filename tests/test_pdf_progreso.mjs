@@ -119,5 +119,23 @@ const PARTES = [
   comprobar(formatearTamano(null) === '0 KB', 'un valor vacío no rompe la interfaz');
 }
 
+/* ── Ancla de posición exacta (v5) ─────────────────────────────────── */
+{
+  const base = progresoInicial();
+  comprobar(base.caracter === 0 && base.cita === '', 'el progreso inicial trae ancla vacía');
+
+  const conAncla = avanzarProgreso(base, { parte: 1, desplazamiento: 0.5, caracter: 820, cita: 'Y entonces', antes: 'igual. ' });
+  comprobar(conAncla.caracter === 820 && conAncla.cita === 'Y entonces', 'guarda el ancla que recibe');
+
+  /* Un guardado por scroll (sin ancla) no puede borrar la posición exacta
+   * que acababa de dejar la voz: sería perder el punto justo al desplazarse. */
+  const trasScroll = avanzarProgreso(conAncla, { parte: 1, desplazamiento: 0.55 });
+  comprobar(trasScroll.caracter === 820 && trasScroll.cita === 'Y entonces', 'un guardado sin ancla conserva la anterior');
+
+  /* Pero al cambiar de capítulo el ancla del anterior ya no significa nada. */
+  const otroCapitulo = avanzarProgreso(conAncla, { parte: 2, desplazamiento: 0 });
+  comprobar(otroCapitulo.caracter === 0 && otroCapitulo.cita === '', 'cambiar de capítulo limpia el ancla');
+}
+
 console.log(fallos === 0 ? '\nTodas las pruebas de progreso pasaron.' : `\n${fallos} prueba(s) fallaron.`);
 process.exit(fallos === 0 ? 0 : 1);
