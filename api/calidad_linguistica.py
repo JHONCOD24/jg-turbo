@@ -282,6 +282,17 @@ _NUMEROS_EN_PALABRAS = {
     "30": ("thirty", "treinta"), "40": ("forty", "cuarenta"), "50": ("fifty", "cincuenta"),
     "60": ("sixty", "sesenta"), "70": ("seventy", "setenta"), "80": ("eighty", "ochenta"),
     "90": ("ninety", "noventa"), "100": ("hundred", "cien", "ciento"),
+    # Centenas: sin ellas, «two hundred» traducido a «200» se denunciaba como
+    # cifra inventada y la interfaz mostraba una alerta falsa sobre una
+    # traducción correcta (caso real: códigos HTTP dichos en voz alta).
+    "200": ("two hundred", "doscientos", "doscientas"),
+    "300": ("three hundred", "trescientos", "trescientas"),
+    "400": ("four hundred", "cuatrocientos", "cuatrocientas"),
+    "500": ("five hundred", "quinientos", "quinientas"),
+    "600": ("six hundred", "seiscientos", "seiscientas"),
+    "700": ("seven hundred", "setecientos", "setecientas"),
+    "800": ("eight hundred", "ochocientos", "ochocientas"),
+    "900": ("nine hundred", "novecientos", "novecientas"),
     "1000": ("thousand", "mil"), "1000000": ("million", "millón", "millon", "millones"),
 }
 

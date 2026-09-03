@@ -14,6 +14,7 @@ Documento para **humanos y agentes de IA**. Objetivo: que las actualizaciones de
 | Calidad micrófono | `jg_mic_quality` | **Sí** |
 | Idioma del texto transcrito | `jg_output_lang` | **Sí** |
 | Voz TTS (femenina/masculina) | `jg_tts_gender` | **Sí** |
+| Nombres de las voces Fish | Catálogo del servidor (`FISH_CATALOGO_BASE`); `FISH_VOICE_*_NAME` solo pisa Nico Robin / Locutor K | **Sí** (servidor; no viven en el navegador) |
 | Acento TTS | `jg_tts_locale` | **Sí** |
 | Pronunciación bilingüe TTS | `jg_tts_bilingual` | **Sí** |
 | Tono TTS | `jg_tts_tone` | **Sí** |
@@ -43,10 +44,11 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_mic_quality`
 - `jg_output_lang` (idioma del texto: same / es / en / fr / pt / de)
 - `jg_tts_gender` (female / male)
-- `jg_tts_locale` (auto / es-CO / es-MX / es-AR / es-US; otros BCP-47 quedan para voces del navegador)
-- `jg_tts_bilingual` (unified / auto / off — por defecto `unified`; el valor antiguo `auto` migra a `unified`)
+- `jg_tts_locale` (auto / es-CO / es-MX / es-AR / es-CL / es-PE / es-US; el selector visible se limita a español latino)
+- `jg_tts_voice` (`neural:es-CO:female`, `fish:female` histórico, `fish:colombiana` o `fish:sarah`; si no existe, se arma con gender+locale). Los valores `fish:female` y `fish:male` siguen valiendo: se leen como Nico Robin y Locutor K.
+- `jg_tts_bilingual` (regional / unified / off — por defecto `regional`; el valor antiguo `auto` migra a `regional`)
 - `jg_tts_tone` (neutral / warm / energetic)
-- `jg_tts_rate` (0.8–2.0)
+- `jg_tts_rate` (0.75–2.0)
 - `jg_tts_engine` (neural / browser)
 - `jg_config_bundle` (snapshot JSON versionado)
 - `jg_glossary_seeded` (flag: ya se sembró glosario por defecto)
@@ -88,7 +90,7 @@ En **Configuración** hay:
 2. `npx vercel --prod --yes` desde `vercel_deploy/`
 3. Comprobar https://jg-turbo.vercel.app
 
-Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md` (**v2.7.0** — «Misma voz» multilingüe por defecto: Ava/Andrew leen español fluido y dicen el inglés con la misma voz; 2026-08-09. Previo: v2.6.3 — Gonzalo CO + Andrew EN, force-EN, prep pronunciación paritaria; 2026-07-23/24). **v2.7.0 no** añade ni renombran claves `jg_tts_*`: `jg_tts_bilingual` ahora acepta `unified | auto | off` y el valor antiguo `auto` migra a `unified` al leerlo.
+Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md`. En **v2.9.0** no se renombra ninguna clave `jg_tts_*`: `jg_tts_bilingual` acepta `regional | unified | off`; el valor histórico `auto` se interpreta como `regional` para que la voz nativa seleccionada se aplique realmente.
 
 ## Checklist antes de un deploy
 

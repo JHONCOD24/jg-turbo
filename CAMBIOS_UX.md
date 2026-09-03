@@ -1,6 +1,131 @@
 # Rediseño de experiencia de usuario y calidad — JG Turbo
 
-Fecha base: 2026-07-30 · **UI actual: v3.6** (2026-08-02) · Prod: <https://jg-turbo.vercel.app>
+Fecha base: 2026-07-30 · **UI actual: v3.10** (2026-08-15) · Prod: <https://jg-turbo.vercel.app>
+
+---
+
+## v3.10 · traducción fiel sin pulido automático · 2026-08-15
+
+- Se retira la casilla **Pulir antes de generar la voz**.
+- El botón vuelve a **Traducir y doblar al español**.
+- La ayuda explica que la traducción es fiel y no reescribe el contenido.
+- Validado en móvil 390 × 844 sin desborde horizontal.
+- Service worker actualizado a `jg-turbo-shell-v27`.
+- Deploy funcional: `dpl_7gF3pF5KUAXvLNGQjg1VUgAvVNv9` · `READY` · dominio
+  real verificado sin errores de consola.
+
+---
+
+## v3.9 · pulido visible antes del doblaje · 2026-08-15
+
+- El panel YouTube muestra **Pulir antes de generar la voz**, marcado por defecto.
+- La explicación aclara qué modifica y que cada segmento conserva su tiempo.
+- El control tiene etiqueta completa, área táctil de 42 px o más y foco nativo.
+- Validado en móvil 390 × 844 sin desborde horizontal.
+- Service worker actualizado a `jg-turbo-shell-v26`.
+- Deploy funcional: `dpl_8Dr52vhh1vXqVJsEFr9uYwy6H9bV` · `READY`.
+
+---
+
+## v3.8 — Pegado siempre compacto; Párrafos decide la separación · 2026-08-14
+
+### Pedido y corrección del diagnóstico anterior
+
+- Al copiar texto con saltos simples o líneas vacías, la aplicación lo pegaba
+  conservando esas separaciones.
+- El requisito definitivo es distinto: todo texto pegado en una transcripción
+  debe entrar como un bloque continuo. Solo la acción «Párrafos» puede volver a
+  introducir separaciones.
+- v3.7 corrigió únicamente el interlineado visual. Conservaba a propósito los
+  saltos del portapapeles, así que no resolvía por completo este comportamiento.
+
+### Contrato permanente
+
+1. En `output`, `fileOutput`, `ytOutput` y `textModalTextarea`, el evento `paste`
+   pasa siempre por `jgPegarTranscripcionCompacta` cuando encuentra saltos.
+2. `jgCompactarTextoPegado` convierte `CRLF`, `LF`, `CR`, `U+2028` y `U+2029`
+   en espacios simples, elimina líneas vacías y espacios repetidos, sin unir
+   palabras ni cambiar la puntuación.
+3. La inserción usa `setRangeText`: respeta el cursor y reemplaza únicamente la
+   selección activa.
+4. Después se emite `input` con propagación para actualizar contadores, botones
+   y la sincronización del editor ampliado.
+5. No aplicar esta normalización al editor de Traducción: allí los párrafos del
+   texto fuente pueden ser información intencional.
+6. No retirar ni debilitar este manejador al cambiar estilos, modales, TTS o PWA.
+7. «Párrafos» continúa usando `formatearParrafosTexto` y es la única acción que
+   inserta `\n\n` de forma deliberada en las transcripciones.
+
+### Pruebas
+
+- `node tests/test_espaciado_texto_pegado.js`: 10 comprobaciones aprobadas.
+- JavaScript inline: sintaxis válida.
+- Navegador real con `ClipboardEvent` y `DataTransfer`, no asignación directa:
+  siete líneas con varios espacios en blanco se pegaron como una sola línea,
+  44 palabras y 299 caracteres, sin `\n`.
+- Al pulsar «Párrafos», ese mismo bloque se convirtió en tres párrafos con
+  separaciones dobles.
+- Reemplazo de selección: `Antes BORRAR después` + pegado `Uno\n\nDos` produjo
+  `Antes Uno Dos después`; cursor en posición 13 y contador actualizado.
+- Interlineado calculado: 21,75 px (`15 px × 1.45`).
+- Los únicos errores de consola fueron `/ping` 404 del servidor estático usado
+  para la prueba; no corresponden a una ruta de producción.
+- Service Worker actualizado a `jg-turbo-shell-v16`.
+
+### Deploy
+
+- Archivos de la mejora sincronizados hacia `vercel_deploy/` y comprobados por
+  SHA-256. Artefactos ejecutables: `index.html`
+  `70EDB0658B3F729A55EF280921C477CAC2E12548916DA55B0C3780A263C41057` y
+  `sw.js` `5C0F4BF7F855874BD180FDAE3F74EC32D044AF70BCF27111449D8D5AEE3F225D`.
+- Despliegue de producción de la corrección:
+  `dpl_2RKC7q61HxziZUV8XyLaVy8kxMYz` · `Ready` · `target production`.
+- Alias real verificado: <https://jg-turbo.vercel.app> respondió `200` y publicó
+  el marcador UX v3.8, el manejador de pegado y `jg-turbo-shell-v16`.
+- Prueba en navegador visible contra el alias real mediante un
+  `ClipboardEvent`: siete fragmentos separados por saltos y líneas vacías se
+  pegaron con `0` saltos. Después, **Párrafos** produjo `3` bloques separados
+  por dos saltos. La consola de producción registró `0` errores.
+
+---
+
+## v3.7 — Espaciado compacto del texto pegado · 2026-08-14
+
+> Superada por v3.8. Se conserva el interlineado `1.45`, pero ya no se conserva
+> la separación del portapapeles: los saltos se compactan al pegar.
+
+### Pedido
+
+- Al pegar texto en una transcripción, los renglones se veían demasiado separados.
+- Conservar el contenido tal como se pega y dejar la separación real en bloques para la acción «Párrafos».
+
+### Diagnóstico
+
+- El `<textarea>` sí conservaba correctamente los saltos del portapapeles.
+- La separación era visual: los editores de transcripción imponían `line-height: 1.75` y el editor ampliado `1.80`, por lo que cada renglón parecía un párrafo independiente.
+
+### Solución
+
+- Se redujo a `line-height: 1.45` el interlineado de Micrófono, Archivo, YouTube y «Editar en grande».
+- No se agregó ningún manejador de `paste` ni se transforma el contenido: espacios y saltos permanecen tal como llegan.
+- El editor de Traducción conserva `line-height: 1.55`; no forma parte del defecto reportado.
+- «Párrafos» conserva su comportamiento y sigue insertando separaciones dobles solo cuando el usuario lo solicita.
+- Service Worker actualizado a `jg-turbo-shell-v14` para renovar el CSS de instalaciones PWA.
+
+### Pruebas
+
+- `node tests/test_espaciado_texto_pegado.js`: 5 comprobaciones aprobadas.
+- JavaScript inline de `index.html`: sintaxis válida.
+- Regresión del reproductor TTS: todas las comprobaciones aprobadas.
+- Navegador real, escritorio: el campo conservó exactamente 3 líneas pegadas y el estilo calculado fue `15 px × 1.45 = 21.75 px` por renglón.
+- `git diff --check`: sin errores de espacios o parches mal formados.
+
+### Deploy
+
+- Archivos sincronizados por SHA-256: `index.html`, `sw.js`, `CAMBIOS_UX.md` y `Agents.md`.
+- Despliegue de producción: `dpl_7kCXAT8kk28sGJrmYGFDsw5MGkqq` · `Ready` · `target production`.
+- Alias verificado: <https://jg-turbo.vercel.app> respondió `200` con el interlineado `1.45` y `jg-turbo-shell-v14`.
+- `/api/health`: `status: ok` después del despliegue.
 
 ---
 

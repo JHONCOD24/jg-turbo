@@ -7,6 +7,41 @@ o el troceo del frontend).
 
 ---
 
+## Entrega 2026-08-24 · Español natural en YouTube
+
+**Pedido:** ejecutar `PLAN_MEJORA_TRADUCCION_ES.md` para corregir traducciones literales, entrecortadas, sin tildes o sin concordancia en el flujo inglés → español de YouTube.
+
+**Solución:**
+
+- Nuevo prompt de traducción profesional a español neutro latinoamericano: reconstruye puntuación de subtítulos automáticos, traduce por unidades de sentido, evita calcos y conserva cifras, nombres y términos técnicos.
+- Con una IA disponible, `/api/translate` siempre intenta IA primero; MyMemory queda únicamente como traducción básica de respaldo.
+- El flujo YouTube → español envía el título, activa una segunda revisión lingüística tolerante a fallos y conserva la primera traducción si esa revisión falla.
+- Los bloques internos mantienen continuidad con los últimos 300 caracteres y una lista breve de términos ya consolidados.
+- El doblaje conserva todos los marcadores `[[JG_SEG_000000]]` en orden, reparte frases naturales dentro de los tiempos existentes y agrupa lotes por punto o pausa mayor a 0,6 s sin cambiar `startTime` ni `endTime`.
+- La interfaz identifica el respaldo sin tecnicismos: «Traducción básica · agrega una clave de IA en Configuración para que el español suene natural».
+- PWA renovada a `jg-turbo-shell-v32`. No se cambió ninguna clave `jg_*` ni la persistencia del navegador.
+- La Fase 6 no cambia el modelo por defecto: el plan la marca como `[DATO PENDIENTE]` hasta confirmar modelos habilitados y costo.
+
+**Pruebas locales:**
+
+- `python -m pytest backend/tests -q` → **113 passed, 2 skipped**.
+- `python -m pytest backend/tests/test_traducir_largo.py tests/test_calidad_traduccion.py -q` → **15 passed**.
+- `node tests/test_youtube_sync.mjs` → **ok**; protege marcadores, tiempos y lotes por pausas naturales.
+- `python ../test_js_syntax.py` + `python -m py_compile api/index.py` → **ok**.
+- Una sola llamada directa a `/api/translate`, dentro de `jgPedirTraduccion`; el troceo del navegador sigue activo.
+
+**Producción:**
+
+- Deployment de código: `dpl_Gn4T52apiEYLJjjvHbyQe8m8Ch5J` · **Ready** · alias `https://jg-turbo.vercel.app`.
+- HTML real contiene `Traduciendo con español natural`, `titulo_video`, `revisar: true` y el aviso de traducción básica; SW real `jg-turbo-shell-v32`.
+- `/api/health`: `status: ok`, `ia_configured: true`, proveedor servidor `mistral`, `youtube_auto: true`.
+- Caso corto real: `ia_used: true`, `revisado: true`, integridad `ok`, 1,54 s; eliminó los calcos y conservó `Acme`, `16`, `API` y `PowerPoint` (la cifra se escribió correctamente como «dieciséis»).
+- Corpus real largo: 22.236 caracteres en 6 peticiones de 2.420–3.996 caracteres; 6/6 con IA y revisión, ninguna vacía, tiempos entre 7,89 y 16,64 s, muy por debajo del límite de 45 s.
+- Doblaje real: marcadores `[[JG_SEG_000000]]` y `[[JG_SEG_000001]]` salieron 1:1 y en orden; `startTime`/`endTime` permanecen inmutables por contrato y prueba automática.
+- Una entrada sintética que repetía la misma oración cientos de veces fue resumida por el modelo y la API la rechazó como incompleta; se conserva esa protección en vez de aceptar silenciosamente pérdida de contenido.
+
+---
+
 ## 1. Resumen ejecutivo
 
 ### Problema reportado
@@ -416,6 +451,84 @@ backend/calidad_linguistica.py  (misma copia, alineada)
 5. En ventana privada: pegar una transcripción larga → **Traducir** → el botón
    muestra «Traduciendo… N de M» y el texto llega completo.
 6. Sin regresiones: `/api/health`, `/api/youtube`, `/api/tts-voices`.
+
+
+---
+
+## 10. Correcciones de la revisión del 2026-08-24
+
+Revisión posterior a la entrega de las 7 fases. Todo lo de abajo se midió contra
+`https://jg-turbo.vercel.app`, no en local.
+
+### 10.1 El doblaje perdía segmentos en silencio (lo grave)
+
+Se mandaron 8 segmentos con marcadores y se repitió la prueba 6 veces: **3 de 6
+perdieron los dos últimos segmentos**. Los 8 marcadores volvían siempre, así que
+`_validar_marcadores_segmento()` los daba por buenos — contaba marcadores, no
+contenido. El audio doblado se quedaba corto y desfasado.
+
+Causa: la regla del modo literal decía «reparte el resultado entre los
+marcadores». Al repartir, la IA gastaba los marcadores antes de llegar al final.
+
+| Arreglo | Dónde |
+|---|---|
+| El texto de un marcador es la traducción DE ESE segmento; solo se puede pasar una palabra al vecino | `api/index.py` · `_prompt_traducir_bloque`, modo literal |
+| Regla explícita «PROHIBIDO terminar antes de tiempo» + repaso final antes de responder | idem |
+| Detector por longitud: si el lote vuelve con menos del 85 % del texto, se rechaza | `js/youtube/translationService.js` · `conservaElContenido()` |
+| Dos intentos por lote antes de bajar a traducir segmento a segmento | idem · `pedirLote()` |
+
+Umbral medido sobre las 6 traducciones: las correctas dieron 1,016 · 1,064 ·
+1,016; las que perdieron segmentos, 0,769 · 0,804 · 0,785. **0,85 queda en medio.**
+
+Resultado tras el arreglo, misma prueba: **5 de 6 completas** (proporciones 0,885
+a 0,952) y 1 rechazada con error claro, que el frontend reintenta y, si insiste,
+resuelve por el respaldo segmento a segmento. El fallo silencioso pasó a ser
+fallo detectado.
+
+### 10.2 Salía voseo argentino
+
+«tenés», «podés» en 3 de 6 muestras. La regla decía «conserva el tratamiento del
+original (tú, usted o vos)», pero el inglés `you` no marca tratamiento, así que
+el modelo elegía libre. Ahora `_REGLAS_ES` prohíbe el voseo **nombrando cada
+forma** (vos, tenés, podés, querés, sabés, sos…), que es la técnica que ya
+funcionaba con los calcos. Tras el arreglo: **0 de 6**.
+
+### 10.3 Alerta falsa de integridad
+
+`«return two hundred»` → `«devuelve 200»` es correcto, pero la interfaz mostraba
+«⚠ Anomalía · Integridad 65/100». `_NUMEROS_EN_PALABRAS` tenía `100` y `1000`
+pero ninguna centena. Añadidas 200 a 900 en `api/calidad_linguistica.py`.
+Verificado en producción: `ok · 100`, sin avisos.
+
+### 10.4 Lotes que degeneraban
+
+Cortar el lote en cada pausa parecía buena idea, pero en un video con un silencio
+entre cada subtítulo daba **un lote por segmento**: la IA traducía media frase
+suelta (justo lo que la fase 3 quería evitar) y salían tantas llamadas como
+segmentos. Medido con 150 segmentos: 150 lotes. Ahora una pausa solo cierra el
+lote si ya hay 3 segmentos o 350 caracteres dentro → **50 lotes**, mínimo 3
+segmentos cada uno.
+
+### 10.5 Detalles
+
+- **El `model` mentía**: toda traducción se reportaba como `gemini-2.0-flash`
+  aunque respondiera Mistral. Nuevo `_modelo_de_proveedor()`. En producción ya
+  devuelve `mistral-small-latest`.
+- **Markdown en la salida**: la IA colaba `*cursivas*` pese a pedirle texto
+  plano. `_sin_enfasis_markdown()` las quita sin tocar un `2 * 3` ni los
+  marcadores del doblaje.
+- **Código muerto**: `TRADUCIR_RAPIDO_CHARS` eliminado; los 7 `preferFast` del
+  frontend, eliminados. `prefer_fast` se conserva en el modelo, marcado como
+  obsoleto, para que un navegador con el HTML viejo en caché no reciba un error.
+
+### 10.6 Estado
+
+- **117 pruebas** (antes 113) + `tests/test_youtube_sync.mjs`.
+- Nuevas: voseo, modelo por proveedor, markdown, centenas, mínimo de lote,
+  rechazo de lote incompleto con reintento.
+- Desplegado: `dpl_uXx4NTTuxKiKpoHsfEco5RAsDNn9` · SW `v33`.
+- **Pendiente a propósito:** fase 6 (`GEMINI_MODEL`), marcada `[DATO PENDIENTE]`
+  en el plan porque decidirla cuesta dinero.
 
 ---
 

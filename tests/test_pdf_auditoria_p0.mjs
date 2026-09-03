@@ -1,0 +1,112 @@
+/* Pruebas P0 del plan "pulir gramática PDF": aplicarSignos (capa revisadoSeguro),
+ * repriorizar del auditor (prioridad capítulo actual) y UI de revisión presente.
+ * Ejecutar: node tests/test_pdf_auditoria_p0.mjs
+ */
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { aplicarSignos, mismasPalabras, crearAuditorPdf, tokenizarExacto } from '../js/pdf/pulido.js';
+import { construirHuella, dividirEnBloquesSemanticos } from '../js/pdf/auditoria.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let fallos = 0;
+function comprobar(condicion, mensaje) {
+  if (condicion) {
+    console.log(`OK: ${mensaje}`);
+  } else {
+    fallos += 1;
+    console.error(`FALLO: ${mensaje}`);
+  }
+}
+
+console.log('--- 1) aplicarSignos: puntuación validada sin tocar palabras ---');
+{
+  const texto = 'habia una vez un pueblo lejano donde la gente no salia';
+  const toks = tokenizarExacto(texto);
+  const res = aplicarSignos(texto, toks, [
+    { pos: 2, tipo: 'coma', texto: ',' },
+    { pos: toks.length - 1, tipo: 'punto', texto: '.' },
+  ]);
+  comprobar(typeof res === 'string' && res.includes('vez,'), 'Inserta coma tras el token indicado');
+  comprobar(res && res.trim().endsWith('.'), 'Inserta punto al final');
+  const chequeo = mismasPalabras(texto, res || '');
+  comprobar(chequeo.igual, 'El texto con signos preserva 100 % de las palabras');
+}
+{
+  const texto = 'Hola mundo tranquilo';
+  const toks = tokenizarExacto(texto);
+  comprobar(aplicarSignos(texto, toks, [{ pos: 99, tipo: 'punto', texto: '.' }]) === null,
+    'Rechaza pos fuera de rango');
+  comprobar(aplicarSignos(texto, toks, [{ pos: 1, tipo: 'palabra', texto: 'hola' }]) === null,
+    'Rechaza signos no permitidos (letras)');
+  comprobar(aplicarSignos(texto, toks, [{ pos: 1, tipo: 'coma', texto: 'y' }]) === null,
+    'Rechaza texto disfrazado de signo');
+  const apertura = aplicarSignos(texto, toks, [{ pos: 0, tipo: 'apertura', texto: '¿' }]);
+  comprobar(typeof apertura === 'string' && apertura.startsWith('¿Hola'), 'Antepone signos de apertura');
+}
+{
+  const texto = 'perdido en la niebla';
+  const toks = tokenizarExacto(texto);
+  const res = aplicarSignos(texto, toks, [{ pos: 0, tipo: 'apertura', texto: '¿' }, { pos: 3, tipo: 'cierre', texto: '?' }]);
+  comprobar(typeof res === 'string' && res.startsWith('¿') && res.includes('niebla?'), 'Apertura + cierre juntos');
+}
+
+console.log('\n--- 2) Auditor: repriorizar mueve el capítulo abierto al frente ---');
+{
+  const orden = [];
+  const auditor = crearAuditorPdf({
+    pedirAuditoria: async (bloque) => {
+      orden.push(bloque.id);
+      await new Promise((r) => setTimeout(r, 15));
+      return { signos: [], propuestas: [] };
+    },
+  });
+  const bloques = ['a', 'b', 'c', 'd'].map((id) => ({ id, texto: `texto ${id}` }));
+  auditor.encolar(bloques);
+  auditor.iniciar(() => {});
+  // Los dos primeros ya arrancaron (concurrencia 2); el capítulo abierto es «d».
+  auditor.repriorizar(['d']);
+  const limite = Date.now() + 3000;
+  while (orden.length < 4 && Date.now() < limite) {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  comprobar(orden.slice(0, 2).join(',') === 'a,b', 'La concurrencia 2 no se rompe (a y b en curso)');
+  comprobar(orden.indexOf('d') < orden.indexOf('c'), `«d» (capítulo abierto) se audita antes que «c» (orden: ${orden.join(' → ')})`);
+  comprobar(orden.length === 4, 'Ningún bloque se perdió ni se duplicó');
+}
+
+console.log('\n--- 3) Reanudación: bloques persistentes reconstruyen capítulos ---');
+{
+  const texto = 'Parrafo uno de la historia inicial.\n\nParrafo dos sigue aqui.\n\nTercero y ultimo parrafo final.';
+  const bloques = dividirEnBloquesSemanticos(texto, [], 3000);
+  bloques.forEach((b, i) => { b.id = `bloq_${i}`; b.capitulo = i === 2 ? 1 : 0; });
+  // simular guardar/cargar (solo los campos ligeros que se persisten)
+  const guardados = JSON.parse(JSON.stringify(bloques.map((b) => ({ id: b.id, texto: b.texto, tipo: b.tipo, capitulo: b.capitulo }))));
+  comprobar(guardados.length === bloques.length && guardados[2].capitulo === 1,
+    'Los bloques persisten id/texto/tipo/capítulo para reanudar tras recargar');
+  comprobar(construirHuella(guardados[0].texto) === construirHuella(bloques[0].texto),
+    'La huella del bloque persistido coincide: no se re-audita lo ya hecho');
+}
+
+console.log('\n--- 4) UI de revisión y backend presentes ---');
+{
+  const indexHtml = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const controller = fs.readFileSync(path.join(__dirname, '../js/pdf/pdfController.js'), 'utf8');
+  const backend = fs.readFileSync(path.join(__dirname, '../backend/app.py'), 'utf8');
+  comprobar(indexHtml.includes('id="btnPdfRevision"') && indexHtml.includes('id="pdfRevisionHoja"'),
+    'index.html tiene botón y hoja de revisión');
+  comprobar(indexHtml.includes('pdf-rev-item'), 'index.html tiene estilos de la hoja de revisión');
+  comprobar(controller.includes('aplicarSignos'), 'El controlador aplica signos (capa revisadoSeguro real)');
+  comprobar(controller.includes('repriorizar'), 'El controlador reprioriza la cola al cambiar de capítulo');
+  comprobar(controller.includes('cargarBloquesDocumento'), 'El controlador restaura bloques al reabrir el libro');
+  comprobar(backend.includes('@app.post("/api/improve"'), 'Backend local expone el alias /api/improve');
+}
+
+if (fallos > 0) {
+  console.error(`\n❌ ${fallos} prueba(s) fallaron.`);
+  process.exit(1);
+} else {
+  console.log('\n✅ Todas las pruebas P0 de auditoría editorial pasaron.');
+}

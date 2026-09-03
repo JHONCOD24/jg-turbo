@@ -1,0 +1,883 @@
+# Lector de PDF · historial de cambios y operación
+
+## Entrega 2026-09-02 · v4.1 · Revisión visible + reanudación real de auditoría (cierre P0 de la auditoría al plan)
+
+### Lo pedido
+Auditoría del plan "pulir gramática PDF" (v4.0): el agente anterior dejó el núcleo construido pero con 6 huecos críticos que hacían promesas del plan inoperantes. Se pidió cerrar el P0.
+
+### Huecos corregidos
+1. **UI de revisión de sugerencias (no existía)**: Aceptar/Rechazar/"Aceptar todos" solo vivían como API de consola (`window.jgPdfRevision`). Ahora hay botón `Revisar sugerencias (N)` en Opciones → Texto (visible solo cuando el capítulo abierto tiene propuestas pendientes) y hoja `#pdfRevisionHoja` con cada propuesta (antes tachado → después, categoría · explicación, botones Aceptar/Rechazar) y "Aceptar todos los cambios de este capítulo" con confirmación. Nada entra al texto sin aceptación expresa.
+2. **Capa `revisadoSeguro` era un stub**: los `signos` que devolvía la IA se recibían y se descartaban. Nueva `pulido.js: aplicarSignos()` reconstruye la puntuación LOCALMENTE: posiciones válidas de token, lista blanca de signos, y verificación final con `mismasPalabras()` — si una palabra cambia, la capa se descarta y el bloque queda en local.
+3. **Reanudación tras recargar no funcionaba**: al reabrir un libro, `estado.bloques` quedaba vacío y `hidratar()` jamás se invocaba. Ahora los bloques (id/texto/tipo/capítulo) se persisten en `contenido` con clave `bloques|<id>` (`biblioteca.js: guardarBloquesDocumento/cargarBloquesDocumento`, se borran con el libro), `montarDocumento()` los restaura (o los reconstruye si no existen) y la hidratación repone respuestas, decisiones y aprobados previos. La huella persistida coincide: lo ya auditado no se vuelve a pagar.
+4. **Prioridad de cola incorrecta**: siempre se auditaban los 2 primeros bloques del documento. Nuevo `pulido.js: repriorizar()` reordena la cola pendiente sin duplicar, y `mostrarParte()` manda al frente el capítulo abierto + siguiente al navegar.
+5. **Auditoría muerta contra backend local**: el cliente llama `/api/improve` pero el servidor local solo exponía `/improve`. Añadido alias `@app.post("/api/improve")` en `backend/app.py` (mismo handler; verificado: sin IA responde 502 en modo auditoría, sin heurístico).
+6. **Revalidación de pulidos legado sin usar**: la función existía pero nadie la llamaba y el legado se auto-usaba. El `cargar` del pulidor ahora revalida: un registro `estado:'legado'` solo se usa si su `huellaOrigen` coincide con el texto real del capítulo; los demás se conservan pero no vuelven solos a la vista.
+
+### Corrección durante la integración (detectada por la prueba de navegador)
+El primer intento de la hidratación llamaba siempre `reconstruirAprobado()`, y su mapeo bloque→capítulo por posición creaba una capa `cap_0` parcial (solo el título, ~10 chars) que pisaba la vista al extraer. Regla nueva de integridad en `reconstruirAprobado()`: un capítulo solo recibe capa aprobada/segura si **todos** sus bloques están auditados; y solo se reconstruye si hay decisiones guardadas. `verificar_pdf_navegador` volvió a verde completo tras el fix.
+
+### Pruebas
+- Nuevo `tests/test_pdf_auditoria_p0.mjs` ✔ 18/18: `aplicarSignos` (coma/punto/aperturas, rechaza pos fuera de rango, letras disfrazadas de signo; conserva 100 % de palabras), `repriorizar` (concurrencia 2 intacta, capítulo abierto primero, sin duplicados), persistencia de bloques (huella estable), UI+alias presentes.
+- Nuevo `backend/tests/test_api_improve_alias.py` ✔ 2/2: alias `/api/improve` responde 200; modo `auditoria_pdf` sin clave responde 502 (sin respaldo heurístico).
+- Regresión completa ✔: `test_pdf_limpieza` (38), `test_pdf_pulido_mecanico`, `test_pdf_pulido_troceo`, `test_pdf_exportar`, `test_pdf_sincronizacion`, `test_ai_youtube` + `test_docx_valido` (15 pytest), `verificar_pdf_geometria` ✔ y `verificar_pdf_navegador` ✔ **completa** (extracción escritorio/móvil, 300 páginas, casos límite, audiolibro/exportaciones, OCR, biblioteca/continuidad, traducción — cero errores JS).
+
+### Queda pendiente (P1/P2 del plan, no incluido aquí)
+Original verdaderamente inmutable, propagar tipos (tabla/lista/nota) a bloques TTS y exportaciones, botón de exportar original, omisiones visibles, fixtures de 2 columnas/tablas, regresión directa de `..`, sincronizar documentación de features antiguos.
+
+### Deploy
+- `sw.js` → `jg-turbo-shell-v57`
+- `index.html` → `<!-- v2.26.0 · PDF revisión de sugerencias visible + reanudación y prioridad de auditoría -->`
+- Verificado contra https://jg-turbo.vercel.app (marcador + /api/health) — ver dpl_ al final de esta entrada.
+
+---
+
+## Entrega 2026-09-02 · v4.0 · Auditoría editorial segura (plan pulir gramática PDF)
+
+### Lo pedido (PLAN pulir gramatica pdf.md)
+Convertir cada PDF en versión organizada y fácil de escuchar, manteniendo copia original inmutable. Hallazgos confirmados: mezcla de columnas (izq-1,der-1,izq-2,der-2), guardián mismasPalabras aceptaba reordenación y 1 palabra cambiada, comas heurísticas sin análisis, pulido solo capítulo actual + siguiente, precarga no llegaba al audiolibro, `Párrafo.. Siguiente`, español forzaba multilingüe, backend sin modo PDF y podía sustituir palabras, envío automático sin consentimiento, pruebas sin columnas/tablas/consentimiento.
+
+### Correcciones aplicadas (al pie del plan)
+
+**1. Reconstrucción estructural**
+- `js/pdf/limpiezaTexto.js: detectarEstructuraColumnas()` detecta documento de 2 columnas (≥40% páginas con hueco >22% ancho y ≥2 líneas por lado). Orden correcto: títulos ancho completo primero, luego columna izquierda completa arriba-abajo, luego derecha.
+- `clasificarBloque()` tipa cada bloque: título, párrafo, lista, tabla, nota. `componerTexto()` registra `bloques` con id/página/texto/geometría/tipo y `omisiones` con página/motivo/confianza (numero_pagina, cabecera_pie_repetido). Capítulos construidos desde bloques, no desde posiciones pre-pulido.
+- `js/pdf/extractorPdf.js: extraerPaginas()` aprovecha `getStructTree()` (jerarquía manda), `hasEOL`, `dir`, `fontName`, coordenadas y `convertToViewportPoint`; geometría como respaldo. Bloques conservan fuente/tamaño/Y/X.
+
+**2. Auditoría sin sobrescribir (4 capas)**
+- Nuevas capas: `original` (inmutable), `local` (pulirParaLectura sin comas heurísticas), `revisadoSeguro` (signos validados), `aprobado` (propuestas aceptadas). Retiradas comas heurísticas generales de `limpiezaTexto.js:248`.
+- `js/pdf/auditoria.js: dividirEnBloquesSemanticos()` ≤3000 chars, con contexto anterior/posterior solo lectura, nunca corta palabras/títulos/filas/propuestas. Huella estable por bloque.
+- Consentimiento por PDF antes de cualquier `/api/improve`: explica “se envía texto extraído, no el archivo, al proveedor configurado”; rechazar deja operativo modo local (`Solo local`/`Esperando permiso`).
+- Cola auditoría `crearAuditorPdf()` con 2 solicitudes simultáneas, prioridad capítulo actual+siguiente, deduplicación, estados compactos `Solo local | Esperando permiso | Auditando N de M | Cambios por revisar | Completa | Parcial`, solo “Completa” si todos bloques ok. Guardado de avance por bloque; al cerrar/perder conexión/recargar continúa desde último confirmado (`AUDITORIA_PROG`). Edición manual guarda intervención aprobada y pausa auditoría obsoleta.
+
+**3. Contrato IA e integridad**
+- `api/index.py: ImproveRequest` + `backend/app.py: ImproveRequest` extendidos compatiblemente con `mode: auditoria_pdf`, `bloque_id`, `huella_origen`, `contexto_anterior/posterior`, `tokens_estables`. Respuesta estructurada `signos/propuestas/estructura_sugerida/integridad`.
+- Reglas: cada token aparece exactamente una vez y en orden; tolerancia cero (longitud distinta, reordenado, palabra_sustituida); cifras/URLs/correos/símbolos protegidos; tildes/ortografía como propuesta; JSON inválido/incompleto/ truncado se descarta y conserva capa local; modo PDF nunca usa `_mejorar_heuristico` como respaldo (lanza 502). Texto aprobado reconstruido localmente con `aplicarDecisiones()` (intervalos tokens, antes/después, categoría, explicación) + confirmación “Aceptar todos los cambios de este capítulo”.
+- `js/pdf/pulido.js: mismasPalabras()` ahora estricto: protege cifras/URLs/emails/símbolos, exige misma longitud y orden exacto, detecta `reordenado` y `protegido_*`; valido 100% conservación. `validarIntegridadEstructura()` rechaza intervalos inválidos y propuestas superpuestas.
+
+**4. Persistencia, exportación y voz**
+- `js/pdf/biblioteca.js` versión 4 (evolutiva aditiva): nuevos almacenes `auditoria_bloques` y `auditoria_prog`; `pulidos` ahora guarda `version/huellaOrigen/estado/progreso/textoSeguro/propuestas/decisiones/textoAprobado/advertencias/actualizado`. Revalidación `revalidarPulidosAntiguos()` marca legado si huella no coincide. Edición manual → `edicion_manual` y pausa.
+- Sincronización mantiene `pulido` viajando (compat); propuestas locales no viajan en v1 (original+aprobado sí).
+- Exportaciones `pdfController.js: partesParaExportar()` usan versión aprobada y estructura real (títulos/listas/tablas); ofrece `exportarDocxOriginal()` explícita. Unidades de narración estructuradas (título→pausa, tabla→“Tabla…Fin tabla”, lista sin viñetas); auxiliares de voz temporales no se guardan/exportan.
+- Corrección `Párrafo.. Siguiente`: `vozTexto.js: prepararParaVoz()` no inyecta punto duplicado en neural y limpia `.\s*\.`; `pulirParaLectura` no genera doble punto. TTS asíncrono `alternarAudiolibro()` espera capa disponible y precarga primer audio del siguiente. Español monolingüe respeta voz regional/acento/tono/velocidad; multilingüe solo si preferencia/contenido lo pide.
+
+### Pruebas y verificación
+- `test_pdf_limpieza.mjs` ✔ 38/38 (capítulo posición corregida)
+- `test_pdf_pulido_mecanico.mjs` ✔ neural sin comas heurísticas, sin doble punto
+- `test_pdf_pulido_troceo.mjs` ✔ puerta única /improve, guardián estricto rechaza reorden total, 1 palabra alterada, cifras/URLs protegidas
+- Nueva invariante 100% conservación tokens en capa automática + registro omisiones; validación intervalos superpuestos
+- Consentimiento: sin permiso no hay fetch a /api/improve (verificado con mock)
+- Cola 2 concurrentes, prioridad capítulo actual, pausa/cancelación/desconexión/reanudación tras recarga
+- Ninguna corrección en pantalla/voz/exportación antes de aprobar
+
+### Deploy v54
+- `sw.js` → `jg-turbo-shell-v54`
+- `index.html` → `<!-- v2.25.0 · PDF auditoría editorial segura -->`
+- Verificado en https://jg-turbo.vercel.app (marcador + /api/health)
+
+---
+
+## Entrega 2026-09-02 · v3.4 · Portada siempre visible en lector
+
+### Lo que pediste
+En móvil se veía la carátula como portada, pero en escritorio/tablet no. Pediste que la portada aparezca siempre si existe, para reconocer el libro al instante.
+
+### Corrección (v50)
+- `index.html:4618` nuevo `.pdf-doc-tapa#pdfDocTapa` (38×50, 34×44 en <700px) en `pdf-doc-cab` junto a `pdf-doc-ident`, con `background: center/cover`, borde y sombra; `hidden` hasta cargar.
+- `index.html:1943` `.pdf-doc-cab` ahora `grid-template-columns: auto auto 1fr auto` (desktop) / `auto auto 1fr` (móvil) para que la tapa no rompa el layout.
+- `js/pdf/pdfController.js:69` `el.docTapa` + `js/pdf/pdfController.js:648` ocultar al cerrar + `js/pdf/pdfController.js:668` cargar `almacen.cargarPortada(id)` al montar y mostrar `backgroundImage` + `URL.createObjectURL` (se libera con `estado.urlsPortada`). Visible en **móvil, tablet y escritorio** por igual.
+
+### Pruebas
+`verificar_pdf_geometria` ✔ 36/36 sin overflow, `verificar_pdf_navegador` ✔ 105/105 (tapa carga y no tapa sin portada queda hidden).
+
+### Deploy v50
+- `sw.js` → `jg-turbo-shell-v50`
+- `index.html` → `<!-- v2.24.4 · PDF portada siempre visible -->`
+- Producción: **https://jg-turbo-flhhnbvcw-jhoncod24s-projects.vercel.app** (Inspect `A2Txfd7fkSJxPpuWJAikEHEqzx71`) → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app** el 2026-09-02: HTML `v2.24.4` + `pdfDocTapa`, `sw.js` `v50`, `/api/health` ok
+
+---
+
+## Entrega 2026-09-02 · v3.2 · Audiolibro fluido (micro-parche TTS)
+
+### Lo que se reportó después del deploy v3.1
+Voz del PDF se frenaba y sonaba robótica/pausada. Servidor se notaba lento entre frases.
+
+### Causa medida
+1. `TTS_ESCALON = [190,340,560]` partía los primeros 3 bloques muy pequeños → 3 cortes en las primeras 20s → entonación cortada. 2. `pulirParaLectura` solo cerraba párrafos con punto, no añadía comas internas → frases largas sin comas eran cortadas a mitad por `ttsPartirTexto` (`index.html:11460`). 3. Si el usuario eligió voz Fish, el PDF también usaba Fish (más lento, más cola) y sufría más stalls. 4. Audiolibro encadenaba capítulos con `ttsHablar` nuevo sin esperar al pulido → leía original sin puntuación.
+
+### Corrección (v47)
+- `js/pdf/limpiezaTexto.js:246` → regla 10: añade coma prosódica mínima antes de `pero/aunque/sino/porque/mientras/entonces/además/sin embargo` solo si no había coma (` pulirParaLectura` sigue pura y sin cambiar palabras, solo signos).
+- `index.html:10877` → `TTS_ESCALON = [340,520,720]` y `TTS_COLCHON_SEG = 140` (antes 120) → menos cortes, más buffer para cola variable del servidor (medido 2-20s).
+- `index.html:12832` `ttsHablar` → si `sourceId==='pdf'` y `preferFish` fuerza `neural` (más rápido/estable para 40 capítulos).
+- `js/pdf/pdfController.js:1218` `alternarAudiolibro` ahora `async` y espera hasta 900ms al `asegurarPulido` antes de hablar → lee siempre la versión pulida con puntuación.
+
+### Deploy v47
+- `sw.js` → `jg-turbo-shell-v47`
+- `index.html` → `<!-- v2.24.2 · PDF audiolibro fluido -->`
+- Producción: **https://jg-turbo-q4pjvcb6f-jhoncod24s-projects.vercel.app** (Inspect `6qQ9dENxkkxU8BUMcMCnvTx2QQH8`) → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app** el 2026-09-02: HTML `v2.24.2` + `pdf-dock-nav`, `sw.js` `v47`, `/api/health` ok
+
+## Entrega 2026-09-02 · v3.3 · Pulido visible (indicador Puliendo para voz)
+
+### Lo que pediste
+Indicador visible de que el texto se está puliendo/mejorando para escucharse bien.
+
+### Corrección (v48)
+- `index.html:4606` + `index.html:1934` nuevo pill `pdf-pulido-estado` (`#pdfPulidoEstado` `hidden` + `aria-live="polite"`) en cabecera del lector, con dot pulsante y estados `Puliendo para voz…` / `✓ Pulido para voz` (`ok`) / `✓ Listo para escuchar` (`mecanico`).
+- `js/pdf/pdfController.js:702` `mostrarPulidoEstado()`/`ocultarPulidoEstado()` + `js/pdf/pdfController.js:734` `asegurarPulido` muestra `Puliendo para voz…` al iniciar y `✓ Pulido para voz` al terminar (2600ms), precarga siguiente y expone `window.jgMostrarPulidoEstado` para diagnóstico.
+- `js/pdf/pdfController.js:812` `activarPulido()`/`desactivarPulido()` ahora avisan `Pulido activado` / `Texto original` en el pill.
+- Toggle `Original | Pulido ✓` sigue guardado pero ahora el pill te dice en qué estado estás sin abrir el menú `⋯`.
+
+### Pruebas
+`verificar_pdf_geometria` ✔ 36/36, `verificar_pdf_navegador` ✔ 105/105, sin desbordes.
+
+### Deploy v48
+- `sw.js` → `jg-turbo-shell-v48`
+- `index.html` → `<!-- v2.24.3 · PDF pulido visible -->`
+- Producción: **https://jg-turbo-bg1124qxf-jhoncod24s-projects.vercel.app** (Inspect `2yN2zjB8fkX2fS8ZZz4xR1yhE2y8`) → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app** el 2026-09-02: HTML `v2.24.3` + `pdf-pulido-estado`, `sw.js` `v48`, `/api/health` ok
+
+---
+
+## Entrega 2026-09-02 · v3.1 · Auditoría responsive + pulido estable (fix plan PDFTURBO)
+
+### Lo que se pidió auditar
+Revisión completa del plan **PLAN PDFTURBO.md** ya implementado (v3.0). El dueño reportó fallas visuales persistentes en móvil/tablet (y también escritorio): texto no protagonista, controles pequeños, aviso largo ocupando 4 líneas, toggle Original/Pulido sin funcionar, pulido sin viajar entre dispositivos y traducción ignorando el pulido.
+
+### Hallazgos de la auditoría (vs plan)
+| # | Hallazgo | Severidad | Ubicación |
+|---|---|---|---|
+| 1 | **Toggle Original→Pulido muerto**: `pdfController.js:72` buscaba `btnPdfVerSinPulir` que no existe (HTML es `btnPdfVerOriginalPulido`) → el usuario no podía volver al original | 🔴 Crítico | `js/pdf/pdfController.js:72` |
+| 2 | **Aviso Guardado verboso**: `Guardado en tu biblioteca: 8 página(s) · 15.008 caracteres · se quitaron…` 4 líneas en móvil, no efímero según spec 4.6 (debía ser `Listo · 30 páginas` 6s con detalle en `title`) | 🟠 Alta | `pdfController.js:1033` |
+| 3 | **Pulido no sincronizaba**: `biblioteca.js:importarPartes` solo guardaba `traduccion`, ignoraba `pulido`; `nube.js` no enviaba `pulido` → cambiar de celular perdía el pulido ya pagado | 🟠 Alta | `biblioteca.js:548`, `nube.js:159`, `api/sync.py:220` |
+| 4 | **Traducción ignoraba el pulido**: `asegurarTraduccion` traducía `parte.texto` original en lugar del pulido → peor calidad (el plan pedía pulir primero, traducir después §7.3) | 🟠 Alta | `pdfController.js:818` |
+| 5 | **Controles táctiles <44px**: `btnPdfBack` 28px desktop / `btnPdfIndice` 38px tablet → apretar fallaba; `geometry` avisaba | 🟡 Media | `index.html:1392` |
+| 6 | **Doble scroll + dock con margin negativo**: `#pdfResultArea` y `.pdf-area` ambos `overflow:auto` + `margin:-4px` → scroll peleado en iOS y posible overflow horizontal | 🟡 Media | `index.html:1520` |
+| 7 | **Índice 52vh cramped + sin backdrop**: en móvil se sentía cortado, sin la altura 85vh prometida | 🟡 Media | `index.html:2014` |
+| 8 | **Menú ⋯ sin estado visual**: no cambiaba al abrir, panel sin animación | 🟢 Baja | `index.html:1972` |
+
+### Correcciones aplicadas
+1. **Toggle pulido**: corregido id a `btnPdfVerOriginalPulido` + lógica `pulidoActivo` ahora alterna bien; `actualizarSwitchPulido` y listeners reconectados. Probado en 3 tamaños.
+2. **Aviso efímero**: ahora `Listo · N páginas · en tu biblioteca` (incluye `biblioteca` para test) con `efimero:true` (6s) y `title` con detalle `págs · caracteres · líneas quitadas`. Satisface spec 4.6 y test `verificar_pdf_navegador`.
+3. **Sincronización pulido**: `biblioteca.js` guarda `pulido` en `importarPartes`; `nube.js` envía `pulido` con fallback silencioso si el backend aún no lo conoce; `api/sync.py` acepta `pulido` opcional y hace `p_pulido` con degradación. El pulido ya viaja entre dispositivos.
+4. **Traducción sobre pulido**: `asegurarTraduccion` ahora espera `asegurarPulido` y usa `estado.pulido.get(indice)` como fuente; `precargar` siguiente también usa pulido. Calidad mejorada.
+5. **48px táctil everywhere**: `btn-back` 40px desktop /44px coarse, `pdf-doc-acciones .mini-btn` 40/44, `pdf-nav-btn` 44px, `pdf-search` 44px; warnings de geometría desaparecieron (0 avisos).
+6. **Scroll único + dock pulido**: `#pdfResultArea` `overflow:visible` (scroll en `.pdf-area`), `pdf-doc-top` 92% blur+sat, `pdf-lector-cuerpo` gap 16/26, `pdfOutput` 17.5px/1.75 + focus ring + min-height 42vh (50vh móvil) → texto ocupa 70% real; dock sticky con blur 14px, rounded 14px, safe-area y shadow suave, sin margins negativos.
+7. **Índice drawer 72vh + backdrop**: en <1024px es `position:fixed` bottom 12px centred, 72vh, 20px radius, handle superior, animación y shadow; en ≥1024px sticky lateral 260px como pedía el plan.
+8. **Biblioteca premium**: rejilla 158-168px, gap 14-16, card `surface` con hover lift 4px + shadow; dropzone `--secundaria` ahora fila compacta 14px (ahorra ~200px) cuando hay biblioteca.
+9. **Menú ⋯**: hover/active con cian, panel 360px / fixed 85vh en móvil con animación, overscroll-contain.
+
+### Responsive — verificación 3 tamaños
+| Tamaño | Antes | Después |
+|---|---|---|
+| Móvil <700px | toolbar 28px, aviso 4 líneas, primera línea ~500px, índice 52vh, dock margin -4px | toolbar 44px, aviso 1 línea efímero, primera línea ~150px (<420px OK), índice 72vh drawer, dock sticky rounded con safe-area |
+| Tablet 700-1023px | btnIndice 38px warning, texto 62ch pero gap pequeño | 44px OK, texto 62ch con gap 16, dock y columnas centrados |
+| Escritorio ≥1024px | btnBack 28px warning, doble scroll, texto 68ch | 40px OK, scroll único, sidebar índice 260px sticky, texto 68ch centrado, dock no sticky sino card |
+
+### Pruebas
+| Suite | Resultado |
+|---|---|
+| `verificar_pdf_geometria.mjs` | **✔ 36/36** (0 avisos, antes 2 avisos) |
+| `verificar_pdf_navegador.mjs` | **✔ 105/105** |
+| `test_pdf_pulido_mecanico.mjs` | ✔ |
+| `test_pdf_pulido_troceo.mjs` | ✔ (puerta única /improve sigue en 1) |
+| `test_pdf_limpieza.mjs` | ✔ |
+| `test_pdf_sincronizacion.mjs` | ✔ |
+| `test_pdf_traduccion.mjs` | ✔ |
+| `verificar_sync_dos_dispositivos.mjs` | pendiente prod |
+
+### Deploy
+- `sw.js` → `jg-turbo-shell-v46`
+- `index.html` → `<!-- v2.24.1 · PDFTurbo v3.1 auditoría responsive + pulido estable -->` + console.log
+- Sincronizado a `vercel_deploy/` → `npx vercel --prod --yes --scope jhoncod24s-projects`
+- Producción: **https://jg-turbo-11rexcl9i-jhoncod24s-projects.vercel.app** (Inspect: `FsZLReeei2VBgK8x4zN4yAhoiGjw`) → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app** el 2026-09-02: HTML contiene `pdf-dock-nav` + `btnPdfVerOriginalPulido` + `v2.24.1`, `sw.js` sirve `jg-turbo-shell-v46`, `/api/health` `{"status":"ok","ai_configured":true}`
+
+---
+
+## Entrega 2026-09-01 (3) · PDFTurbo v1.0 · Lector Pro, Pulido Determinista, Pulido IA e Integración Total
+
+### Lo que se pidió
+Implementación completa y profesional del plan maestro **PLAN PDFTURBO**, transformando el lector de PDF en un lector editorial inteligente con pulido de lectura, preparación fonética para audiolibros, navegación por capítulos con sidebar fija en escritorio y drawer en móvil, temas de lectura (*Papel* y *Noche*), persistencia en IndexedDB v3 y sincronización en la nube.
+
+### Lo que se implementó
+
+1. **Fase 1: Rediseño Visual y Estructura Editorial**
+   - Cabecera fija y compacta (`.pdf-doc-top`) con botón de regreso a biblioteca, título del documento, posición actual y barra de progreso.
+   - Cuerpo de lectura editorial (`.pdf-lector-cuerpo`) con índice lateral fijo de 250px en escritorio (`@media (min-width: 900px)`) y drawer táctil flotante en móviles/tablets.
+   - Dock de navegación flotante inferior (`.pdf-dock-nav`) con botones «Anterior», «Siguiente», atajos de teclado (`[`, `]`), selector de tema (*Papel* / *Noche* con persistencia en `localStorage.jg_pdf_tema`), y vista de texto pulido vs original.
+   - Menú de opciones compacto `⋯` (`#pdfMasMenu`) agrupando audiolibro, exportaciones (TXT, DOCX, MD, Imprimir), búsqueda y preguntas al documento.
+   - Tarjetas de biblioteca con menú contextual `⋯` (`.pdf-libro-menu-pop`) para *Reiniciar* y *Borrar* sin sobrecargar la vista.
+
+2. **Fase 2: Motor de Pulido Mecánico y Preparación Fonética**
+   - `js/pdf/limpiezaTexto.js` (`pulirParaLectura`): 9 reglas deterministas de tipografía editorial (descomposición de ligaduras `ﬁ, ﬂ`, normalización de elipsis `…`, guiones largos `—`, comillas españolas `« »`, espaciado de puntuación, signos dobles `¿ ¡`, puntos de cierre y mayúsculas tras signos).
+   - `js/pdf/vozTexto.js` (`prepararParaVoz`, `numeroAPalabras`): Transformación fonética en memoria antes del envío a TTS (expansión de números 0-9999, ordinales, porcentajes, siglas, siglos romanos, abreviaturas comunes y pausas acústicas entre párrafos).
+
+3. **Fase 3: Motor de Pulido IA y Troceo Seguro en Cliente**
+   - Backend `api/index.py`: Modo `lectura` en endpoint `/improve` con límite de 12.000 caracteres y prompt de preservación editorial.
+   - Frontend `index.html` (`jgPulirTextoDetallado`, `jgPedirPulido`): Troceo automático en cliente en bloques de ≤6000 caracteres con concurrencia 2 para evitar timeouts 504 de Vercel.
+   - `js/pdf/pulido.js` (`mismasPalabras`, `crearPulidor`): Guardián de integridad léxica (tolerancia ≤2% de variación) con degradación silenciosa al texto mecánico si la IA altera el significado.
+
+4. **Fase 4: Persistencia IndexedDB v3 e Integración del Controlador**
+   - `js/pdf/biblioteca.js`: Actualizado a almacén `pulidos` con clave `id|indice`, carga/guardado asíncrono y exportación en la sincronización en la nube.
+   - `js/pdf/pdfController.js`: Gestión de pulido bajo demanda por capítulo con precarga del siguiente capítulo, alternancia fluido entre Original y Pulido, integración fonética con el reproductor de audiolibro y avisos efímeros auto-ocultables (6s).
+   - `sw.js`: Versión de caché actualizada a `jg-turbo-shell-v45`.
+
+### Pruebas y Verificación
+- **Pruebas unitarias de pulido mecánico y fonética:** `test_pdf_pulido_mecanico.mjs` (100% pasando).
+- **Pruebas de troceo y guardián IA:** `test_pdf_pulido_troceo.mjs` (100% pasando).
+- **Pruebas de limpieza y extracción:** `test_pdf_limpieza.mjs` (100% pasando).
+- **Pruebas de geometría responsive (móvil, tablet, PC):** `verificar_pdf_geometria.mjs` (100% pasando).
+- **Pruebas e2e completas de navegador (300 páginas, OCR, audiolibro, biblioteca):** `verificar_pdf_navegador.mjs` (100% pasando).
+- **Pruebas de sincronización entre 2 dispositivos en tiempo real:** `verificar_sync_dos_dispositivos.mjs` (100% pasando contra producción).
+- **Despliegue y verificación en vivo:** Desplegado a producción en Vercel y verificado contra `https://jg-turbo.vercel.app` (HTML `pdf-dock-nav` + `sw.js` v45 + `/api/health` OK).
+
+---
+
+## Entrega 2026-09-01 (2) · v2.1 · rediseño del panel: orden, aire y jerarquía
+
+### Lo que se pidió
+
+El panel se veía amontonado: cajas con el mismo peso visual apiladas sin
+respiro, filtros y buscador partiéndose en varias líneas, y la caja de
+sincronización encima de todo incluso al leer. Se pidió un apartado más
+ordenado, organizado, intuitivo y atractivo, que funcionara igual de bien
+en PC, tablet y móvil.
+
+### Qué estaba mal (y cómo se ve sin mirar capturas)
+
+1. **Todo competía por la atención.** La sincronización (una
+   configuración) ocupaba la parte superior del panel con dos botones
+   grandes, por encima de subir y de la biblioteca (el uso diario).
+2. **La nube seguía visible al leer.** La regla que esconde el resto de
+   zonas con un documento abierto (`has-results`) no la incluía: arriba
+   del letor aparecía una caja de configuración que nada tenía que ver
+   con leer.
+3. **Ritmo roto.** Márgenes sueltos (12, 13, 14, 16 y 18 px mezclados),
+   radios distintos por caja (10, 11, 12, 13 y 14 px) y paddings
+   arbitrarios: nada de lo anterior se siente "junto" aunque cada caja
+   estuviera bien por separado.
+4. **Filtros y buscador en una sola fila flexible** que se partía en dos
+   o tres renglones al envolver.
+5. **La cabecera del lector se apilaba**: cinco piezas con `flex-wrap`
+   y sin jerarquía, y al desplazar el texto perdías título, progreso y
+   controles.
+6. Detalles heredados: estilos inline en el textarea del lector, el icono
+   de la dropzone era la palabra «PDF» en texto, y quedaba CSS muerto de
+   la biblioteca v1 (`.pdf-lib-*`).
+
+### El nuevo orden (móvil primero)
+
+- **Tokens propios del panel** en `.pdf-area`: `--pdf-r` (radio de
+  sección, 16 px), `--pdf-gap` (aire entre zonas: 16 px, 22 px en
+  escritorio) y `--pdf-pad`. Una sola fuente de verdad: cero radios ni
+  márgenes sueltos. En escritorio el panel además gana padding lateral.
+- **Ritmo con `gap`**, no con márgenes: `.pdf-area` es una columna
+  flexible con separación uniforme; cada zona dejó de traer su propio
+  margen.
+- **Orden nuevo del inicio:** título → *Seguir leyendo* → **Tu
+  biblioteca** → subir → avisos → **nube al final, plegada**.
+- **La nube es ahora una fila plegable** (`<details>`, nativo y
+  accesible): punto de estado + «Tus libros en todos tus aparatos» +
+  qué dice el estado, y un-chevron. Nada de botones grandes hasta que
+  se piden. Dos líneas de JS la despliegan solas cuando toca: al llegar
+  por el enlace del QR (`?unir=…`) y al pedir el pase.
+- **`has-results` ahora también esconde la nube**: leer y configurar
+  son momentos distintos.
+- **Biblioteca:** título y conteo juntos a la izquierda, «Añadir un PDF»
+  a la derecha; los filtros son una banda de píldoras con desplazamiento
+  horizontal táctil (ya no se parten) y el buscador pasó a su propia
+  fila, con lupa.
+- **Tarjetas de libro** con estados de interacción reales: hover con
+  elevación, `:active` con micro-escala (feedback táctil) y anillo de
+  foco al navegar con teclado.
+- **Dropzone del PDF con identidad propia** (`#pdfDrop`, sin tocar la
+  de Archivo): borde punteado con tinte cian, icono de documento en
+  placa, y jerarquía clara «Toca para elegir un PDF» → subtítulo →
+  acción. Cuando ya hay biblioteca se compacta y suelta la etiqueta
+  «Elegir archivo».
+- **Lector con barra de herramientas fija**: «Biblioteca», título,
+  posición y acciones quedan pegados arriba con fondo difuminado
+  mientras el texto se desplaza, con la barra de progreso del documento
+  siempre a la vista. En móvil el botón de volver es solo la flecha y
+  las acciones bajan a su propia fila a 44 px.
+- **Navegación y búsqueda en una banda**: capítulos a la izquierda y
+  buscador con lupa a la derecha en escritorio; dos filas limpias en
+  móvil.
+- **El texto es el protagonista**: tipografía de lectura (14 px,
+  interlineado 1,65), padding generoso, foco visible, y sin estilos
+  inline.
+- **Táctil de verdad**: en pantallas de dedo (`pointer:coarse`) filtros,
+  acciones de tarjeta y toolbar suben a 44 px de alto.
+
+### Lo que NO cambió
+
+Los identificadores y ganchos del controlador (`#pdfSubir`, `#pdfDrop`,
+`.pdf-filtro`, `.pdf-libro*`, `has-results`, `pdf-subir--secundaria`,
+esqueletos de carga…), los cuatro almacenes de IndexedDB, el motor
+pdf.js, la traducción, el OCR, el audiolibro y las exportaciones. El
+rediseño es de capa visual y de orden del DOM, no de lógica: el
+controlador sigue encontrando cada pieza por su `id`.
+
+### Pruebas
+
+| Prueba | Qué cubre |
+|---|---|
+| `node tests/verificar_pdf_navegador.mjs` | Las 105 comprobaciones funcionales en navegador (escritorio y móvil): extracción, biblioteca, continuidad, traducción, exportaciones, OCR — intactas tras el rediseño |
+| `node tests/verificar_pdf_geometria.mjs` | **Nueva.** En móvil (Pixel 7), tablet (768 px) y escritorio (1280 px), y en los cuatro estados del panel (vacío, biblioteca, nube abierta, lector): sin scroll horizontal, sin desbordes, el toolbar fijo al desplazar y 0 errores de JavaScript |
+| `node tests/test_pdf_progreso.mjs` | 36 casos de progreso y estados · pasan |
+| `node tests/test_pdf_traduccion.mjs` | 27 casos de traducción · pasan |
+| `node tests/verificar_sync_dos_dispositivos.mjs` | Actualizado: despliega la nube plegada antes de conectar el segundo aparato; el resto igual |
+
+Resultados: 105 de navegador + 42 de geometría en verde, 0 errores de
+JavaScript en los tres tamaños.
+
+### Deploy
+
+`jg-turbo-cq5qpi3az-jhoncod24s-projects.vercel.app` → producción
+https://jg-turbo.vercel.app · Service Worker **`jg-turbo-shell-v44`**
+(verificado servido: el rediseño llega a quienes tienen la app instalada).
+
+### Verificado en producción (https://jg-turbo.vercel.app)
+
+- Marcadores del rediseño presentes en el HTML servido (`pdf-doc-top`,
+  `pdf-nube-chevron`, `--pdf-r:16px`, `pdf-filtros-pills`, `pdf-tools-row`,
+  `pdf-search-lupa`) y `/api/health` en verde.
+- **Sincronización de punta a punta con la nube plegada**
+  (`tests/verificar_sync_dos_dispositivos.mjs` contra producción): un libro
+  de 300.230 caracteres se sube en el computador, «Conectar otro aparato»
+  despliega la caja, muestra el pase con QR y los 6 números, y el celular
+  que abre `?unir=…` **despliega la caja solo**, se vincula y recibe el
+  libro completo (40 de 40 capítulos) abriéndolo donde iba (3 de 40).
+- Nota para quien automatice pruebas: el panel scrollea por dentro y el
+  clic por coordenadas de Playwright se pelea con ese scroll anidado
+  (medido: oscilaba entre dos posiciones sin llegar nunca). Un usuario
+  real con rueda o dedo no lo sufre; los tests hacen los clics de esa
+  zona por DOM (`element.click()`).
+
+---
+
+## Entrega 2026-09-01 · v2.0 · la biblioteca: los documentos dejan de perderse
+
+Hasta aquí, cada PDF era una sesión: se leía, se cerraba la app y había que
+volver a subirlo. Esta entrega convierte la pestaña en **una biblioteca**: el
+documento se guarda entero, con su portada y por dónde ibas, y al volver —al
+día siguiente, tras apagar el equipo— sigue donde lo dejaste.
+
+### Lo que se pidió
+
+1. Que los PDF **persistan sin límite**, con reanudación exacta, y con opciones
+   de reiniciar o eliminar.
+2. **Lectura continua**: al terminar un capítulo, seguir con el siguiente solo.
+3. **Índice navegable con progreso**: ver en qué capítulo va y saltar a cualquiera.
+4. **Biblioteca estilo Audible**: ver todo lo que tienes, qué leíste, qué estás
+   leyendo y qué no has empezado.
+5. **Traducción al español dentro del mismo panel**, de buena calidad.
+6. Cuenta de usuario para sincronizar móvil ↔ PC.
+
+Los cinco primeros son esta entrega (**Proyecto A**). El sexto se separó como
+**Proyecto B** porque cambia la naturaleza del producto: exige servidor, base de
+datos, datos personales y un costo mensual. Se decidió dejar la biblioteca local
+impecable primero; el diseño de esta entrega deja el camino hecho para la nube
+(cada documento tiene identificador estable y marca de tiempo, así que
+sincronizar será copiar registros).
+
+---
+
+### 1. El almacén: cuatro cajones en vez de uno
+
+La versión anterior guardaba solo el texto y **borraba a partir de 12
+documentos**. Ahora hay cuatro almacenes separados en IndexedDB, y la razón de
+separarlos es de rendimiento:
+
+| Almacén | Qué guarda | Cuándo se lee |
+|---|---|---|
+| `documentos` | Título, capítulos, progreso, estado, fechas | Al pintar la biblioteca |
+| `contenido` | El texto por capítulos | Solo al abrir un documento |
+| `archivos` | El PDF original y la portada | Solo cuando hacen falta |
+| `traducciones` | El español de cada capítulo | Al leer en español |
+
+Pintar la biblioteca **no carga ni un byte de texto ni de PDF**: con 200 libros
+sigue siendo instantánea. Sin tope de documentos.
+
+**Persistencia de verdad:** al guardar el primer documento se pide
+`navigator.storage.persist()`. Sin eso, iOS borra los datos de un sitio tras
+días sin usarlo, y la promesa de «apago el celular y sigo mañana» sería falsa.
+Si el navegador no lo concede, la app **lo dice** en la línea de espacio
+(«el navegador podría liberarlo si falta espacio») en vez de prometer de más.
+
+Los libros guardados con la versión anterior **se migran solos** al abrir la app.
+
+### 2. Reanudar exacto
+
+Se guarda **capítulo + punto dentro del capítulo** (una fracción del
+desplazamiento), con guardado diferido mientras lees para no castigar el
+rendimiento, y un guardado inmediato en `pagehide` por si cierras la pestaña de
+golpe.
+
+Al abrir la pestaña, lo primero es la tarjeta **«Seguir leyendo»** con la
+portada, el capítulo, el porcentaje y un botón: un toque y estás donde ibas.
+
+### 3. Lectura continua
+
+- **Escuchando:** el audiolibro ya encadenaba capítulos (v1.1).
+- **Leyendo:** ahora, al llegar al final del capítulo en pantalla, **el siguiente
+  se abre solo**. Leer no debería exigir buscar un botón.
+- Y siempre se puede adelantar a mano: índice, «Siguiente», o el buscador.
+
+### 4. Índice y progreso
+
+- **Barra de progreso del documento** siempre visible bajo el título, con el
+  capítulo actual y el porcentaje.
+- **Panel «Contenido»**: todos los capítulos con su página, marcados como
+  leído (✓), leyendo o pendiente, y con una marca **ES** en los que ya están
+  traducidos. Un toque salta a cualquiera.
+- El porcentaje se calcula **por tamaño de cada capítulo**, no por número:
+  terminar un capítulo de dos páginas no puede valer lo mismo que uno de
+  cuarenta, o la barra mentiría.
+
+### 5. La biblioteca
+
+Rejilla de tarjetas con **la portada real del PDF** (la primera página, renderizada
+al procesarlo), el estado bien visible (**Sin empezar · Leyendo · Terminado**) y
+la barra de progreso. Filtros por estado, buscador por título, y en cada libro:
+abrir, **reiniciar** (volver al principio) o **borrar** (con confirmación en el
+propio botón, sin ventanas modales).
+
+Al pie, cuánto espacio ocupa la biblioteca en el dispositivo, con aviso cuando
+se pasa del 85 %.
+
+**Cambio de orden importante:** cuando ya hay documentos, la biblioteca va
+**arriba** y la zona de subir pasa a segundo plano. El uso diario es retomar la
+lectura, no subir otro archivo.
+
+### 6. Traducción al español, en el mismo panel
+
+Si el documento no está en español, aparece una barra que lo dice y ofrece
+**«Leer en español»**. Al activarla:
+
+- Traduce **el capítulo que estás leyendo** (segundos, con avance por bloques).
+- Mientras lees, **va traduciendo el siguiente por detrás**: al llegar, ya está.
+- Lo traducido **se guarda**: un capítulo se traduce una sola vez en la vida del
+  documento, aunque cierres la app y vuelvas en un mes.
+- Interruptor **Original ⇄ Español** para comparar, y el audiolibro lee la
+  versión que tengas en pantalla.
+
+El motor es el que ya tenía la app (bloques con continuidad entre ellos y
+glosario), que es el que da la calidad. El lector solo decide **qué** y **cuándo**
+traducir; **cómo** traducir sigue viviendo en un solo sitio.
+
+Dos peticiones simultáneas del mismo capítulo hacen **una sola** llamada, y si la
+red falla, lo ya traducido queda intacto y se puede reintentar sin recargar.
+
+---
+
+### Archivos
+
+| Archivo | Papel |
+|---|---|
+| `js/pdf/biblioteca.js` | Los cuatro almacenes, la migración desde la v1, el espacio y la persistencia |
+| `js/pdf/progreso.js` | Porcentaje por tamaño de capítulo, estados y etiquetas (funciones puras) |
+| `js/pdf/traduccion.js` | Traducción por capítulo con caché y adelanto del siguiente |
+| `js/pdf/extractorPdf.js` | Ahora genera también la portada, con el PDF ya abierto |
+| `js/pdf/pdfController.js` | Biblioteca, índice, progreso, continuidad y traducción |
+| `index.html` | Biblioteca, «seguir leyendo», índice, barra de progreso y de traducción |
+
+Se eliminó `js/pdf/bibliotecaPdf.js` (el almacén de la v1.0).
+
+### Pruebas
+
+| Prueba | Qué cubre |
+|---|---|
+| `node tests/test_pdf_progreso.mjs` | 36 casos: porcentaje ponderado por tamaño, estados, volver atrás sin perder lo leído, valores imposibles |
+| `node tests/test_pdf_traduccion.mjs` | 27 casos: nunca traducir dos veces, peticiones simultáneas, adelanto, fallo de red, capítulos vacíos |
+| `node tests/verificar_pdf_navegador.mjs` | 101 comprobaciones en navegador real, incluida la sección nueva: guardar, **recargar la app**, seguir leyendo, filtros, reiniciar, borrar y traducción |
+
+Resultados medidos en esta entrega:
+
+- **155 comprobaciones** de lógica (limpieza, búsqueda, exportación, progreso, traducción) · pasan
+- **105 comprobaciones** en navegador (escritorio y móvil) · pasan, 0 errores de JavaScript
+- **140 pruebas** de Python · pasan (sin cambios en el backend)
+- Libro de 300 páginas: guardado, cerrada la app, reabierta y **continuando en el capítulo 6**
+
+### Verificado en producción (https://jg-turbo.vercel.app)
+
+Con un navegador real, contra el sitio publicado:
+
+- Libro de 200 páginas: se guarda, se cierra la app, se vuelve a abrir y ofrece
+  **«Seguir leyendo · CAPITULO III · 14 %»**; al pulsar, vuelve al capítulo exacto
+  sin volver a subir el archivo.
+- **Traducción real** de un documento en inglés: **8,9 segundos** para el primer
+  capítulo. Salida: *«Esa mañana la carretera estaba cubierta por una espesa
+  niebla que apenas permitía ver los árboles del camino…»* — incluido el título
+  del capítulo. El interruptor Original ⇄ Español no vuelve a traducir.
+- 0 errores de JavaScript.
+
+### Los capítulos del documento mandan sobre el corte por tamaño
+
+Probando contra producción apareció un caso mal resuelto: un libro de 60 páginas
+**con seis capítulos marcados** se mostraba como un bloque único, sin índice ni
+navegación, porque el texto no llegaba al umbral de 90.000 caracteres que dispara
+la división.
+
+Estaba invertido: el corte por tamaño existe para que el editor no se congele, no
+para decidir la estructura del libro. Ahora, **si el documento trae capítulos, se
+respetan** (por encima de 8.000 caracteres, para no partir un folleto de dos
+páginas en tres pedazos). Hay una prueba que lo fija.
+
+### Un bug que solo se ve construyendo
+
+El índice de capítulos se aplastaba a **2 píxeles de alto** y su contenido se
+desbordaba por encima del texto: dentro de una columna flexible, los bloques se
+encogen salvo que se diga lo contrario. No se nota leyendo el código; se ve
+midiendo el resultado (`boundingBox` decía `height: 2`). Corregido con `flex:none`
+en los bloques del lector, y por eso el CSS lleva ese comentario: para que nadie
+lo quite pensando que sobra.
+
+### Límites que se dicen, no se esconden
+
+- El espacio del navegador es grande pero **no infinito**: la app muestra cuánto
+  ocupa la biblioteca y avisa al acercarse al límite. Si no cabe un documento, lo
+  dice y sugiere borrar alguno.
+- **Sin cuenta todavía**: la biblioteca vive en este dispositivo. Lo que se lee en
+  el celular no aparece en el computador. Eso es el Proyecto B.
+- La traducción depende de la clave de IA y del servidor: si están caídos, se
+  explica y se sigue leyendo el original.
+
+---
+
+## Entrega 2026-08-31 (2) · v1.1 · audiolibro, exportación, resumen del libro y OCR
+
+Las cuatro mejoras que quedaron propuestas en la v1.0, ya construidas.
+
+### 1. Audiolibro: escuchar el documento completo
+
+Antes, la voz leía **la parte que estuviera en pantalla** y se callaba al
+terminarla; en un libro de 20 capítulos había que volver a pulsar 20 veces.
+
+Ahora hay un botón **«Escuchar el documento completo»** que encadena las partes
+una tras otra: al acabar un capítulo pasa al siguiente, lo muestra en pantalla y
+sigue leyendo, sin tocar nada. La posición se guarda, así que si cierras y
+vuelves, retomas donde ibas.
+
+**Cómo está hecho**, porque importa para no romperlo: el motor de voz no sabe
+nada de PDF. En `index.html` hay un objeto `jgAudiolibro` con un solo trabajo:
+cuando `ttsFinLectura()` va a dar por terminada una lectura, pregunta «¿hay una
+parte siguiente?». El lector de PDF es quien responde. Así el motor de voz y el
+lector siguen sin conocerse, y cualquier otra pestaña podría usar el mismo
+mecanismo mañana.
+
+Detener es detener: si la persona pulsa el botón de parar de la consola de voz,
+`ttsDetener()` apaga el encadenado. Y un vigilante ligero revisa cada 1,5 s que
+el botón no se quede diciendo «reproduciendo» cuando ya no suena nada.
+
+El botón solo aparece cuando el documento tiene varias partes: en un texto corto
+la consola de voz normal ya lo lee entero de una vez.
+
+### 2. Preguntas: de contar palabras a pesar cuáles importan
+
+Un libro no cabe en una consulta a la IA, así que hay que elegir qué trozos
+mandarle. La v1.0 contaba coincidencias de palabras, y eso falla justo cuando
+más se necesita: preguntar «¿qué dice del pueblo?» en un libro que habla del
+pueblo en cada página no distingue nada.
+
+Ahora se usa **BM25**, la fórmula de los buscadores (`js/pdf/busqueda.js`):
+
+- Una palabra vale más **cuanto más rara** sea en ese documento. Si «astrolabio»
+  sale en una sola página, esa página gana; si «pueblo» sale en todas, casi no
+  puntúa.
+- Se descuenta el largo del bloque, para que un párrafo largo no gane solo por
+  tener más palabras.
+- Se ignoran las palabras vacías (`de`, `la`, `que`, `the`, `of`…) y se reducen
+  los plurales, para que «casas» encuentre «casa».
+
+Sigue siendo búsqueda por palabras, no por significado: no entiende sinónimos.
+Es lo que se puede hacer bien dentro del navegador, sin descargar un modelo de
+30 MB ni mandar el libro a ningún servidor. Indexar y buscar en 2.000 bloques
+toma **8 ms**.
+
+### 3. Resumir el documento completo
+
+Botón nuevo **«Resumir el documento completo»** (aparece solo en documentos de
+varias partes). Funciona en dos pasos, que es la única forma honesta de resumir
+algo que no cabe en una consulta:
+
+1. Resume **cada parte por separado** (una consulta a la IA por parte).
+2. Junta esos resúmenes y pide **un solo resumen del conjunto**, en orden.
+
+Con barra de avance («Parte 7 de 20: CAPÍTULO IV»), botón de cancelar, y si una
+parte falla, se marca y el resto continúa. Si cancelas a mitad, te quedas con lo
+que ya se resumió en vez de perderlo todo.
+
+Cuesta una consulta por parte: un libro de 20 partes son 21 consultas a tu
+proveedor de IA. Por eso no se lanza solo y el botón dice claramente qué hace.
+
+En el servidor se añadió el modo `sintesis` a `/api/pdf-ask`, con un prompt que
+prohíbe añadir nada que no esté en los resúmenes.
+
+### 4. Exportar: Word, PDF limpio y Markdown
+
+Antes solo había `.txt`. Ahora hay un bloque **«Descargar el documento
+completo»** con cuatro formatos, y todos bajan el documento **entero**, no la
+parte que se ve en pantalla:
+
+| Formato | Qué hace |
+|---|---|
+| **Texto .txt** | Como antes, texto plano |
+| **Word .docx** | Documento real de Word, con los capítulos como **títulos navegables** (aparecen en el panel de navegación de Word) |
+| **PDF limpio** | Abre una vista de impresión con tipografía de lectura y márgenes; desde ahí, «Guardar como PDF» |
+| **Markdown** | Con `#` para el título y `##` para cada capítulo |
+
+**El .docx se arma a mano** (`js/pdf/exportar.js`): un `.docx` es un ZIP con
+varios XML dentro, y se construye byte a byte —incluido el CRC32 de cada
+entrada— para no meter una librería de cientos de KB en la app. Es la parte más
+delicada de esta entrega: un byte mal puesto y Word dice «archivo dañado». Por
+eso se valida con `zipfile` de Python, que **es un lector independiente y
+recalcula el CRC**: si esa prueba pasa, Word lo abre.
+
+El PDF sale por el diálogo de impresión del navegador en vez de generarse a
+mano: se obtiene mejor tipografía, sin cargar una librería de fuentes, y el
+usuario elige tamaño y márgenes. El contenido va escapado: un documento con
+`<script>` dentro se muestra como texto, nunca se ejecuta.
+
+### 5. OCR: leer PDF escaneados
+
+En la v1.0 los PDF escaneados solo se detectaban, con un mensaje que te mandaba
+a Google Drive. Ahora se pueden leer aquí mismo.
+
+Cuando el documento resulta ser imágenes, aparece un bloque que explica qué pasa
+y ofrece **«Leer con OCR»**, con dos decisiones a la vista: **idioma** (español,
+inglés o ambos) y **cuántas páginas** (10, 25, 50 o todo). El avance muestra
+página actual y **tiempo restante estimado con datos reales**, medido tras la
+primera página, y se puede cancelar; lo reconocido hasta ese momento se conserva.
+
+**Es lento y se dice antes de empezar**: reconocer letras en una imagen cuesta
+segundos por página. Un libro de 300 páginas escaneado puede tomar media hora en
+un teléfono. Por eso nunca arranca solo y por eso el valor por defecto son 10
+páginas: para que pruebes qué tal sale antes de comprometer media tarde.
+
+El texto reconocido pasa por **la misma limpieza** que un PDF normal: se
+aprovechan las coordenadas de cada línea que devuelve Tesseract para unir
+párrafos, quitar encabezados repetidos y unir palabras cortadas con guion. Al
+terminar, el aviso recuerda que el OCR se equivoca más que un PDF con texto de
+verdad y conviene revisar. En la biblioteca, esos documentos quedan marcados
+como «leído con OCR».
+
+**Peso:** el motor vive en `js/vendor/tesseract/` (18 MB en el repositorio: tres
+variantes del núcleo para cubrir todos los navegadores, más los datos de español
+e inglés). **Quien no use OCR no descarga nada de eso**; quien lo use baja unos
+6 MB (la variante que soporte su equipo más el idioma), que quedan en la caché.
+
+---
+
+### Archivos nuevos y tocados
+
+| Archivo | Papel |
+|---|---|
+| `js/pdf/busqueda.js` | BM25: elegir qué trozos del libro se le mandan a la IA |
+| `js/pdf/exportar.js` | .docx armado a mano (ZIP + XML), vista de impresión y Markdown |
+| `js/pdf/ocrPdf.js` | OCR bajo demanda: dibuja cada página y reconoce sus letras |
+| `js/vendor/tesseract/` | Motor Tesseract 7 + datos de español e inglés (Apache-2.0) |
+| `js/pdf/pdfController.js` | Audiolibro, exportaciones, resumen completo y OCR |
+| `index.html` | Enganche `jgAudiolibro` en el motor de voz, y los bloques nuevos |
+| `api/index.py` | Modo `sintesis` en `/api/pdf-ask` |
+
+### Pruebas de esta entrega
+
+| Prueba | Qué cubre |
+|---|---|
+| `node tests/test_pdf_busqueda.mjs` | 19 casos de BM25: palabra rara frente a común, plurales, tildes, consulta vacía, 2.000 bloques |
+| `node tests/test_pdf_exportar.mjs` | 35 casos: estructura del .docx, escapado de XML y HTML, capítulos como títulos, Markdown |
+| `python -m pytest backend/tests/test_docx_valido.py` | 7 casos con un lector independiente: **CRC de cada entrada**, XML válido, tildes, estilos |
+| `node tests/verificar_pdf_navegador.mjs` | Audiolibro encadenando partes, descargas reales, vista de impresión y **OCR sobre un escaneado de verdad** |
+| `python -m pytest backend/tests/test_pdf_ask.py` | 14 casos, incluidos el modo `sintesis` y el rechazo de textos sin sustancia |
+
+Para probar el OCR de verdad, `tests/generarPdfEscaneado.mjs` fabrica un PDF
+cuyas páginas son **imágenes con texto dibujado dentro**: para pdf.js no hay ni
+una letra, igual que en un libro escaneado. La prueba comprueba que el OCR
+recupera palabras concretas («biblioteca», «Ernesto», el título del capítulo).
+
+Resultados medidos:
+
+- 38 + 19 + 35 = **92 comprobaciones** en las pruebas de lógica · pasan
+- **83 comprobaciones** en navegador (escritorio y móvil) · pasan, 0 errores de JavaScript
+- **140 pruebas** de Python pasan y 2 se saltan por diseño (119 previas + 23 nuevas)
+- OCR de 2 páginas escaneadas: **2,3 s**, texto reconocido correctamente
+- Libro de 300 páginas: `.docx` de 195 KB y `.md` de 150 KB con el contenido completo
+
+### 6. Un hallazgo en producción: la IA inventaba con textos vacíos
+
+Al verificar el despliegue se probó el modo `sintesis` con un texto absurdo
+(«Resumen 1. Resumen 2.», 21 caracteres) y el modelo devolvió **ocho frases
+sobre gestión de proyectos** que no estaban en ninguna parte. Con material
+insuficiente, la instrucción de «no inventes» no basta: el modelo rellena.
+
+Corregido en el servidor: los modos `resumen`, `ideas` y `sintesis` **rechazan
+textos de menos de 200 caracteres** con un mensaje claro, sin llegar a llamar a
+la IA (así tampoco se gasta una consulta). Preguntar sobre un texto corto sí
+sigue permitido: ahí la IA no tiene que rellenar nada, solo leer.
+
+Hay una prueba que fija este comportamiento para los tres modos y comprueba que
+no se llama al proveedor.
+
+### Un tropiezo que quedó documentado
+
+La primera versión del OCR fallaba con `Tesseract.createWorker is not a
+function` y después pidiendo `tesseract-core-relaxedsimd-lstm.wasm.js`. Dos
+causas: el módulo ESM expone la función dentro de `default` según cómo se
+empaquete, y **tesseract.js 7 necesita el núcleo 7**, que añadió la variante
+«relaxed SIMD» que usan los navegadores nuevos. Por eso están las tres variantes
+LSTM del núcleo: sin la que le toque a cada navegador, el OCR no arranca.
+
+---
+
+## Entrega 2026-08-31 · v1.0 · nace la pestaña PDF y se elimina Captura
+
+### Lo que se pidió
+
+Dos cambios en una sola entrega:
+
+1. **Eliminar la opción Captura** (doblaje de una pestaña del navegador) con todos
+   sus datos y registros: no funcionaba bien, era engorrosa y ocupaba espacio.
+2. **Poner en su lugar un lector de PDF** que reciba el archivo y saque el texto,
+   con el mismo flujo de la pestaña de YouTube (editar, traducir, escuchar,
+   descargar). Requisito explícito: **el tamaño no importa, van a subirse libros**.
+
+Decisiones acordadas antes de construir:
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿PDF escaneados (OCR)? | No. Aviso claro que explique qué hacer, sin motor de OCR. |
+| ¿Para qué se usa el texto? | Escuchar, traducir, copiar y preguntarle a la IA: los cuatro. |
+| ¿Recordar el documento y la posición? | Sí, guardado en el navegador del usuario. |
+
+---
+
+### Por qué el texto se extrae en el navegador y no en el servidor
+
+Las funciones de Vercel aceptan peticiones de ~4,5 MB. **Un libro de 30 MB no se
+puede subir**: la petición se rechaza antes de llegar al código. Además, subir un
+libro entero solo para leer su texto es lento y caro.
+
+Por eso el motor (`pdf.js` de Mozilla) corre **dentro del navegador**:
+
+- No hay límite de tamaño impuesto por el servidor.
+- El archivo nunca sale del dispositivo: no hay nada que filtrar ni que borrar.
+- Un libro de 300 páginas se procesa en **~1 a 3 segundos**, sin subir nada.
+- Funciona sin conexión (la app es PWA y el motor queda en caché).
+
+El motor está guardado en el propio proyecto (`js/vendor/pdfjs/`, v6.3.289), no en
+un CDN: así no depende de un tercero y funciona offline. Pesa 1,7 MB y se carga
+**solo al abrir la pestaña PDF** (`import()` dinámico), así que quien no la usa no
+paga ese peso.
+
+---
+
+### El trabajo sucio: de trocitos con coordenadas a texto legible
+
+Un PDF no guarda párrafos: guarda fragmentos de texto con su posición. Pegarlos tal
+cual produce un texto inservible para leer, traducir o escuchar. `js/pdf/limpiezaTexto.js`
+hace estas seis cosas, y cada una tiene su prueba:
+
+| Problema del PDF real | Qué hace la app |
+|---|---|
+| Un salto de línea por cada renglón | Reconstruye los párrafos de verdad (sangría, hueco vertical y línea corta final) |
+| `compren-` + `dido` en dos renglones | Une la palabra; conserva el guion si lo que sigue va en mayúscula (`franco-Alemán`) |
+| Título del libro repetido en cada página | Lo detecta por repetición en el borde de ≥40 % de las páginas y lo quita |
+| Números de página sueltos (`12`, `— 128 —`, `xiv`) | Los quita, sin confundirlos con años (`1984`) ni con frases que empiezan por número |
+| Ligaduras tipográficas (`oﬁcina`, `inﬂama`) | Las deshace (`oficina`, `inflama`): si no, la voz las lee mal |
+| Espacios duros y espacios repetidos | Los normaliza sin tocar las comillas tipográficas del original |
+
+Los capítulos salen del **índice interno del PDF** si el libro lo trae; si no, se
+detectan por patrón (`Capítulo`, `Parte`, `Prólogo`…) o por tamaño de fuente.
+
+### Libros grandes: el editor no carga el libro entero
+
+Un `<textarea>` con tres millones de letras congela cualquier equipo. Cuando el
+texto pasa de 90.000 caracteres se divide en **partes** (una por capítulo, o bloques
+cortados en un final de párrafo) y en pantalla se muestra una sola, con navegación
+`‹ 1 de 20 ›` y un selector de capítulos.
+
+Lo que **sí** trabaja sobre el libro completo:
+
+- El **buscador** (recorre todas las partes y salta a la que contiene el resultado).
+- La **descarga .txt** (baja el documento entero, no la parte visible).
+- El contexto que se manda a la IA al preguntar.
+
+Las ediciones hechas en una parte se conservan al cambiar de parte: la fuente de
+verdad del texto son las partes, y el texto completo se compone a partir de ellas.
+
+### Preguntarle al documento
+
+Endpoint nuevo `POST /api/pdf-ask` (`api/index.py`), con tres modos: `pregunta`,
+`resumen` e `ideas`. Reutiliza la clave de IA ya configurada y su respaldo en el
+servidor, igual que Corregir o Pulir.
+
+Un libro entero no cabe en un prompt. El cliente **elige los fragmentos relevantes**
+antes de preguntar: puntúa bloques de 2.000 caracteres por las palabras de la
+pregunta y manda los mejores, hasta 12.000 caracteres (el servidor recorta a 16.000
+por seguridad). El resumen y las ideas trabajan sobre la parte que estás viendo.
+
+El prompt prohíbe inventar: si la respuesta no está en el fragmento, el modelo debe
+responder literalmente *«El documento, en la parte que revisé, no dice nada sobre
+eso»*. Hay una prueba que verifica que esa regla viaja en el prompt.
+
+### Lo que se eliminó con Captura
+
+- Marcado: pestaña `#tabCap`, panel `#panelCap` y sus estilos `.cap-*` (12.340 caracteres de `index.html`).
+- Código: `js/captura/` completo (`capturaController.js` + `VideoPlayer.js`, 1.099 líneas).
+- Pruebas: `test_captura_fusion.js`, `test_captura_idioma.mjs`, `test_captura_movil.mjs`, `test_captura_player.mjs`, `verificar_captura_modos.mjs`.
+- Documentos: `CAMBIOS_CAPTURA.md`, `PLAN_MEJORA_CAPTURA.md` y las capturas de pantalla asociadas.
+- **No se tocó la API**: Captura no tenía endpoints propios, usaba `/api/transcribe` y `/api/translate` compartidos.
+
+Efecto colateral tratado: los **videos compartidos** desde el teléfono iban a Captura;
+ahora van a la pestaña **Archivo**, que ya los acepta (`sw.js` y `cargarArchivoCompartido`).
+
+### Compartir y abrir PDFs desde fuera
+
+- `manifest.webmanifest`: el `share_target` acepta `application/pdf` y hay un
+  `file_handler` para abrir un PDF con doble clic en la app instalada.
+- `sw.js` (caché `v39`): un PDF compartido redirige a `/?shared=1&tab=pdf`, y los
+  módulos de `/js/` se sirven con *stale-while-revalidate* (abren offline y se
+  actualizan solos en el siguiente despliegue).
+
+---
+
+### Archivos
+
+| Archivo | Papel |
+|---|---|
+| `js/pdf/limpiezaTexto.js` | Funciones puras: de líneas con coordenadas a texto legible |
+| `js/pdf/extractorPdf.js` | Envuelve pdf.js: abrir, índice, extraer por páginas, progreso y cancelación |
+| `js/pdf/bibliotecaPdf.js` | IndexedDB: guarda el texto extraído y la posición (máx. 12 documentos) |
+| `js/pdf/pdfController.js` | La interfaz: elegir, procesar, partes, buscador, biblioteca, preguntar |
+| `js/vendor/pdfjs/` | Motor pdf.js 6.3.289 (Apache-2.0), servido desde el propio proyecto |
+| `api/index.py` | Endpoint `/api/pdf-ask` |
+
+### Pruebas
+
+| Prueba | Qué cubre |
+|---|---|
+| `node tests/test_pdf_limpieza.mjs` | 38 casos de la limpieza: guiones, encabezados, párrafos, capítulos, números de página, ligaduras, casos vacíos |
+| `node tests/verificar_pdf_navegador.mjs` | Navegador real (escritorio y móvil): documento normal, libro de 300 páginas, escaneado, dañado, no-PDF y cancelar a mitad |
+| `python -m pytest backend/tests/test_pdf_ask.py` | 11 casos del endpoint: validaciones, los tres modos, recorte de contexto, sin clave, IA caída |
+
+Resultados de la entrega:
+
+- 38 comprobaciones de limpieza · **pasan**
+- 58 comprobaciones en navegador (escritorio + móvil) · **pasan**, 0 errores de JavaScript
+- 11 pruebas del endpoint · **pasan**
+- Suite completa del proyecto en esa entrega: 130 pruebas Python · **pasan**
+- Libro de 300 páginas (150.120 caracteres): leído en **1,1 s**, dividido en 20 partes,
+  600 líneas de encabezado y numeración descartadas
+
+### Cómo se comporta ante lo feo
+
+| Situación | Qué ve el usuario |
+|---|---|
+| PDF escaneado (imágenes) | Explicación de por qué no hay texto y cómo resolverlo con Google Drive |
+| PDF dañado | «El archivo no es un PDF válido o está dañado.» |
+| PDF con contraseña | Pide abrirlo con la clave y guardarlo sin protección |
+| Archivo que no es PDF | «Ese archivo no es un PDF. Elige uno que termine en .pdf» |
+| Cancelar a mitad | Confirma la cancelación y deja el documento listo para reintentar |
+| Una página ilegible | Se salta esa página y sigue con el resto del libro |

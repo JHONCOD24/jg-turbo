@@ -28,9 +28,11 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 4. Sync a `../vercel_deploy/` (`index.html`, `api/*`, docs tocados, `vercel.json`)
 5. Desplegar **solo** `vercel_deploy` al proyecto **`jg-turbo`** (**nunca** la raíz del monorepo):
    ```bash
-   npx vercel --prod --yes --cwd ../vercel_deploy
-   # o: cd ../vercel_deploy && npx vercel link --project jg-turbo --yes && rm -f .env.local && npx vercel --prod --yes
+   cd ../vercel_deploy
+   npx vercel --prod --yes --scope jhoncod24s-projects
    ```
+   ⚠️ **No usar `--cwd`**: con Vercel CLI 59.x devuelve `Not authorized` aunque la sesión sea válida
+   (comprobado 2026-08-15). Entrar en la carpeta y pasar `--scope`.
    ⚠️ Sin el `link` a `jg-turbo`, el deploy puede ir al proyecto `vercel_deploy` y **producción no cambia**.  
    ⚠️ Desde la raíz del monorepo → ~1000 archivos y **404** en jg-turbo.vercel.app.
 6. Verificar prod **contra el dominio real**, no contra la URL que imprime el CLI:
@@ -51,6 +53,110 @@ Detalle TTS completo: **`CAMBIOS_TTS.md`**. Persistencia: `CONFIG_PERSISTENTE.md
 **Estado desde 2026-08-01: la extracción es automática otra vez.** Documento
 maestro: **`CAMBIOS_YOUTUBE.md`** (diagnóstico medido, alternativas con fuente,
 arquitectura, validación y guía de activación).
+
+## PDF (leer antes de tocar `js/pdf/`)
+
+Documento maestro: **`CAMBIOS_PDF.md`** (v1.0, 2026-08-31).
+
+**La decisión que no se revierte:** el texto se extrae **en el navegador** con
+pdf.js, nunca en el servidor. Vercel rechaza peticiones de más de ~4,5 MB, así que
+un libro de 30 MB no se puede subir: no es una preferencia, es el límite de la
+plataforma. Además así el archivo no sale del dispositivo y no hay nada que borrar.
+
+El motor vive en `js/vendor/pdfjs/` (v6.3.289, Apache-2.0), **no en un CDN**: la app
+es PWA y debe abrir un PDF sin conexión. Se carga con `import()` dinámico al usar la
+pestaña, para no cobrarle 1,7 MB a quien no lee PDFs.
+
+**No volcar un libro entero en el `<textarea>`**: por encima de 90.000 caracteres el
+texto se divide en capítulos y se muestra uno solo. La fuente de verdad son las
+partes (`estado.partes`); el texto completo se compone a partir de ellas. El
+buscador, la descarga `.txt` y el contexto de la IA sí usan el documento entero.
+
+**Biblioteca (v2.0):** `js/pdf/biblioteca.js` guarda cada documento en CUATRO
+almacenes de IndexedDB (`documentos`, `contenido`, `archivos`, `traducciones`).
+Están separados a propósito: pintar la biblioteca solo lee `documentos`, sin
+cargar textos ni PDFs. No juntarlos «para simplificar»: con 200 libros la
+pestaña tardaría segundos en abrir. La versión de la base es la 2 y trae
+migración desde la 1: si se sube a 3, migrar también.
+
+**Persistencia:** se pide `navigator.storage.persist()` al guardar el primer
+documento. Sin eso iOS borra la biblioteca tras días sin uso. Si el navegador la
+niega, la app lo dice; no prometer permanencia que no se controla.
+
+**`flex:none` en los bloques del lector** (`.pdf-doc-cab`, `.pdf-indice`,
+`.pdf-trad`, …) no es decorativo: `#pdfResultArea` es una columna flexible y sin
+eso el índice se aplasta a 2 px y su contenido se desborda sobre el texto.
+Medido, no supuesto.
+
+**Traducción:** el lector decide QUÉ y CUÁNDO traducir; CÓMO se traduce sigue en
+`traducirTranscripcionDetallada`. Cada capítulo traducido se guarda: no volver a
+pagarlo. `js/pdf/traduccion.js` ya evita traducciones duplicadas en paralelo.
+
+**OCR (v1.1):** los PDF escaneados se pueden leer con Tesseract en el navegador,
+pero **solo cuando la persona lo pide**: es lento (segundos por página) y por eso
+el valor por defecto son 10 páginas. `js/vendor/tesseract/` pesa 18 MB en el repo
+porque lleva **las tres variantes LSTM del núcleo** (normal, SIMD y relaxed-SIMD):
+si falta la que soporta el navegador, el OCR no arranca. tesseract.js 7 exige
+núcleo 7. Quien no use OCR no descarga nada de eso.
+
+**Audiolibro (v1.1):** `jgAudiolibro` en `index.html` es el único punto donde el
+motor de voz y el lector de PDF se tocan: al terminar una parte, `ttsFinLectura()`
+pregunta si hay otra. No meter lógica de PDF dentro del motor de voz.
+
+**Exportar a .docx (v1.1):** se arma a mano en `js/pdf/exportar.js` (ZIP + XML,
+con su CRC32). Si se toca, correr `pytest backend/tests/test_docx_valido.py`: usa
+`zipfile`, que **verifica el CRC** y detecta un archivo que Word rechazaría.
+
+## Sincronización entre dispositivos (leer antes de tocar `api/sync.py`)
+
+Documento maestro: **`CAMBIOS_SYNC.md`**.
+
+**No hay usuarios ni correos, y es deliberado:** hay «bibliotecas» y llaves. Eso
+mantiene el proyecto fuera del alcance de la Ley 1581 (habeas data) porque no se
+guarda ni un dato personal. **No añadir registro por correo** sin decidir antes
+quién asume esa responsabilidad legal.
+
+**El servidor nunca guarda una llave en claro**, solo su huella SHA-256. Por eso
+al vincular un dispositivo se le fabrica una llave NUEVA en vez de entregarle la
+existente. Hay una prueba que falla si alguien rompe esto.
+
+**Dónde vive la seguridad: en la base, no en la API.** Las tablas `jgt_*` tienen
+RLS activo y **sin políticas**; lo único accesible desde fuera son diez
+funciones `SECURITY DEFINER` (`jgt_crear`, `jgt_codigo`, `jgt_vincular`,
+`jgt_estado`, `jgt_bajar`, `jgt_subir`, `jgt_subir_parte`, `jgt_bajar_partes`,
+`jgt_resumen_partes`, `jgt_olvidar`) que validan la llave.
+Por eso basta la **clave pública** de Supabase y NO se usa la `service_role`.
+No cambiar esto por PostgREST directo: volvería a hacer falta la clave secreta.
+
+**Sincronización por capítulos (chunking):** Los libros viajan ligeros (metadatos
+en `/api/sync/subir` y texto capítulo por capítulo en `/api/sync/parte`). No hay
+límite de tamaño de libro y no se satura el payload de Vercel. `completarCapitulos`
+en `js/pdf/nube.js` reconcilia automáticamente cualquier capítulo faltante.
+
+**Vinculación por QR:** `mostrarPase()` espera `await sincronizarAhora` antes de
+mostrar el código QR/enlace `?unir=...` para garantizar que todo el contenido
+esté listo en la nube cuando el nuevo dispositivo se conecte.
+
+**Prefijo `jgt_`:** esa base la comparte otra app del mismo dueño (25 tablas).
+Cualquier tabla o función nueva de JG Turbo lleva ese prefijo.
+
+**Proyecto Supabase:** `jg-PRUEBA` (`xuyxgzxseoetidzfqntu`). Tras un «restore»,
+esperar a que responda de verdad antes de migrar: una migración aplicada durante
+la restauración se pierde sin avisar.
+
+**Regla de conflictos:** gana el cambio más reciente, y vive en UN solo sitio
+(`js/pdf/sincronizacion.js`, con pruebas). No reimplementarla en el cliente.
+
+**El cursor es una fecha ISO**: el `+` de la zona horaria se convierte en espacio
+al viajar por una URL. El servidor lo repara; no quitar esa línea.
+
+## Captura de pestaña · ELIMINADA (2026-08-31)
+
+La pestaña Captura (doblaje de una pestaña del navegador con `getDisplayMedia`) se
+eliminó por pedido del usuario: no funcionaba bien y estorbaba. Se borraron el panel,
+`js/captura/`, sus pruebas y sus documentos. **No reintroducirla** sin pedido expreso.
+La API no se tocó: usaba `/api/transcribe` y `/api/translate` compartidos. Los videos
+compartidos desde el teléfono ahora van a la pestaña **Archivo**.
 
 **El hecho medido:** YouTube bloquea a las IP de centros de datos **de forma
 determinista**, no aleatoria. El mismo video falló 5/5 veces desde Vercel; otro
@@ -88,7 +194,17 @@ Reglas para el siguiente agente:
   `.yt-manual-advanced`, `prepararBookmarkletYt`). Si hace falta un atajo, extensión o
   botón real, nunca un enlace `javascript:` a la vista.
 - `YOUTUBE_PROXY_URL` sigue conectada como plan C; ya no hace falta.
-- SW de esta entrega: **`jg-turbo-shell-v12`**. PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+- **Panel rediseñado (v2.1, 2026-09-01):** el orden del inicio es lead →
+seguir leyendo → biblioteca → subir → avisos → **nube plegada al final**
+(`<details>`; se despliega sola al llegar por `?unir=` o al pedir el pase).
+`has-results` también esconde la nube. El lector lleva toolbar sticky
+(`.pdf-doc-top`). El ritmo visual sale de tokens en `.pdf-area`
+(`--pdf-r`, `--pdf-gap`, `--pdf-pad`): no poner radios ni márgenes sueltos
+en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
+overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
+anidado) van por DOM, no por coordenadas.
+
+SW vigente: **`jg-turbo-shell-v44`** (rediseño panel PDF v2.1). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 
@@ -149,6 +265,27 @@ Nunca desde la raíz del workspace. Tras el fix: ~17 archivos, alias https://jg-
 
 ## TTS (lectura en voz alta)
 
+**Motor v2.16.3 — 18 voces Fish, agrupadas** (2026-08-19): el listado de Fish
+Audio se parte por idioma y género (español/inglés × femeninas/masculinas).
+Hay 14 en español y 4 en inglés. Se eligen igual que Salomé: no se aplican
+solas. Detalle: `CAMBIOS_TTS.md` §v2.24.0.
+
+**Motor v2.10.0 — descarga MP3** (2026-08-14): cada consola de Micrófono,
+Archivo, YouTube, Traducción y «Editar en grande» monta una acción secundaria
+`MP3` junto a «Escuchar». Genera el texto completo con la voz, acento, tono y
+velocidad elegidos; procesa textos largos por bloques en paralelo y los une en
+orden dentro del navegador. No sube ni conserva archivos adicionales. La
+descarga requiere el motor Neural porque `speechSynthesis` no permite exportar
+las voces instaladas del navegador. Detalle y pruebas: `CAMBIOS_TTS.md` §v2.10.0.
+
+**Motor v2.9.0 — voces regionales reales** (2026-08-14): por defecto usa
+`regional`, aplica el acento español elegido (CO/MX/AR/CL/PE/es-US) y cambia a
+voces nativas para inglés o portugués. `auto` histórico migra a `regional`.
+`unified` queda opcional y no aplica el selector de acento porque usa voces
+multilingües con base `en-US`. El selector visible no añade todos los idiomas de
+`speechSynthesis`; el respaldo del navegador no introduce pausas artificiales.
+Detalle y pruebas: `CAMBIOS_TTS.md` §v2.9.0.
+
 **Motor v2.8.0 — lectura continua con controles de reproducción** (2026-08-14):
 dos `<audio>` que se turnan (sin huecos entre bloques), colchón de 120 s generado
 por delante, bloques escalonados `190→340→560→900`, velocidad aplicada en el
@@ -157,31 +294,36 @@ y posición arrastrable, caché de audio, `GET /tts` cacheable, `GET /tts-warmup
 voces propias para **es · en · pt · fr · de · it** con detección del idioma real
 del texto. Detalle y medidas: `CAMBIOS_TTS.md` §v2.8.0.
 
-**Motor v2.7.0 — «Misma voz» multilingüe** (2026-08-09). Por defecto una sola voz
-lee todo el texto: español fluido y términos en inglés en inglés **sin cambiar de
-voz ni de ritmo**. UI de consola: **franja horizontal** (2026-08-01).
+**Histórico v2.7.0 — «Misma voz» multilingüe** (2026-08-09). En esa versión era
+el valor inicial; desde v2.9.0 queda como alternativa opcional. UI de consola:
+**franja horizontal** (2026-08-01).
 
-| Rol | Voz (modo «Misma voz», por defecto) | Respaldo |
+| Rol | Voz (modo «Una voz», opcional) | Respaldo |
 |---|---|---|
 | Mujer | `en-US-AvaMultilingualNeural` | `en-US-EmmaMultilingualNeural` |
 | Hombre | `en-US-AndrewMultilingualNeural` | `en-US-BrianMultilingualNeural` |
 
-Modo legado «Dos voces» (opción `auto`), con acentos manuales CO/MX/AR/es-US:
+Modo regional actual, con acentos manuales CO/MX/AR/CL/PE/es-US:
 
 | Rol | Voz |
 |---|---|
-| Mujer ES (auto) | `es-MX-DaliaNeural` |
-| Hombre ES (auto / zona CO) | `es-CO-GonzaloNeural` (+ prosodia calmada) |
-| Mujer EN | `en-US-AriaNeural` |
+| Mujer ES inicial | `es-CO-SalomeNeural` |
+| Hombre ES inicial | `es-CO-GonzaloNeural` |
+| Mujer EN | `en-US-AvaNeural` |
 | Hombre EN | `en-US-AndrewNeural` |
 
-Config `jg_tts_bilingual`: `unified` (defecto) | `auto` | `off`. El valor antiguo
-`auto` migra a `unified` al leerlo. API `POST /tts` acepta `unified: true`
+Config `jg_tts_bilingual`: `regional` (defecto) | `unified` | `off`. El valor antiguo
+`auto` migra a `regional` al leerlo. API `POST /tts` acepta `unified: true`
 (sin force-EN; headers `X-TTS-Language: multi`, `X-TTS-Engine: edge-neural-unified`).
 
 - Historial + arquitectura + deploys + pruebas: **`CAMBIOS_TTS.md`** (maestro)
-- Prod actual: UX **v3.6** (`CAMBIOS_UX.md`) · TTS motor **v2.8.0** · https://jg-turbo.vercel.app
-- UX reciente: v3.6 FAB Grabar/Detener móvil · v3.5 opciones/sensibilidad · v3.4 mic largos por partes
+- Prod actual: UX **v3.8** (`CAMBIOS_UX.md`) · TTS motor **v2.15.0** · https://jg-turbo.vercel.app
+- UX reciente: v3.8 pegado sin saltos + Párrafos explícito · v3.7 interlineado compacto · v3.6 FAB Grabar/Detener móvil
+- **Contrato de pegado:** no retirar `jgCompactarTextoPegado` ni
+  `jgPegarTranscripcionCompacta`. Micrófono, Archivo, YouTube y «Editar en
+  grande» deben convertir saltos del portapapeles en espacios; solo «Párrafos»
+  introduce separaciones dobles. Prueba obligatoria:
+  `tests/test_espaciado_texto_pegado.js`.
 - **Micrófono largo:** WAV de 4+ min se parte en ~90 s (límite body Vercel ~4,5 MB). Ver `PRECISION_AUDIO.md`.
 - **Documentar siempre** cada entrega en el MD del feature (versión, deploy, pruebas) y sincronizar a `vercel_deploy/`.
 - **Nunca** `npx vercel --prod` desde la raíz del monorepo (causa 404).

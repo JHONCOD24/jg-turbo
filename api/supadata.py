@@ -94,6 +94,47 @@ def texto_de_contenido(contenido: Any) -> str:
     return ""
 
 
+def segmentos_de_contenido(contenido: Any) -> list[dict]:
+    """Convierte los trozos cronometrados de Supadata de ms a segundos.
+
+    La documentación vigente usa ``offset`` y ``duration`` en milisegundos.
+    Aceptamos además nombres ya normalizados para que el contrato sea estable
+    ante respuestas cacheadas o pruebas locales.
+    """
+    if not isinstance(contenido, list):
+        return []
+    salida: list[dict] = []
+    for trozo in contenido:
+        if not isinstance(trozo, dict):
+            continue
+        texto = str(trozo.get("text") or "").replace("\n", " ").strip()
+        if not texto:
+            continue
+        try:
+            if "offset" in trozo:
+                inicio = float(trozo.get("offset") or 0.0) / 1000.0
+                duracion = float(trozo.get("duration") or 0.0) / 1000.0
+            else:
+                inicio = float(trozo.get("startTime", trozo.get("start", 0.0)) or 0.0)
+                fin_recibido = trozo.get("endTime", trozo.get("end"))
+                duracion = (
+                    float(trozo.get("duration") or 0.0)
+                    if fin_recibido is None
+                    else max(0.0, float(fin_recibido) - inicio)
+                )
+        except (TypeError, ValueError):
+            continue
+        inicio = max(0.0, inicio)
+        duracion = max(0.0, duracion)
+        salida.append({
+            "startTime": round(inicio, 3),
+            "endTime": round(inicio + duracion, 3),
+            "duration": round(duracion, 3),
+            "text": texto,
+        })
+    return salida
+
+
 def _get(ruta: str, params: Optional[dict] = None) -> tuple[int, dict]:
     """GET autenticado. Devuelve (status, json) sin lanzar por HTTP."""
     if not API_KEY:
@@ -121,10 +162,14 @@ def _fallo(status: int, datos: dict) -> SupadataError:
     return SupadataError(mensaje, codigo or "http", status)
 
 
-def transcribir(url: str, idioma_corto: Optional[str] = None) -> dict:
+def transcribir(
+    url: str,
+    idioma_corto: Optional[str] = None,
+    con_tiempos: bool = False,
+) -> dict:
     """Pide el texto del video.
 
-    Devuelve {'texto', 'lang', 'disponibles'} o {'job_id': ...}.
+    Devuelve {'texto', 'lang', 'disponibles', 'segmentos'} o {'job_id': ...}.
 
     `mode=auto` = usa los subtítulos si existen y, si no, los genera con IA.
 
@@ -132,7 +177,8 @@ def transcribir(url: str, idioma_corto: Optional[str] = None) -> dict:
     es arbitraria — un video en inglés puede llegar en alemán. Por eso quien
     llama debe revisar `disponibles` cuando el usuario pidió «auto».
     """
-    params = {"url": url, "text": "true", "mode": "auto"}
+    # text=false es el contrato documentado para recibir offset/duration.
+    params = {"url": url, "text": "false" if con_tiempos else "true", "mode": "auto"}
     if idioma_corto:
         params["lang"] = idioma_corto
     status, datos = _get("/transcript", params)
@@ -140,13 +186,22 @@ def transcribir(url: str, idioma_corto: Optional[str] = None) -> dict:
     if status == 202 and datos.get("jobId"):
         return {"job_id": str(datos["jobId"])}
     if status == 200:
-        texto = texto_de_contenido(datos.get("content"))
+        contenido = datos.get("content")
+        texto = texto_de_contenido(contenido)
         if texto:
-            return {
+            resultado = {
                 "texto": texto,
                 "lang": datos.get("lang") or idioma_corto or "es",
                 "disponibles": datos.get("availableLangs") or [],
             }
+            if con_tiempos:
+                segmentos = segmentos_de_contenido(contenido)
+                if not segmentos:
+                    raise SupadataError(
+                        "Supadata devolvió texto sin marcas de tiempo.", "sin-tiempos", status
+                    )
+                resultado["segmentos"] = segmentos
+            return resultado
         raise SupadataError("Supadata devolvió una transcripción vacía.", "vacio", status)
     raise _fallo(status, datos)
 
@@ -159,10 +214,15 @@ def estado_job(job_id: str) -> dict:
 
     estado = str(datos.get("status") or "").lower()
     if estado == "completed":
-        texto = texto_de_contenido(datos.get("content"))
+        contenido = datos.get("content")
+        texto = texto_de_contenido(contenido)
         if not texto:
             raise SupadataError("El video terminó sin texto utilizable.", "vacio")
-        return {"estado": "completado", "texto": texto, "lang": datos.get("lang") or "es"}
+        resultado = {"estado": "completado", "texto": texto, "lang": datos.get("lang") or "es"}
+        segmentos = segmentos_de_contenido(contenido)
+        if segmentos:
+            resultado["segmentos"] = segmentos
+        return resultado
     if estado == "failed":
         error = datos.get("error")
         raise _fallo(200, error if isinstance(error, dict) else {"error": error})

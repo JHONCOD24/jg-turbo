@@ -49,6 +49,11 @@ except Exception as _exc_supadata:  # pragma: no cover - entorno local incomplet
     supadata = None
     print(f"[AVISO] Supadata no disponible en local: {_exc_supadata}")
 
+# Limpieza de subtítulos: mismo módulo puro que usa la función de Vercel, para
+# que el texto crudo salga idéntico en local y en producción.
+from api import subtitulos_limpieza as subs_limpieza
+from api import pulido
+
 # Buscar ffmpeg en WinGet o rutas comunes y agregarlo al PATH
 def setup_ffmpeg_path():
     if shutil.which("ffmpeg"):
@@ -208,6 +213,15 @@ def _dividir_en_bloques_ia(texto: str, limite: int = IA_CHUNK_CHARS) -> list:
                 actual = ""
             trozo = ""
             for oracion in re.split(r"(?<=[.!?…])\s+", parrafo):
+                # Los subtítulos automáticos vienen sin puntuación: aquí la
+                # división por oraciones devolvía UNA «oración» de miles de
+                # caracteres que se enviaba entera a la IA y volvía truncada.
+                if len(oracion) > limite:
+                    if trozo.strip():
+                        bloques.append(trozo.strip())
+                        trozo = ""
+                    bloques.extend(subs_limpieza.cortar_por_palabras(oracion, limite))
+                    continue
                 if trozo and len(trozo) + len(oracion) + 1 > limite:
                     bloques.append(trozo.strip())
                     trozo = oracion
@@ -1277,27 +1291,48 @@ def transcribe_chunk(
         limpiar_archivo(tmp_path)
 
 class YouTubeRequest(BaseModel):
+    # Doblaje sincronizado: devuelve `segments` con el momento de cada frase.
+    # Sin esto la respuesta sigue siendo la de siempre (solo texto).
+    include_timestamps: bool = False
     url: str
     language: str = "auto"
     prefer_subtitles: bool = True
     fast_mode: bool = True
 
 def _vtt_a_texto(contenido: str) -> str:
-    """Convierte un archivo de subtítulos VTT a texto plano, sin marcas de tiempo
-    ni líneas duplicadas (frecuentes en subtítulos automáticos con efecto rodante)."""
-    texto_partes = []
-    anterior = None
-    for linea in contenido.splitlines():
-        linea = linea.strip()
-        if not linea or linea.upper().startswith("WEBVTT") or "-->" in linea:
+    """Convierte un archivo de subtítulos VTT a texto plano hablado.
+
+    Descartar solo la línea repetida exacta no bastaba: los subtítulos
+    automáticos repiten media ventana («…de un tema» / «de un tema que…») y ese
+    duplicado llegaba a la traducción y al doblaje.
+    """
+    return subs_limpieza.texto_desde_vtt(contenido)
+
+
+def _vtt_a_segmentos(contenido: str) -> list:
+    """VTT/SRT → segmentos con tiempos (los pide el doblaje sincronizado)."""
+    return subs_limpieza.segmentos_desde_vtt(contenido)
+
+
+def _segmentos_para_cliente(segmentos) -> list:
+    """Pasa los segmentos internos a la forma que espera el navegador.
+
+    El módulo de doblaje (js/youtube/transcriptionService.js) lee `startTime`,
+    `duration` y `text`; ahí también recorta los solapes de tiempo.
+    """
+    salida = []
+    for seg in segmentos or []:
+        if not isinstance(seg, dict):
             continue
-        if re.match(r"^\d+$", linea) or linea.startswith(("Kind:", "Language:")):
+        texto = str(seg.get("texto") or "").strip()
+        if not texto:
             continue
-        linea = re.sub(r"<[^>]+>", "", linea)
-        if linea and linea != anterior:
-            texto_partes.append(linea)
-            anterior = linea
-    return " ".join(texto_partes)
+        salida.append({
+            "text": texto,
+            "startTime": round(max(0.0, float(seg.get("inicio") or 0.0)), 3),
+            "duration": round(max(0.0, float(seg.get("duracion") or 0.0)), 3),
+        })
+    return salida
 
 def _obtener_subtitulos(info: dict, idioma_corto: Optional[str]):
     """Busca subtítulos (manuales o automáticos) en el video y devuelve (texto, idioma)
@@ -1324,13 +1359,14 @@ def _obtener_subtitulos(info: dict, idioma_corto: Optional[str]):
             try:
                 with _ur.urlopen(track["url"], timeout=20) as r:
                     contenido = r.read().decode("utf-8", errors="ignore")
-                texto = _vtt_a_texto(contenido)
+                segmentos = _vtt_a_segmentos(contenido)
+                texto = subs_limpieza.texto_desde_segmentos(segmentos)
                 if texto:
-                    return texto, lang
+                    return texto, lang, segmentos
             except Exception:
                 continue
 
-    return None, None
+    return None, None, []
 
 @app.post("/youtube")
 def transcribe_youtube(req: YouTubeRequest, request: Request):
@@ -1366,17 +1402,25 @@ def transcribe_youtube(req: YouTubeRequest, request: Request):
         # Supadata igual que producción, para que el espejo local sea fiel.
         if supadata is not None and supadata.configurado():
             try:
-                resultado_sd = supadata.transcribir(req.url, idioma_corto)
+                resultado_sd = supadata.transcribir(
+                    req.url, idioma_corto, con_tiempos=req.include_timestamps
+                )
                 if resultado_sd.get("job_id"):
-                    listo = supadata.esperar(resultado_sd["job_id"], 90)
+                    listo = supadata.esperar(
+                        resultado_sd["job_id"], 90,
+                        con_tiempos=req.include_timestamps,
+                    )
                     if listo:
                         resultado_sd = listo
                 if resultado_sd.get("texto"):
+                    limpio_sd = subs_limpieza.limpiar_texto_subtitulos(resultado_sd["texto"])
                     return JSONResponse({
-                        "text": corregir_terminos_tecnicos(resultado_sd["texto"]),
+                        "text": corregir_terminos_tecnicos(limpio_sd),
                         "language": resultado_sd.get("lang") or idioma_corto or "es",
                         "title": "",
                         "source": "subtitles",
+                        "needs_polish": subs_limpieza.parece_subtitulo_sin_puntuar(limpio_sd),
+                        "segments": _segmentos_para_cliente(resultado_sd.get("segmentos")),
                     })
             except Exception as exc_sd:
                 raise HTTPException(
@@ -1395,13 +1439,18 @@ def transcribe_youtube(req: YouTubeRequest, request: Request):
 
     # 1. Intentar usar subtítulos (manuales o automáticos) — es más rápido
     if req.prefer_subtitles:
-        texto_subs, lang_subs = _obtener_subtitulos(info, idioma_corto)
+        texto_subs, lang_subs, segs_subs = _obtener_subtitulos(info, idioma_corto)
         if texto_subs:
+            limpio_subs = subs_limpieza.limpiar_texto_subtitulos(texto_subs)
             return JSONResponse({
-                "text": corregir_terminos_tecnicos(texto_subs),
+                "text": corregir_terminos_tecnicos(limpio_subs),
                 "language": lang_subs,
                 "title": titulo,
                 "source": "subtitles",
+                "needs_polish": subs_limpieza.parece_subtitulo_sin_puntuar(limpio_subs),
+                "segments": _segmentos_para_cliente(
+                    segs_subs if req.include_timestamps else None
+                ),
             })
 
     # 2. Fallback: descargar el audio y transcribirlo con Whisper
@@ -1653,6 +1702,10 @@ def _mejorar_con_ia_sync(provider_resuelto: str, api_key: str, prompt: str, open
         return data["choices"][0]["message"]["content"].strip(), "mistral"
     raise ValueError(f"Proveedor no soportado: {provider_resuelto}")
 
+# El lector de PDF llama a «/api/improve» (la ruta que expone Vercel). Contra el
+# servidor local esa ruta no existía y la auditoría quedaba muerta: mismo
+# handler bajo los dos nombres. Anotado en CAMBIOS_PDF.md v4.1, hueco 5.
+@app.post("/api/improve")
 @app.post("/improve")
 async def improve_text(req: ImproveRequest, request: Request):
     """Mejora el texto con IA (Gemini o Claude) o con heurística local como fallback."""
@@ -1791,6 +1844,14 @@ class TranslateRequest(BaseModel):
     api_key: str = ""
     openrouter_model: Optional[str] = None
     prefer_fast: bool = False
+    # Doblaje: traducción fiel, sin adaptar ni reordenar, para que cada frase
+    # siga cayendo donde cae en el video.
+    literal: bool = False
+    # Segunda pasada que deja el resultado con sonido natural en el idioma
+    # destino (el navegador la pide al traducir al español).
+    revisar: bool = False
+    # Título del video: desambigua terminología.
+    titulo_video: str = ""
 
 
 _LANG_NAMES_TR = {
@@ -1862,7 +1923,9 @@ def _limpiar_transcripcion_youtube_cruda(texto: str) -> str:
         partes.append(linea)
         anterior = linea
 
-    limpio = re.sub(r"\s{2,}", " ", " ".join(partes)).strip()
+    # unir_cues quita el solape del modo rodante: el panel de YouTube repite
+    # la cola de la línea anterior y pegarlas sin más duplicaba media frase.
+    limpio = re.sub(r"\s{2,}", " ", subs_limpieza.unir_cues(partes)).strip()
     return limpio or texto.strip()
 
 
@@ -2034,18 +2097,78 @@ def _limpiar_respuesta_ia(texto: str) -> str:
     return t.strip().strip("`").strip()
 
 
-def _prompt_traducir_bloque(src_lang: str, trg_lang: str, bloque: str) -> str:
+def _prompt_traducir_bloque(
+    src_lang: str,
+    trg_lang: str,
+    bloque: str,
+    literal: bool = False,
+    titulo_video: str = "",
+) -> str:
+    """Prompt de traducción. `literal` es el modo doblaje: nada de adaptar.
+
+    En doblaje cada frase tiene que seguir cayendo donde cae en el video, así
+    que reordenar o fusionar oraciones desincroniza la voz con la imagen.
+    """
+    contexto = (
+        f"- Context: this text is the transcript of a video titled \"{titulo_video.strip()}\". "
+        "Use it to resolve ambiguous terms, never to add content.\n"
+        if titulo_video and titulo_video.strip() else ""
+    )
+    modo = (
+        "- LITERAL MODE (dubbing): keep the sentence-by-sentence structure. Do not "
+        "merge, split or reorder sentences, and do not localize examples: each "
+        "sentence must still line up with the same moment of the video.\n"
+        if literal else
+        "- Use the natural phrasing of the target language; do not calque the source "
+        "syntax word by word.\n"
+    )
     return (
         f"Translate the following text from {src_lang} to {trg_lang}.\n"
         "Rules:\n"
+        f"{contexto}"
         "- Translate EVERY sentence to the target language. Do not leave any sentence "
         "in the source language.\n"
         "- Keep the same order and roughly the same length. Do not summarize or omit.\n"
+        f"{modo}"
         "- Preserve paragraph breaks, names, technical terms (API, AI, PowerPoint), "
         "URLs, emails, numbers and units.\n"
         "- Do not add titles, notes, bilingual pairs, explanations or prefaces.\n"
         "- Output ONLY the full translation in the target language.\n\n"
         f"Original text:\n{bloque}"
+    )
+
+
+def _prompt_revisar_traduccion(trg_lang: str, bloque: str, literal: bool = False) -> str:
+    """Segunda pasada: quita el olor a traducción sin tocar el contenido.
+
+    Una traducción correcta puede seguir sonando a inglés traducido. Esta
+    pasada la deja como la escribiría un nativo, con la misma información.
+    """
+    limite_estructura = (
+        "- NO fusiones, dividas ni reordenes oraciones: el texto se va a locutar "
+        "sincronizado con un video y cada frase debe seguir en su sitio.\n"
+        if literal else
+        "- Puedes reorganizar una frase si con eso suena más natural, siempre que "
+        "no se pierda ni se añada información.\n"
+    )
+    return (
+        f"Eres corrector de estilo nativo de {trg_lang}. Recibes una traducción "
+        "correcta pero que todavía suena a traducción.\n\n"
+        "QUÉ HACER:\n"
+        "- Sustituye los calcos y las construcciones que nadie diría en este idioma "
+        "por la forma en que se dice de verdad.\n"
+        "- Arregla concordancia, preposiciones, artículos y orden de palabras.\n"
+        "- Deja la puntuación como corresponde al idioma (en español, también ¿ ¡).\n"
+        f"{limite_estructura}"
+        "\nQUÉ NO HACER:\n"
+        "- NO traduzcas otra vez ni cambies el idioma.\n"
+        "- NO resumas, NO amplíes, NO añadas ni quites ninguna idea, cifra, nombre "
+        "propio, término técnico, URL ni unidad.\n"
+        "- NO cambies el registro ni el tono.\n"
+        "- Si una frase ya está bien, déjala exactamente igual.\n\n"
+        "SALIDA: solo el texto revisado, en texto plano, completo de principio a fin. "
+        "Sin markdown, sin comillas envolventes, sin comentarios.\n\n"
+        f"TEXTO:\n<<<\n{bloque}\n>>>"
     )
 
 
@@ -2098,7 +2221,11 @@ async def translate_text(req: TranslateRequest, request: Request):
                     _mejorar_con_ia_sync,
                     provider_resuelto,
                     api_key,
-                    _prompt_traducir_bloque(src_lang, trg_lang, bloque),
+                    _prompt_traducir_bloque(
+                        src_lang, trg_lang, bloque,
+                        literal=bool(req.literal),
+                        titulo_video=req.titulo_video or "",
+                    ),
                     openrouter_model,
                 )
                 parcial = _limpiar_respuesta_ia(parcial or "")
@@ -2108,6 +2235,37 @@ async def translate_text(req: TranslateRequest, request: Request):
             translated = "\n\n".join(salidas).strip()
             if _traduccion_parece_incompleta(txt, translated, src_code, trg_code):
                 raise Exception("La IA devolvió una traducción incompleta o mezclada.")
+
+            # Segunda pasada opcional: quitarle el olor a traducción.
+            if req.revisar:
+                try:
+                    rev_bloques = (
+                        _dividir_en_bloques_ia(translated)
+                        if len(translated) > 2200 else [translated]
+                    )
+                    rev_salidas = []
+                    for bloque in rev_bloques:
+                        parcial, _ = await loop.run_in_executor(
+                            _IA_EXECUTOR,
+                            _mejorar_con_ia_sync,
+                            provider_resuelto,
+                            api_key,
+                            _prompt_revisar_traduccion(
+                                trg_lang, bloque, literal=bool(req.literal)
+                            ),
+                            openrouter_model,
+                        )
+                        parcial = _limpiar_respuesta_ia(parcial or "")
+                        if not parcial:
+                            raise Exception("Revisión vacía")
+                        rev_salidas.append(parcial)
+                    revisado = "\n\n".join(rev_salidas).strip()
+                    # Aquí NO sirve `_traduccion_parece_incompleta`: compara
+                    # idiomas, y la revisión conserva el idioma a propósito.
+                    if revisado and not pulido.salida_truncada(translated, revisado):
+                        translated = revisado
+                except Exception:
+                    pass  # nos quedamos con la traducción sin revisar
             return _respuesta_traduccion_local(
                 txt,
                 translated,
@@ -2436,6 +2594,115 @@ async def correct_transcription(req: CorrectTranscriptionRequest, request: Reque
     if resultado.get("aviso"):
         respuesta["aviso"] = resultado["aviso"]
     return respuesta
+
+class PolishRequest(BaseModel):
+    """Pulido máximo de una transcripción antes de traducirla o doblarla."""
+    text: str
+    language: str = "es"           # variante regional incluida: es-CO, en-US…
+    mode: str = "transcript"       # "transcript" | "dub"
+    provider: str = "gemini"
+    api_key: str = ""
+    openrouter_model: Optional[str] = None
+    context: str = ""              # glosario / términos del nicho
+    lead_in: str = ""              # cola ya pulida de la petición anterior
+
+
+@app.post("/polish-transcript")
+async def polish_transcript(req: PolishRequest, request: Request):
+    """Espejo local de /api/polish-transcript (Vercel).
+
+    Se diferencia de /improve en lo que importa con subtítulos: bloques cortos
+    que ven el contexto de sus vecinos (coherencia en las costuras), guardia
+    anti-truncado por bloque (el texto ya no «se corta») y un modo `dub` que
+    prepara el texto para que la voz sintética lo lea natural.
+    """
+    crudo = (req.text or "").strip()
+    if not crudo:
+        raise HTTPException(status_code=400, detail="Texto vacío.")
+
+    modo = pulido.normalizar_modo(req.mode)
+    lang = req.language if req.language and req.language != "auto" else "es"
+    glosario = (req.context or "").strip()[:1200]
+
+    # Limpieza local previa: horas, [Música], solapes del modo rodante.
+    base = _limpiar_transcripcion_youtube_cruda(crudo)
+    base = subs_limpieza.limpiar_texto_subtitulos(base)
+    base = corregir_terminos_tecnicos(base) or base
+
+    provider_resuelto, api_key, openrouter_model = _resolver_config_ia(
+        request, req.provider, req.api_key, req.openrouter_model
+    )
+    error_detail = None
+
+    if api_key:
+        proveedor_usado = {"nombre": None}
+
+        def pedir(prompt: str, bloque: str) -> str:
+            respuesta, nombre = _mejorar_con_ia_sync(
+                provider_resuelto, api_key, prompt, openrouter_model
+            )
+            proveedor_usado["nombre"] = nombre
+            return _limpiar_respuesta_ia(respuesta or "")
+
+        def trabajo():
+            return pulido.pulir_por_bloques(
+                base, pedir,
+                dividir=_dividir_en_bloques_ia,
+                limite=pulido.LIMITE_PULIDO_CHARS,
+                lang=lang, modo=modo, glosario=glosario,
+                antes_inicial=(req.lead_in or ""),
+            )
+
+        try:
+            loop = asyncio.get_event_loop()
+            texto_pulido, incidencias = await loop.run_in_executor(_IA_EXECUTOR, trabajo)
+            if texto_pulido:
+                validacion = validar_texto_transformado(base, texto_pulido, "pulido")
+                respuesta = {
+                    "text": texto_pulido,
+                    "ia_used": True,
+                    "provider": proveedor_usado["nombre"],
+                    "mode": modo,
+                    "method": "ia",
+                    "language": lang,
+                    "validation": validacion,
+                    "chunks": len(_dividir_en_bloques_ia(base, pulido.LIMITE_PULIDO_CHARS)),
+                    "ready_for_dub": modo == pulido.MODO_DOBLAJE and not incidencias,
+                }
+                if incidencias:
+                    # Callar esto sería peor: el usuario tiene que saber qué
+                    # tramo quedó crudo antes de mandarlo a doblar.
+                    respuesta["aviso"] = (
+                        "Un tramo del texto no se pudo pulir y quedó como venía. "
+                        "Revísalo antes de doblarlo."
+                    )
+                else:
+                    aviso = _aviso_integridad(validacion)
+                    if aviso:
+                        respuesta["aviso"] = aviso
+                return respuesta
+        except Exception as e:
+            error_detail = _detalle_error_ia(provider_resuelto, e)
+
+    local = _mejorar_heuristico(base)
+    validacion = validar_texto_transformado(base, local, "pulido")
+    return {
+        "text": local,
+        "ia_used": False,
+        "provider": None,
+        "mode": modo,
+        "method": "local" if local != base else "none",
+        "language": lang,
+        "error_detail": error_detail,
+        "validation": validacion,
+        "chunks": 1,
+        "ready_for_dub": False,
+        "aviso": (
+            "Se aplicó solo la limpieza local (sin clave de IA configurada): el "
+            "texto queda legible, pero no al nivel de pulido para doblaje."
+        ),
+    }
+
 
 class CorrectRequest(BaseModel):
     text: str

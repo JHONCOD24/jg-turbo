@@ -19,15 +19,15 @@ Esta guía explica la arquitectura productiva, los archivos obligatorios y el pr
 **Siempre desplegar en Vercel** al cerrar una mejora de la aplicación. No entregar solo el cambio local. Tras sincronizar `vercel_deploy/`, desplegar **solo** el contenido de esa carpeta al proyecto **`jg-turbo`**.
 
 ```bash
-# Forma segura (recomendada):
-npx vercel --prod --yes --cwd vercel_deploy
-
-# Equivalente:
+# Comando verificado el 2026-08-15 (Vercel CLI 59.0.0):
 cd vercel_deploy
-npx vercel link --project jg-turbo --yes   # si hace falta
-rm -f .env.local
-npx vercel --prod --yes
+npx vercel --prod --yes --scope jhoncod24s-projects
 ```
+
+⚠️ **`--cwd` dejó de funcionar.** Con Vercel CLI 59.x, `npx vercel --prod --yes --cwd vercel_deploy`
+responde `{"status":"error","reason":"deploy_failed","message":"Not authorized"}` aunque
+`npx vercel whoami` diga `jhoncod24`. Hay que **entrar en la carpeta** y pasar `--scope`.
+Si el vínculo se rompiera: `npx vercel link --project jg-turbo --yes && rm -f .env.local`.
 
 **Nunca** desde la raíz del monorepo (`JG Turbo/`): sube ~1000 archivos y deja **404** en https://jg-turbo.vercel.app.
 
@@ -65,14 +65,10 @@ Los dominios pertenecen a proyectos diferentes:
 carpeta vinculada al proyecto `jg-turbo` (o con `--cwd`).
 
 ```bash
-# Opción A — sin cambiar de directorio (evita errores de cwd en agentes):
-npx vercel --prod --yes --cwd vercel_deploy
-
-# Opción B — clásico:
 cd vercel_deploy
-npx vercel link --project jg-turbo --yes   # una sola vez; corrige la vinculación
+npx vercel link --project jg-turbo --yes   # solo si el vínculo se rompió
 rm -f .env.local                           # el link genera un token OIDC: no subirlo
-npx vercel --prod --yes
+npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
 Comprueba que el CLI diga **«Downloading N deployment files»** con N bajo

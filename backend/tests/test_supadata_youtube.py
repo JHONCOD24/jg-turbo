@@ -114,14 +114,14 @@ def test_sin_clave_no_intenta_salir_a_la_red(monkeypatch):
 
 def test_esperar_devuelve_none_si_se_agota_el_presupuesto(monkeypatch, con_clave):
     monkeypatch.setattr(sd.time, "sleep", lambda s: None)
-    monkeypatch.setattr(sd, "estado_job", lambda job: {"estado": "en_proceso"})
+    monkeypatch.setattr(sd, "estado_job", lambda job, con_tiempos=False: {"estado": "en_proceso"})
     assert sd.esperar("job-777", 0.01) is None
 
 
 def test_esperar_devuelve_el_texto_al_completarse(monkeypatch, con_clave):
     llamadas = {"n": 0}
 
-    def estado(job):
+    def estado(job, con_tiempos=False):
         llamadas["n"] += 1
         if llamadas["n"] < 2:
             return {"estado": "en_proceso"}
@@ -159,7 +159,7 @@ def test_auto_reintenta_para_no_devolver_un_idioma_arbitrario(monkeypatch):
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
     pedidos = []
 
-    def transcribir(url, idioma):
+    def transcribir(url, idioma, con_tiempos=False):
         pedidos.append(idioma)
         if idioma is None:
             return {"texto": "Also hier sind wir.", "lang": "de", "disponibles": ["de", "en"]}
@@ -184,7 +184,7 @@ def test_con_idioma_explicito_no_hay_reintento(monkeypatch):
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
     pedidos = []
 
-    def transcribir(url, idioma):
+    def transcribir(url, idioma, con_tiempos=False):
         pedidos.append(idioma)
         return {"texto": "Texto.", "lang": "de", "disponibles": ["de", "en"]}
 
@@ -203,7 +203,7 @@ def test_reintento_que_se_vuelve_trabajo_largo_conserva_el_texto(monkeypatch):
     _bloquear_via_gratuita(monkeypatch)
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
 
-    def transcribir(url, idioma):
+    def transcribir(url, idioma, con_tiempos=False):
         if idioma is None:
             return {"texto": "Texto en alemán.", "lang": "de", "disponibles": ["de", "en"]}
         return {"job_id": "job-lento"}
@@ -235,7 +235,7 @@ def test_youtube_usa_supadata_cuando_youtube_bloquea(monkeypatch):
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
     monkeypatch.setattr(
         sd, "transcribir",
-        lambda url, idioma: {"texto": "Texto traído por Supadata.", "lang": "es"},
+        lambda url, idioma, con_tiempos=False: {"texto": "Texto traído por Supadata.", "lang": "es"},
     )
 
     resp = TestClient(api_module.app).post(
@@ -252,7 +252,7 @@ def test_la_via_gratuita_va_primero_y_no_gasta_creditos(monkeypatch):
     """Si YouTube responde, no se llama a Supadata (el plan gratis es de 100/mes)."""
     monkeypatch.setattr(
         api_module, "_subtitulos_via_transcript_api",
-        lambda video_id, idioma: ("Subtítulos gratis.", "es"),
+        lambda video_id, idioma: ("Subtítulos gratis.", "es", []),
     )
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
 
@@ -274,8 +274,8 @@ def test_video_largo_devuelve_202_con_identificador(monkeypatch):
     """Videos de +20 min: el navegador sigue esperando sin morir a los 60 s."""
     _bloquear_via_gratuita(monkeypatch)
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
-    monkeypatch.setattr(sd, "transcribir", lambda url, idioma: {"job_id": "job-largo"})
-    monkeypatch.setattr(sd, "esperar", lambda job, segundos: None)
+    monkeypatch.setattr(sd, "transcribir", lambda url, idioma, con_tiempos=False: {"job_id": "job-largo"})
+    monkeypatch.setattr(sd, "esperar", lambda job, segundos, con_tiempos=False: None)
 
     resp = TestClient(api_module.app).post(
         "/api/youtube",
@@ -290,10 +290,10 @@ def test_video_largo_devuelve_202_con_identificador(monkeypatch):
 def test_video_largo_que_termina_a_tiempo_responde_texto(monkeypatch):
     _bloquear_via_gratuita(monkeypatch)
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
-    monkeypatch.setattr(sd, "transcribir", lambda url, idioma: {"job_id": "job-largo"})
+    monkeypatch.setattr(sd, "transcribir", lambda url, idioma, con_tiempos=False: {"job_id": "job-largo"})
     monkeypatch.setattr(
         sd, "esperar",
-        lambda job, segundos: {"estado": "completado", "texto": "Charla larga.", "lang": "en"},
+        lambda job, segundos, con_tiempos=False: {"estado": "completado", "texto": "Charla larga.", "lang": "en"},
     )
 
     resp = TestClient(api_module.app).post(
@@ -310,7 +310,7 @@ def test_endpoint_de_trabajo_entrega_el_texto(monkeypatch):
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
     monkeypatch.setattr(
         sd, "estado_job",
-        lambda job: {"estado": "completado", "texto": "Terminado.", "lang": "es"},
+        lambda job, con_tiempos=False: {"estado": "completado", "texto": "Terminado.", "lang": "es"},
     )
 
     resp = TestClient(api_module.app).get("/api/youtube-job?id=job-largo")
@@ -320,7 +320,7 @@ def test_endpoint_de_trabajo_entrega_el_texto(monkeypatch):
 
 def test_endpoint_de_trabajo_responde_202_mientras_procesa(monkeypatch):
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
-    monkeypatch.setattr(sd, "estado_job", lambda job: {"estado": "en_proceso"})
+    monkeypatch.setattr(sd, "estado_job", lambda job, con_tiempos=False: {"estado": "en_proceso"})
 
     resp = TestClient(api_module.app).get("/api/youtube-job?id=job-largo")
     assert resp.status_code == 202
@@ -331,7 +331,7 @@ def test_creditos_agotados_se_reporta_como_problema_de_cuenta(monkeypatch):
     _bloquear_via_gratuita(monkeypatch)
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
 
-    def sin_creditos(url, idioma):
+    def sin_creditos(url, idioma, con_tiempos=False):
         raise sd.SupadataError("Se agotaron los créditos de Supadata este mes.", "limit-exceeded", 402)
 
     monkeypatch.setattr(sd, "transcribir", sin_creditos)
@@ -369,7 +369,7 @@ def test_sin_supadata_la_cadena_antigua_sigue_intacta(monkeypatch):
             }
 
     monkeypatch.setattr(
-        api_module, "_obtener_subtitulos", lambda info, idioma: ("Texto por yt-dlp.", "es")
+        api_module, "_obtener_subtitulos", lambda info, idioma: ("Texto por yt-dlp.", "es", [])
     )
     monkeypatch.setitem(sys.modules, "yt_dlp", types.SimpleNamespace(YoutubeDL=YdlConSubtitulos))
 

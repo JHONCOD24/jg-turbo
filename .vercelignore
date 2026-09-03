@@ -11,3 +11,12 @@ agent-tools/
 terminals/
 Skills/
 _skill_inspect/
+
+# Restos que se colaron en despliegues anteriores (v2.26.0 y previos):
+# registros de Playwright, accesos directos y volcados de instalación.
+.playwright-cli/
+_prueba.lnk
+temp.js
+install_torch_log.txt
+install_torch_verbose.txt
+tests/

@@ -89,7 +89,7 @@ def test_youtube_usa_subtitulos_con_mock():
     original_obtener_subs = app_module._obtener_subtitulos
     original_yt_dlp = sys.modules.get("yt_dlp")
     sys.modules["yt_dlp"] = types.SimpleNamespace(YoutubeDL=FakeYDL)
-    app_module._obtener_subtitulos = lambda info, idioma_corto: ("Texto desde subtítulos.", "es")
+    app_module._obtener_subtitulos = lambda info, idioma_corto: ("Texto desde subtítulos.", "es", [])
     try:
         resp = client.post(
             "/youtube",

@@ -4,7 +4,7 @@
  */
 /* v2: sube CACHE_SHELL al desplegar UI nueva para que el rediseño no quede
  * atrapado en el shell viejo. Network-first en HTML/navegación. */
-const CACHE_SHELL = 'jg-turbo-shell-v12';
+const CACHE_SHELL = 'jg-turbo-shell-v57';
 const CACHE_SHARE = 'jg-turbo-share-v1';
 const SHARE_KEY = 'shared-audio';
 
@@ -64,6 +64,27 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+
+  /* Módulos y motores de /js/ (el lector de PDF pesa 1,7 MB y el de OCR
+   * unos 6 MB cuando se usa): se sirven del caché al instante y se actualizan
+   * por detrás. Así la app abre un PDF sin internet y aun así recibe las
+   * mejoras del siguiente despliegue sin quedarse pegada a una versión vieja.
+   * Solo se guarda lo que de verdad se descargó. */
+  if (req.method === 'GET' && url.pathname.startsWith('/js/')) {
+    event.respondWith(
+      caches.open(CACHE_SHELL).then((cache) =>
+        cache.match(req).then((guardado) => {
+          const red = fetch(req)
+            .then((res) => {
+              if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
+              return res;
+            })
+            .catch(() => guardado);
+          return guardado || red;
+        })
+      )
+    );
+  }
 });
 
 async function handleShareTarget(request) {
@@ -100,7 +121,14 @@ async function handleShareTarget(request) {
     console.error('[jg-sw] share-target', err);
   }
 
-  // 303 → la app abre en pestaña Archivo y consume el archivo guardado
-  const dest = new URL('/?shared=1&tab=file', self.location.origin).href;
+  // 303 → la app abre en la pestaña correspondiente y consume el archivo guardado.
+  // Un PDF va al lector de PDF; lo demás (audio y video) va a la pestaña Archivo.
+  const tipo = (file && file.type) || '';
+  const nombre = (file && file.name) || '';
+  const esPdf = tipo === 'application/pdf' || /\.pdf$/i.test(nombre);
+  const dest = new URL(
+    esPdf ? '/?shared=1&tab=pdf' : '/?shared=1&tab=file',
+    self.location.origin
+  ).href;
   return Response.redirect(dest, 303);
 }

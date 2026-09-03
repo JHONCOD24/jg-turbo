@@ -62,6 +62,10 @@
             ".amr",
             ".3gp"
           ]
+        },
+        {
+          "name": "documento",
+          "accept": ["application/pdf", ".pdf"]
         }
       ]
     }
@@ -75,6 +79,13 @@
         "video/webm": [".webm"]
       },
       "launch_type": "single-client"
+    },
+    {
+      "action": "/?open=pdf",
+      "accept": {
+        "application/pdf": [".pdf"]
+      },
+      "launch_type": "single-client"
     }
   ],
   "shortcuts": [
@@ -83,6 +94,13 @@
       "short_name": "Archivo",
       "description": "Abrir pestaña de archivo / WhatsApp",
       "url": "/?tab=file",
+      "icons": [{ "src": "/favicon-32.png", "sizes": "32x32" }]
+    },
+    {
+      "name": "Leer un PDF",
+      "short_name": "PDF",
+      "description": "Sacar el texto de un PDF o un libro",
+      "url": "/?tab=pdf",
       "icons": [{ "src": "/favicon-32.png", "sizes": "32x32" }]
     }
   ]

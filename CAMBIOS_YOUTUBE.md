@@ -1,5 +1,406 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Corrección 2026-08-16 (2) · ventanas de tiempo infladas y techo de confianza
+
+Diagnóstico hecho sobre un video real de 52 min (`AQ_Iqo3UYMk`, 1331 segmentos)
+consultando el endpoint de producción.
+
+### Hallazgo 1 · los `endTime` venían inflados al doble
+
+YouTube deja cada línea de subtítulo en pantalla mientras entra la siguiente, así
+que los finales se solapan con el inicio del segmento siguiente. Medido:
+
+| | Antes | Después |
+|---|---|---|
+| Duración media declarada | 4,69 s | 2,34 s |
+| Tiempo total declarado | 103,9 min (**200 %** del video) | 52,0 min (100 %) |
+| Unidades de voz que invaden la siguiente | 608 de 609 | **0** |
+| Ritmo real a doblar (mediana) | 10,7 car/s | 16,2 car/s |
+
+El texto **no** se duplicaba (solo el 0,2 % de los pares repetía alguna palabra):
+lo que se duplicaba era el tiempo. El motor leía «tengo 4,69 s para esta frase»
+cuando en realidad tenía 2,34 s, así que hablaba demasiado despacio y cada frase
+invadía la siguiente, acumulando desfase a lo largo del video.
+
+Corregido en `normalizarSegmentos()` con `recortarSolapes()`: el final de cada
+segmento se recorta al inicio del siguiente, con un mínimo de 0,25 s. Es el punto
+único por el que pasan los tres formatos (Supadata, transcript-api y Whisper).
+
+### Hallazgo 2 · la confianza tenía un techo de 0,798
+
+La evidencia real del video fue solo `lexico (0,72)` + `proveedor (0,62)` = 0,798.
+Cuando la transcripción llega por Supadata no hay metadato de si la pista es
+automática, y `defaultAudioLanguage` está bloqueado para las IP de Vercel. Con eso,
+**ningún video podía alcanzar el umbral de 0,85**: la app habría preguntado siempre.
+
+Solución: leer las pistas desde el reproductor del navegador, que consulta YouTube
+con la IP doméstica del usuario y no está bloqueado. Una pista `kind: 'asr'` la
+genera YouTube escuchando el audio, así que su idioma es el idioma hablado (0,92).
+Con esa señal el mismo video pasa de 0,798 a más de 0,90 y se acepta sin preguntar;
+si la pista automática delata otro idioma, el conflicto tumba la confianza y no se
+dobla. El reproductor ahora se crea **antes** de decidir, lo que además muestra el
+video más pronto.
+
+Ambos cambios son aditivos: si el reproductor no expone sus pistas (API no
+documentada, tarda hasta 2,4 s), se sigue sin esa señal y todo funciona igual.
+
+## Mejora 2026-08-16 · doblaje solo de audio en inglés, con el video de protagonista
+
+### Encargo
+
+Procesar **solo** videos cuyo audio original esté en inglés, doblarlos al español
+con sincronía cercana a la voz original, y que el foco sea escuchar: nada de una
+transcripción lateral que reduzca el tamaño del video.
+
+### Causas verificadas en el código anterior
+
+- **No existía detección del idioma del audio.** `transcriptionService.js` pedía
+  `language: 'en'` y validaba `datos.language`, que es el idioma de la **pista de
+  subtítulos**, no del audio. Y `api/index.py` hacía `next(iter(listado))` cuando
+  no encontraba la pista preferida: cualquier pista servía. Un video hablado en
+  español con subtítulos traducidos al inglés pasaba el filtro y se «doblaba».
+- **El video ocupaba la mitad.** `index.html`, sobre 760 px:
+  `grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr)` → video al ~53 %.
+- **La sincronía no podía sostenerse.** Los bloques de voz duraban 26–34 s con
+  avance interpolado, así que la deriva se medía en segundos. `calcularVelocidadAudio`
+  solo aceleraba, con tope 4x: como el español ocupa más que el inglés, casi
+  siempre aceleraba y la voz podía volverse ininteligible.
+- El video se **pausaba** al esperar un bloque de voz, y `mute()` eliminaba música
+  y efectos del audio original.
+
+### Solución entregada
+
+**Idioma (nuevo módulo `api/deteccion_idioma.py`, compartido por Vercel y local)**
+
+- Detección por señales con peso según lo que cada una demuestra del *audio*:
+  idioma declarado por YouTube (0,97) · pista automática, que YouTube genera
+  escuchando el audio (0,92) · léxico sobre texto de ASR (0,90) · léxico general
+  (0,72) · pista manual, que puede ser traducción (0,55).
+- Señales que se contradicen bajan la confianza; señales que coinciden la suben.
+- La respuesta del servidor incluye `audio_language`, `audio_language_confidence`,
+  `audio_language_evidence` y los umbrales, para que el navegador no los invente.
+- Reglas de negocio: **≥85 %** en inglés dobla · **60–85 %** pregunta al usuario
+  antes de gastar procesamiento · **<60 % o distinto de inglés** no dobla y explica
+  qué idioma detectó.
+- `_elegir_pista_cronometrada` prefiere la pista del idioma hablado en vez de
+  «la primera que haya».
+
+**Interfaz**
+
+- Video a ancho completo (97 % del panel en escritorio, 91 % en móvil).
+- La transcripción vive en un desplegable cerrado por defecto.
+- Subtítulo opcional sobre el video (apagado por defecto).
+- Volumen independiente para la voz en español y para el audio original, que se
+  recuerdan entre sesiones.
+- Insignia del idioma detectado con su porcentaje de certeza.
+
+**Sincronía**
+
+- Unidades de voz de 3 a 8 s cortadas en punto o coma, en vez de bloques de 26–34 s.
+- Velocidad bidireccional acotada a 0,85–1,35x: la voz ya no se acelera hasta
+  volverse ininteligible.
+- Objetivo de ±150 ms: por debajo no se toca nada; entre 150 y 400 ms se corrige
+  con un ajuste de velocidad del ±6 % que no se oye; por encima de 400 ms se salta.
+- Gracia de 450 ms para que una frase termine su última sílaba.
+- El colchón se mide en **segundos de video resueltos** (objetivo 120 s), no en
+  número de bloques, porque el generador de voz tarda entre 1 y 41 s por fragmento.
+- Si la reproducción alcanza al generador, **suena el audio original**; el video ya
+  no se congela.
+- El audio original baja a 12 % en vez de silenciarse: la música se conserva.
+- El motor mide su propio desfase y publica promedio, p95 y % dentro de objetivo.
+
+### Lo que no es posible (y no se promete)
+
+Clonar la voz original (haría falta el PCM del audio: la IFrame API no lo entrega,
+y descargarlo choca con los ToS de YouTube y con el bloqueo de IP a Vercel ya
+medido), separar voz de música, y sincronía labial. La alternativa real para lo
+primero es asignar una voz distinta por hablante.
+
+### Pruebas
+
+- `tests/test_youtube_sync.mjs`: velocidades acotadas, ajuste fino, percentiles,
+  unidades cortas, colchón por segundos y reglas de idioma. OK.
+- `backend/tests/test_deteccion_idioma.py`: 10 casos, incluido el bug original
+  (audio en español con subtítulos manuales en inglés). OK.
+- `backend/tests/test_supadata_youtube.py` y `test_youtube_subs_parse.py`: OK.
+- Layout verificado con Playwright en 1366 px y 390 px, sin scroll horizontal.
+
+## Corrección 2026-08-15 · traducción fiel y voz sin estiramiento
+
+### Problema reportado
+
+La voz española sonaba robótica, pausada y poco coherente. El pulido automático
+alteraba palabras y contexto; se solicitó traducir el inglés tal cual al español
+y limitar cualquier corrección al mínimo indispensable.
+
+### Causa verificada
+
+- El doblaje enviaba cada traducción a `/improve`. Los fragmentos cortos podían
+  convertirse en oraciones cerradas y acumular puntos o pausas artificiales.
+- Cuando un MP3 español era más corto que su ventana, `dubbingEngine` lo
+  ralentizaba y reposicionaba proporcionalmente para llenar todo el intervalo.
+  Esa combinación estiraba la voz y generaba correcciones audibles.
+
+### Solución entregada
+
+- El doblaje ya no llama a **Pulir**. El texto visible y la voz salen directamente
+  de la traducción fiel.
+- Nuevo campo aditivo `TranslateRequest.literal`. YouTube lo envía en `true`.
+- El prompt literal prohíbe parafrasear, pulir, resumir, completar fragmentos,
+  eliminar repeticiones o añadir puntuación inexistente.
+- Los marcadores `[[JG_SEG_000000]]` se conservan una vez, en orden. Los segmentos
+  vecinos sirven como contexto, pero el texto nunca se mueve entre timestamps.
+- **Pulir** continúa disponible como acción manual general, ahora con reglas
+  mínimas: ortografía y puntuación inequívoca, sonidos alargados y repetición
+  exacta accidental. No elimina «o sea», «digamos» o «bueno».
+- Los bloques de voz crecen hasta 34 segundos y buscan terminar en un cierre de
+  idea. Esto reduce cortes entre frases.
+- La reproducción nunca ralentiza un MP3 por debajo de la velocidad seleccionada
+  del video. Si acaba antes, deja silencio; solo acelera cuando el español no cabe.
+- La corrección de deriva usa el avance real de ambos reproductores y tolera
+  380 ms antes de reposicionar, evitando saltos pequeños y constantes.
+
+### Pruebas
+
+- Cinco suites JavaScript: OK.
+- 54 pruebas dirigidas del backend: OK.
+- Casos nuevos: prompt literal conectado en Vercel y backend local, marcadores
+  intactos, repeticiones conservadas, Pulir mínimo y voz corta sin estiramiento.
+- Sintaxis de ocho módulos, JavaScript embebido y ambos backends: OK.
+- Navegador visible 390 × 844: sin casilla de pulido automático, texto de
+  traducción fiel, ocho módulos y sin desborde horizontal.
+- Service worker: `jg-turbo-shell-v27`.
+
+### Despliegue
+
+- Deploy funcional: `dpl_7gF3pF5KUAXvLNGQjg1VUgAvVNv9` · `READY` · producción.
+- Dominio real verificado: versión 2.20.0, solicitud literal activa, sin casilla
+  ni importación del pulido automático, módulo anterior con respuesta 404,
+  service worker v27 y `/api/health` saludable.
+- Navegador visible en producción: ocho módulos YouTube y cero errores de consola.
+- No se ejecutó un doblaje completo con servicios externos para no consumir
+  créditos. La validación auditiva queda pendiente con un video real del usuario.
+
+---
+
+## Entrega 2026-08-15 · pulido conservador antes del doblaje
+
+### Pedido
+
+La traducción podía conservar muletillas, repeticiones o palabras mal reconocidas.
+El texto debía pasar por **Pulir** antes de generar la voz, mejorando claridad y
+redacción sin cambiar el sentido, la disposición de segmentos ni sus tiempos.
+
+### Solución entregada
+
+- Nueva opción marcada por defecto: **Pulir antes de generar la voz**.
+- El flujo queda: transcripción inglesa con tiempos, traducción al español,
+  pulido conservador, subtítulos sincronizados y voz española.
+- `polishingService.js` procesa hasta ocho segmentos por lote con marcadores
+  `[[JG_SEG_000000]]`. Cada marcador debe volver exactamente una vez, en el mismo
+  orden, y ninguna palabra puede moverse a otro segmento.
+- El pulido solo cambia `text`. `startTime`, `endTime` y `duration` se copian sin
+  modificación.
+- Se eliminan muletillas sin contenido, tartamudeos, falsos inicios y
+  repeticiones accidentales. Las repeticiones intencionales se conservan.
+- Se corrigen ortografía, concordancia, puntuación, frases rotas y palabras mal
+  reconocidas únicamente cuando la solución es clara por el contexto.
+- No se permite resumir, mover ideas, cambiar ejemplos ni agregar información.
+- Antes de aceptar cada resultado se comprueban longitud, cifras, porcentajes,
+  correos y URLs. Un lote inválido se reintenta por segmento; si sigue siendo
+  inseguro, se conserva la traducción anterior y el resto continúa.
+- La voz y el texto visible reciben el mismo texto pulido.
+
+### Optimización de la opción general Pulir
+
+Los prompts de `/api/improve` y `/improve` ahora comparten el mismo contrato
+conservador. También respetan glosario, párrafos, saltos, listas, hechos, cifras,
+nombres, URLs, formalidad y orden de ideas. El modo segmentado es aditivo mediante
+`preserve_segments`; los clientes anteriores siguen funcionando sin enviarlo.
+
+### Pruebas
+
+- Cinco suites JavaScript: OK.
+- `tests/test_youtube_sync.mjs`: marcadores, tiempos intactos, cifras protegidas,
+  recuperación individual y conservación ante salida insegura: OK.
+- 53 pruebas dirigidas del backend: OK.
+- Sintaxis del JavaScript embebido, nueve módulos y ambos backends: OK.
+- Navegador visible en 390 × 844: opción accesible, marcada por defecto, módulo
+  cargado y sin desborde horizontal. Los dos 404 locales fueron `/ping` y
+  `/api/tts-voices`, rutas ausentes en el servidor estático de prueba.
+- Service worker: `jg-turbo-shell-v26`.
+
+### Despliegue
+
+- Deployment funcional: `dpl_8Dr52vhh1vXqVJsEFr9uYwy6H9bV` · `READY` ·
+  target `production` · alias `https://jg-turbo.vercel.app`.
+- Dominio real: marcador `JG Turbo v2.19.0`, casilla
+  `ytPolishBeforeDubbing`, contrato `preserve_segments`, módulo
+  `polishingService.js` HTTP 200, SW v26 y `/api/health` con `status: ok`.
+- Navegador visible contra producción: nueve módulos YouTube cargados, opción
+  marcada, botón habilitado con URL válida y cero errores de consola.
+- No se ejecutó una transcripción, traducción, pulido o síntesis real durante la
+  comprobación para no consumir créditos externos.
+
+---
+
+## Entrega 2026-08-15 · doblaje sincronizado inglés → español
+
+### Pedido
+
+La reproducción sincronizada no debía limitarse a mostrar texto en español. El
+video debía escucharse con voz española alineada con el audio inglés, incluyendo
+pausa, búsqueda y cambios de velocidad.
+
+### Solución entregada
+
+- El botón principal ahora dice **Traducir y doblar al español**.
+- La traducción conserva sus timestamps y además se agrupa en bloques de voz de
+  hasta 18 segundos o 360 caracteres. Esto reduce llamadas sin convertir todo el
+  video en un único audio propenso a deriva.
+- `dubbingService.js` genera tres bloques iniciales y deja dos trabajadores
+  preparando el resto. Cada error queda aislado por bloque.
+- `dubbingEngine.js` usa un elemento `Audio`, silencia YouTube mientras el
+  doblaje está activo y restaura el audio original al desactivarlo.
+- La posición de cada MP3 se calcula desde `player.getCurrentTime()`. El ritmo se
+  ajusta con `duracionAudio × velocidadVideo / duracionBloqueVideo`, con corrección
+  de deriva superior a 220 ms.
+- Al pausar o almacenar en búfer se pausa la voz. Después de buscar, el motor
+  selecciona el bloque correspondiente y coloca el MP3 en el punto proporcional.
+- **Reproducir con voz en español** es un clic explícito para cumplir las
+  restricciones de reproducción automática de los navegadores móviles.
+- Se reutilizan la voz, el acento y el tono ya guardados en `jg_tts_*`. No se
+  agregó ninguna clave ni dependencia.
+
+### Módulos nuevos
+
+| Archivo | Responsabilidad |
+|---|---|
+| `js/youtube/dubbingService.js` | Agrupación, síntesis progresiva, caché y liberación de MP3 |
+| `js/youtube/dubbingEngine.js` | Silencio del original, reproducción, velocidad, búsqueda y corrección de deriva |
+
+También se amplió `YouTubePlayer.js` con `playVideo`, `pauseVideo`, `mute`,
+`unMute` e `isMuted`, nombres verificados en la documentación vigente de
+YouTube IFrame Player API.
+
+### Pruebas
+
+- Cinco suites JavaScript de regresión: OK.
+- `tests/test_youtube_sync.mjs`: agrupación de voz, cálculo temporal, velocidad
+  y reutilización de bloques: OK.
+- Sintaxis del JavaScript embebido y de ocho módulos YouTube: OK.
+- 37 pruebas dirigidas de YouTube, Supadata y voces Fish: OK.
+- Navegador real local: módulos HTTP 200, control visible y móvil 390 × 844 sin
+  desborde horizontal.
+- La suite total del backend no terminó dentro del límite de 180 segundos; no
+  produjo una salida útil. Se sustituyó por las 37 pruebas dirigidas anteriores.
+- Service worker: `jg-turbo-shell-v25`.
+
+### Despliegue
+
+- Deployment funcional y verificado: `dpl_6PgZ9E7UfjFsjh2NnWQ4KXUpicKx` · `READY` ·
+  target `production` · alias `https://jg-turbo.vercel.app`.
+- Dominio real: HTML con marcador `JG Turbo v2.18.0`, botón `ytDubbingBtn`,
+  TTS GET con `source`, SW v25 y `/api/health` con `status: ok`,
+  `youtube_auto: true`, `groq_configured: true`.
+- Navegador real contra producción: ocho módulos YouTube cargados, cero errores
+  de consola y botón **Traducir y doblar al español** habilitado con URL válida.
+- No se lanzó una transcripción, traducción o síntesis real durante esta
+  verificación para no consumir créditos externos.
+
+---
+
+## Entrega 2026-08-15 · traducción sincronizada inglés → español
+
+### Pedido
+
+Extender el panel existente para obtener una transcripción inglesa con tiempos,
+traducirla al español por segmentos y mostrar cada fragmento en sincronía con un
+reproductor embebido. La sincronización debía continuar correcta al cambiar la
+velocidad y el flujo histórico de texto plano debía permanecer intacto.
+
+### Solución entregada
+
+- Nuevo botón **Traducir al español y sincronizar**, independiente de
+  **Transcribir video**.
+- `YouTubeRequest.include_timestamps` es aditivo y vale `false` por defecto. El
+  contrato anterior no cambia.
+- `youtube-transcript-api` conserva `start` y `duration`; Supadata se pide con
+  `text=false` y convierte `offset`/`duration` de milisegundos a segundos.
+- Los trabajos largos conservan segmentos en `GET /api/youtube-job` cuando se
+  solicita `include_timestamps=true`.
+- La traducción usa la puerta existente `/api/translate`. Envía lotes pequeños
+  con marcadores estables; si un lote pierde correspondencia, reintenta cada
+  segmento y aísla el fallo sin cancelar los demás.
+- El reproductor usa YouTube IFrame Player API. El motor consulta
+  `getCurrentTime()`, escucha `onStateChange` y `onPlaybackRateChange`, y muestra
+  el segmento cuyo intervalo cumple `startTime <= currentTime < endTime`.
+- El polling usa `requestAnimationFrame`, se detiene en pausa/final y vuelve a
+  iniciar con reproducción. No recalcula tiempos por velocidad: el reloj leído
+  sigue siendo el tiempo propio del video.
+- Interfaz responsive con texto anterior y siguiente, indicador de estado,
+  velocidad real y selector limitado a las tasas que YouTube reporta como
+  disponibles.
+
+### Módulos
+
+| Archivo | Responsabilidad |
+|---|---|
+| `js/youtube/transcriptionService.js` | URL, API, trabajos largos y normalización de timestamps |
+| `js/youtube/translationService.js` | Lotes, traducción y recuperación por segmento |
+| `js/youtube/YouTubePlayer.js` | Wrapper de YouTube IFrame Player API |
+| `js/youtube/syncEngine.js` | Búsqueda binaria, polling y estados |
+| `js/youtube/TranscriptionDisplay.js` | Render seguro del contexto y segmento activo |
+| `js/youtube/youtubeSyncController.js` | Integración del flujo con el panel existente |
+
+### Documentación externa verificada
+
+- YouTube IFrame Player API: `YT.Player`, `onReady`, `onStateChange`,
+  `onPlaybackRateChange`, `getCurrentTime`, `getPlaybackRate`,
+  `getAvailablePlaybackRates` y `setPlaybackRate`.
+- Supadata `/transcript`: `text=false`, `content[].offset` y
+  `content[].duration` en milisegundos, además del trabajo asíncrono.
+
+### Pruebas
+
+- `py_compile` sobre API Vercel, Supadata, parser de YouTube y backend local: OK.
+- 42 pruebas dirigidas del flujo YouTube: OK.
+- Suite completa del backend: 95 aprobadas, 2 omitidas.
+- `tests/test_youtube_sync.mjs`: búsqueda temporal, URL, normalización,
+  traducción por lotes y fallo aislado: OK.
+- Cinco suites JavaScript de regresión ejecutadas por separado: OK.
+- Sintaxis de los seis módulos y del JavaScript embebido: OK.
+- Navegador real: módulos cargados, layout de escritorio y móvil sin desborde.
+- Service worker: `jg-turbo-shell-v24`.
+
+### Variables de entorno
+
+No se añadió ninguna clave nueva. Se reutilizan:
+
+- `SUPADATA_API_KEY` para videos bloqueados o sin subtítulos.
+- `GROQ_API_KEY` como respaldo Whisper con timestamps.
+- Una clave de traducción existente: `MISTRAL_API_KEY`, `GEMINI_API_KEY` o
+  `GOOGLE_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`/`GROK_API_KEY`, o
+  `ANTHROPIC_API_KEY`. También se respetan las credenciales guardadas por el
+  usuario en el navegador.
+
+### Despliegue
+
+- Primer deploy `dpl_FHJS7aNaLASRUdH9AAe8o97jZprS`: HTML, API y health
+  correctos, pero Vercel no publicó los archivos `.mjs`; detectado por la
+  verificación del dominio real antes del cierre.
+- Corrección: módulos ES con extensión `.js` y `js/youtube/package.json` con
+  `type: module`.
+- Deployment funcional verificado: `dpl_8YVarJF2CLpFcb1hndqnLhjoCtc8`.
+- Dominio real `https://jg-turbo.vercel.app`: HTML 200, marcador `ytSyncBtn`,
+  controlador `.js`, seis módulos HTTP 200, `sw.js` v24 y `/api/health` con
+  `status: ok`, `youtube_auto: true`, `groq_configured: true`.
+- Navegador real contra producción: seis módulos cargados, cero errores de
+  consola y botón sincronizado habilitado al pegar una URL válida. No se lanzó
+  una transcripción real para no consumir créditos externos durante esta prueba.
+
+---
+
 **Fecha de esta entrega:** 2026-08-01  
 **Estado:** en producción · https://jg-turbo.vercel.app  
 **Cambio de fondo:** la transcripción de YouTube vuelve a ser **automática**. Pegar el enlace basta; el pegado manual pasa a ser red de seguridad.  

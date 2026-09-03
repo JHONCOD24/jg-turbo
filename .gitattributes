@@ -1,0 +1,14 @@
+# El proyecto se despliega directamente desde la copia de trabajo, así que los
+# archivos deben quedar en disco byte a byte como se subieron. Sin esto, al
+# clonar en Windows Git convertiría los saltos de línea a CRLF y el código
+# desplegado desde otro equipo no coincidiría con el de este.
+* text=auto eol=lf
+
+# Librerías vendorizadas y binarios: Git no debe tocarlos nunca.
+js/vendor/** -text
+*.traineddata -text -diff
+*.wasm        -text
+*.png  -text -diff
+*.ico  -text -diff
+*.gz   -text -diff
+*.lnk  -text -diff

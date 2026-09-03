@@ -82,7 +82,7 @@ def test_bloqueo_de_subtitulos_conserva_fallback_ytdlp(monkeypatch):
     monkeypatch.setattr(
         api_module,
         "_obtener_subtitulos",
-        lambda info, idioma: ("Texto recuperado por yt-dlp.", "es"),
+        lambda info, idioma: ("Texto recuperado por yt-dlp.", "es", []),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -213,12 +213,12 @@ def test_ip_bloqueada_no_cancela_el_segundo_metodo(monkeypatch):
 
     def watch_page_con_texto(video_id, idioma):
         intentos.append(video_id)
-        return "Texto recuperado de la página del video.", "es"
+        return "Texto recuperado de la página del video.", "es", []
 
     monkeypatch.setattr(api_module, "YouTubeTranscriptApi", ApiBloqueada)
     monkeypatch.setattr(api_module, "_subtitulos_via_watch_page", watch_page_con_texto)
 
-    texto, lang = api_module._subtitulos_via_transcript_api("abc123xyz00", "es")
+    texto, lang, _segs = api_module._subtitulos_via_transcript_api("abc123xyz00", "es")
 
     assert intentos == ["abc123xyz00"]
     assert texto == "Texto recuperado de la página del video."

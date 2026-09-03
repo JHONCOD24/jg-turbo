@@ -53,3 +53,5 @@ benchmark-report*.json
 .playwright-mcp/
 desktop-check.png
 mobile-options.png
+.vercel
+.env*

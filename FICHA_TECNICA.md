@@ -2,6 +2,46 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+## YouTube con voz y traducción sincronizadas
+
+En el panel YouTube, **Traducir y doblar al español** obtiene la pista inglesa
+con tiempos y traduce cada segmento de forma fiel. No pasa por Pulir, no resume,
+no elimina repeticiones y no reescribe el contenido. Los segmentos vecinos solo
+aportan contexto para entender la frase; ninguna palabra se mueve de timestamp.
+
+El subtítulo visible y la voz utilizan exactamente la misma traducción.
+**Reproducir con voz en español** silencia el audio inglés y reproduce la voz en
+el punto correspondiente.
+
+La voz nunca se ralentiza para llenar una ventana. Habla al ritmo seleccionado,
+deja silencio si termina antes y solo se acelera cuando el español necesita más
+tiempo para caber en el bloque.
+
+El selector ofrece las velocidades que YouTube admite para ese video. La voz y
+el texto usan el tiempo real del reproductor, por lo que se corrigen al pausar,
+buscar o cambiar la velocidad. **Usar audio original** detiene el doblaje y
+restaura el sonido de YouTube.
+
+Si un segmento concreto no puede traducirse, conserva temporalmente el inglés y
+continúa con el resto. El botón **Transcribir video** mantiene el flujo anterior
+de texto completo editable.
+
+## Pegado compacto · UX v3.8
+
+Al pegar texto en Micrófono, Archivo, YouTube o «Editar en grande», los saltos
+simples y las líneas vacías se convierten automáticamente en espacios. El texto
+queda en un bloque continuo sin cambiar sus palabras ni su puntuación. Usa
+**Párrafos** cuando quieras que JG Turbo lo distribuya en bloques legibles.
+
+## Descarga de audio MP3 · TTS v2.10
+
+En Micrófono, Archivo, YouTube, Traducción y «Editar en grande», abre
+**Escuchar** y pulsa **MP3** para descargar todo el texto con la voz, acento,
+tono y velocidad seleccionados. La preparación ocurre por bloques para soportar
+textos largos y entrega un solo archivo. Requiere el motor Neural; las voces
+locales del navegador se pueden reproducir, pero el navegador no permite
+exportarlas como archivo.
+
 ## Actualización de audio y lenguaje del 23 de julio de 2026
 
 La aplicación ahora verifica la calidad real del micrófono, mide ruido, procesa la grabación final con Whisper y marca fragmentos ambiguos. La traducción inglés ↔ español conserva invariantes y alerta ante posibles omisiones o invenciones.
@@ -26,6 +66,7 @@ Consulta [Cómo funciona la captura, transcripción y traducción mejoradas](PRE
 1.  **Voz en vivo (Micrófono)**: Ideal para dictados rápidos y transcripciones inmediatas con formateo inteligente.
 2.  **Archivos locales**: Procesa grabaciones largas, reuniones o notas de voz subidas en formatos de audio común (MP3, WAV, M4A, etc.).
 3.  **Videos de YouTube**: Pega el enlace y la app trae el texto sola. Si el video no tiene subtítulos, lo transcribe con IA sin que hagas nada. Ver [Transcripción de YouTube](CAMBIOS_YOUTUBE.md).
+4.  **Documentos PDF**: Una biblioteca de lectura. Saca el texto limpio de un PDF o de un libro completo (sin límite de tamaño, sin subir el archivo a ningún servidor) y **lo guarda en tu dispositivo con tu progreso**: al volver, sigues donde ibas sin buscar el archivo otra vez. Índice de capítulos navegable, lectura continua, audiolibro, traducción al español dentro del panel, exportación a Word/PDF/Markdown, resumen con IA y OCR para escaneados. Ver [Lector de PDF](CAMBIOS_PDF.md).
 
 ---
 
@@ -33,6 +74,8 @@ Consulta [Cómo funciona la captura, transcripción y traducción mejoradas](PRE
 *   **Interfaz (Frontend)**: HTML5, CSS3 vanilla y JavaScript nativo en un solo archivo, con diseño responsive y enfoque local-first.
 *   **Servidor (Backend)**: FastAPI (Python) con una versión local y otra para Vercel. La versión local procesa audio con `faster-whisper`; Vercel usa Groq.
 *   **Motores de transcripción**: `faster-whisper` en el backend local y `whisper-large-v3` mediante Groq en Vercel. Ambos reciben el glosario como contexto.
+*   **OCR**: Tesseract 7 en el navegador, bajo demanda y solo para PDF escaneados (`js/vendor/tesseract/`). Nunca automático: cuesta segundos por página.
+*   **PDF**: `pdf.js` (Mozilla) ejecutándose **en el navegador**, servido desde el propio proyecto (`js/vendor/pdfjs/`). No hay subida al servidor: Vercel limita las peticiones a ~4,5 MB y un libro no cabría. Limpieza propia del texto (párrafos, guiones de corte, encabezados repetidos) en `js/pdf/limpiezaTexto.js`. Detalle: `CAMBIOS_PDF.md`.
 *   **YouTube**: **Supadata** como vía principal (sale por su propia infraestructura, que YouTube no bloquea, y genera el texto con IA si el video no tiene subtítulos). Antes de gastar un crédito se intenta gratis con `youtube-transcript-api`; **yt-dlp + Whisper de Groq** queda como respaldo. Detalle y medición: `CAMBIOS_YOUTUBE.md`.
 
 ---
@@ -178,25 +221,26 @@ Verás el avance en el botón: **«Traduciendo… 3 de 7»**. No cierres la pest
 
 Detalle técnico e historial: [CAMBIOS_TRADUCCION.md](CAMBIOS_TRADUCCION.md).
 
-## Lectura en voz alta — misma voz, fluida y natural
+## Lectura en voz alta — voces regionales y reproducción continua
 
-**Motor TTS: 2.8.0** (14 ago 2026) · **UI consola: franja horizontal** (1 ago 2026; ver [CAMBIOS_UX.md](CAMBIOS_UX.md) v3.2).
+**Motor TTS: 2.9.0** (14 ago 2026) · **UI consola: franja horizontal** (1 ago 2026; ver [CAMBIOS_UX.md](CAMBIOS_UX.md) v3.2).
 
-La app lee el texto desde una consola dedicada. Por defecto usa el modo **«Misma
-voz»**: una sola voz multilingüe lee todo el texto con español fluido y pronuncia
-los términos en inglés **en inglés, con la misma voz y el mismo ritmo** (sin
-cambios bruscos ni pausas robóticas). **No reescribe el texto en pantalla.**
+La app lee el texto desde una consola dedicada. Por defecto usa **voces nativas
+regionales**: el español respeta el acento seleccionado y el inglés o portugués
+usan una voz propia cuando el texto corresponde. **No reescribe el texto en
+pantalla.**
 
-- **Modo «Misma voz» (recomendado y por defecto)**: mujer **Ava** · hombre **Andrew** (voces multilingües de Microsoft)
-- **Modo «Dos voces» (opcional)**: acento latino para español + voz inglesa para frases/términos en inglés
-  - Acentos: Colombia, México, Argentina y español latino de Estados Unidos
-  - Recomendado (auto): mujer **Dalia (México)** · hombre **Gonzalo (Colombia)** · inglés **Aria/Andrew**
-- **Pronunciación bilingüe**: Misma voz (`unified`, por defecto) · Dos voces (`auto`) · Solo idioma principal (`off`)
+- **Modo regional (recomendado y por defecto)**: acento latino para español + voz nativa para inglés o portugués
+  - Acentos: Colombia, México, Argentina, Chile, Perú y español latino de Estados Unidos
+  - Inicial: **Salomé/Gonzalo (Colombia)** · inglés **Ava/Andrew** · portugués **Francisca/Antonio**
+- **Modo «Una voz» (opcional)**: Ava/Andrew multilingües conservan el timbre, pero su base es inglesa y el acento regional no aplica
+- **Cambio de idioma**: Regional (`regional`, por defecto) · Una voz (`unified`) · Solo idioma principal (`off`)
 - **Tonos**: neutral, cálido y enérgico
 - **Controles (UI)**: una franja inferior compacta — **Escuchar**, **Mujer/Hombre**, velocidad `0.75×`–`2×` (Detener cuando está leyendo). En «Editar en grande» no apila bloques altos para dejar más espacio al texto.
-- **Barra de reproducción** (v2.8.0): mientras lee aparece **⏪ 10 s**, **⏩ 10 s**, la posición arrastrable y el tiempo (`0:35 / 1:42`). Avanzar o retroceder **no reinicia** la lectura, y cambiar la velocidad tampoco: se oye al instante. También se maneja desde la pantalla de bloqueo y los auriculares.
+- **Barra de reproducción** (v2.8.0, reloj v2.22.0): mientras lee aparece **⏪ 10 s**, **⏩ 10 s**, la posición arrastrable y el tiempo (`0:35 / 1:42`). Ese tiempo es el de **escucha** a la velocidad elegida: si bajas a `0.84×` se alarga y si subes se acorta, también antes de pulsar Escuchar. Avanzar o retroceder **no reinicia** la lectura, y cambiar la velocidad tampoco: se oye al instante. También se maneja desde la pantalla de bloqueo y los auriculares.
 - **Idioma de la voz** (v2.8.0): la voz habla en el idioma del texto — español, inglés, **portugués, francés, alemán e italiano**. Si el texto contradice al desplegable, manda el texto.
+- **Fish Audio** (v2.24.0): 18 voces, agrupadas por **español/inglés** y **femeninas/masculinas**. Solo suenan si la persona las elige.
 - **Respaldo**: voces del navegador cuando la red o el motor neural fallan
-- **Persistencia**: preferencias `jg_tts_*` en el navegador (un deploy no las borra). El valor antiguo `auto` migra a `unified`.
+- **Persistencia**: preferencias `jg_tts_*` en el navegador (un deploy no las borra). El valor antiguo `auto` migra a `regional`.
 
-Consulta el documento maestro [Lectura en voz alta (TTS)](CAMBIOS_TTS.md) para: arquitectura, flujo paso a paso, historial 2.6→2.8.0, UI de consola, decisiones, API, guías de pronunciación, proceso de deploy, IDs de producción, pruebas y límites. UX reciente: [CAMBIOS_UX.md](CAMBIOS_UX.md). Config: [CONFIG_PERSISTENTE.md](CONFIG_PERSISTENTE.md). Deploy: [DOCUMENTACION_DESPLIEGUE.md](DOCUMENTACION_DESPLIEGUE.md).
+Consulta el documento maestro [Lectura en voz alta (TTS)](CAMBIOS_TTS.md) para: arquitectura, flujo paso a paso, historial 2.6→2.9.0, UI de consola, decisiones, API, guías de pronunciación, proceso de deploy, IDs de producción, pruebas y límites. UX reciente: [CAMBIOS_UX.md](CAMBIOS_UX.md). Config: [CONFIG_PERSISTENTE.md](CONFIG_PERSISTENTE.md). Deploy: [DOCUMENTACION_DESPLIEGUE.md](DOCUMENTACION_DESPLIEGUE.md).
