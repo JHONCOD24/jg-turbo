@@ -1,4 +1,4 @@
-<!-- v2.28.1 · PDF caratulas en los 3 aparatos: la portada viaja con la sincronizacion -->
+<!-- v2.28.2 · Fix linea marron vacia + envio unico de caratulas pendientes -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1306,6 +1306,9 @@
   .cmd-grid h4:first-child{margin-top:0}
 
   .notice{margin:12px 16px;padding:10px 12px;border-radius:10px;font-size:12.5px;display:flex;gap:9px;align-items:flex-start;flex:none}
+  /* `display:flex` le gana al `[hidden]` del navegador: sin esto, la caja de
+   * avisos se veía siempre, vacía, como una línea marrón sin texto. */
+  .notice[hidden]{display:none !important}
   .notice.warn{background:rgba(255,122,24,.08);border:1px solid rgba(255,122,24,.25);color:#FFC79A}
   .notice.info{background:rgba(39,225,193,.07);border:1px solid var(--cyan-glow);color:#9DEBDC}
   .notice.err{background:rgba(255,59,92,.07);border:1px solid rgba(255,59,92,.25);color:#FF8FA3}

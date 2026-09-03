@@ -145,9 +145,12 @@ export function crearNube({ pedir, biblioteca }) {
 
       let subidos = 0;
       for (const resumen of paraSubir) {
-        /* La carátula acompaña al contenido, nunca al registro ligero: solo
-         * se pide cuando el texto va a viajar de todas formas. */
-        const conPortada = necesitaSubirContenido(resumen);
+        /* La carátula acompaña al contenido, nunca al registro ligero: viaja
+         * cuando el texto viaja, y una sola vez más si hay carátula local que
+         * la nube aún no tiene (libros sincronizados antes de que las
+         * carátulas viajaran). Así llega sin reenviarse cada minuto. */
+        const conPortada = necesitaSubirContenido(resumen)
+          || await biblioteca.faltaSubirPortada(resumen.id);
         const paquete = await biblioteca.paqueteParaSubir(resumen.id, { conPortada });
         if (!paquete) continue;
         avisar(`Enviando ${subidos + 1} de ${paraSubir.length}…`);
@@ -194,6 +197,11 @@ export function crearNube({ pedir, biblioteca }) {
         }
 
         await biblioteca.marcarSincronizado(paquete.id, paquete.actualizado);
+        /* Si la carátula viajó en este paquete, queda anotado: no se vuelve a
+         * enviar salvo que el libro cambie de verdad. */
+        if (paquete.datos && paquete.datos.portadaMini) {
+          await biblioteca.marcarPortadaSincronizada(paquete.id, paquete.actualizado);
+        }
         subidos += 1;
       }
 

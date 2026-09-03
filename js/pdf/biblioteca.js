@@ -645,6 +645,40 @@ export async function dataURLABlob(dataURL) {
 }
 
 /**
+ * ¿Tiene este libro carátula local que la nube aún no recibió?
+ *
+ * Los libros sincronizados antes de que las carátulas viajaran quedaron con
+ * la imagen en el aparato y sin ella en la nube, y como ya figuran como
+ * sincronizados nunca la reenviarían. Esta marca (`portadaSincronizada`,
+ * solo contabilidad: no toca `actualizado`) les da un único viaje más.
+ */
+export async function faltaSubirPortada(id) {
+  try {
+    const doc = await cargarDocumento(id);
+    if (!doc || doc.borrado || doc.portadaSincronizada) return false;
+    const archivos = await conAlmacenes([ARCHIVOS], 'readonly', (a) => esperar(a.get(id)));
+    return Boolean(archivos?.portada);
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Anota que la carátula de este libro ya está en la nube. */
+export async function marcarPortadaSincronizada(id, marca = Date.now()) {
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return false;
+      doc.portadaSincronizada = marca;
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
  * Metadatos de todo lo que hay aquí (incluidas las marcas de borrado), sin
  * el texto: sirve para decidir qué mover, no para moverlo.
  */
@@ -742,6 +776,8 @@ export async function importarDeSincronizacion(documento) {
     meta: { ...meta, id, actualizado, sincronizado: actualizado },
     ...(portada ? { portada } : {}),
   });
+  /* Lo que llegó con carátula no necesita reenviarla: ya la tienen los dos. */
+  if (portada) await marcarPortadaSincronizada(id, actualizado);
   return true;
 }
 

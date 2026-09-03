@@ -1,5 +1,13 @@
 # Lector de PDF · historial de cambios y operación
 
+## Fix · Línea marrón vacía + carátulas pendientes (rama `fix-aviso-vacio`)
+
+- **Línea marrón vacía (reportada con fotos):** era la caja de avisos (`#pdfNotice`, clase `.notice`) mostrándose vacía: su `display:flex` le ganaba al atributo `hidden`. Una regla `.notice[hidden]{display:none !important}` la quita en todos los paneles. Solo aparece cuando hay un mensaje de verdad.
+- **Carátulas de libros ya sincronizados:** viajaban solo con el contenido; los 7 libros, sincronizados antes, no las reenviaban nunca. Nueva marca contable `portadaSincronizada`: cada carátula local pendiente hace un único viaje más y queda anotada (`biblioteca.js: faltaSubirPortada/marcarPortadaSincronizada`; `nube.js` la pide y la anota; al importar con carátula también se anota para no devolverla). No toca `actualizado`: no provoca reenvíos.
+- Deploy: `sw.js` → `jg-turbo-shell-v62`, `index.html` → `v2.28.2`.
+
+---
+
 ## Mejora · Carátulas en los 3 aparatos (rama `feat-portadas-sync`)
 
 Pedido: las carátulas se veían en el móvil (donde se importó el PDF) pero no en escritorio ni tablet.
