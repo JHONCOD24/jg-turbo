@@ -19,6 +19,31 @@ const ROMANOS_SIGLOS = {
   XXI: 'veintiuno', XXII: 'veintidós',
 };
 
+/* Conectores que en español piden una pausa antes: sin ella, el partidor de
+ * bloques corta donde le toca y la frase se parte a mitad de idea. Se aplica
+ * SOLO aquí, en la capa que se le entrega al motor de voz. */
+const CONECTORES_PAUSA = /\s+(pero|aunque|sino|porque|mientras|entonces|además|sin embargo|no obstante|es decir|por tanto|por lo tanto)\s+/gi;
+
+/**
+ * ¿Esta línea suelta es un título? Versión mínima para la capa de voz: aquí
+ * no hay geometría del PDF, solo el texto. Una línea corta, sola entre saltos
+ * y sin signo final es, casi siempre, un título o un encabezado.
+ */
+function pareceTituloSuelto(linea) {
+  const t = linea.trim();
+  if (!t || t.length > 70) return false;
+  if (/[.!?…:;,»)]$/.test(t)) return false;      /* ya cierra: no hace falta */
+  const palabras = t.split(/\s+/).filter(Boolean);
+  if (palabras.length > 10) return false;
+  const letras = t.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+  if (letras.length < 2) return false;
+  /* Mayúsculas, o empieza con palabra de capítulo, o es numeración. */
+  if (t === t.toUpperCase()) return true;
+  if (/^(cap[íi]tulo|parte|secci[óo]n|libro|tomo|ep[íi]logo|pr[óo]logo|introducci[óo]n|conclusi[óo]n|anexo|ap[ée]ndice|prefacio)\b/i.test(t)) return true;
+  if (/^(?:\d{1,3}|[IVXLCDM]{1,7})\s*[.\-–—:]?\s*\S*/.test(t) && palabras.length <= 6) return true;
+  return false;
+}
+
 /**
  * Convierte un número entero (0 a 9999) a palabras en español.
  * @param {number} n
@@ -80,11 +105,17 @@ export function numeroAPalabras(n) {
  *   no inyecta puntos al final de los párrafos (ttsNormalizarTextoNarracion
  *   ya los convierte en «. », y tenerlo dos veces producía caídas tonales
  *   dobles que sonaban robóticas y pausadas).
+ * @param {boolean} [opts.pausarTitulos=true] – Cierra con dos puntos las
+ *   líneas sueltas que parecen títulos, para que la voz pause antes del cuerpo.
+ * @param {boolean} [opts.comasProsodicas=true] – Inserta una coma antes de
+ *   conectores («pero», «aunque»…), para que las frases largas respiren.
  * @returns {string}
  */
 export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   if (!texto || typeof texto !== 'string') return '';
   const neural = opts.neural !== false; // por defecto true
+  const pausarTitulos = opts.pausarTitulos !== false; // por defecto true
+  const comasProsodicas = opts.comasProsodicas !== false; // por defecto true
   let salida = texto;
 
   // Si no es español, aplicar solo limpieza básica
@@ -177,6 +208,32 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     salida = salida.replace(/\n{3,}/g, '\n\n');
   } else {
     salida = salida.replace(/\n{3,}/g, '\n\n');
+  }
+
+  /* ── Respiración: pausas que solo existen para el oído ──────────────
+   *
+   * Nada de lo que sigue toca el texto que la persona ve, guarda o exporta:
+   * esta cadena se genera justo antes de hablar y se descarta. Por eso se
+   * puede añadir puntuación aquí sin romper la promesa de original inmutable.
+   */
+  if (pausarTitulos) {
+    salida = salida.split(/\n\n+/).map((bloque) => {
+      const t = bloque.trim();
+      if (!t) return '';
+      /* Un título sin cierre hace que la voz siga de largo hasta el párrafo
+       * siguiente. Los dos puntos suenan mejor que el punto: dejan la
+       * entonación abierta, como cuando alguien anuncia un capítulo. */
+      return pareceTituloSuelto(t) ? `${t}:` : t;
+    }).filter(Boolean).join('\n\n');
+  }
+
+  if (comasProsodicas) {
+    /* Coma antes del conector solo si no había ya un signo delante. */
+    salida = salida.replace(CONECTORES_PAUSA, (coincidencia, conector, desplazamiento, completo) => {
+      const anterior = completo[desplazamiento - 1] || '';
+      if (/[,;:.!?…]/.test(anterior)) return coincidencia;
+      return `, ${conector} `;
+    });
   }
 
   return salida;
