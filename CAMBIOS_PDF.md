@@ -1,5 +1,15 @@
 # Lector de PDF · historial de cambios y operación
 
+## Hotfix 2026-09-03 · Biblioteca en versión 5 (rama `fix-biblioteca-v5`)
+
+Síntoma: en el celular la biblioteca aparecía vacía y al pulsar «Actualizar ahora» salía `the requested version (4) is less than the existing version (5)`, aunque la nube mostraba los 7 libros.
+Causa: la base IndexedDB del teléfono ya estaba en versión 5 (la subió un despliegue a producción anterior al de v5.0 —hay dos de hace 14-17 h—; en este repo no existe ningún código con versión 5) y la entrega v5.0 pedía la 4. IndexedDB no abre una base más nueva: todo (`listar`, `guardar`, sincronizar) fallaba y la biblioteca se pintaba vacía. Los libros nunca estuvieron en riesgo: intactos en el teléfono y en la nube.
+Corrección (`js/pdf/biblioteca.js`): `VERSION` 4→5 con migración aditiva (solo crea almacenes faltantes, no toca datos) + mensaje en palabras si alguna vez la base vuelve a ser más nueva que el código. Los usuarios en v4 migran sin perder nada; los que ya están en v5 vuelven a abrirla.
+Pruebas: `node --check` ✔ + regresión (`progreso`, `sincronizacion`, `auditoria_p0`) ✔. La apertura real contra una base v5 solo se confirma en el dispositivo afectado.
+Deploy: `sw.js` → `jg-turbo-shell-v59`, `index.html` → `v2.27.1`. Tras actualizar: cerrar todas las pestañas de la app en el celular, reabrir y la biblioteca muestra los 7 libros.
+
+---
+
 ## Entrega 2026-09-03 · v5.0 · Lectura continua: retomar donde quedaste
 
 ### Lo pedido

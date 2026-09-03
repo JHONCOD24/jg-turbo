@@ -16,7 +16,16 @@
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
 
 const BASE = 'jg-turbo-pdf';
-const VERSION = 4;
+/* Versión 5: compatibilidad hacia adelante. Encontramos dispositivos cuya base
+ * ya está en 5 (un despliegue anterior la subió) mientras el código pedía 4:
+ * IndexedDB se niega a abrir una base más nueva («requested version (4) is
+ * less than the existing version (5)») y la biblioteca aparece vacía aunque
+ * los libros están intactos. Subir a 5 la vuelve a abrir.
+ *
+ * La migración es aditiva a propósito: `onupgradeneeded` solo CREA los
+ * almacenes que falten, jamás borra ni reescribe datos. Pasar de 4 a 5 no
+ * cambia ni un registro; abrir una base que ya es 5 no migra nada. */
+const VERSION = 5;
 const DOCUMENTOS = 'documentos';
 const CONTENIDO = 'contenido';
 const ARCHIVOS = 'archivos';
@@ -101,7 +110,16 @@ function abrir() {
     };
 
     peticion.onsuccess = () => resolver(peticion.result);
-    peticion.onerror = () => rechazar(peticion.error || new Error('No se pudo abrir la biblioteca.'));
+    peticion.onerror = () => {
+      const original = peticion.error;
+      /* Si algún día la base vuelve a ser más nueva que el código, decirlo en
+       * palabras en vez del inglés críptico de IndexedDB. */
+      if (original && original.name === 'VersionError') {
+        rechazar(new Error('Tu biblioteca es más nueva que esta versión de la app. Recarga la página para actualizarla y vuelve a intentarlo.'));
+        return;
+      }
+      rechazar(original || new Error('No se pudo abrir la biblioteca.'));
+    };
     peticion.onblocked = () => rechazar(new Error('Cierra las otras pestañas de JG Turbo para actualizar la biblioteca.'));
   }).catch((error) => {
     conexion = null;
