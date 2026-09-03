@@ -72,10 +72,23 @@ llamaba a tiempo. Por eso pulsar «Actualizar» no traía nada: no había nada q
 (`portada || antes.portada || null`, `biblioteca.js:232`): sincronizar no borra una carátula que
 solo estaba en este aparato.
 
-### Deploy
+### Deploy v65
 - `sw.js` → `jg-turbo-shell-v65` · `JG_JS_V` → `v65` (si no se sube, el HTML nuevo se emparejaría
   con el JS viejo y el botón volvería a estar muerto)
 - `index.html` → `<!-- v2.28.5 · Las caratulas de libros ya sincronizados por fin viajan; el boton Actualizar responde -->`
+- Producción: `jg-turbo-apzve5n6b` → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app** el 2026-09-03: marcador `v2.28.5`, `JG_JS_V v65`,
+  `sw.js v65`, `#pdfActualizarBiblioLabel` presente, `/api/health` ok. Comprobado además sobre los
+  módulos servidos (`?v=v65`): `nube.js` usa `debeSubir()` **y** consulta la carátula antes del
+  bucle, `sincronizacion.js` exporta `debeSubir`, y `pdfController.js` trae `desdeCabecera`.
+
+### Qué falta comprobar (solo se puede con los aparatos delante)
+Que las 7 carátulas aparezcan en los tres. El recorrido: en el aparato **donde se abrieron los
+PDF** (el que tiene las imágenes), recargar dos veces para tomar el `sw` nuevo y pulsar
+**Actualizar** — debe decir «se enviaron N libros», no «Todo al día». Después, en los otros dos,
+recargar y pulsar **Actualizar**: deben decir «llegaron N libros» y pintarse las carátulas. Si el
+primero dice «Todo al día» de entrada, es que ese aparato no tenía las imágenes: hay que pulsar
+Actualizar en el que sí las tiene.
 
 ---
 
