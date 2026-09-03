@@ -171,14 +171,49 @@ function detectarRelleno(paginas) {
 
 /* ── Títulos de capítulo ───────────────────────────────────────────── */
 
-function pareceTitulo(linea, alturaModal) {
-  const texto = linea.texto.trim();
+/* Un título numerado: «II», «3.», «IV. El regreso». */
+const PATRON_TITULO_NUMERADO = /^(?:\d{1,3}|[IVXLCDM]{1,7})\s*[.\-–—:]?\s*(?:[A-ZÁÉÍÓÚÜÑ].{0,60})?$/;
+
+/**
+ * ¿Esta línea es un título de capítulo o de sección?
+ *
+ * Único criterio del archivo: `clasificarBloque()` lo reutiliza, para que un
+ * texto no pueda ser título para una función y párrafo para la otra. Antes
+ * había dos reglas distintas y los bloques salían mal tipados.
+ *
+ * Se reconoce un título por cualquiera de estas señales:
+ *   1. Empieza por una palabra de capítulo («Capítulo», «Prólogo», «Anexo»…).
+ *   2. Está impreso más grande que el cuerpo.
+ *   3. Va TODO EN MAYÚSCULAS y es corto (los libros lo usan constantemente,
+ *      y era el caso que más se escapaba).
+ *   4. Es una numeración de capítulo («II», «3. El regreso»).
+ *
+ * Y se descarta si acaba en un signo que solo aparece a mitad de frase, si es
+ * demasiado largo, o si es un número de página.
+ */
+export function pareceTitulo(linea, alturaModal) {
+  const texto = String(linea?.texto || '').trim();
   if (!texto || texto.length > MAX_LARGO_TITULO) return false;
+  /* Un título no termina en coma, punto y coma, dos puntos ni punto final. */
   if (/[,;:]$/.test(texto)) return false;
+  /* «II», «IV»: los capítulos se numeran con romanos en mayúsculas y las
+   * páginas preliminares con minúsculas («xiv»). Un romano suelto en
+   * mayúsculas es capítulo aunque también podría ser página. */
+  if (/^[IVXLCDM]{1,7}$/.test(texto)) return true;
   if (esNumeroDePagina(texto)) return false;
+
   if (PATRON_TITULO.test(texto)) return true;
-  /* Un título también se reconoce porque está impreso más grande. */
-  if (alturaModal > 0 && linea.altura >= alturaModal * 1.25) return true;
+  if (alturaModal > 0 && (linea.altura || 0) >= alturaModal * 1.25) return true;
+
+  /* Todo en mayúsculas y corto: el caso más común en libros impresos. Se
+   * exige al menos dos letras para no confundirlo con una inicial suelta. */
+  const letras = texto.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+  if (letras.length >= 2 && texto === texto.toUpperCase() && texto.length <= 60 && !/[.!?]$/.test(texto)) {
+    return true;
+  }
+
+  if (PATRON_TITULO_NUMERADO.test(texto) && !/[.!?]$/.test(texto)) return true;
+
   return false;
 }
 
@@ -292,8 +327,9 @@ export function clasificarBloque(texto, linea) {
   const t = String(texto || '').trim();
   if (!t) return 'nota';
   if (/^(tabla|cuadro|figura)\s*\d*/i.test(t)) return 'tabla';
-  if (/^[-•●]\s+/.test(t) || /^\d+\.\s+/.test(t)) return 'lista';
-  if (t.length < 90 && /^[A-ZÁÉÍÓÚÑ][^.!?]*$/.test(t) && (linea.altura || 0) > 0) return 'titulo';
+  if (/^[-•●]\s+/.test(t) || /^\d+\.\s+\S/.test(t) && t.length > 90) return 'lista';
+  /* Mismo criterio que el resto del archivo: una sola definición de título. */
+  if (pareceTitulo({ texto: t, altura: linea?.altura || 0 }, linea?.alturaModal || 0)) return 'titulo';
   return 'parrafo';
 }
 

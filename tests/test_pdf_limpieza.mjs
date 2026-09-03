@@ -10,6 +10,8 @@ import {
   componerTexto,
   esNumeroDePagina,
   normalizarClave,
+  pareceTitulo,
+  clasificarBloque,
 } from '../js/pdf/limpiezaTexto.js';
 
 let fallos = 0;
@@ -236,6 +238,36 @@ function pagina(numero, lineas) {
 
 {
   comprobar(normalizarClave('Página 12 · HISTORIA') === 'pagina · historia', 'la clave ignora números y mayúsculas');
+}
+
+/* ── Detección de títulos: un criterio único ───────────────────────── */
+{
+  const modal = 10;   /* altura de línea típica del cuerpo */
+  const linea = (texto, extra = {}) => ({ texto, altura: modal, x: 50, ancho: 200, y: 700, ...extra });
+
+  /* Los que ya funcionaban deben seguir funcionando. */
+  comprobar(pareceTitulo(linea('CAPÍTULO PRIMERO'), modal), 'reconoce "CAPÍTULO PRIMERO"');
+  comprobar(pareceTitulo(linea('Prólogo'), modal), 'reconoce "Prólogo"');
+  comprobar(pareceTitulo(linea('Texto grande', { altura: modal * 1.4 }), modal), 'reconoce por tamaño mayor');
+
+  /* Los que se escapaban. */
+  comprobar(pareceTitulo(linea('LA CASA DE LOS ESPÍRITUS'), modal),
+    'reconoce un titulo en mayusculas del mismo tamaño');
+  comprobar(pareceTitulo(linea('II'), modal), 'reconoce un numero romano solo');
+  comprobar(pareceTitulo(linea('3. El regreso'), modal), 'reconoce "3. El regreso"');
+
+  /* Y lo que NO debe confundirse con un título. */
+  comprobar(!pareceTitulo(linea('En un lugar de la Mancha vivia un hidalgo de los de lanza en astillero.'), modal),
+    'una frase larga no es titulo');
+  comprobar(!pareceTitulo(linea('dijo el hombre,'), modal), 'algo que acaba en coma no es titulo');
+  comprobar(!pareceTitulo(linea('Y entonces se fue.'), modal), 'algo que acaba en punto no es titulo');
+  comprobar(!pareceTitulo(linea('12'), modal), 'un numero de pagina no es titulo');
+
+  /* Los dos criterios del archivo deben coincidir: antes no lo hacían. */
+  comprobar(clasificarBloque('CAPÍTULO PRIMERO', { altura: modal }) === 'titulo',
+    'clasificarBloque coincide con pareceTitulo en un titulo claro');
+  comprobar(clasificarBloque('LA CASA DE LOS ESPÍRITUS', { altura: modal }) === 'titulo',
+    'clasificarBloque tambien reconoce mayusculas');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas pasaron.' : `\n${fallos} prueba(s) fallaron.`);
