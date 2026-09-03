@@ -1,4 +1,4 @@
-<!-- v2.28.3 · Boton Actualizar en la cabecera de la biblioteca (sincronizar sin bajar al fondo) -->
+<!-- v2.28.4 · JS versionado con el HTML (JG_JS_V): adios botones muertos por cache -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -15296,7 +15296,12 @@ actualizarContador();
 
 // El flujo sincronizado vive en módulos para mantener separadas la extracción,
 // traducción, reproducción, sincronización y presentación.
-import('/js/youtube/youtubeSyncController.js').then(({ inicializarYoutubeSincronizado }) => {
+/* Versión de los módulos /js/: el service worker sirve esos archivos desde el
+ * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
+ * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
+ * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
+const JG_JS_V = 'v64';
+import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,
     estaServidorOnline: () => Boolean(serverInfo.online),
@@ -15316,7 +15321,7 @@ import('/js/youtube/youtubeSyncController.js').then(({ inicializarYoutubeSincron
  * esta pestaña no paga ese peso al abrir la app. */
 const pdfOutput = document.getElementById('pdfOutput');
 let jgPdfListo = null;
-import('/js/pdf/pdfController.js').then(({ inicializarLectorPdf }) => {
+import('/js/pdf/pdfController.js?v=' + JG_JS_V).then(({ inicializarLectorPdf }) => {
   jgPdfListo = inicializarLectorPdf({
     contarPalabras,
     /* Preguntar al documento: reutiliza la clave de IA ya configurada y su

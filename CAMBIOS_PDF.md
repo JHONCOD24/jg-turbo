@@ -1,5 +1,13 @@
 # Lector de PDF · historial de cambios y operación
 
+## Fix · JS versionado con el HTML (rama `fix-aviso-vacio`)
+
+Síntoma: el botón «Actualizar» aparecía pero no hacía nada (HTML nuevo + JS viejo del caché: el service worker sirve `/js/` al instante y lo refresca por detrás).
+Corrección: los dos módulos dinámicos (`pdfController`, `youtubeSyncController`) se importan con `?v=` de la constante `JG_JS_V` (`index.html`); al subirla en cada despliegue, HTML y JS van siempre juntos. Regla: subir `JG_JS_V` + `CACHE_SHELL` + marcador en cada entrega.
+Deploy: `sw.js` → `jg-turbo-shell-v64`, `index.html` → `v2.28.4`.
+
+---
+
 ## Fix · Botón Actualizar en la biblioteca (rama `fix-aviso-vacio`)
 
 Pedido: en escritorio/tablet no aparece la sección «Tus libros en todos tus aparatos» del fondo (en el móvil sí), así que no hay forma de sincronizar.
