@@ -94,6 +94,18 @@ Las dos daban por buena la entrega sin llegar a ejecutarse enteras:
 ### Deploy v66
 - `sw.js` → `jg-turbo-shell-v66` · `JG_JS_V` → `v66`
 - `index.html` → `<!-- v2.29.0 · Las caratulas llegan de verdad + biblioteca sin ventana emergente -->`
+- Producción: `jg-turbo-g1vq1fmxr` → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app** el 2026-09-03: marcador `v2.29.0`, `JG_JS_V v66`,
+  `sw.js v66`, `/api/health` ok. Comprobado sobre los módulos servidos (`?v=v66`) que llevan de
+  verdad los cambios: `portadasARescatar` en `nube.js` y `sincronizacion.js`,
+  `guardarPortadaRecibida` en `biblioteca.js`, y en el HTML tanto la regla de la biblioteca sin
+  scroll interno como la del botón a 44 px.
+
+### Qué falta comprobar (solo con los aparatos delante)
+En cada uno: recargar **dos veces** (la primera toma el `sw` nuevo) y pulsar **Actualizar**. Debe
+decir **«Listo: N carátulas nuevas»** y aparecer las tapas. El libro «How to write a good
+advertisement» seguirá sin carátula hasta que se pulse Actualizar en el aparato donde se abrió: es
+el único que tiene esa imagen, y en la nube aún no está.
 
 ---
 
