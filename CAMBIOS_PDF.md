@@ -7,6 +7,7 @@ Causa: la carátula se genera al importar (primera página → JPEG) y se guarda
 Corrección: la carátula viaja como texto (`portadaMini`) dentro de `datos` del paquete y al llegar se vuelve imagen y se guarda con el libro (`biblioteca.js: blobADataURL/dataURLABlob/paqueteParaSubir/importarDeSincronizacion`; `nube.js` la pide solo cuando el contenido viaja, nunca con el registro ligero). Sin carátula, la tarjeta muestra la inicial (`pdfController.js: tarjetaLibro`).
 Pruebas: `test_pdf_portada.mjs` ✔ 10/10 (nuevo) + regresión (`sincronizacion`, `exportar`) ✔. Ver en los 3 aparatos tras «Actualizar ahora».
 Deploy: `sw.js` → `jg-turbo-shell-v61`, `index.html` → `v2.28.1`.
+Verificado en https://jg-turbo.vercel.app: marcador v2.28.1 ✔, `sw.js` v61 ✔, `/api/health` ok ✔ (construido sobre v2.28.0 del otro agente, sin pisar su trabajo).
 
 ---
 
