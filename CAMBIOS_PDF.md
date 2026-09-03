@@ -39,6 +39,7 @@ Que quien lee o escucha un libro pueda cerrar la app en cualquier momento —inc
 - `sw.js` → `jg-turbo-shell-v58`
 - `index.html` → `<!-- v2.27.0 · PDF lectura continua v5.0: ancla de posicion, guardado al ocultar, sync ligero, frases y capitulos, voz con pausas, revision explicada -->`
 - Verificado en https://jg-turbo.vercel.app: marcador + /api/health
+- dpl_2026-09-03: `npx vercel --prod --yes --scope jhoncod24s-projects` desde la raíz → Ready 27 s, alias https://jg-turbo.vercel.app; servido: marcador v2.27.0 ✔, `sw.js` v58 ✔, `/api/health` ok ✔ (rama `lectura-continua-pdf`, flujo raíz confirmado con el usuario según 0.5).
 
 ---
 
