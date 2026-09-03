@@ -4,7 +4,7 @@
  */
 import {
   calcularPorcentaje, estadoDeLectura, etiquetaProgreso, etiquetaEstado,
-  progresoInicial, avanzarProgreso, progresoDeCapitulo, formatearTamano,
+  progresoInicial, avanzarProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
 } from '../js/pdf/progreso.js';
 
 let fallos = 0;
@@ -135,6 +135,27 @@ const PARTES = [
   /* Pero al cambiar de capítulo el ancla del anterior ya no significa nada. */
   const otroCapitulo = avanzarProgreso(conAncla, { parte: 2, desplazamiento: 0 });
   comprobar(otroCapitulo.caracter === 0 && otroCapitulo.cita === '', 'cambiar de capítulo limpia el ancla');
+}
+
+/* ── Frase de reanudación ──────────────────────────────────────────── */
+{
+  const AHORA = 1_700_000_000_000;
+  const hace = (ms) => ({ parte: 1, desplazamiento: 0.5, caracter: 100, actualizado: AHORA - ms });
+
+  comprobar(etiquetaReanudar(hace(30 * 1000), PARTES, AHORA).includes('hace un momento'),
+    'medio minuto es "hace un momento"');
+  comprobar(etiquetaReanudar(hace(20 * 60 * 1000), PARTES, AHORA).includes('hace 20 minutos'),
+    'veinte minutos se dicen en minutos');
+  comprobar(etiquetaReanudar(hace(3 * 3600 * 1000), PARTES, AHORA).includes('hace 3 horas'),
+    'tres horas se dicen en horas');
+  comprobar(etiquetaReanudar(hace(2 * 86400 * 1000), PARTES, AHORA).includes('hace 2 días'),
+    'dos dias se dicen en dias');
+  comprobar(etiquetaReanudar(hace(60 * 1000), PARTES, AHORA).includes('CAPÍTULO II'),
+    'nombra el capitulo donde quedo');
+  comprobar(etiquetaReanudar(null, PARTES, AHORA) === '',
+    'sin progreso no dice nada');
+  comprobar(etiquetaReanudar(progresoInicial(), PARTES, AHORA) === '',
+    'un libro sin empezar no dice nada');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas de progreso pasaron.' : `\n${fallos} prueba(s) fallaron.`);

@@ -2324,6 +2324,23 @@
     .btn-back#btnPdfBack span{display:none}
     .btn-back#btnPdfBack{padding-inline:12px}
   }
+  /* Aviso de reanudación: aparece unos segundos al abrir un libro empezado.
+     Sin él, aterrizar a mitad de un capítulo parece un error de la app. */
+  .pdf-reanudar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    margin:6px 0 0;padding:8px 12px;
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent);
+    border:1px solid color-mix(in srgb, var(--lec-acento, var(--cyan)) 34%, transparent);
+    border-radius:10px;
+    font-size:13px;line-height:1.4;
+    animation:pdfReanudarEntra .28s ease both;
+  }
+  .pdf-reanudar[hidden]{display:none !important}
+  .pdf-reanudar-txt{flex:1 1 auto;min-width:0}
+  .pdf-reanudar .mini-btn{flex:0 0 auto;min-height:var(--h-touch)}
+  @keyframes pdfReanudarEntra{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.pdf-reanudar{animation:none}}
+  @media (max-width:640px){ .pdf-reanudar{font-size:12.5px;padding:8px 10px} }
 
   /* Menú ⋯ (Opciones) — pulido visual */
   .pdf-mas-menu{position:relative}
@@ -5272,6 +5289,10 @@
                 <span class="count" id="pdfCount">0 palabras</span>
               </div>
             </header>
+            <div class="pdf-reanudar" id="pdfReanudar" hidden role="status" aria-live="polite">
+              <span class="pdf-reanudar-txt" id="pdfReanudarTxt"></span>
+              <button type="button" class="mini-btn" id="btnPdfReanudarInicio">Empezar de cero</button>
+            </div>
 
             <div class="pdf-barra pdf-barra--doc" id="pdfProgresoDoc" role="progressbar" aria-label="Progreso de lectura" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <div class="pdf-barra-relleno" id="pdfProgresoRelleno"></div>

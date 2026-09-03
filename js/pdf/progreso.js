@@ -99,6 +99,41 @@ export function etiquetaProgreso(progreso, partes) {
 }
 
 /**
+ * «Seguías en CAPÍTULO II, hace 20 minutos».
+ *
+ * Es la frase que le dice a la persona que la app se acordó de ella. Sin
+ * esto, reanudar bien es invisible: parece que el libro se abrió donde le
+ * dio la gana.
+ *
+ * @param {{parte:number, actualizado:number}|null} progreso
+ * @param {{titulo?:string, texto:string}[]} partes
+ * @param {number} [ahora] – inyectable para poder probarlo
+ * @returns {string} vacío si no hay nada que reanudar
+ */
+export function etiquetaReanudar(progreso, partes, ahora = Date.now()) {
+  if (!progreso || !progreso.actualizado) return '';
+  if (calcularPorcentaje(progreso, partes) <= 0) return '';
+
+  const lista = Array.isArray(partes) ? partes : [];
+  const indice = acotar(Math.floor(progreso.parte ?? 0), 0, Math.max(0, lista.length - 1));
+  const titulo = lista[indice]?.titulo;
+
+  const transcurrido = Math.max(0, ahora - Number(progreso.actualizado));
+  const minutos = Math.floor(transcurrido / 60000);
+  const horas = Math.floor(minutos / 60);
+  const dias = Math.floor(horas / 24);
+
+  let cuando;
+  if (minutos < 1) cuando = 'hace un momento';
+  else if (minutos < 60) cuando = `hace ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`;
+  else if (horas < 24) cuando = `hace ${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+  else cuando = `hace ${dias} ${dias === 1 ? 'día' : 'días'}`;
+
+  if (lista.length > 1 && titulo) return `Seguías en ${titulo}, ${cuando}`;
+  return `Seguías leyendo ${cuando}`;
+}
+
+/**
  * Nueva posición de lectura. Conserva el capítulo más lejano alcanzado, para
  * que volver atrás a releer no borre lo que ya llevabas.
  *

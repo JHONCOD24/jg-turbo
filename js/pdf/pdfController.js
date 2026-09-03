@@ -21,7 +21,7 @@ import { construirDocx, construirHtmlImpresion, construirMarkdown } from './expo
 import { crearTraductor, necesitaTraduccion } from './traduccion.js';
 import {
   progresoInicial, avanzarProgreso, calcularPorcentaje, estadoDeLectura,
-  etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano,
+  etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
 } from './progreso.js';
 import { construirAncla, resolverAncla } from './anclaTexto.js';
 import * as almacen from './biblioteca.js';
@@ -106,6 +106,8 @@ export function inicializarLectorPdf(deps = {}) {
     revisionHoja: $('pdfRevisionHoja'), revisionTitulo: $('pdfRevisionTitulo'),
     revisionLista: $('pdfRevisionLista'), revisionVacio: $('pdfRevisionVacio'),
     revisionAceptarTodo: $('btnPdfRevisionAceptarTodo'), revisionCerrar: $('btnPdfRevisionCerrar'),
+    reanudar: $('pdfReanudar'), reanudarTxt: $('pdfReanudarTxt'),
+    reanudarInicio: $('btnPdfReanudarInicio'),
 
     nube: $('pdfNube'), nubePunto: $('pdfNubePunto'), nubeEstado: $('pdfNubeEstado'),
     nubeMas: $('btnPdfNubeMas'), nubeOpciones: $('pdfNubeOpciones'),
@@ -132,6 +134,7 @@ export function inicializarLectorPdf(deps = {}) {
     parteActual: 0,
     totalPaginas: 0,
     progreso: progresoInicial(),
+    temporizadorReanudar: null,
     traductor: null,
     traducido: new Map(),
     pulidor: null,
@@ -957,6 +960,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.buscarToggle) el.buscarToggle.setAttribute('aria-expanded', 'false');
     detenerAudiolibro();
     guardarEdicionActual();
+    clearTimeout(estado.temporizadorReanudar);
     if (estado.id && estado.auditor) { try { estado.auditor.pausar(); } catch(_){} }
     estado.id = '';
     estado.partes = [];
@@ -1039,6 +1043,19 @@ export function inicializarLectorPdf(deps = {}) {
     await mostrarParte(estado.progreso.parte || 0, {
       desplazamiento: estado.progreso.desplazamiento || 0,
     });
+    /* Decirle a la persona que la app se acordó de dónde iba. Se retira solo:
+     * es una confirmación, no un cartel permanente. */
+    if (el.reanudar && el.reanudarTxt) {
+      const frase = etiquetaReanudar(estado.progreso, estado.partes);
+      el.reanudar.hidden = !frase;
+      el.reanudarTxt.textContent = frase;
+      if (frase) {
+        clearTimeout(estado.temporizadorReanudar);
+        estado.temporizadorReanudar = setTimeout(() => {
+          if (el.reanudar) el.reanudar.hidden = true;
+        }, 9000);
+      }
+    }
     if (estado.pulidoActivo && estado.vista === 'original') {
       asegurarPulido(estado.progreso.parte || 0, { mostrar: true }).catch(() => {});
     }
@@ -2442,6 +2459,15 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   el.volver.addEventListener('click', () => volverABiblioteca());
+
+  if (el.reanudarInicio) el.reanudarInicio.addEventListener('click', () => {
+    if (!hayDocumento()) return;
+    el.reanudar.hidden = true;
+    mostrarParte(0, { desplazamiento: 0 });
+    estado.progreso = avanzarProgreso(estado.progreso, { parte: 0, desplazamiento: 0, caracter: 0, cita: '', antes: '' });
+    irAPosicion(0, { centrar: false });
+    guardarProgresoPronto();
+  });
 
   el.salida.addEventListener('input', () => {
     guardarEdicionActual();
