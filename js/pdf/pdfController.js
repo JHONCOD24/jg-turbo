@@ -23,6 +23,7 @@ import {
   progresoInicial, avanzarProgreso, calcularPorcentaje, estadoDeLectura,
   etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano,
 } from './progreso.js';
+import { construirAncla, resolverAncla } from './anclaTexto.js';
 import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 
@@ -762,17 +763,110 @@ export function inicializarLectorPdf(deps = {}) {
     }, ESPERA_GUARDADO_MS);
   }
 
-  /** Fracción desplazada dentro del capítulo que se está leyendo. */
+  /** Fracción desplazada dentro del capítulo (se conserva por compatibilidad). */
   function desplazamientoActual() {
     const alto = el.salida.scrollHeight - el.salida.clientHeight;
     if (alto <= 0) return 0;
     return Math.max(0, Math.min(1, el.salida.scrollTop / alto));
   }
 
-  function anotarPosicion({ desplazamiento } = {}) {
+  /**
+   * Carácter que está arriba del todo en la pantalla.
+   *
+   * Un <textarea> no dice qué carácter se ve, así que se estima por la
+   * proporción desplazada y luego se ajusta al comienzo de la frase más
+   * cercana: aterrizar a mitad de una frase se siente como un error, y
+   * empezar la frase de nuevo se siente natural.
+   */
+  function caracterVisible() {
+    const texto = el.salida.value || '';
+    if (!texto) return 0;
+    const bruto = Math.round(desplazamientoActual() * texto.length);
+    const frases = partirEnFrases(texto);
+    if (!frases.length) return Math.max(0, Math.min(texto.length, bruto));
+    const rango = fraseEn(frases, Math.max(0, Math.min(texto.length - 1, bruto)));
+    return rango ? rango[0] : bruto;
+  }
+
+  /**
+   * Lleva la vista a un carácter del texto.
+   *
+   * Se mide sobre `el.realce`, la capa gemela que ya existe para resaltar la
+   * frase que suena: tiene el mismo texto, la misma tipografía y los mismos
+   * márgenes que el textarea, pero sus nodos SÍ se pueden medir. Sin ella
+   * habría que adivinar.
+   */
+  function irAPosicion(caracter, { centrar = true } = {}) {
+    const texto = el.salida.value || '';
+    if (!texto) return;
+    const pos = Math.max(0, Math.min(texto.length, Math.floor(Number(caracter) || 0)));
+    const alto = el.salida.scrollHeight - el.salida.clientHeight;
+    if (alto <= 0) return;
+
+    let destino = null;
+    if (el.realce) {
+      /* Se pinta el texto partido en el punto buscado y se mide dónde cae. */
+      const marca = document.createElement('span');
+      marca.textContent = '\u200b';           /* invisible, pero ocupa una posición */
+      el.realce.textContent = '';
+      el.realce.append(
+        document.createTextNode(texto.slice(0, pos)),
+        marca,
+        document.createTextNode(texto.slice(pos)),
+      );
+      destino = marca.offsetTop - (centrar ? el.salida.clientHeight * 0.30 : 0);
+      /* La guía se limpia: quien la necesite la volverá a pintar. */
+      limpiarGuia();
+    }
+    if (destino == null) destino = alto * (pos / Math.max(1, texto.length));
+    el.salida.scrollTop = Math.max(0, Math.min(alto, destino));
+    sincronizarRealce();
+  }
+
+  /**
+   * Restaura la posición guardada del capítulo abierto.
+   *
+   * Se llama en cada momento en que el texto del textarea se reemplaza (montar,
+   * pulir, traducir, volver al original): reemplazar el contenido de un
+   * <textarea> lo devuelve al principio, y ese era el motivo por el que un
+   * libro «volvía a empezar el capítulo» al reabrirlo.
+   *
+   * Se intenta en dos tiempos porque la primera vez el navegador todavía no ha
+   * terminado de maquetar y `scrollHeight` aún no es el definitivo.
+   */
+  function restaurarPosicionGuardada() {
+    const progreso = estado.progreso;
+    if (!progreso) return;
+    const aplicar = () => {
+      const texto = el.salida.value || '';
+      if (!texto) return;
+      if (progreso.cita || progreso.caracter) {
+        irAPosicion(resolverAncla(texto, progreso));
+      } else {
+        /* Documento guardado antes de esta versión: solo hay la fracción. */
+        const alto = el.salida.scrollHeight - el.salida.clientHeight;
+        if (alto > 0) el.salida.scrollTop = alto * Math.max(0, Math.min(1, progreso.desplazamiento || 0));
+      }
+    };
+    requestAnimationFrame(() => {
+      aplicar();
+      /* Segundo intento tras la maquetación real (fuentes, imágenes, envolturas). */
+      setTimeout(aplicar, 120);
+    });
+  }
+
+  function anotarPosicion({ desplazamiento, caracter } = {}) {
+    const texto = el.salida.value || '';
+    /* Si quien llama sabe el carácter exacto (la voz lo sabe), se usa; si no,
+     * se deduce de la pantalla. */
+    const punto = caracter != null ? caracter : caracterVisible();
+    const ancla = construirAncla(texto, punto);
     estado.progreso = avanzarProgreso(estado.progreso, {
       parte: estado.parteActual,
       desplazamiento: desplazamiento != null ? desplazamiento : desplazamientoActual(),
+      caracter: ancla.caracter,
+      cita: ancla.cita,
+      antes: ancla.antes,
     });
     actualizarBarraDoc();
     guardarProgresoPronto();
@@ -781,6 +875,9 @@ export function inicializarLectorPdf(deps = {}) {
   async function mostrarParte(indice, { seleccionar = null, desplazamiento = 0 } = {}) {
     if (!hayDocumento()) return;
     const nuevo = Math.max(0, Math.min(indice, estado.partes.length - 1));
+    /* ¿Estamos volviendo al capítulo que el progreso dice que se estaba
+     * leyendo? Solo entonces hay una posición guardada que respetar. */
+    const indiceEsElGuardado = nuevo === (estado.progreso?.parte ?? -1);
     if (nuevo !== estado.parteActual) guardarEdicionActual();
     estado.parteActual = nuevo;
 
@@ -800,12 +897,14 @@ export function inicializarLectorPdf(deps = {}) {
     actualizarContador();
 
     /* Restaurar el punto exacto donde se quedó la lectura. */
-    requestAnimationFrame(() => {
-      const alto = el.salida.scrollHeight - el.salida.clientHeight;
-      el.salida.scrollTop = alto > 0 ? alto * Math.max(0, Math.min(1, desplazamiento)) : 0;
+    estado.progreso = avanzarProgreso(estado.progreso, {
+      parte: nuevo,
+      desplazamiento,
+      /* Al llegar a un capítulo nuevo (no al reabrir el que se leía) no hay
+       * ancla que conservar: se entra por el principio. */
+      ...(indiceEsElGuardado ? {} : { caracter: 0, cita: '', antes: '' }),
     });
-
-    estado.progreso = avanzarProgreso(estado.progreso, { parte: nuevo, desplazamiento });
+    restaurarPosicionGuardada();
     actualizarBarraDoc();
     pintarIndice();
     guardarProgresoPronto();
@@ -1222,12 +1321,25 @@ export function inicializarLectorPdf(deps = {}) {
     if (indice !== estado.parteActual || estado.vista !== 'original' || !estado.pulidoActivo) return;
     // Si hay texto aprobado/revisadoSeguro para este capítulo, preferirlo
     const progAprobado = estado.textoAprobadoPorBloque.get(`cap_${indice}`);
-    if (progAprobado) { el.salida.value = progAprobado; el.salida.dispatchEvent(new Event('input', { bubbles: true })); actualizarContador(); return; }
+    if (progAprobado) {
+      el.salida.value = progAprobado;
+      el.salida.dispatchEvent(new Event('input', { bubbles: true }));
+      actualizarContador();
+      restaurarPosicionGuardada();   /* reemplazar el texto manda el scroll a 0 */
+      return;
+    }
     const seguro = estado.textoSeguroPorBloque.get(`cap_${indice}`);
-    if (seguro) { el.salida.value = seguro; el.salida.dispatchEvent(new Event('input', { bubbles: true })); actualizarContador(); return; }
+    if (seguro) {
+      el.salida.value = seguro;
+      el.salida.dispatchEvent(new Event('input', { bubbles: true }));
+      actualizarContador();
+      restaurarPosicionGuardada();
+      return;
+    }
     el.salida.value = estado.pulido.get(indice) || el.salida.value;
     el.salida.dispatchEvent(new Event('input', { bubbles: true }));
     actualizarContador();
+    restaurarPosicionGuardada();
   }
 
   function activarPulido() {
@@ -1241,6 +1353,7 @@ export function inicializarLectorPdf(deps = {}) {
       el.salida.value = textoDeParte(estado.parteActual);
       el.salida.dispatchEvent(new Event('input', { bubbles: true }));
       actualizarContador();
+      restaurarPosicionGuardada();
       asegurarPulido(estado.parteActual, { mostrar: true });
     }
   }
@@ -1256,6 +1369,7 @@ export function inicializarLectorPdf(deps = {}) {
       el.salida.value = estado.partes[estado.parteActual]?.texto || '';
       el.salida.dispatchEvent(new Event('input', { bubbles: true }));
       actualizarContador();
+      restaurarPosicionGuardada();
     }
   }
 
@@ -1495,6 +1609,7 @@ export function inicializarLectorPdf(deps = {}) {
     el.salida.value = estado.traducido.get(indice) || el.salida.value;
     el.salida.dispatchEvent(new Event('input', { bubbles: true }));
     actualizarContador();
+    restaurarPosicionGuardada();
   }
 
   async function activarEspanol() {
@@ -1522,6 +1637,7 @@ export function inicializarLectorPdf(deps = {}) {
     el.salida.value = estado.partes[estado.parteActual]?.texto || '';
     el.salida.dispatchEvent(new Event('input', { bubbles: true }));
     actualizarContador();
+    restaurarPosicionGuardada();
   }
 
   /* ── Procesar un PDF nuevo ───────────────────────────────────────── */
@@ -2345,6 +2461,7 @@ export function inicializarLectorPdf(deps = {}) {
     temporizadorScroll = setTimeout(() => {
       if (!hayDocumento()) return;
       const fraccion = desplazamientoActual();
+      /* Sin `caracter`: `anotarPosicion` lo deduce de lo que se ve. */
       anotarPosicion({ desplazamiento: fraccion });
       if (fraccion > 0.995 && estado.parteActual + 1 < estado.partes.length) {
         mostrarParte(estado.parteActual + 1);
@@ -2570,8 +2687,11 @@ export function inicializarLectorPdf(deps = {}) {
     if (datos.estado === 'paused') return;
     if (!datos.sonando) { limpiarGuia(); return; }
 
-    /* El progreso del libro se anota siempre que suene, se siga el texto o no. */
-    anotarPosicion({ desplazamiento: datos.fraccion });
+    /* El progreso del libro se anota siempre que suene, se siga el texto o no.
+     * Cuando la guía pudo situar el bloque, se conoce el carácter EXACTO que
+     * está sonando: es la mejor posición que puede guardarse. */
+    const exacto = datos.bloque >= 0 ? posicionDeVoz(datos) : null;
+    anotarPosicion({ desplazamiento: datos.fraccion, caracter: exacto != null ? exacto : undefined });
     if (!voz.siguiendo) { limpiarGuia(); return; }
 
     /* Si lo que suena es una selección y no el capítulo entero, la posición
