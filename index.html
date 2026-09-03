@@ -2462,6 +2462,10 @@
   .pdf-mas-ayuda{
     margin:-2px 0 2px;font-size:11.5px;line-height:1.45;color:var(--muted);
   }
+  .pdf-ayuda-gesto{
+    margin:4px 0 0;font-size:12px;line-height:1.45;
+    color:var(--muted);
+  }
 
   .pdf-mas-seccion{display:flex;flex-direction:column;gap:8px}
   /* `display:flex` gana al `[hidden]` del navegador: sin esto, un apartado
@@ -5180,6 +5184,7 @@
                           </div>
                         </div>
                         <p class="pdf-mas-ayuda">Resalta la frase que suena y arrastra el texto tras ella. Si te desplazas a mano, te deja mirar unos segundos antes de retomar.</p>
+                        <p class="pdf-ayuda-gesto">Toca dos veces cualquier párrafo para leer desde ahí.</p>
                         <label class="task-field" for="pdfDormir">
                           <span class="task-field-label">Apagar la voz sola</span>
                           <select id="pdfDormir">
@@ -13464,6 +13469,23 @@ function ttsBuscar(segundos){
 function ttsSaltar(delta){
   ttsBuscar(ttsTiempoActual() + ttsTiempoAudio(delta));
 }
+/* Salto a un bloque concreto de la cola, no a un segundo.
+ *
+ * El reproductor razona en segundos, pero el lector razona en frases. Esta
+ * función es el puente: le dices «bloque 7, al 30 % de su contenido» y ella
+ * calcula el segundo que corresponde. La usa el lector de PDF cuando tocas
+ * un párrafo para empezar a leer ahí.
+ */
+function ttsIrABloque(indiceBloque, dentro = 0){
+  if(!ttsState.queue.length) return;
+  const i = Math.max(0, Math.min(ttsState.queue.length - 1, Math.floor(indiceBloque) || 0));
+  let acumulado = 0;
+  for(let k = 0; k < i; k++) acumulado += ttsDuracionBloque(ttsState.queue[k]);
+  const dur = ttsDuracionBloque(ttsState.queue[i]);
+  const proporcion = Math.max(0, Math.min(1, Number(dentro) || 0));
+  ttsBuscar(acumulado + dur * proporcion);
+}
+window.ttsIrABloque = ttsIrABloque;
 
 function ttsHablarBrowserDesde(startIdx, token){
   if(!ttsSupportedBrowser()){

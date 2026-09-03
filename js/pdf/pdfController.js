@@ -2495,6 +2495,37 @@ export function inicializarLectorPdf(deps = {}) {
     }, 220);
   });
 
+  /* ── Tocar dos veces el texto: leer desde ahí ───────────────────────
+   *
+   * Doble toque y no toque simple: el textarea es editable y seleccionable, y
+   * un toque simple tiene que seguir sirviendo para poner el cursor. El doble
+   * toque no compite con nada y es el gesto que la gente ya usa para
+   * seleccionar una palabra, así que se descubre solo.
+   */
+  el.salida.addEventListener('dblclick', () => {
+    if (!hayDocumento()) return;
+    const punto = el.salida.selectionStart;
+    if (punto == null) return;
+
+    /* Se ancla al comienzo de la frase: empezar a media frase suena a error. */
+    const frases = partirEnFrases(el.salida.value || '');
+    const rango = frases.length ? fraseEn(frases, punto) : null;
+    const desde = rango ? rango[0] : punto;
+
+    anotarPosicion({ caracter: desde });
+
+    /* Si ya hay voz sonando en este capítulo, se salta ahí al instante. */
+    const destino = bloqueDeCaracter(desde);
+    if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
+      window.ttsIrABloque(destino.bloque, destino.dentro);
+      avisar('Leyendo desde aquí.', 'info');
+      return;
+    }
+    /* Si no había voz, se marca el punto y se ofrece empezar. */
+    irAPosicion(desde);
+    avisar('Marcado. Pulsa Escuchar para leer desde aquí.', 'info');
+  });
+
   /* ── El texto sigue a la voz ───────────────────────────────────────
    *
    * Escuchando un libro, la pregunta constante es «¿por dónde va?». Aquí el
@@ -2605,6 +2636,37 @@ export function inicializarLectorPdf(deps = {}) {
     const enCompacto = Math.round(inicio + (fin - inicio) * dentro);
     const acotado = Math.max(0, Math.min(guia.mapa.length - 1, enCompacto));
     return guia.mapa[acotado];
+  }
+
+  /**
+   * Camino inverso de `posicionDeVoz`: de un punto del texto al bloque de
+   * audio que lo contiene.
+   *
+   * `guia.anclas` dice en qué carácter empieza cada bloque de la cola. Con eso
+   * basta para saber a qué bloque saltar y en qué proporción de él caemos.
+   * Devuelve null si la guía todavía no está situada (no hay lectura en curso).
+   */
+  function bloqueDeCaracter(caracter) {
+    const anclas = guia.anclas;
+    if (!anclas || !anclas.length || !guia.mapa || !guia.mapa.length) return null;
+    /* Las anclas están en el texto compacto; el carácter viene del texto real. */
+    let enCompacto = guia.mapa.indexOf(Math.floor(caracter));
+    if (enCompacto < 0) {
+      /* El carácter puede ser un espacio o un signo, que no está en el mapa:
+       * se busca el siguiente que sí lo esté. */
+      for (let c = Math.floor(caracter); c < guia.mapa.length + Math.floor(caracter); c += 1) {
+        const donde = guia.mapa.indexOf(c);
+        if (donde >= 0) { enCompacto = donde; break; }
+      }
+    }
+    if (enCompacto < 0) return null;
+
+    let i = 0;
+    while (i + 1 < anclas.length && anclas[i + 1] <= enCompacto) i += 1;
+    const inicio = anclas[i];
+    const fin = i + 1 < anclas.length ? anclas[i + 1] : guia.compacto.length;
+    const dentro = fin > inicio ? (enCompacto - inicio) / (fin - inicio) : 0;
+    return { bloque: i, dentro: Math.max(0, Math.min(1, dentro)) };
   }
 
   /** Corta el texto en frases. Intl.Segmenter respeta abreviaturas («Sr.»). */
