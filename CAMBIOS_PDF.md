@@ -1,5 +1,47 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v5.0 · Lectura continua: retomar donde quedaste
+
+### Lo pedido
+Que quien lee o escucha un libro pueda cerrar la app en cualquier momento —incluso porque se apagó el celular— y al volver, en el mismo dispositivo o en otro, aterrice exactamente en la frase donde quedó; adelantar y retroceder por contenido (frase, párrafo, capítulo) en vez de por minutos; que los títulos no se peguen al texto y la voz suene fluida; y entender qué hace la auditoría mientras la hace. (PLAN LECTURA CONTINUA PDF.md, rama `lectura-continua-pdf`.)
+
+### Causas encontradas (verificadas en el código antes de tocar nada)
+- **A — el pulido borra la posición recién restaurada** (`js/pdf/pdfController.js:940-945`, `mostrarPulido()` en `:1225-1231`): reemplazar el `<textarea>` lo devuelve al inicio sin reponer el scroll. Igual en traducción (`:1495-1497`).
+- **B — la posición no significa lo mismo en dos pantallas** (`desplazamientoActual()` `:766-770`): fracción visual que apunta a párrafos distintos según el ancho.
+- **C — la restauración se intenta una sola vez, demasiado pronto** (`requestAnimationFrame` en `:803`, antes de la maquetación definitiva).
+- **D — la sincronización casi nunca se dispara** (`sincronizarAhora()` `:2963` solo en 5 puntos; sin `visibilitychange`, `pagehide` útil ni latido).
+- **E — avanzar marca el libro entero como cambiado** (`biblioteca.js:284-296` toca `actualizado`; `nube.js:158-188` resube todos los capítulos por 20 bytes).
+- **F — la auditoría aplasta los saltos de párrafo** (`pulido.js:166-187` rearma con `join(' ')`; `mismasPalabras()` `:46-54` no lo detecta).
+- **G — títulos no detectados + doble definición incompatible** (`limpiezaTexto.js:174-183` vs `:296`).
+- **H — sin comas prosódicas tras retirar las de v3.2** (`limpiezaTexto.js:246-250`): la fluidez se repone en la capa de voz, no en el original.
+
+### Corrección aplicada (una línea por tarea)
+- T0 `tests/`: restauradas las 10 pruebas `.mjs` + `backend/tests/test_pdf_ask.py` que la reestructuración dejó en `JG Turbo_OLD` (+2 helpers `generarPdf*.mjs` que los `verificar_*` necesitan y el plan no listaba).
+- T1 `js/pdf/anclaTexto.js` (nuevo) + `js/pdf/progreso.js`: ancla portable `{caracter, cita, antes}`; `avanzarProgreso()` conserva el ancla salvo cambio de capítulo.
+- T2 `js/pdf/pdfController.js`: `caracterVisible()` / `irAPosicion()` (mide sobre `el.realce`) / `restaurarPosicionGuardada()` (doble intento); `mostrarParte()`, pulido, traducción y volver-al-original restauran por ancla; scroll y voz anotan el carácter exacto.
+- T3 `js/pdf/pdfController.js`: `guardarYaMismo()` + guardado al ocultar la app, al pausar la voz y latido de 60 s (reemplazó el bloque `pagehide`/`visibilitychange` anterior para no duplicar listeners; se conservó el pull al volver visible).
+- T4 `js/pdf/sincronizacion.js` (`necesitaSubirContenido()`), `biblioteca.js` (`contenidoActualizado`, `tocarContenido()`, `exportarParaSincronizar()`), `nube.js` (solo sube capítulos si el texto cambió): leer ya no resube el libro; traducción/pulido/edición sí marcan contenido (con `marcar:false` al importar, para no reenviar en bucle).
+- T5 `js/pdf/progreso.js` (`etiquetaReanudar()`), `index.html` (`#pdfReanudar` + CSS), controlador: aviso «Seguías en…» 9 s + «Empezar de cero».
+- T6 `index.html` (`ttsIrABloque()`), controlador (`bloqueDeCaracter()` + `dblclick`): doble toque lee desde ahí; ayuda visible en Opciones → Escuchar.
+- T7 `index.html` + controlador: botones ‹‹ ›› = frase anterior/siguiente en PDF (±10 s fuera), `jg-tts-salto-frase`, botones `#btnPdfCapPrev/Next`, `jgPdfContexto()` en la barra (`Cap. 3/12 · 2:14 / 41:03`).
+- T8 `js/pdf/pulido.js`: `aplicarSignos()` recorre el original (conserva espacios/saltos/sangría); `mismasPalabras()` rechaza `estructura_perdida`.
+- T9 `js/pdf/limpiezaTexto.js`: `pareceTitulo()` exportada y única (mayúsculas cortas + numeración), `clasificarBloque()` la reutiliza; romano suelto en mayúsculas (`II`) aceptado antes del filtro de páginas (capítulos en mayúsculas, preliminares en minúsculas).
+- T10 `js/pdf/vozTexto.js`: `prepararParaVoz()` con `pausarTitulos` (dos puntos tras título suelto) y `comasProsodicas` (coma ante conector), solo capa de voz, desactivables, solo español.
+- T11 `js/pdf/auditoria.js` (estados honestos: `Revisando N de M`, `Revisada, sin cambios`, `N sugerencias por revisar`), controlador (conteo real + hoja `#pdfAuditoriaHoja` en vez de `window.confirm` + chip pulsable con `title`).
+
+### Pruebas
+- `test_pdf_ancla.mjs` ✔ 13/13 (nuevo) · `test_pdf_progreso.mjs` ✔ 47/47 · `test_pdf_limpieza.mjs` ✔ 50/50 (38 viejos intactos) · `test_pdf_sincronizacion.mjs` ✔ 42/42 · `test_pdf_pulido_mecanico.mjs` ✔ 24/24 · `test_pdf_pulido_troceo.mjs` ✔ 12/12 · `test_pdf_exportar.mjs` ✔ 35/35 · `test_pdf_busqueda.mjs` ✔ 19/19 · `test_pdf_traduccion.mjs` ✔ 27/27 · `test_pdf_auditoria_p0.mjs` ✔ 34/34 · `test_pdf_voz.mjs` ✔ 15/15 (nuevo) · `backend/tests/test_pdf_ask.py` ✔ 14/14.
+- `node --check` verde en los 6 `.js` tocados.
+- NO verificable en este entorno: `verificar_pdf_geometria.mjs` / `verificar_pdf_navegador.mjs` (exigen Playwright + navegadores, no instalados), recorrido manual de aceptación de 14 puntos (celular 390 px, doble toque, escucha de 2 min, dos dispositivos reales, Network con 1×`subir`/0×`parte`), escucha real de la Tarea 10. Pendiente del usuario o de un entorno con navegador.
+- Backend ajeno al plan: 12 fallos + 5 errores de colección en YouTube/traducción **idénticos en el commit base `5984269`** (deriva de `api/index.py`, no tocada aquí); documentado, no introducido por esta entrega.
+
+### Deploy
+- `sw.js` → `jg-turbo-shell-v58`
+- `index.html` → `<!-- v2.27.0 · PDF lectura continua v5.0: ancla de posicion, guardado al ocultar, sync ligero, frases y capitulos, voz con pausas, revision explicada -->`
+- Verificado en https://jg-turbo.vercel.app: marcador + /api/health
+
+---
+
 ## Entrega 2026-09-02 · v4.1 · Revisión visible + reanudación real de auditoría (cierre P0 de la auditoría al plan)
 
 ### Lo pedido

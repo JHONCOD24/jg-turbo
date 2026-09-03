@@ -11,8 +11,8 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 - Claves, glosario y preferencias viven en el **navegador** (`jg_*`).
 - Un **deploy no las borra**. No renombrar claves sin migración. No sobrescribir con vacío.
 - Bundle: `jg_config_bundle`. UI: Exportar / Importar config.
-- Deploy: sincronizar a `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\` → `npx vercel --prod --yes`
-- Git: repo en `Spech to text App/` → `JHONCOD24/jg-turbo` (author `JHONCOD24 <juanloras35@gmail.com>`)
+- Deploy: desde la raíz del repo (`C:\Users\juanl\Documents\Proyectos\jg-turbo\`) → `npx vercel --prod --yes --scope jhoncod24s-projects`
+- Git: repo en la raíz (`jg-turbo/`, la app vive en la raíz desde la reestructuración del 2026-09-03) → `JHONCOD24/jg-turbo` (author `JHONCOD24 <juanloras35@gmail.com>`)
 - Prod: https://jg-turbo.vercel.app
 
 
@@ -20,15 +20,20 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 
 **Siempre desplegar en Vercel** cuando se termine una mejora o feature de esta app. No dejar solo cambios locales.
 
-**Regla persistente para futuros agentes:** una mejora no se considera cerrada hasta que esté documentada en el MD del feature, sincronizada en `../vercel_deploy/`, desplegada al proyecto `jg-turbo` y verificada contra `https://jg-turbo.vercel.app`. Recordar esta regla en cada sesión.
+**Regla persistente para futuros agentes:** una mejora no se considera cerrada hasta que esté documentada en el MD del feature, desplegada al proyecto `jg-turbo` y verificada contra `https://jg-turbo.vercel.app`. Recordar esta regla en cada sesión.
 
-1. Editar en `Spech to text App/`
+> Reestructuración 2026-09-03: la app vive en la raíz del repo (`jg-turbo/`).
+> Ya NO existe `Spech to text App/` ni `vercel_deploy/` como carpetas de
+> trabajo/despliegue. `sincronizar_deploy.mjs` (raíz) es un resto del flujo
+> antiguo y apunta a carpetas que ya no existen: **no usarlo**. El despliegue
+> sale de la raíz.
+
+1. Editar en la raíz del repo (`jg-turbo/`: `index.html`, `js/`, `api/`, `sw.js`)
 2. **Documentar todo** en el MD del feature (TTS → `CAMBIOS_TTS.md`: versión, dpl_, cambios, pruebas, proceso)
 3. Alinear satélites si aplica (`DOCUMENTACION_DESPLIEGUE.md`, `FICHA_TECNICA.md`, `CONFIG_PERSISTENTE.md`, este `Agents.md`)
-4. Sync a `../vercel_deploy/` (`index.html`, `api/*`, docs tocados, `vercel.json`)
-5. Desplegar **solo** `vercel_deploy` al proyecto **`jg-turbo`** (**nunca** la raíz del monorepo):
+4. Desplegar desde la raíz al proyecto **`jg-turbo`**:
    ```bash
-   cd ../vercel_deploy
+   cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
    npx vercel --prod --yes --scope jhoncod24s-projects
    ```
    ⚠️ **No usar `--cwd`**: con Vercel CLI 59.x devuelve `Not authorized` aunque la sesión sea válida
@@ -254,14 +259,17 @@ Reglas para el siguiente agente:
 
 El 404 `NOT_FOUND` ocurrió porque un deploy se lanzó desde la **raíz del monorepo** (`JG Turbo/`), donde **no hay** `index.html`. Vercel subió miles de archivos y la producción quedó sin frontend.
 
-**Siempre** ejecutar el deploy desde `vercel_deploy/`:
+**Siempre** ejecutar el deploy desde la raíz del repo aplanado (`jg-turbo/`,
+donde SÍ hay `index.html`):
 
 ```bash
-cd vercel_deploy
-npx vercel --prod --yes
+cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
+npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
-Nunca desde la raíz del workspace. Tras el fix: ~17 archivos, alias https://jg-turbo.vercel.app OK con TTS.
+Nunca desde la raíz del workspace (`Proyectos/`). Nota histórica: antes se
+desplegaba desde `vercel_deploy/`; esa carpeta ya no existe tras la
+reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias https://jg-turbo.vercel.app OK con TTS.
 
 ## TTS (lectura en voz alta)
 
@@ -325,5 +333,5 @@ Config `jg_tts_bilingual`: `regional` (defecto) | `unified` | `off`. El valor an
   introduce separaciones dobles. Prueba obligatoria:
   `tests/test_espaciado_texto_pegado.js`.
 - **Micrófono largo:** WAV de 4+ min se parte en ~90 s (límite body Vercel ~4,5 MB). Ver `PRECISION_AUDIO.md`.
-- **Documentar siempre** cada entrega en el MD del feature (versión, deploy, pruebas) y sincronizar a `vercel_deploy/`.
-- **Nunca** `npx vercel --prod` desde la raíz del monorepo (causa 404).
+- **Documentar siempre** cada entrega en el MD del feature (versión, deploy, pruebas). Ya no hay que sincronizar a `vercel_deploy/` (no existe desde la reestructuración del 2026-09-03).
+- **Nunca** `npx vercel --prod` desde la raíz del workspace (`Proyectos/`, causa 404): siempre desde la raíz del repo (`jg-turbo/`).
