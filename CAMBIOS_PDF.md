@@ -1,5 +1,15 @@
 # Lector de PDF · historial de cambios y operación
 
+## Mejora · Carátulas en los 3 aparatos (rama `feat-portadas-sync`)
+
+Pedido: las carátulas se veían en el móvil (donde se importó el PDF) pero no en escritorio ni tablet.
+Causa: la carátula se genera al importar (primera página → JPEG) y se guarda solo en ese aparato; la sincronización no la enviaba (solo viajaban metadatos, capítulos, traducción y pulido). Además, un libro con marca `tienePortada` pero sin archivo mostraba un cuadro vacío en vez de la inicial.
+Corrección: la carátula viaja como texto (`portadaMini`) dentro de `datos` del paquete y al llegar se vuelve imagen y se guarda con el libro (`biblioteca.js: blobADataURL/dataURLABlob/paqueteParaSubir/importarDeSincronizacion`; `nube.js` la pide solo cuando el contenido viaja, nunca con el registro ligero). Sin carátula, la tarjeta muestra la inicial (`pdfController.js: tarjetaLibro`).
+Pruebas: `test_pdf_portada.mjs` ✔ 10/10 (nuevo) + regresión (`sincronizacion`, `exportar`) ✔. Ver en los 3 aparatos tras «Actualizar ahora».
+Deploy: `sw.js` → `jg-turbo-shell-v61`, `index.html` → `v2.28.1`.
+
+---
+
 ## Entrega 2026-09-03 · v5.1 · Que un libro suene a libro
 
 ### Lo pedido

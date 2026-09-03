@@ -145,7 +145,10 @@ export function crearNube({ pedir, biblioteca }) {
 
       let subidos = 0;
       for (const resumen of paraSubir) {
-        const paquete = await biblioteca.paqueteParaSubir(resumen.id);
+        /* La carátula acompaña al contenido, nunca al registro ligero: solo
+         * se pide cuando el texto va a viajar de todas formas. */
+        const conPortada = necesitaSubirContenido(resumen);
+        const paquete = await biblioteca.paqueteParaSubir(resumen.id, { conPortada });
         if (!paquete) continue;
         avisar(`Enviando ${subidos + 1} de ${paraSubir.length}…`);
 

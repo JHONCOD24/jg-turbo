@@ -433,7 +433,10 @@ export function inicializarLectorPdf(deps = {}) {
     /* La portada se pide aparte: la lista se pinta sin esperar por las tapas. */
     if (doc.tienePortada) {
       almacen.cargarPortada(doc.id).then((blob) => {
-        if (!blob) return;
+        /* El registro dice que hay carátula pero el archivo no está (libro que
+         * llegó por sincronización antes de que las carátulas viajaran):
+         * se muestra la inicial en vez de un cuadro vacío. */
+        if (!blob) { tapa.dataset.sinPortada = '1'; return; }
         const url = URL.createObjectURL(blob);
         estado.urlsPortada.push(url);
         tapa.style.backgroundImage = `url("${url}")`;

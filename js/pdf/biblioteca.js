@@ -608,6 +608,42 @@ export async function vaciarBiblioteca() {
 
 /* ── Puente con la sincronización ──────────────────────────────────── */
 
+/* Tope para una carátula viajera: una primera página en JPEG de 380 px pesa
+ * decenas de KB; por encima de esto algo anda mal y no se envía. */
+const MAX_BYTES_PORTADA = 1_500_000;
+
+/**
+ * Imagen ↔ texto para que la carátula pueda viajar por la sincronización
+ * (que solo mueve JSON). Funciona en el navegador y en Node (pruebas).
+ */
+export async function blobADataURL(blob) {
+  if (!blob) return null;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (!bytes.length || bytes.length > MAX_BYTES_PORTADA) return null;
+  let bin = '';
+  const PASO = 8192;
+  for (let i = 0; i < bytes.length; i += PASO) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + PASO));
+  }
+  return `data:${blob.type || 'image/jpeg'};base64,${btoa(bin)}`;
+}
+
+/** Inversa de `blobADataURL`. Devuelve null si no es una imagen válida. */
+export async function dataURLABlob(dataURL) {
+  const texto = String(dataURL || '');
+  const cabe = texto.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+  if (!cabe) return null;
+  try {
+    const bin = atob(texto.slice(cabe[0].length));
+    if (!bin.length || bin.length > MAX_BYTES_PORTADA) return null;
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: cabe[1] });
+  } catch (_) {
+    return null;
+  }
+}
+
 /**
  * Metadatos de todo lo que hay aquí (incluidas las marcas de borrado), sin
  * el texto: sirve para decidir qué mover, no para moverlo.
@@ -629,17 +665,29 @@ export async function exportarParaSincronizar() {
  * texto**. El texto viaja aparte, capítulo a capítulo, y por eso no hay
  * límite de tamaño de libro.
  */
-export async function paqueteParaSubir(id) {
+export async function paqueteParaSubir(id, { conPortada = false } = {}) {
   const doc = await cargarDocumento(id);
   if (!doc) return null;
   if (doc.borrado) return { id, actualizado: doc.actualizado, borrado: true, datos: null };
   const { ...meta } = doc;
-  return {
+  const paquete = {
     id,
     actualizado: doc.actualizado || Date.now(),
     borrado: false,
     datos: { meta },
   };
+  /* La carátula solo viaja cuando viaja el contenido (libro nuevo o texto
+   * cambiado): pesa decenas de KB y no tiene sentido reenviarla cada minuto
+   * con el registro ligero de progreso. Quien la llama decide con
+   * `necesitaSubirContenido()`. */
+  if (conPortada) {
+    try {
+      const archivos = await conAlmacenes([ARCHIVOS], 'readonly', (a) => esperar(a.get(id)));
+      const mini = await blobADataURL(archivos?.portada || null);
+      if (mini) paquete.datos.portadaMini = mini;
+    } catch (_) { /* sin carátula se vive: queda la inicial */ }
+  }
+  return paquete;
 }
 
 /** Los capítulos de un documento, cada uno con su traducción si la tiene. */
@@ -683,7 +731,17 @@ export async function importarDeSincronizacion(documento) {
   }
 
   const meta = datos?.meta || {};
-  await guardarDocumento({ meta: { ...meta, id, actualizado, sincronizado: actualizado } });
+  /* La carátula viaja como texto dentro de `datos` porque la sincronización
+   * solo mueve JSON. Al llegar se vuelve imagen y se guarda con el libro:
+   * así la biblioteca se ve igual en el celular, la tablet y el escritorio. */
+  let portada = null;
+  try {
+    portada = await dataURLABlob(datos?.portadaMini || null);
+  } catch (_) { portada = null; }
+  await guardarDocumento({
+    meta: { ...meta, id, actualizado, sincronizado: actualizado },
+    ...(portada ? { portada } : {}),
+  });
   return true;
 }
 
