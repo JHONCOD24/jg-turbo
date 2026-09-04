@@ -1,5 +1,26 @@
 # JG Turbo — reglas para agentes
 
+## ⚠️ Antes de tocar el código: `TRAMPAS.md`
+
+**`TRAMPAS.md`** recoge los errores que ya se cometieron en este proyecto, con la causa medida y la
+regla para no repetirlos. Varios se cometieron **dos veces** por no estar escritos. Léelo entero la
+primera vez; después, al menos la sección que toque tu tarea:
+
+| Vas a tocar… | Lee al menos |
+|---|---|
+| Alturas, scroll, responsive | §3 (la cadena de scroll) y §4 (el estilo computado manda) |
+| `nube.js`, `sincronizacion.js`, `biblioteca.js` | §5 (cinco formas de perder datos) |
+| Texto, pulido, voz | §6 (el guardián que solo mira una dimensión) |
+| Interfaz, botones, avisos | §8 (si no da señal, está roto) |
+| Cualquier cosa | §1 (pruebas que pasan sin probar nada) y §9 (trabajar en este repo) |
+
+Lo más caro del proyecto ha sido **dar por verificado lo que no lo estaba**: verificaciones en verde
+con la funcionalidad rota, y verificaciones que se cortaban a la mitad sin que nadie contara las
+comprobaciones. Empieza por §1.
+
+**Si cometes un error nuevo, añádelo a `TRAMPAS.md`** con el mismo formato (síntoma · causa · regla).
+Es parte de cerrar la tarea, no un extra.
+
 ## Coordinación multi-agente
 
 Si hay agentes de **diseño/UX** en paralelo: **no editar** `index.html` ni copiar un frontend viejo a `vercel_deploy/`. Ver `../COORDINACION_AGENTES.md` e inventario en `../auditoria-ux-2026-07-29/INVENTARIO_TECNICO.md`.
@@ -46,6 +67,42 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 
 Detalle TTS completo: **`CAMBIOS_TTS.md`**. Persistencia: `CONFIG_PERSISTENTE.md`. Deploy: `DOCUMENTACION_DESPLIEGUE.md`.
 
+
+## Verificación (qué correr antes de dar algo por terminado)
+
+Todas viven en `tests/` y se ejecutan desde la raíz del repo. **No basta con que no haya `FALLO:`:
+cuenta las comprobaciones.** Si salen menos que la última vez, la prueba se cortó (ver `TRAMPAS.md`
+§1.2).
+
+**Unitarias** (rápidas, sin navegador — córrelas siempre):
+
+```bash
+node tests/test_pdf_ancla.mjs            node tests/test_pdf_progreso.mjs
+node tests/test_pdf_limpieza.mjs         node tests/test_pdf_sincronizacion.mjs
+node tests/test_pdf_pulido_mecanico.mjs  node tests/test_pdf_pulido_troceo.mjs
+node tests/test_pdf_exportar.mjs         node tests/test_pdf_busqueda.mjs
+node tests/test_pdf_traduccion.mjs       node tests/test_pdf_auditoria_p0.mjs
+node tests/test_pdf_voz.mjs              node tests/test_tts_narracion.mjs
+```
+
+Referencia al 2026-09-03: **451 comprobaciones, 0 fallos**.
+
+**Con navegador** (Playwright; se busca en el repo, en `../node_modules` y en `JG Turbo_OLD/`):
+
+| Comando | Qué cubre | Referencia |
+|---|---|---|
+| `node tests/verificar_pdf_geometria.mjs` | Desbordes, toques ≥44px y solapes en móvil/tablet/escritorio | 42, sin avisos |
+| `node tests/verificar_pdf_scroll.mjs` | Que la biblioteca **se pueda desplazar** con nueve libros, y que las otras pestañas y el lector conserven su modelo de scroll | 39 |
+| `node tests/verificar_pdf_navegador.mjs` | Recorrido funcional completo del lector | 103 |
+
+**Backend:** `python -m pytest backend/tests -q`.
+⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
+existen. Es anterior a septiembre de 2026 (comprobado con `git stash`). Si tocas backend, corre los
+archivos concretos que te afecten.
+
+**Cuando toques CSS de alturas o scroll**, `verificar_pdf_scroll.mjs` es obligatoria: es la única
+que trabaja con volumen suficiente para que el scroll exista. Las otras dos dieron 42/42 y 103/103
+con el scroll completamente roto.
 
 ## Stack
 

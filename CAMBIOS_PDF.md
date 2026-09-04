@@ -1,5 +1,42 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · Documentación · `TRAMPAS.md`
+
+### Lo pedido
+Que los errores cometidos —los míos y los de otros agentes— queden escritos para que no se repitan.
+
+### Qué se hizo
+Nuevo **`TRAMPAS.md`**: 9 secciones, ~25 casos reales, cada uno con síntoma, causa medida y la regla
+que lo evita. Todos ocurrieron de verdad en este proyecto; ninguno es hipotético. Varios se
+cometieron **dos veces** por no estar escritos.
+
+Las secciones que más han costado:
+1. **Pruebas que pasan sin probar nada** — verificaciones en verde con la funcionalidad rota (dos
+   libros no ejercitan el scroll), una que llevaba desde la v2.28.0 cortándose en la comprobación 48
+   de 103 sin que nadie contara, y una migración que dejó atrás 9 pruebas y rompió Playwright.
+3. **La cadena de scroll se suelta entera o no se suelta** — con la tabla de cómo está diseñada la
+   app (pantalla fija en ≥641px, scroll de documento en móvil, y las dos excepciones).
+5. **Cinco formas de perder datos en la sincronización** — la comprobación colocada detrás del
+   filtro que ya la excluía, el cambio que no altera la marca de tiempo y por eso no se propaga, y
+   por qué **nunca** hay que tocar `actualizado` para forzar un envío (pisaría el progreso ajeno).
+
+`Agents.md` gana dos secciones nuevas:
+- Un aviso al principio, con una tabla de «vas a tocar X → lee la sección Y» de `TRAMPAS.md`.
+- **Verificación**: qué pruebas existen, cómo correrlas y **con qué cifra de referencia**, porque
+  parte del problema era no saber cuáles había ni notar cuándo una se cortaba.
+
+### Decisión sobre las referencias
+Las causas se citan por **nombre de función, selector o título de sección**, no por número de línea:
+durante esta misma sesión dos referencias se desplazaron por mis propias ediciones. En un
+`index.html` de más de 15 000 líneas, una línea citada envejece en horas.
+
+### Verificado
+Las cifras de referencia que se documentan en `Agents.md` se comprobaron ejecutándolas:
+unitarias **451 OK / 0 fallos**, geometría **42 / 0 avisos**, scroll **39**, navegador **103**.
+Y que los 15 archivos de prueba listados existen.
+
+---
+
 ## Hotfix 2026-09-03 · v2.29.1 · El scroll de la biblioteca (regresión de la v2.29.0)
 
 ### Lo reportado
