@@ -385,11 +385,38 @@ Si un archivo cambia bajo tus pies a mitad de tarea, **vuelve a leerlo** antes d
 restaura. Así se comprobó que los 5 fallos de `pytest` y el corte de `verificar_pdf_navegador` eran
 anteriores, y que el scroll roto sí era propio.
 
-### 9.3 La carpeta de respaldo es solo de lectura
+### 9.3 La carpeta de respaldo es solo de lectura, y no se despliega
 
 `JG Turbo_OLD/` conserva la estructura anterior a la reestructuración del 2026-09-03. Sirve para
 recuperar lo que la migración dejó atrás (de ahí salieron las pruebas y Playwright). **Nunca
-escribas ahí.**
+escribas ahí.** No es un repositorio git: lo que se edite ahí queda suelto, sin historial y sin
+forma de llevarlo al otro computador.
+
+**El peligro que tenía** (neutralizado el 2026-09-04): conservaba **dos** enlaces con el proyecto
+de producción, los dos apuntando al mismo `prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8` que la carpeta buena:
+
+| Carpeta | Por qué era peligrosa |
+|---|---|
+| `JG Turbo_OLD/.vercel` | un `npx vercel --prod` desde ahí subía la versión de agosto |
+| `JG Turbo_OLD/vercel_deploy/.vercel` | peor: `vercel_deploy` **era** la carpeta de despliegue del flujo antiguo, justo donde iría alguien siguiendo documentación vieja |
+
+Un solo comando ejecutado ahí por equivocación habría sobrescrito **jg-turbo.vercel.app** con la
+versión de agosto. Ambas se renombraron a `.vercel.NO-DESPLEGAR-CARPETA-ANTIGUA`, y hay un
+`LEER-PRIMERO-NO-TRABAJAR-AQUI.md` en su raíz explicándolo. **No las vuelvas a renombrar.**
+
+**Regla general:** cuando dupliques o archives una carpeta de proyecto, lo primero que hay que
+desactivar es su enlace de despliegue. Una copia de seguridad que puede escribir en producción no
+es una copia de seguridad: es una bomba con temporizador. Comprueba con:
+
+```bash
+find . -maxdepth 4 -path "*/.vercel/*" -name "project.json" -exec grep -l "prj_TU_PROYECTO" {} +
+```
+
+Solo debería salir la carpeta viva (`jg-turbo/`).
+
+**Y no la borres sin más:** las verificaciones con navegador buscan ahí su copia de Playwright
+(`JG Turbo_OLD/node_modules/playwright`), porque no está instalado en el proyecto nuevo. Para poder
+borrarla, antes `npm i -D playwright` en `jg-turbo`.
 
 ### 9.4 Diagnostica midiendo, no leyendo
 

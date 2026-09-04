@@ -392,3 +392,7 @@ Config `jg_tts_bilingual`: `regional` (defecto) | `unified` | `off`. El valor an
 - **Micrófono largo:** WAV de 4+ min se parte en ~90 s (límite body Vercel ~4,5 MB). Ver `PRECISION_AUDIO.md`.
 - **Documentar siempre** cada entrega en el MD del feature (versión, deploy, pruebas). Ya no hay que sincronizar a `vercel_deploy/` (no existe desde la reestructuración del 2026-09-03).
 - **Nunca** `npx vercel --prod` desde la raíz del workspace (`Proyectos/`, causa 404): siempre desde la raíz del repo (`jg-turbo/`).
+- **Nunca desde `JG Turbo_OLD/` ni desde `JG Turbo_OLD/vercel_deploy/`.** Es el respaldo de agosto y
+  tenía dos enlaces al MISMO proyecto de producción: desplegar desde ahí sobrescribía
+  jg-turbo.vercel.app con la versión vieja. El 2026-09-04 se renombraron a
+  `.vercel.NO-DESPLEGAR-CARPETA-ANTIGUA`; no los restaures. Detalle en `TRAMPAS.md` §9.3.
