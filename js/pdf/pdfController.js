@@ -12,7 +12,7 @@
  *    en capítulos y se muestra uno, sin perder el resto.
  */
 import { procesarPdf, ErrorPdf } from './extractorPdf.js';
-import { componerTexto, pulirParaLectura } from './limpiezaTexto.js';
+import { componerTexto, pulirParaLectura, depurarCapitulos, ajustarAPalabra } from './limpiezaTexto.js';
 import { prepararParaVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
 import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, esCompleta } from './auditoria.js';
@@ -25,6 +25,9 @@ import {
 } from './progreso.js';
 import { construirAncla, resolverAncla } from './anclaTexto.js';
 import { limpiarNombreLibro, conseguirCaratula } from './caratula.js';
+import {
+  calcularHuellaArchivo, clasificarArchivoKindle, idKindleDesdeHuella, mensajeErrorKindle,
+} from './kindleImport.js';
 import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 
@@ -33,6 +36,11 @@ const LIMITE_PARTE = 90000;
 /* Por debajo de esto no vale la pena partir por capítulos: un folleto de dos
  * páginas se lee entero de una vez, no en tres pedazos. */
 const MINIMO_PARA_CAPITULOS = 8000;
+/* Sube cuando cambie la forma de cortar el libro en unidades de lectura. Los
+ * libros guardados con una versión anterior se rehacen solos al abrirlos: el
+ * troceo se guarda con el documento, así que arreglar el código no arregla lo
+ * que ya estaba en la biblioteca. */
+const VERSION_TROCEO = 2;
 /* Cuánto texto se le manda a la IA como contexto de una pregunta. */
 const LIMITE_CONTEXTO_IA = 12000;
 const TAM_BLOQUE_BUSQUEDA = 2000;
@@ -62,6 +70,13 @@ export function inicializarLectorPdf(deps = {}) {
     biblioteca: $('pdfBiblioteca'), conteo: $('pdfBibliotecaConteo'), rejilla: $('pdfRejilla'),
     vacia: $('pdfBibliotecaVacia'), espacio: $('pdfEspacio'), anadir: $('btnPdfAnadir'),
     buscarLibro: $('pdfBuscarLibro'),
+
+    kindle: $('pdfKindle'), kindleInput: $('pdfKindleInput'), kindleElegir: $('btnPdfKindleElegir'),
+    kindleLocal: $('pdfKindleLocal'), kindleNube: $('pdfKindleNube'),
+    kindleOpcionNube: $('pdfKindleOpcionNube'), kindleNubeHint: $('pdfKindleNubeHint'),
+    kindleProgreso: $('pdfKindleProgreso'), kindleProgresoRelleno: $('pdfKindleProgresoRelleno'),
+    kindleEstado: $('pdfKindleEstado'), kindleCancelar: $('btnPdfKindleCancelar'),
+    kindleResultados: $('pdfKindleResultados'),
 
     titulo: $('pdfResultTitle'), donde: $('pdfDocDonde'), count: $('pdfCount'),
     salida: $('pdfOutput'), realce: $('pdfRealce'), volver: $('btnPdfBack'),
@@ -1185,14 +1200,79 @@ export function inicializarLectorPdf(deps = {}) {
     }
   }
 
+  /**
+   * Rehace las unidades de lectura de un libro que ya estaba guardado.
+   *
+   * Las partes se trocean **al procesar el PDF** y se guardan así para
+   * siempre. Cuando se arregló el troceo (v2.31.0), los libros que ya estaban
+   * en la biblioteca siguieron mostrando los cortes viejos: capítulos vacíos,
+   * varios con el mismo número de página y palabras partidas entre dos
+   * unidades. Arreglar el troceo no bastaba; había que rehacer lo guardado.
+   *
+   * Se hace sin volver a leer el PDF: el texto ya está aquí. Se juntan las
+   * partes, se depuran los capítulos con la regla nueva y se vuelve a cortar,
+   * ahora sin partir palabras. El progreso de lectura no se pierde porque se
+   * guarda como ancla de texto y se vuelve a localizar por contenido.
+   *
+   * @returns {{partes:object[], capitulos:object[]}|null} null si no hacía falta
+   */
+  function rehacerTroceo(doc, partes) {
+    if (!Array.isArray(partes) || partes.length < 2) return null;
+
+    /* Se reconstruye el texto tal como estaba: las partes se cortaron de un
+     * texto continuo separado por líneas en blanco. */
+    const texto = partes.map((p) => String(p?.texto || '')).join('\n\n');
+    if (!texto.trim()) return null;
+
+    /* Los capítulos guardados apuntan al texto original. Si no los hay, se
+     * reconstruyen desde dónde empieza cada parte. */
+    let capitulos = Array.isArray(doc.capitulos) && doc.capitulos.length
+      ? doc.capitulos
+      : (() => {
+        const lista = [];
+        let pos = 0;
+        for (const p of partes) {
+          lista.push({ titulo: p.titulo || 'Parte', pagina: p.pagina || 1, posicion: pos });
+          pos += String(p.texto || '').length + 2;
+        }
+        return lista;
+      })();
+
+    capitulos = depurarCapitulos(capitulos, texto.length)
+      .map((c) => ({ ...c, posicion: ajustarAPalabra(texto, c.posicion) }));
+
+    const nuevas = partirTexto(texto, capitulos, []);
+    if (!nuevas.length) return null;
+    /* Si el resultado es el mismo, no se toca nada: reescribir la biblioteca
+     * sin motivo gasta tiempo y arriesga sin ganar nada. */
+    const igual = nuevas.length === partes.length
+      && nuevas.every((n, i) => n.texto === partes[i].texto);
+    if (igual) return null;
+    return { partes: nuevas, capitulos };
+  }
+
   async function abrirDocumento(id) {
     const doc = await almacen.cargarDocumento(id);
-    const partes = await almacen.cargarContenido(id);
+    let partes = await almacen.cargarContenido(id);
     if (!doc || !partes || !partes.length) {
       avisar('Ese documento ya no está guardado.', 'warn');
       refrescarInicio();
       return;
     }
+
+    /* Libros guardados con el troceo antiguo: se rehacen una vez y queda
+     * anotado, para no repetirlo en cada apertura. */
+    let capitulos = doc.capitulos || [];
+    if (doc.versionTroceo !== VERSION_TROCEO) {
+      const rehecho = rehacerTroceo(doc, partes);
+      if (rehecho) {
+        partes = rehecho.partes;
+        capitulos = rehecho.capitulos;
+        avisar('Se reorganizaron las páginas de este libro.', 'info', { efimero: true });
+      }
+      await almacen.marcarTroceo(id, VERSION_TROCEO, rehecho ? partes : null);
+    }
+
     estado.archivo = null;
     await montarDocumento({
       id: doc.id,
@@ -1201,7 +1281,7 @@ export function inicializarLectorPdf(deps = {}) {
       totalPaginas: doc.totalPaginas,
       idioma: doc.idioma,
       progreso: doc.progreso,
-      capitulos: doc.capitulos || [],
+      capitulos,
     });
     avisar('');
     el.resultArea.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -1898,7 +1978,10 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   /** Guarda el documento entero y lo deja abierto para leer. */
-  async function entregarDocumento(resultado, { origen = 'texto', portada = null } = {}) {
+  async function entregarDocumento(resultado, {
+    origen = 'texto', portada = null, archivo = estado.archivo, huella = '', idDocumento = '',
+    sincronizarDocumento = true, abrir = true, refrescar = true, sincronizarAlGuardar = true,
+  } = {}) {
     // Capas: original inmutable + local (orden/espacios/guiones ya aplicados en componerTexto)
     estado.originalTexto = resultado.texto;
     estado.localTexto = resultado.texto; // local ya es texto con limpieza sin IA (pulirParaLectura puro)
@@ -1912,13 +1995,13 @@ export function inicializarLectorPdf(deps = {}) {
 
     const partes = partirTexto(resultado.texto, resultado.capitulos, resultado.paginas);
     const titulo = resultado.titulo
-      || (estado.archivo?.name || 'Documento').replace(/\.pdf$/i, '');
+      || (archivo?.name || 'Documento').replace(/\.pdf$/i, '');
     const idioma = deps.detectarIdioma
       ? deps.detectarIdioma(resultado.texto.slice(0, 4000))
       : 'es';
-    const id = estado.archivo
-      ? `${(estado.archivo.name || 'doc').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${estado.archivo.size || 0}`
-      : `doc-${Date.now().toString(36)}`;
+    const id = idDocumento || (archivo
+      ? `${(archivo.name || 'doc').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${archivo.size || 0}`
+      : `doc-${Date.now().toString(36)}`);
 
     /* La primera vez que se guarda algo, se pide al navegador que no lo borre. */
     const permiso = await almacen.pedirPersistencia();
@@ -1928,38 +2011,44 @@ export function inicializarLectorPdf(deps = {}) {
         meta: {
           id,
           titulo,
-          nombreArchivo: estado.archivo?.name || '',
+          nombreArchivo: archivo?.name || '',
           idioma,
           totalPaginas: resultado.totalPaginas || 0,
           paginasLeidas: resultado.paginasLeidas || 0,
           origen,
+          ...(huella ? { huella } : {}),
+          sincronizar: sincronizarDocumento !== false,
           capitulos: resultado.capitulos || [],
-          bytes: estado.archivo?.size || 0,
+          bytes: archivo?.size || 0,
           progreso: progresoInicial(),
           estado: 'sin-empezar',
         },
         partes,
-        pdf: estado.archivo || null,
+        pdf: archivo || null,
         portada,
       });
       /* Los bloques viajan aparte para poder reanudar la auditoría al
        * reabrir el libro sin recomputar nada ni repetir gastos de IA. */
-      almacen.guardarBloquesDocumento(id, bloques).catch(() => {});
+      await almacen.guardarBloquesDocumento(id, bloques).catch(() => {});
     } catch (error) {
       avisar(error.message || 'No se pudo guardar el documento en la biblioteca.', 'err');
+      return { ok: false, error };
     }
 
-    await montarDocumento({ id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, bloques });
-    await refrescarInicio();
-    sincronizarAhora({ silencioso: true });
+    if (abrir) {
+      await montarDocumento({ id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, bloques });
+    }
+    if (refrescar) await refrescarInicio();
+    if (sincronizarAlGuardar) sincronizarAhora({ silencioso: true });
 
-    if (estado.pulidor) {
+    if (abrir && estado.pulidor) {
       estado.pulidor.obtener(0, partes[0]).catch(() => {});
     }
 
     if (permiso.soportado && !permiso.concedido) {
       console.info('[jg-pdf] el navegador no concedió almacenamiento persistente');
     }
+    return { ok: true, id, titulo };
   }
 
   async function procesar() {
@@ -2007,7 +2096,8 @@ export function inicializarLectorPdf(deps = {}) {
         return;
       }
 
-      await entregarDocumento(resultado, { origen: 'texto', portada: resultado.portada });
+      const guardado = await entregarDocumento(resultado, { origen: 'texto', portada: resultado.portada });
+      if (!guardado?.ok) return;
       mostrarProgreso(false);
 
       const recorte = rango.hasta || rango.desde > 1
@@ -2028,6 +2118,176 @@ export function inicializarLectorPdf(deps = {}) {
     } finally {
       bloquear(false);
       estado.cancelacion = null;
+    }
+  }
+
+  /* ── Importación segura de PDF descargados oficialmente de Kindle ── */
+
+  let tareaKindle = null;
+
+  function mostrarProgresoKindle(visible, mensaje = '', porcentaje = 0) {
+    if (!el.kindleProgreso) return;
+    el.kindleProgreso.hidden = !visible;
+    if (el.kindleEstado) el.kindleEstado.textContent = mensaje;
+    if (el.kindleProgresoRelleno) {
+      el.kindleProgresoRelleno.style.width = `${Math.max(0, Math.min(100, porcentaje))}%`;
+    }
+  }
+
+  function pintarResultadosKindle(resultados) {
+    if (!el.kindleResultados) return;
+    el.kindleResultados.textContent = '';
+    for (const resultado of resultados) {
+      const item = document.createElement('li');
+      item.textContent = resultado;
+      el.kindleResultados.append(item);
+    }
+    el.kindleResultados.hidden = resultados.length === 0;
+  }
+
+  function actualizarDestinoKindle() {
+    if (!el.kindleNube) return;
+    const conectada = Boolean(nube?.estaVinculada());
+    el.kindleNube.disabled = !conectada;
+    el.kindleOpcionNube?.classList.toggle('is-disabled', !conectada);
+    if (el.kindleNubeHint) {
+      el.kindleNubeHint.textContent = conectada
+        ? 'El texto se copiará a tu biblioteca privada de JG Turbo.'
+        : 'Conecta primero la nube de JG Turbo.';
+    }
+    if (!conectada && el.kindleNube.checked && el.kindleLocal) el.kindleLocal.checked = true;
+  }
+
+  async function buscarDuplicadoKindle(archivo, huella) {
+    const documentos = await almacen.listarDocumentos();
+    const directo = documentos.find((doc) => doc.huella === huella);
+    if (directo) return directo;
+
+    /* Compatibilidad con libros guardados antes de que existieran huellas:
+     * solo se leen los PDF del mismo tamaño y se compara su contenido real. */
+    const candidatos = documentos.filter((doc) =>
+      !doc.huella && doc.tieneArchivo && Number(doc.bytes) === Number(archivo.size));
+    for (const candidato of candidatos) {
+      const anterior = await almacen.cargarArchivo(candidato.id);
+      if (!anterior) continue;
+      const huellaAnterior = await calcularHuellaArchivo(anterior);
+      if (huellaAnterior !== huella) continue;
+      await almacen.guardarHuella(candidato.id, huella);
+      return candidato;
+    }
+    return null;
+  }
+
+  async function importarLoteKindle(archivosDados) {
+    const archivos = Array.from(archivosDados || []);
+    if (!archivos.length || tareaKindle || estado.trabajando) return;
+
+    const quiereNube = Boolean(el.kindleNube?.checked && nube?.estaVinculada());
+    const tarea = { cancelado: false };
+    tareaKindle = tarea;
+    bloquear(true);
+    if (el.kindleInput) el.kindleInput.disabled = true;
+    if (el.kindleElegir) el.kindleElegir.setAttribute('aria-disabled', 'true');
+    if (el.kindleCancelar) el.kindleCancelar.hidden = false;
+    pintarResultadosKindle([]);
+
+    let importados = 0;
+    let duplicados = 0;
+    let omitidos = 0;
+    const resultados = [];
+    const total = archivos.length;
+    const progresoGlobal = (indice, avance) => ((indice + (avance / 100)) / total) * 100;
+
+    try {
+      for (let indice = 0; indice < total; indice += 1) {
+        if (tarea.cancelado) break;
+        const archivo = archivos[indice];
+        const nombre = archivo.name || `Archivo ${indice + 1}`;
+        const clasificacion = clasificarArchivoKindle(archivo);
+        if (!clasificacion.aceptado) {
+          omitidos += 1;
+          resultados.push(clasificacion.mensaje);
+          continue;
+        }
+
+        mostrarProgresoKindle(true, `Comprobando ${indice + 1} de ${total}: ${nombre}`, progresoGlobal(indice, 2));
+        try {
+          const huella = await calcularHuellaArchivo(archivo);
+          if (tarea.cancelado) break;
+          const duplicado = await buscarDuplicadoKindle(archivo, huella);
+          if (duplicado) {
+            duplicados += 1;
+            resultados.push(`${nombre}: ya estaba guardado como «${duplicado.titulo || nombre}»; no se reemplazó.`);
+            continue;
+          }
+
+          const resultado = await procesarPdf(archivo, {
+            cancelacion: tarea,
+            alCargar: (pct) => mostrarProgresoKindle(
+              true, `Abriendo ${indice + 1} de ${total}: ${nombre}`, progresoGlobal(indice, 3 + (pct * 0.09))
+            ),
+            alProgresar: (hechas, paginas) => mostrarProgresoKindle(
+              true,
+              `Importando ${indice + 1} de ${total}: ${nombre} · página ${hechas} de ${paginas}`,
+              progresoGlobal(indice, 12 + ((hechas / Math.max(1, paginas)) * 84))
+            ),
+          });
+          if (tarea.cancelado || resultado.cancelado) break;
+          if (resultado.escaneado) {
+            omitidos += 1;
+            resultados.push(`${nombre}: no contiene texto. Ábrelo individualmente si quieres intentar OCR.`);
+            continue;
+          }
+
+          const guardado = await entregarDocumento(resultado, {
+            archivo,
+            origen: 'kindle-descarga-oficial',
+            portada: resultado.portada,
+            huella,
+            idDocumento: idKindleDesdeHuella(huella),
+            sincronizarDocumento: quiereNube,
+            abrir: false,
+            refrescar: false,
+            sincronizarAlGuardar: false,
+          });
+          if (!guardado?.ok) {
+            omitidos += 1;
+            resultados.push(mensajeErrorKindle(guardado?.error, nombre));
+            continue;
+          }
+          importados += 1;
+          resultados.push(`${nombre}: importado en «${guardado.titulo}».`);
+        } catch (error) {
+          if (tarea.cancelado) break;
+          omitidos += 1;
+          resultados.push(mensajeErrorKindle(error, nombre));
+        }
+      }
+
+      await refrescarInicio();
+      let sincronizacionCompleta = true;
+      if (!tarea.cancelado && quiereNube && importados > 0) {
+        mostrarProgresoKindle(true, 'Guardados. Sincronizando una sola vez…', 98);
+        sincronizacionCompleta = Boolean(await sincronizarAhora({ silencioso: true }));
+        if (!sincronizacionCompleta) resultados.push('Los libros quedaron guardados aquí, pero la sincronización no terminó.');
+      }
+
+      const partesResumen = [
+        `${importados} ${importados === 1 ? 'importado' : 'importados'}`,
+        `${duplicados} ${duplicados === 1 ? 'duplicado omitido' : 'duplicados omitidos'}`,
+        `${omitidos} ${omitidos === 1 ? 'archivo no compatible' : 'archivos no compatibles'}`,
+      ];
+      const prefijo = tarea.cancelado ? 'Importación cancelada' : 'Importación terminada';
+      mostrarProgresoKindle(true, `${prefijo}: ${partesResumen.join(' · ')}.`, 100);
+      pintarResultadosKindle(resultados);
+      if (importados > 0) avisar(`${prefijo}: ${importados} ${importados === 1 ? 'libro guardado' : 'libros guardados'}.`, 'ok', { efimero: true });
+    } finally {
+      tareaKindle = null;
+      estado.trabajando = false;
+      bloquear(false);
+      if (el.kindleInput) { el.kindleInput.disabled = false; el.kindleInput.value = ''; }
+      if (el.kindleElegir) el.kindleElegir.removeAttribute('aria-disabled');
+      if (el.kindleCancelar) el.kindleCancelar.hidden = true;
     }
   }
 
@@ -3350,6 +3610,7 @@ export function inicializarLectorPdf(deps = {}) {
       ? 'Tus libros se copian solos entre tus aparatos'
       : 'Ahora mismo solo están en este';
 
+    actualizarDestinoKindle();
     if (!conectado) return;
     try {
       const estado = await nube.estado();
@@ -3523,6 +3784,7 @@ export function inicializarLectorPdf(deps = {}) {
       avisoNube(mensaje, 'ok');
       /* Arriba también, para quien pulsó arriba. */
       if (desdeCabecera && !silencioso) avisar(mensaje, 'ok', { efimero: true });
+      return resultado;
     } catch (error) {
       const fallo = error?.message || 'No se pudo sincronizar.';
       if (!silencioso) {
@@ -3530,6 +3792,7 @@ export function inicializarLectorPdf(deps = {}) {
         if (desdeCabecera) avisar(fallo, 'err');
       }
       el.nubePunto.dataset.estado = 'error';
+      return null;
     }
   }
 
@@ -3591,6 +3854,15 @@ export function inicializarLectorPdf(deps = {}) {
     el.nubeOpciones.hidden = true;
     pintarNube();
     avisoNube('Este aparato dejó de sincronizar. Tus libros siguen aquí.', 'ok');
+  });
+
+  if (el.kindleInput) el.kindleInput.addEventListener('change', () => {
+    importarLoteKindle(el.kindleInput.files);
+  });
+  if (el.kindleCancelar) el.kindleCancelar.addEventListener('click', () => {
+    if (!tareaKindle) return;
+    tareaKindle.cancelado = true;
+    if (el.kindleEstado) el.kindleEstado.textContent = 'Cancelando después de la página actual…';
   });
 
   pintarNube();

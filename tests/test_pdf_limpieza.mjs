@@ -8,6 +8,8 @@
 import {
   agruparLineas,
   componerTexto,
+  depurarCapitulos,
+  ajustarAPalabra,
   esNumeroDePagina,
   normalizarClave,
   pareceTitulo,
@@ -377,6 +379,75 @@ const LIBRO_CON_INDICE = {
   });
   comprobar(Array.isArray(soloIndiceMalo.capitulos),
     'un índice entero apuntando a páginas inexistentes no rompe');
+}
+
+/* ── Depurar capítulos de un libro YA guardado ──────────────────────────
+ *
+ * Los libros que ya estaban en la biblioteca guardan sus capítulos tal como
+ * salieron la primera vez, con los defectos de entonces: varios en la misma
+ * posición, alguno en la 0 por apuntar a una página inexistente, y migas que
+ * solo contienen el nombre del autor o el nombre de la editorial.
+ *
+ * `depurarCapitulos` es la misma regla que usa `componerTexto`, sacada aparte
+ * para poder aplicarla también al reabrir un libro viejo sin volver a leer
+ * el PDF.
+ */
+{
+  const LARGO = 20000;
+  const sucios = [
+    { titulo: 'Portada', pagina: 1, posicion: 0 },
+    { titulo: 'Descubre el poder de tu mente', pagina: 5, posicion: 40 },
+    { titulo: 'Urano', pagina: 5, posicion: 40 },
+    { titulo: 'Créditos', pagina: 5, posicion: 55 },
+    { titulo: 'Índice', pagina: 6, posicion: 120 },
+    { titulo: 'Prólogo', pagina: 11, posicion: 900 },
+    { titulo: 'Capítulo 1', pagina: 25, posicion: 4000 },
+    { titulo: 'Apéndice', pagina: 300, posicion: 0 },   /* el que «vuela» al principio */
+  ];
+  const limpios = depurarCapitulos(sucios, LARGO);
+
+  comprobar(limpios.length < sucios.length, `se retiran las migas (${sucios.length} → ${limpios.length})`);
+  const porPagina = new Map();
+  for (const c of limpios) porPagina.set(c.pagina, (porPagina.get(c.pagina) || 0) + 1);
+  comprobar([...porPagina.values()].every((n) => n === 1),
+    'no quedan dos capítulos con el mismo número de página');
+  comprobar(limpios.every((c, i) => i === 0 || c.posicion > limpios[i - 1].posicion),
+    'las posiciones quedan en orden y sin repetirse');
+  comprobar(limpios.some((c) => c.titulo === 'Prólogo'), 'el prólogo sobrevive: tiene contenido detrás');
+  comprobar(limpios.some((c) => c.titulo === 'Capítulo 1'), 'y el capítulo 1 también');
+  comprobar(!limpios.some((c) => c.titulo === 'Urano'), 'el nombre de la editorial no es un capítulo');
+
+  /* Casos límite. */
+  comprobar(Array.isArray(depurarCapitulos(null, 100)), 'lista nula no rompe');
+  comprobar(depurarCapitulos([], 100).length === 0, 'lista vacía devuelve vacía');
+  const uno = depurarCapitulos([{ titulo: 'Único', pagina: 1, posicion: 0 }], 5000);
+  comprobar(uno.length === 1, 'un solo capítulo se conserva siempre');
+}
+
+/* ── Ninguna posición puede caer a mitad de palabra ─────────────────────
+ *
+ * Reportado en «El placebo eres tú»: el apéndice terminaba en «es» y el
+ * prólogo empezaba en «ta conclusión». La palabra «esta» quedaba partida
+ * entre dos unidades de lectura, y la voz la leía en dos trozos.
+ */
+{
+  const texto = 'Primera parte del libro. Y esta conclusión cierra el argumento del autor.';
+  const mitadDePalabra = texto.indexOf('ta conclusión');   /* dentro de «esta» */
+
+  comprobar(ajustarAPalabra(texto, mitadDePalabra) !== mitadDePalabra,
+    'una posición a mitad de palabra se mueve');
+  const ajustada = ajustarAPalabra(texto, mitadDePalabra);
+  comprobar(/^\s|^[A-ZÁÉÍÓÚÑ]|^esta/i.test(texto.slice(ajustada, ajustada + 6).trim()) || texto[ajustada - 1] === ' ' || ajustada === 0,
+    `la posición ajustada cae en un límite de palabra (quedó: «${texto.slice(ajustada, ajustada + 14)}»)`);
+  comprobar(!/^[a-záéíóúüñ]/.test(texto.slice(ajustada).trim().slice(0, 1)) || texto.slice(ajustada).trim().startsWith('esta'),
+    'no empieza a mitad de una palabra');
+
+  /* Una posición que ya está bien no se mueve. */
+  const buena = texto.indexOf('Y esta');
+  comprobar(ajustarAPalabra(texto, buena) === buena, 'una posición ya correcta se respeta');
+  comprobar(ajustarAPalabra(texto, 0) === 0, 'el principio del texto se respeta');
+  comprobar(ajustarAPalabra(texto, texto.length) === texto.length, 'el final del texto se respeta');
+  comprobar(ajustarAPalabra('', 5) === 0, 'texto vacío no rompe');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas pasaron.' : `\n${fallos} prueba(s) fallaron.`);

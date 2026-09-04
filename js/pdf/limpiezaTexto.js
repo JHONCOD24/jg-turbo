@@ -383,6 +383,86 @@ function situarPaginas(texto, marcas) {
   return salida;
 }
 
+/**
+ * Mueve una posición hasta el límite de palabra más cercano hacia atrás.
+ *
+ * Reportado en «El placebo eres tú»: una unidad terminaba en «es» y la
+ * siguiente empezaba en «ta conclusión». La palabra «esta» quedaba partida en
+ * dos, y la voz la leía en dos trozos. Pasa cuando la posición de un capítulo
+ * cae dentro de una palabra, que es fácil: viene de casar contenido, no de
+ * contar letras.
+ *
+ * @param {string} texto
+ * @param {number} posicion
+ * @returns {number}
+ */
+export function ajustarAPalabra(texto, posicion) {
+  const t = String(texto || '');
+  if (!t.length) return 0;
+  let p = Math.max(0, Math.min(Math.floor(Number(posicion) || 0), t.length));
+  if (p === 0 || p === t.length) return p;
+
+  /* Ya está en un límite: el carácter anterior es un espacio o un salto. */
+  if (/\s/.test(t[p - 1])) return p;
+
+  /* Se retrocede hasta el hueco anterior, sin irse muy lejos: si la palabra
+   * fuera larguísima (una URL pegada, por ejemplo) es mejor quedarse donde
+   * estaba que saltar a mitad del párrafo anterior. */
+  const MAX_RETROCESO = 80;
+  for (let i = p - 1; i >= 0 && p - i <= MAX_RETROCESO; i -= 1) {
+    if (/\s/.test(t[i])) return i + 1;
+  }
+  return p;
+}
+
+/**
+ * Quita del índice de un libro lo que no es un capítulo.
+ *
+ * El índice de un PDF trae una entrada por cada página de cortesía: el nombre
+ * del autor, el de la editorial, la dedicatoria, los créditos. Como unidades
+ * de lectura no valen nada —salen capítulos vacíos, y varios con el mismo
+ * número de página— y estorban al navegar.
+ *
+ * Lo que decide es **cuánto contenido tiene cada entrada por delante**, no lo
+ * lejos que esté de la anterior; por eso se recorre de atrás hacia adelante.
+ * Mirando hacia atrás se perdía el prólogo de los libros con muchas páginas
+ * de cortesía: quedaba pegado a la portada y se descartaba, aunque detrás
+ * tuviera un capítulo entero.
+ *
+ * Está aparte de `componerTexto` para poder aplicarla también a los libros que
+ * ya estaban guardados, sin volver a leer su PDF.
+ *
+ * @param {{titulo:string, pagina:number, posicion:number}[]} capitulos
+ * @param {number} largoTexto
+ * @returns {{titulo:string, pagina:number, posicion:number}[]}
+ */
+export function depurarCapitulos(capitulos, largoTexto) {
+  const lista = (Array.isArray(capitulos) ? capitulos : [])
+    .filter((c) => c && Number.isFinite(Number(c.posicion)))
+    .map((c) => ({ ...c, posicion: Math.max(0, Math.floor(Number(c.posicion))) }))
+    .sort((a, b) => a.posicion - b.posicion);
+  if (lista.length <= 1) return lista;
+
+  const largo = Math.max(1, Number(largoTexto) || 0);
+  const minimo = Math.min(MIN_CAPITULO, Math.floor(largo / Math.max(4, lista.length * 2)));
+
+  const aceptados = [];
+  let siguiente = largo;
+  for (let i = lista.length - 1; i >= 0; i -= 1) {
+    const cap = lista[i];
+    if (siguiente - cap.posicion >= minimo) {
+      aceptados.unshift(cap);
+      siguiente = cap.posicion;
+    }
+  }
+  /* El libro tiene que empezar en algún sitio, aunque las páginas de cortesía
+   * no den para un capítulo. */
+  if (!aceptados.length || aceptados[0].posicion > lista[0].posicion) {
+    aceptados.unshift(lista[0]);
+  }
+  return aceptados;
+}
+
 export function componerTexto(paginas, opciones = {}) {
   const listaPaginas = Array.isArray(paginas) ? paginas : [];
   const vacio = { texto: '', capitulos: [], paginas: [], descartadas: 0, paginasConTexto: 0, paginasTotales: listaPaginas.length, bloques: [], omisiones: [] };
@@ -552,38 +632,11 @@ export function componerTexto(paginas, opciones = {}) {
      *
      * El mínimo escala con el documento: 400 caracteres son una miga en un
      * libro de 300 páginas y son el documento entero en un folleto de dos. */
-    const minimo = Math.min(
-      MIN_CAPITULO,
-      Math.floor(texto.length / Math.max(4, capitulos.length * 2)),
-    );
-
-    /* Lo que decide si una entrada es un capítulo NO es lo lejos que esté de
-     * la anterior, sino **cuánto contenido tiene por delante**. Por eso se
-     * recorre de atrás hacia adelante: cada entrada mira hasta dónde llega su
-     * texto —hasta la siguiente que ya se aceptó— y se queda solo si eso da
-     * para leer algo.
-     *
-     * Mirando hacia atrás se perdía el prólogo de los libros que traen muchas
-     * páginas de cortesía: quedaba a pocos caracteres de la portada y se
-     * descartaba, aunque detrás tuviera un capítulo entero. */
-    const aceptados = [];
-    let siguiente = texto.length;
-    for (let i = capitulos.length - 1; i >= 0; i -= 1) {
-      const cap = capitulos[i];
-      if (siguiente - cap.posicion >= minimo) {
-        aceptados.unshift(cap);
-        siguiente = cap.posicion;
-      }
-    }
-    /* La primera entrada se conserva siempre: aunque las páginas de cortesía
-     * no den para un capítulo, el libro tiene que empezar en alguna parte. */
-    if (capitulos.length && (!aceptados.length || aceptados[0].posicion > 0)) {
-      const primera = capitulos[0];
-      if (!aceptados.length || primera.posicion < aceptados[0].posicion) {
-        aceptados.unshift(primera);
-      }
-    }
-    capitulos = aceptados;
+    /* La regla vive en `depurarCapitulos` para poder aplicarla también a los
+     * libros que ya estaban guardados, sin volver a leer su PDF. */
+    capitulos = depurarCapitulos(capitulos, texto.length)
+      /* Y ninguna posición puede caer dentro de una palabra. */
+      .map((c) => ({ ...c, posicion: ajustarAPalabra(texto, c.posicion) }));
   } else {
     // buscar títulos en texto final para capítulos (posiciones reales post-pulido)
     const titulosEnTexto = [];

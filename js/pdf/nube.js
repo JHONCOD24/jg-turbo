@@ -12,7 +12,7 @@
  */
 import {
   decidir, marcarBorrado, necesitaSubirContenido, debeSubir, puedeFaltarPortada,
-  portadasARescatar,
+  portadasARescatar, esSincronizable,
 } from './sincronizacion.js';
 
 const CLAVE_LLAVE = 'jg_sync_llave';
@@ -115,14 +115,21 @@ export function crearNube({ pedir, biblioteca }) {
         datos: d.datos,
       }));
 
-      const locales = await biblioteca.exportarParaSincronizar();
+      /* Los locales privados se necesitan solo para impedir que una copia
+       * remota con el mismo id los pise. Nunca entran en enviar ni en rescatar
+       * carátulas. */
+      const todosLocales = await biblioteca.exportarParaSincronizar({ incluirLocales: true });
+      const locales = todosLocales.filter(esSincronizable);
 
       /* Quién gana lo decide siempre el mismo sitio: sincronizacion.js, que
        * es el módulo con pruebas. Aquí no se vuelve a razonar la regla. */
-      const aqui = new Map(locales.map((d) => [d.id, d]));
+      const aqui = new Map(todosLocales.map((d) => [d.id, d]));
       const alla = new Map(llegados.map((d) => [d.id, d]));
-      const aplicar = llegados.filter((remotoDoc) =>
-        decidir(aqui.get(remotoDoc.id) || null, remotoDoc) === 'bajar');
+      const aplicar = llegados.filter((remotoDoc) => {
+        const local = aqui.get(remotoDoc.id) || null;
+        if (local && !esSincronizable(local)) return false;
+        return decidir(local, remotoDoc) === 'bajar';
+      });
 
       /* ── Traer ─────────────────────────────────────────────────────── */
       let bajados = 0;

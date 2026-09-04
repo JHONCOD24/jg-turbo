@@ -1,5 +1,71 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v2.32.0 · Los libros ya guardados también se arreglan
+
+### Lo reportado, auditando «El placebo eres tú» tras la v2.31.0
+«Siguen las páginas 5, 5, 5. La primera no tiene nada, la segunda dice *Descubre el poder de tu
+mente*, la tercera dice *Urano*. El apéndice, página 10, termina con "es" y el prólogo, página 11,
+sigue con "ta conclusión". Sigue habiendo la misma falla.»
+
+### Causa: la v2.31.0 fue correcta pero incompleta
+Las unidades de lectura se trocean **al procesar el PDF** y se guardan en la biblioteca. Arreglar
+el troceo no arregla lo que ya estaba guardado: `abrirDocumento()` carga las partes de IndexedDB
+tal como quedaron el primer día. Los libros nuevos salían bien; los de la biblioteca, exactamente
+igual que antes. Desde fuera parecía que el arreglo no había servido de nada — y tenía razón quien
+lo miraba.
+
+**Y el dato del corte reveló un segundo fallo que la v2.31.0 no cubría:** «es» / «ta conclusión» es
+la palabra «esta» partida entre dos unidades. `mejorCorte()` solo actuaba al partir por tamaño; los
+límites que vienen del índice del libro caían donde cayeran, incluso dentro de una palabra.
+
+### Corrección
+- **`limpiezaTexto.js: depurarCapitulos(capitulos, largoTexto)`** — la regla que quita las migas
+  del índice, ahora como función propia y exportada. `componerTexto` la usa, y también el
+  re-troceo de los libros viejos, que no puede volver a leer el PDF.
+- **`limpiezaTexto.js: ajustarAPalabra(texto, posicion)`** — mueve cualquier posición al límite de
+  palabra anterior. Se aplica a **todas** las posiciones de capítulo, vengan de donde vengan. Con
+  un tope de retroceso: ante una «palabra» larguísima (una URL pegada) se queda donde estaba en vez
+  de saltar a mitad del párrafo anterior.
+- **`pdfController.js: rehacerTroceo()`** — al abrir un libro guardado con troceo antiguo, se
+  rehacen sus unidades **sin volver a leer el PDF**: se junta el texto que ya está, se depuran los
+  capítulos y se vuelve a cortar. Queda anotado con `versionTroceo`, así que ocurre una sola vez.
+  Si el resultado sería idéntico, no se toca nada.
+- **`biblioteca.js: marcarTroceo()`** — guarda las unidades nuevas y la versión.
+  `contenidoActualizado` sí se toca (el texto por capítulos cambió y los otros aparatos deben
+  recibirlo); `progreso` **no**, porque por dónde iba la persona lo resuelve el ancla de texto
+  buscando su contenido en las partes nuevas.
+
+### Verificado sobre el caso real
+Nueva `tests/verificar_pdf_retroceo.mjs` ✔ **10/10**: siembra en la biblioteca un libro con el
+troceo defectuoso —tres unidades en la página 5, una vacía, «Urano» como capítulo y la palabra
+«esta» partida entre el apéndice y el prólogo—, lo abre y comprueba el resultado:
+
+```
+el libro parte del troceo viejo (5 unidades)
+y con tres unidades en la página 5, como se reportó
+→ se retiran las unidades vacías (5 → 3)
+→ no quedan varias unidades con el mismo número de página (5×1, 10×1, 11×1)
+→ ninguna unidad empieza a mitad de palabra («ta conclusión»)
+→ ninguna unidad termina a mitad de palabra («Y es»)
+→ el progreso de lectura sobrevive
+→ al reabrirlo no se vuelve a rehacer
+```
+
+Esta prueba es justo la que faltaba en la v2.31.0: se probó el troceo de PDF nuevos y no el de los
+libros que la gente ya tiene.
+
+### Pruebas
+- `tests/test_pdf_limpieza.mjs` ✔ **86/86**: `depurarCapitulos` sobre un índice sucio real,
+  `ajustarAPalabra` con el corte «esta» reportado, y los casos límite.
+- `tests/verificar_pdf_retroceo.mjs` ✔ **10/10** (nueva).
+- Regresión ✔ **602 OK · 0 FALLOS** · geometría 42/42 · scroll 39/39 · navegador 103/103.
+
+### Deploy
+- `sw.js` → `jg-turbo-shell-v70` · `JG_JS_V` → `v70`
+- `index.html` → `<!-- v2.32.0 · Los libros ya guardados rehacen sus paginas al abrirlos -->`
+
+---
+
 ## Entrega 2026-09-03 · v2.31.0 · Páginas coherentes y guía que deja de titilar
 
 ### Lo reportado

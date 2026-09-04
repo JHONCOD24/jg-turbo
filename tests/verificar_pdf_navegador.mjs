@@ -10,6 +10,7 @@
  *   5. OCR sobre un escaneado con letras de verdad.
  *   6. La biblioteca: guardar, cerrar la app, volver y seguir donde iba.
  *   7. Traducción: detectar el idioma y ofrecer leerlo en español.
+ *   8. Kindle: lote local, formatos bloqueados, duplicados y cancelación.
  *
  * Requiere Playwright instalado en la raíz del repo (node_modules/playwright).
  */
@@ -79,14 +80,16 @@ const INGLES = join(temporal, 'english_book.pdf');
 const ESCANEADO = join(temporal, 'escaneado.pdf');
 const ROTO = join(temporal, 'roto.pdf');
 const NO_PDF = join(temporal, 'notas.txt');
+const KFX = join(temporal, 'libro_protegido.kfx');
 crearLibro(LIBRO, 4);
 crearLibro(GRANDE, 300);
 crearLibroIngles(INGLES, 6);
 crearEscaneado(ESCANEADO);
 crearRoto(ROTO);
 writeFileSync(NO_PDF, 'esto es un texto suelto, no un pdf');
+writeFileSync(KFX, 'archivo de prueba que JG Turbo no debe intentar convertir');
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
 async function abrirPestana(pagina) {
   await pagina.goto(BASE, { waitUntil: 'domcontentloaded' });
@@ -625,6 +628,70 @@ console.log('\n── Documento en inglés ────────────�
   await pagina.waitForTimeout(500);
   await leer(pagina, LIBRO, 40000);
   comprobar(await pagina.locator('#pdfTradBar').isHidden(), 'un documento en español no ofrece traducción');
+
+  comprobar(sinRuido(errores).length === 0, `sin errores de JavaScript (${sinRuido(errores).length})`);
+  sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
+  await contexto.close();
+}
+
+/* ── 8) Importación Kindle oficial y solo local ────────────────────── */
+console.log('\n── Importación Kindle segura ──────────────────');
+{
+  const { pagina, errores, contexto } = await nuevaPagina({ viewport: { width: 1280, height: 1000 } });
+  const peticionesDeSalida = [];
+  pagina.on('request', (peticion) => {
+    if (['POST', 'PUT', 'PATCH'].includes(peticion.method())) peticionesDeSalida.push(peticion.url());
+  });
+
+  comprobar(await pagina.locator('#pdfKindle').isVisible(), 'muestra el asistente «Traer desde Kindle»');
+  await pagina.locator('#pdfKindle').evaluate((detalle) => { detalle.open = true; });
+  comprobar(
+    (await pagina.locator('#pdfKindle a[href="https://www.amazon.com/mycd"]').getAttribute('target')) === '_blank',
+    'la gestión de Amazon se abre fuera de JG Turbo'
+  );
+  comprobar(await pagina.locator('#pdfKindleLocal').isChecked(), 'el destino inicial es solo este dispositivo');
+  comprobar(await pagina.locator('#pdfKindleNube').isDisabled(), 'no ofrece sincronizar si la nube no está conectada');
+
+  await pagina.locator('#pdfKindleInput').setInputFiles([LIBRO, INGLES, KFX]);
+  await pagina.waitForFunction(
+    () => document.getElementById('pdfKindleEstado')?.textContent?.startsWith('Importación terminada:'),
+    null, { timeout: 120000 }
+  );
+  comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 2, 'guarda secuencialmente los dos PDF válidos');
+  comprobar(/KFX|DRM/i.test(await pagina.locator('#pdfKindleResultados').textContent() || ''), 'rechaza KFX y explica el límite de DRM');
+
+  const documentos = await pagina.evaluate(() => new Promise((resolver, rechazar) => {
+    const peticion = indexedDB.open('jg-turbo-pdf', 5);
+    peticion.onerror = () => rechazar(peticion.error);
+    peticion.onsuccess = () => {
+      const lectura = peticion.result.transaction('documentos', 'readonly').objectStore('documentos').getAll();
+      lectura.onerror = () => rechazar(lectura.error);
+      lectura.onsuccess = () => resolver(lectura.result);
+    };
+  }));
+  comprobar(documentos.every((doc) => doc.origen === 'kindle-descarga-oficial'), 'registra el origen oficial en los metadatos');
+  comprobar(documentos.every((doc) => /^[a-f0-9]{64}$/.test(doc.huella || '')), 'guarda una huella SHA-256 por PDF');
+  comprobar(documentos.every((doc) => doc.sincronizar === false), 'marca ambos libros para que no entren en la nube');
+
+  await pagina.locator('#pdfKindleEstado').evaluate((nodo) => { nodo.textContent = ''; });
+  await pagina.locator('#pdfKindleInput').setInputFiles([LIBRO, INGLES]);
+  await pagina.waitForFunction(
+    () => document.getElementById('pdfKindleEstado')?.textContent?.startsWith('Importación terminada:'),
+    null, { timeout: 120000 }
+  );
+  comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 2, 'un lote repetido no crea copias');
+  comprobar(/2 duplicados omitidos/i.test(await pagina.locator('#pdfKindleEstado').textContent() || ''), 'informa los duplicados exactos omitidos');
+
+  await pagina.locator('#pdfKindleEstado').evaluate((nodo) => { nodo.textContent = ''; });
+  await pagina.locator('#pdfKindleInput').setInputFiles(GRANDE);
+  await pagina.locator('#btnPdfKindleCancelar').waitFor({ state: 'visible', timeout: 10000 });
+  await pagina.locator('#btnPdfKindleCancelar').click();
+  await pagina.waitForFunction(
+    () => document.getElementById('pdfKindleEstado')?.textContent?.startsWith('Importación cancelada:'),
+    null, { timeout: 120000 }
+  );
+  comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 2, 'cancelar no borra lo ya terminado ni deja un registro incompleto');
+  comprobar(peticionesDeSalida.length === 0, 'la importación local no envía archivos a Amazon ni al backend');
 
   comprobar(sinRuido(errores).length === 0, `sin errores de JavaScript (${sinRuido(errores).length})`);
   sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));

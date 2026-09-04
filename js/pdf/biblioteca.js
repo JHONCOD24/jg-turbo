@@ -14,6 +14,7 @@
  *   traducciones → el español de cada capítulo, para no pagarlo dos veces.
  */
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
+import { esSincronizable } from './sincronizacion.js';
 
 const BASE = 'jg-turbo-pdf';
 /* Versión 5: compatibilidad hacia adelante. Encontramos dispositivos cuya base
@@ -264,6 +265,22 @@ export async function cargarDocumento(id) {
     return (await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.get(id)))) || null;
   } catch (_) {
     return null;
+  }
+}
+
+/** Añade la huella sin tocar progreso ni fechas de contenido. */
+export async function guardarHuella(id, huella) {
+  if (!id || !/^[a-f0-9]{64}$/i.test(String(huella || ''))) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return false;
+      doc.huella = String(huella).toLowerCase();
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
   }
 }
 
@@ -568,6 +585,9 @@ export async function borrarDocumento(id) {
           borrado: ahora,
           actualizado: ahora,
           sincronizado: previo?.sincronizado || 0,
+          /* Un libro local sigue siendo local incluso después de borrarlo: si
+           * esta marca perdiera el campo, intentaría viajar en el próximo sync. */
+          sincronizar: previo?.sincronizar !== false,
         }));
         await esperar(contenido.delete(id));
         await esperar(contenido.delete(`bloques|${id}`));
@@ -735,6 +755,45 @@ export async function guardarPortadaGenerada(id, portada, origen = 'dibujada') {
   }
 }
 
+/**
+ * Anota con qué versión del troceo está guardado este libro y, si se rehizo,
+ * guarda las unidades nuevas.
+ *
+ * `contenidoActualizado` sí se toca cuando cambian las partes: el texto por
+ * capítulos es distinto y los otros aparatos tienen que recibirlo. Pero
+ * `progreso` no se toca: por dónde iba la persona lo resuelve el ancla de
+ * texto al abrir, buscando su contenido en las partes nuevas.
+ *
+ * @param {string} id
+ * @param {number} version
+ * @param {object[]|null} partes – null si no hizo falta rehacer nada
+ * @returns {Promise<boolean>}
+ */
+export async function marcarTroceo(id, version, partes = null) {
+  if (!id) return false;
+  try {
+    if (Array.isArray(partes) && partes.length) {
+      await conAlmacenes([CONTENIDO], 'readwrite', (contenido) =>
+        esperar(contenido.put({ id, partes })));
+    }
+    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return;
+      doc.versionTroceo = version;
+      if (Array.isArray(partes) && partes.length) {
+        doc.titulosPartes = partes.map((p) => p.titulo);
+        doc.caracteres = partes.reduce((suma, p) => suma + String(p.texto || '').length, 0);
+        doc.contenidoActualizado = Date.now();
+        doc.actualizado = Date.now();
+      }
+      await esperar(docs.put(doc));
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /** Anota que la carátula de este libro ya está en la nube. */
 export async function marcarPortadaSincronizada(id, marca = Date.now()) {
   try {
@@ -754,15 +813,17 @@ export async function marcarPortadaSincronizada(id, marca = Date.now()) {
  * Metadatos de todo lo que hay aquí (incluidas las marcas de borrado), sin
  * el texto: sirve para decidir qué mover, no para moverlo.
  */
-export async function exportarParaSincronizar() {
+export async function exportarParaSincronizar({ incluirLocales = false } = {}) {
   try {
     const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
-    return (todos || []).map(({
+    return (todos || [])
+      .filter((doc) => incluirLocales || esSincronizable(doc))
+      .map(({
       id, actualizado, contenidoActualizado, sincronizado, borrado, titulo,
-      portadaSincronizada, tienePortada,
+      portadaSincronizada, tienePortada, sincronizar,
     }) => ({
       id, actualizado: actualizado || 0, contenidoActualizado: contenidoActualizado || 0,
-      sincronizado: sincronizado || 0, borrado, titulo,
+      sincronizado: sincronizado || 0, borrado, titulo, sincronizar,
       /* Van aquí para que las decisiones sobre carátulas se tomen sin volver a
        * leer la base: a cuáles les falta enviarla, y a cuáles les falta
        * recibirla. */
@@ -782,6 +843,7 @@ export async function exportarParaSincronizar() {
 export async function paqueteParaSubir(id, { conPortada = false } = {}) {
   const doc = await cargarDocumento(id);
   if (!doc) return null;
+  if (!esSincronizable(doc)) return null;
   if (doc.borrado) return { id, actualizado: doc.actualizado, borrado: true, datos: null };
   const { ...meta } = doc;
   const paquete = {

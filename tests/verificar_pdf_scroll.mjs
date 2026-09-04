@@ -92,7 +92,7 @@ async function sembrarLibros(pagina, cuantos) {
   }, cuantos);
 }
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
 for (const [nombre, ancho, alto] of [['móvil', 390, 844], ['tablet', 834, 1112], ['escritorio', 1280, 800]]) {
   console.log(`\n── ${nombre} (${ancho}×${alto}) ──`);

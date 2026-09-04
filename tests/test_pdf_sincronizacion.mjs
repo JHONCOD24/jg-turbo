@@ -8,7 +8,7 @@
 import { readFileSync } from 'fs';
 import {
   fusionar, decidir, aplicarRemotos, marcarBorrado, esMasNuevo, necesitaSubirContenido,
-  debeSubir, puedeFaltarPortada, portadasARescatar,
+  debeSubir, puedeFaltarPortada, portadasARescatar, esSincronizable,
 } from '../js/pdf/sincronizacion.js';
 
 let fallos = 0;
@@ -232,6 +232,20 @@ const doc = (id, actualizado, extra = {}) => ({
   comprobar(puedeFaltarPortada(null) === false, 'un documento nulo no se revisa');
 }
 
+/* ── Libros que la persona eligió mantener solo en este dispositivo ── */
+{
+  const privado = { id: 'kindle-local', actualizado: 9000, sincronizado: 0, sincronizar: false };
+  comprobar(esSincronizable(privado) === false, 'un Kindle local queda fuera de la sincronización');
+  comprobar(debeSubir(privado, { cursor: '', remoto: null }) === false,
+    'un Kindle local no sube ni durante la primera sincronización');
+  comprobar(debeSubir(privado, { cursor: 'c1', faltaPortada: true }) === false,
+    'ni una carátula pendiente puede hacer subir un Kindle local');
+  comprobar(puedeFaltarPortada(privado) === false,
+    'la sincronización no consulta la carátula de un Kindle local');
+  comprobar(esSincronizable({ id: 'viejo' }) === true,
+    'los documentos anteriores, sin campo nuevo, conservan la sincronización');
+}
+
 /* ── La carátula que llega y se tiraba a la basura ──────────────────────
  *
  * Caso real, con las carátulas YA en la nube y los tres aparatos en la misma
@@ -304,6 +318,11 @@ const doc = (id, actualizado, extra = {}) => ({
   const exporta = fuenteBiblio.slice(fuenteBiblio.indexOf('export async function exportarParaSincronizar'));
   comprobar(exporta.slice(0, 700).includes('portadaSincronizada'),
     'exportarParaSincronizar entrega portadaSincronizada (sin eso la decisión es ciega)');
+  comprobar(exporta.includes('incluirLocales || esSincronizable(doc)'),
+    'la exportación normal excluye los libros marcados como solo locales');
+  const borrar = fuenteBiblio.slice(fuenteBiblio.indexOf('export async function borrarDocumento'));
+  comprobar(borrar.slice(0, 1000).includes('sincronizar: previo?.sincronizar !== false'),
+    'la marca de borrado conserva que un libro era solo local');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas de sincronización pasaron.' : `\n${fallos} prueba(s) fallaron.`);

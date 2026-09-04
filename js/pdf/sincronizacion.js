@@ -131,8 +131,13 @@ export function necesitaSubirContenido(documento) {
  * todavía tiene que confirmarlo mirando si de verdad hay una imagen guardada.
  */
 export function puedeFaltarPortada(documento) {
-  if (!documento || documento.borrado) return false;
+  if (!esSincronizable(documento) || documento.borrado) return false;
   return !documento.portadaSincronizada;
+}
+
+/** `false` explícito significa que el libro no puede salir del dispositivo. */
+export function esSincronizable(documento) {
+  return Boolean(documento) && documento.sincronizar !== false;
 }
 
 /**
@@ -191,7 +196,7 @@ export function portadasARescatar(llegados, locales) {
 }
 
 export function debeSubir(local, { cursor = '', remoto = null, faltaPortada = false } = {}) {
-  if (!local) return false;
+  if (!esSincronizable(local)) return false;
 
   /* Una carátula pendiente es motivo suficiente por sí sola, pero nunca para
    * un libro borrado: de eso solo viaja la lápida. */

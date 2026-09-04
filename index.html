@@ -1,4 +1,4 @@
-<!-- v2.31.0 · Paginas coherentes y guia sin titileo -->
+<!-- v2.32.0 · Los libros ya guardados rehacen sus paginas al abrirlos -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1497,6 +1497,7 @@
   .pdf-area.has-results #pdfSubir,
   .pdf-area.has-results #pdfContinuar,
   .pdf-area.has-results #pdfBiblioteca,
+  .pdf-area.has-results #pdfKindle,
   .pdf-area.has-results #pdfNube{
     display:none !important;
   }
@@ -1987,6 +1988,59 @@
     color:var(--text);font-size:12px;font-weight:600;
   }
   #pdfDrop:hover .drop-action{border-color:rgba(39,225,193,.4);color:var(--cyan)}
+
+  /* ── Asistente Kindle: descarga oficial, nunca acceso a la cuenta ── */
+  .pdf-kindle{
+    border:1px solid var(--line);border-radius:var(--pdf-r);
+    background:var(--bg-2);overflow:hidden;
+  }
+  .pdf-kindle-cab{
+    display:flex;align-items:center;gap:12px;min-height:54px;padding:10px var(--pdf-pad);
+    cursor:pointer;list-style:none;user-select:none;
+  }
+  .pdf-kindle-cab::-webkit-details-marker{display:none}
+  .pdf-kindle-cab:focus-visible{outline:none;box-shadow:inset var(--focus);border-radius:var(--pdf-r)}
+  .pdf-kindle-icono{
+    width:34px;height:34px;display:grid;place-items:center;flex:none;border-radius:11px;
+    color:var(--cyan);background:rgba(39,225,193,.1);
+  }
+  .pdf-kindle-icono svg{width:18px;height:18px}
+  .pdf-kindle-ident{display:flex;flex:1;min-width:0;flex-direction:column;gap:1px}
+  .pdf-kindle-titulo{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13.5px;color:var(--text)}
+  .pdf-kindle-meta{font-size:var(--fs-xs);color:var(--muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pdf-kindle-chevron{width:16px;height:16px;flex:none;color:var(--muted-2);transition:transform .18s ease}
+  .pdf-kindle[open] .pdf-kindle-chevron{transform:rotate(180deg)}
+  .pdf-kindle[open] .pdf-kindle-cab{border-bottom:1px solid var(--line)}
+  .pdf-kindle-cuerpo{padding:var(--pdf-pad);display:flex;flex-direction:column;gap:14px}
+  .pdf-kindle-cuerpo p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+  .pdf-kindle-cuerpo strong{color:var(--text)}
+  .pdf-kindle-pasos{margin:0;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.55}
+  .pdf-kindle-pasos li+li{margin-top:5px}
+  .pdf-kindle-amazon{align-self:flex-start;min-height:44px}
+  .pdf-kindle-destinos{border:0;padding:0;margin:0;display:grid;gap:8px}
+  .pdf-kindle-destinos legend{padding:0 0 7px;color:var(--text);font-size:12px;font-weight:700}
+  .pdf-kindle-opcion{
+    display:flex;align-items:flex-start;gap:10px;min-height:48px;padding:10px 12px;
+    border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;
+  }
+  .pdf-kindle-opcion input{margin-top:3px;accent-color:var(--cyan)}
+  .pdf-kindle-opcion span{display:flex;flex-direction:column;gap:2px;color:var(--text);font-size:13px;font-weight:600}
+  .pdf-kindle-opcion small{color:var(--muted-2);font-size:11.5px;font-weight:400;line-height:1.35}
+  .pdf-kindle-opcion.is-disabled{opacity:.55;cursor:not-allowed}
+  .pdf-kindle-acciones{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pdf-kindle-acciones .btn{min-height:44px}
+  .pdf-kindle-elegir{cursor:pointer}
+  .pdf-kindle-progreso{display:flex;flex-direction:column;gap:7px}
+  .pdf-kindle-progreso[hidden],.pdf-kindle-resultados[hidden]{display:none}
+  .pdf-kindle-barra{height:5px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+  .pdf-kindle-barra-relleno{height:100%;width:0;background:var(--cyan);transition:width .15s ease}
+  .pdf-kindle-estado{color:var(--muted);font-size:12px;line-height:1.45}
+  .pdf-kindle-resultados{margin:0;padding-left:20px;color:var(--muted);font-size:12px;line-height:1.5}
+  .pdf-kindle-resultados li+li{margin-top:4px}
+  @media (min-width:700px){
+    .pdf-kindle-destinos{grid-template-columns:1fr 1fr}
+    .pdf-kindle-destinos legend{grid-column:1 / -1}
+  }
 
   /* Con biblioteca, subir otro documento — ultra compacto para ahorrar 200px */
   .pdf-subir--secundaria{
@@ -5023,6 +5077,51 @@
           </p>
           <p class="pdf-biblioteca-espacio" id="pdfEspacio"></p>
         </section>
+
+        <details class="pdf-kindle" id="pdfKindle">
+          <summary class="pdf-kindle-cab">
+            <span class="pdf-kindle-icono" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/><path d="M8 7h8M8 11h6"/></svg>
+            </span>
+            <span class="pdf-kindle-ident">
+              <span class="pdf-kindle-titulo">Traer desde Kindle</span>
+              <span class="pdf-kindle-meta">Solo PDF descargados oficialmente</span>
+            </span>
+            <svg class="pdf-kindle-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </summary>
+          <div class="pdf-kindle-cuerpo">
+            <p><strong>JG Turbo no entra a tu cuenta de Amazon.</strong> Amazon permite descargar PDF o EPUB únicamente en compras confirmadas sin DRM. Los préstamos y los formatos protegidos deben seguir leyéndose en Kindle.</p>
+            <a class="btn pdf-kindle-amazon" id="btnPdfKindleAmazon" href="https://www.amazon.com/mycd" target="_blank" rel="noopener noreferrer">
+              Abrir mis libros en Amazon
+            </a>
+            <ol class="pdf-kindle-pasos">
+              <li>En Amazon, abre el menú del libro y busca la descarga en PDF o EPUB.</li>
+              <li>Si aparece, descarga el PDF. La disponibilidad depende de cada título.</li>
+              <li>Regresa aquí y elige todos los PDF que quieras guardar.</li>
+            </ol>
+            <fieldset class="pdf-kindle-destinos">
+              <legend>Dónde guardar estos libros</legend>
+              <label class="pdf-kindle-opcion" id="pdfKindleOpcionLocal">
+                <input type="radio" name="pdfKindleDestino" id="pdfKindleLocal" value="local" checked>
+                <span>Solo este dispositivo<small>El PDF y su texto no entran en la sincronización.</small></span>
+              </label>
+              <label class="pdf-kindle-opcion is-disabled" id="pdfKindleOpcionNube">
+                <input type="radio" name="pdfKindleDestino" id="pdfKindleNube" value="nube" disabled>
+                <span>Mis dispositivos<small id="pdfKindleNubeHint">Conecta primero la nube de JG Turbo.</small></span>
+              </label>
+            </fieldset>
+            <div class="pdf-kindle-acciones">
+              <label class="btn primary pdf-kindle-elegir" for="pdfKindleInput" id="btnPdfKindleElegir">Elegir PDF</label>
+              <input type="file" class="sr-only" id="pdfKindleInput" name="libros_kindle" multiple accept="application/pdf,.pdf,.azw,.azw3,.kfx,.mobi" aria-label="Elegir uno o varios PDF descargados oficialmente de Amazon">
+              <button type="button" class="btn" id="btnPdfKindleCancelar" hidden>Cancelar importación</button>
+            </div>
+            <div class="pdf-kindle-progreso" id="pdfKindleProgreso" role="status" aria-live="polite" hidden>
+              <div class="pdf-kindle-barra" aria-hidden="true"><div class="pdf-kindle-barra-relleno" id="pdfKindleProgresoRelleno"></div></div>
+              <span class="pdf-kindle-estado" id="pdfKindleEstado"></span>
+            </div>
+            <ul class="pdf-kindle-resultados" id="pdfKindleResultados" aria-label="Resultado de la importación" hidden></ul>
+          </div>
+        </details>
 
         <div class="pdf-subir" id="pdfSubir">
         <div class="drop" id="pdfDrop" role="button" tabindex="0" aria-label="Elegir un archivo PDF">
@@ -15400,7 +15499,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v69';
+const JG_JS_V = 'v70';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

@@ -68,7 +68,7 @@ const INGLES = join(temporal, 'english_book.pdf');
 crearLibro(LIBRO, 24);
 crearLibroIngles(INGLES, 10);
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
 /* Mediciones dentro de la página */
 async function medir(pagina, etiqueta) {
