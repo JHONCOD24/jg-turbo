@@ -174,7 +174,7 @@ function pagina(numero, lineas) {
    * frase o incluso a mitad de palabra. */
   const paginas = [
     pagina(1, [
-      linea('Un frío y despejado día viajaron durante dos horas al norte de bos', { y: 100, ancho: 410 }),
+      linea('Un frío y despejado día viajaron durante dos horas al norte de Bos', { y: 100, ancho: 410 }),
     ]),
     pagina(2, [
       linea('ton, hasta llegar a un monasterio de peterborough, en new Hampshire. El A', { x: 92, y: 800, ancho: 430 }),
@@ -193,24 +193,33 @@ function pagina(numero, lineas) {
   ];
   const resultado = componerTexto(paginas);
   comprobar(
-    resultado.texto.includes('norte de bos ton, hasta llegar'),
-    'un cambio de página con sangría no inventa punto ni párrafo entre «bos» y «ton»'
+    resultado.texto.includes('norte de Boston, hasta llegar')
+      && !/Bos\s+ton/i.test(resultado.texto),
+    'el texto canónico contiene Boston, no bos ton'
+  );
+  comprobar(
+    resultado.texto.includes('El ARN fabrica') && !resultado.texto.includes('A RN'),
+    'el texto canónico contiene ARN, no A RN'
+  );
+  comprobar(
+    resultado.texto.includes('un aluvión de respuestas') && !resultado.texto.includes('alu vión'),
+    'el texto canónico contiene aluvión, no alu vión'
+  );
+  comprobar(
+    resultado.texto.includes('esta conclusión') && !resultado.texto.includes('es ta conclusión'),
+    'el texto canónico contiene esta conclusión, no es ta'
   );
   comprobar(
     resultado.texto.includes('significado que le damos a esas experiencias'),
-    'conserva completa la frase «le damos» al cruzar de página'
+    'conserva el espacio entre «le» y «damos»: son dos palabras'
   );
   comprobar(
     resultado.texto.includes('componentes. Como ya has ido aprendiendo'),
     'separa dos oraciones pegadas después del punto'
   );
   comprobar(
-    Array.isArray(resultado.candidatosUnion)
-      && resultado.candidatosUnion.some((c) => c.izquierda === 'bos' && c.derecha === 'ton')
-      && resultado.candidatosUnion.some((c) => c.izquierda === 'A' && c.derecha === 'RN')
-      && resultado.candidatosUnion.some((c) => c.izquierda === 'alu' && c.derecha === 'vión')
-      && resultado.candidatosUnion.some((c) => c.izquierda === 'es' && c.derecha === 'ta'),
-    'marca también el corte corto «es» + «ta» para que la IA pueda proponer unirlo'
+    resultado.pendientes === 0 && resultado.listoParaLectura === true,
+    'el corpus de aceptación no deja límites pendientes'
   );
 }
 

@@ -138,24 +138,20 @@ console.log('\n--- 3) Gestor de pulido (crearPulidor) con caché y degradación 
 
 {
   let opcionesRecibidas = null;
-  const original = 'Viajaron al norte de bos ton y produjo un alu vión.';
-  const candidatosUnion = [
-    { izquierda: 'bos', derecha: 'ton' },
-    { izquierda: 'alu', derecha: 'vión' },
-  ];
+  const original = 'Viajaron al norte de Boston y produjo un aluvión.';
   const pulidor = crearPulidor({
     pulir: async (_texto, opciones) => {
       opcionesRecibidas = opciones;
-      return 'Viajaron al norte de Boston y produjo un aluvión.';
+      return 'Viajaron al norte de Bostom y produjo un aluvión.';
     },
   });
-  const salida = await pulidor.obtener(0, { texto: original, candidatosUnion });
-  comprobar(salida.includes('Boston') && salida.includes('aluvión'),
-    'crearPulidor conserva las uniones válidas en el texto que verá y oirá el usuario');
-  comprobar(opcionesRecibidas?.candidatosUnion?.length === 2,
-    'crearPulidor entrega a la IA únicamente los candidatos del capítulo');
-  comprobar(pulidor.resultado(0)?.ok === true,
-    'crearPulidor informa que la revisión terminó y pasó el guardián');
+  const salida = await pulidor.obtener(0, { texto: original });
+  comprobar(salida === original,
+    'crearPulidor ya no repara palabras: un cambio de letras se descarta');
+  comprobar(opcionesRecibidas?.mode === 'lectura' && !opcionesRecibidas?.candidatosUnion,
+    'el pulido editorial no envía candidatos de unión por texto');
+  comprobar(pulidor.resultado(0)?.ok === false,
+    'un cambio de letras no se marca como revisión terminada');
 }
 
 {

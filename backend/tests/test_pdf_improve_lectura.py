@@ -72,3 +72,32 @@ def test_backend_local_declara_el_mismo_contrato():
     assert 'if (req.mode or "") == "lectura"' in codigo
     assert 'uniones.append(f"- {izquierda} + {derecha}")' in codigo
     assert "UNIONES PERMITIDAS" in codigo
+    assert 'pdf_boundary_decisions' in codigo
+    assert "limites: Optional[list]" in codigo
+
+
+def test_vercel_modo_limites_no_reescribe(api_vercel, monkeypatch):
+    prompts = []
+    monkeypatch.setattr(api_vercel, "_resolver_ia", lambda *a, **k: ("clave", "gemini"))
+
+    def ia_falsa(_key, _provider, prompt, _model=None, _max_tokens=None):
+        prompts.append(prompt)
+        return '[{"boundaryId":"b:a:1:0~a:1:1","action":"join","confidence":0.9,"reason":"palabra"}]', "gemini"
+
+    monkeypatch.setattr(api_vercel, "_llamar_ia_con_respaldo", ia_falsa)
+    respuesta = TestClient(api_vercel.app).post("/api/improve", json={
+        "text": "limites",
+        "language": "es",
+        "provider": "gemini",
+        "api_key": "clave-prueba",
+        "mode": "pdf_boundary_decisions",
+        "limites": [
+            {"boundaryId": "b:a:1:0~a:1:1", "leftFragment": "Bos", "rightFragment": "ton", "kind": "page-break"},
+        ],
+    })
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.json()
+    assert cuerpo["decisions"][0]["boundaryId"] == "b:a:1:0~a:1:1"
+    assert cuerpo["decisions"][0]["action"] == "join"
+    assert "NO reescribas" in prompts[0] or "no reescribas" in prompts[0].lower()
+    assert "Bos" in prompts[0] and "ton" in prompts[0]

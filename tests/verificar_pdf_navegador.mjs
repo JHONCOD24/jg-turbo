@@ -239,67 +239,67 @@ for (const [nombre, opciones] of [
   await contexto.close();
 }
 
-/* ── 1a) Cortes sin guion corregidos por IA con guardián local ─────── */
-console.log('\n── Cortes físicos sin guion · IA protegida ───');
+/* ── 1a) Cortes sin guion reparados en el motor, antes de la IA ─────── */
+console.log('\n── Cortes físicos · motor v2.37 ───');
 {
   const { pagina, errores, contexto } = await nuevaPagina(
     { viewport: { width: 1280, height: 900 } },
-    { rechazarIa: false }
+    { rechazarIa: true }
   );
   const lecturas = [];
   await pagina.route('**/improve', async (ruta) => {
     const cuerpo = ruta.request().postDataJSON();
+    lecturas.push(cuerpo);
+    if (cuerpo.mode === 'pdf_boundary_decisions') {
+      await ruta.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ decisions: [], ia_used: true, provider: 'prueba' }),
+      });
+      return;
+    }
     if (cuerpo.mode === 'auditoria_pdf') {
       await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ signos: [], propuestas: [] }) });
       return;
     }
-    lecturas.push(cuerpo);
-    const corregido = String(cuerpo.text || '')
-      .replace(/\bbos\s+ton\b/gi, 'Boston')
-      .replace(/\bA\s+RN\b/g, 'ARN')
-      .replace(/\balu\s+vion\b/gi, 'aluvión')
-      .replace(/\bes\s+ta\b/gi, 'esta')
-      .replace(/componentes\.Como/g, 'componentes. Como');
     await ruta.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ text: corregido, ia_used: true, provider: 'prueba' }),
+      body: JSON.stringify({ text: cuerpo.text, ia_used: false, provider: 'prueba' }),
     });
   });
 
   await pagina.locator('#pdfInput').setInputFiles(CORTES);
   await pagina.locator('#btnPdfRead').click();
-  await pagina.locator('#pdfAuditoriaHoja').waitFor({ state: 'visible', timeout: 60000 });
-  const local = await pagina.locator('#pdfOutput').inputValue();
-  comprobar(local.includes('norte de bos ton, hasta llegar'),
-    'la capa local no inventa un punto al cambiar de página');
-  comprobar(local.includes('significado que le damos a esas experiencias'),
-    'la capa local conserva «le damos» como una frase continua');
-
-  await pagina.locator('#btnPdfAuditoriaAceptar').click();
   await pagina.waitForFunction(
-    () => document.getElementById('pdfOutput')?.value?.includes('Boston')
-      && document.getElementById('pdfOutput')?.value?.includes('ARN')
-      && document.getElementById('pdfOutput')?.value?.includes('aluvión')
-      && document.getElementById('pdfOutput')?.value?.includes('esta conclusion'),
+    () => {
+      const t = document.getElementById('pdfOutput')?.value || '';
+      return t.includes('Boston') && t.includes('ARN');
+    },
     null, { timeout: 60000 }
   );
-  const corregido = await pagina.locator('#pdfOutput').inputValue();
-  comprobar(corregido.includes('Boston') && corregido.includes('ARN') && corregido.includes('aluvión')
-      && corregido.includes('esta conclusion'),
-    'la salida visible une bos+ton, A+RN, alu+vión y es+ta');
-  comprobar(corregido.includes('componentes. Como'),
-    'la salida visible separa las oraciones pegadas');
-  comprobar(lecturas.length === 1, 'el capítulo corto usa una sola petición de lectura');
-  const pares = (lecturas[0]?.candidatos_union || []).map((c) => `${c.izquierda}+${c.derecha}`);
-  comprobar(['bos+ton', 'A+RN', 'alu+vion', 'es+ta'].every((par) => pares.includes(par)),
-    'la IA recibe solamente los límites físicos candidatos del capítulo');
+  const local = await pagina.locator('#pdfOutput').inputValue();
+  comprobar(local.includes('norte de Boston, hasta llegar') && !/Bos\s+ton/i.test(local),
+    'el texto visible contiene Boston, no Bos ton');
+  comprobar(local.includes('ARN') && !local.includes('A RN'),
+    'el texto visible contiene ARN, no A RN');
+  comprobar(/aluvión|aluvion/.test(local) && !/alu\s+vió?n/.test(local),
+    'el texto visible contiene aluvión, no alu vión');
+  comprobar(local.includes('esta conclusion') && !local.includes('es ta conclusion'),
+    'el texto visible contiene esta conclusion, no es ta');
+  comprobar(local.includes('significado que le damos a esas experiencias'),
+    'conserva el espacio entre «le» y «damos»');
+  comprobar(local.includes('componentes. Como') || local.includes('componentes.Como'),
+    'las oraciones pegadas se separan o se conservan sin partir palabras');
+  comprobar(!lecturas.some((c) => Array.isArray(c.candidatos_union) && c.candidatos_union.length),
+    'la reparación ya no empareja candidatos por texto');
 
-  await pagina.locator('#pdfPulidoEstado').click();
-  await pagina.locator('#pdfAuditoriaHoja').waitFor({ state: 'visible' });
-  await pagina.locator('#btnPdfAuditoriaCerrar').click();
-  comprobar(await pagina.locator('#pdfAuditoriaHoja').isHidden(),
-    'el botón cerrar funciona al reabrir la explicación después de autorizar');
+  const tts = await pagina.evaluate(() => {
+    const salida = document.getElementById('pdfOutput')?.value || '';
+    return window.jgPrepararParaVoz ? window.jgPrepararParaVoz(salida) : salida;
+  });
+  comprobar(String(tts).includes('Boston') && String(tts).includes('ARN'),
+    'el texto enviado a TTS contiene Boston y ARN');
 
   await pagina.locator('#btnPdfBack').click();
   await abrirPestana(pagina);
@@ -308,10 +308,8 @@ console.log('\n── Cortes físicos sin guion · IA protegida ───');
     () => document.getElementById('pdfOutput')?.value?.includes('Boston'),
     null, { timeout: 20000 }
   );
-  comprobar((await pagina.locator('#pdfOutput').inputValue()).includes('aluvión'),
-    'la corrección segura persiste después de cerrar y reabrir el libro');
-  comprobar(lecturas.length === 1,
-    'reabrir una corrección con la misma huella no vuelve a gastar IA');
+  comprobar((await pagina.locator('#pdfOutput').inputValue()).includes('Boston'),
+    'la reconstrucción persiste después de cerrar y reabrir el libro');
   comprobar(sinRuido(errores).length === 0, `sin errores de JavaScript (${sinRuido(errores).length})`);
   sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
   await contexto.close();

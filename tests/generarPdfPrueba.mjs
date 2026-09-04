@@ -164,7 +164,7 @@ export function crearLibroConPalabraEntrePaginas(ruta) {
 /** Casos reales sin guion: la IA decide la unión, pero solo en cortes marcados. */
 export function crearLibroConCortesSinGuion(ruta) {
   const paginaUno = [
-    ['Un frio y despejado dia viajaron durante dos horas al norte de bos', 70, 100, 11],
+    ['Un frio y despejado dia viajaron durante dos horas al norte de Bos', 70, 100, 11],
   ];
   const paginaDos = [
     ['ton, hasta llegar a un monasterio. El A', 92, 800, 11],
@@ -175,7 +175,7 @@ export function crearLibroConCortesSinGuion(ruta) {
     ['damos a esas experiencias produce un alu', 92, 800, 11],
   ];
   const paginaCuatro = [
-    ['vion de respuestas fisicas. Y es', 92, 800, 11],
+    ['vión de respuestas fisicas. Y es', 92, 800, 11],
   ];
   const paginaCinco = [
     ['ta conclusion conserva la palabra completa.', 92, 800, 11],
