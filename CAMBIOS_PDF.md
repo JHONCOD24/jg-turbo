@@ -1,5 +1,60 @@
 # Lector de PDF · historial de cambios y operación
 
+## Hotfix 2026-09-03 · v2.29.1 · El scroll de la biblioteca (regresión de la v2.29.0)
+
+### Lo reportado
+«Ya veo las carátulas, pero no deja hacer scroll. No me deja bajar.»
+
+### Causa — mía, de la entrega anterior
+La v2.29.0 sacó la biblioteca de su caja con scroll propio liberando `html`, `body`, `#panelPdf`,
+`.card` y `.pdf-area`… pero **no `.wrap`**, que en pantallas ≥641px lleva
+`height:100dvh; overflow:hidden` (regla «9. Alto de la ventana», `index.html:3974`).
+
+Medido con nueve libros: `#panelPdf` crecía correctamente a 1159 px, pero `.wrap` seguía anclado a
+800 px **recortando** un contenido de 1334 px. No es que el scroll fallara: es que no había nada
+que desplazar, porque el contenido estaba cortado, no desbordado.
+
+La app está diseñada así a propósito —pantalla fija con scroll interior— y es lo correcto para el
+lector, Micrófono, Archivo y YouTube, donde el contenido tiene un alto acotado. Solo la biblioteca
+necesita lo contrario, porque crece con cada libro. Había que soltar la cadena entera, no la mitad.
+
+### Corrección
+`index.html` — la excepción de la biblioteca alcanza también a `.wrap`:
+
+```css
+body:not(.jg-leyendo):not(.jg-pantalla):has(#panelPdf.active) > .wrap{
+  height:auto;min-height:100dvh;overflow:visible;
+}
+```
+
+Resultado medido: móvil 2302 px de contenido y se desplaza; escritorio 1369 px y se desplaza. Y el
+scroll es **del documento**, no de una caja interna, que era el objetivo de la v2.29.0.
+
+### Por qué no se detectó antes
+Todas las verificaciones trabajaban con **dos** libros, y con dos libros todo cabe en pantalla:
+nunca llegaban a intentar desplazarse. Pasaban en verde con el scroll roto.
+
+Nueva `tests/verificar_pdf_scroll.mjs` ✔ **39/39**: siembra nueve libros, **hace scroll de verdad
+con la rueda del ratón** y comprueba que la página se mueve, en móvil, tablet y escritorio.
+Verifica además lo que NO debía cambiar: que Micrófono, Archivo y YouTube conservan el layout de
+la app, y que el lector mantiene su scroll interno.
+
+**Comprobado que la prueba sirve:** contra el CSS con el fallo da **6 FALLOS** en las tres
+pantallas («el contenido no supera la ventana», «la página no se desplaza»); contra el corregido,
+39/39.
+
+### Pruebas
+- `tests/verificar_pdf_scroll.mjs` ✔ 39/39 (nueva)
+- `tests/verificar_pdf_geometria.mjs` ✔ 42/42, sin avisos
+- `tests/verificar_pdf_navegador.mjs` ✔ 103/103
+- Regresión unitaria ✔ 451 OK · 0 FALLOS
+
+### Deploy v67
+- `sw.js` → `jg-turbo-shell-v67` · `JG_JS_V` sigue en `v66` (esta entrega no toca ningún módulo JS)
+- `index.html` → `<!-- v2.29.1 · Arreglado el scroll de la biblioteca (faltaba soltar .wrap) -->`
+
+---
+
 ## Entrega 2026-09-03 · v2.29.0 · Las carátulas llegan de verdad, y la biblioteca deja de ser una ventana
 
 ### Lo reportado

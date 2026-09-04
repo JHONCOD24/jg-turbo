@@ -1,4 +1,4 @@
-<!-- v2.29.0 · Las caratulas llegan de verdad + biblioteca sin ventana emergente -->
+<!-- v2.29.1 · Arreglado el scroll de la biblioteca (faltaba soltar .wrap) -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1465,12 +1465,23 @@
      que es el mismo defecto por el otro lado), y con muchos crece hacia
      abajo y desplaza la página.
 
-     `html,body{height:100%}` tiene que ceder aquí: con una altura exacta el
-     documento no crece, el contenido se le desborda por debajo y el pie de la
-     app acaba montado sobre los botones del final. Con `min-height` la página
-     crece de verdad y cada cosa ocupa su sitio. */
-  body:not(.jg-leyendo):has(#panelPdf.active),
+     Para que esto funcione hay que soltar la cadena ENTERA, no solo el área:
+     de `html` a `.wrap`. La app está diseñada como pantalla fija con scroll
+     interno (`.wrap{height:100dvh;overflow:hidden}` en «9. Alto de la
+     ventana»), y eso es lo correcto para el lector, el micrófono o YouTube,
+     donde el contenido tiene un alto acotado. Una biblioteca no: crece con
+     cada libro que añades.
+
+     Si se libera solo `.pdf-area`, `.wrap` sigue recortando a la altura de la
+     ventana y no queda NADA que desplazar: la lista se corta y el scroll deja
+     de responder. */
   html:has(#panelPdf.active){height:auto;min-height:100%}
+  body:not(.jg-leyendo):not(.jg-pantalla):has(#panelPdf.active){
+    height:auto;min-height:100%;
+  }
+  body:not(.jg-leyendo):not(.jg-pantalla):has(#panelPdf.active) > .wrap{
+    height:auto;min-height:100dvh;overflow:visible;
+  }
   body:not(.jg-leyendo) #panelPdf{flex:1 0 auto;min-height:0}
   body:not(.jg-leyendo) #panelPdf > .card{flex:1 0 auto;min-height:0}
   body:not(.jg-leyendo) #panelPdf .pdf-area{
