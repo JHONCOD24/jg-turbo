@@ -24,6 +24,7 @@ import {
   etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
 } from './progreso.js';
 import { construirAncla, resolverAncla } from './anclaTexto.js';
+import { limpiarNombreLibro, conseguirCaratula } from './caratula.js';
 import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 
@@ -323,6 +324,50 @@ export function inicializarLectorPdf(deps = {}) {
     estado.urlsPortada = [];
   }
 
+  /* ── Carátulas de los libros que no traen ninguna ───────────────────
+   *
+   * Un PDF de solo texto no tiene tapa, y una estantería de rectángulos con
+   * una letra no se puede recorrer con la vista. Se resuelve en dos pasos:
+   * se busca la portada REAL del libro y, si no aparece, se dibuja una con su
+   * título, su autor y un color propio.
+   *
+   * La dibujada no necesita internet ni cuesta nada, así que se pone sola. La
+   * búsqueda de la real sí sale a la red: se hace al pulsar «Buscar carátula»
+   * y al procesar un libro nuevo, no cada vez que se abre la biblioteca.
+   */
+  async function ponerCaratula(doc, { buscarReal = false, forzar = false } = {}) {
+    if (!doc || !doc.id) return 'ninguna';
+    if (doc.tienePortada && !forzar) return 'ninguna';
+    try {
+      const { titulo, autor } = limpiarNombreLibro(doc.titulo || doc.nombreArchivo || '');
+      if (!titulo) return 'ninguna';
+      const { blob, origen } = await conseguirCaratula({ titulo, autor, buscarReal });
+      if (!blob) return 'ninguna';
+      await almacen.guardarPortadaGenerada(doc.id, blob, origen);
+      return origen;
+    } catch (_) {
+      return 'ninguna';   /* sin carátula el libro se abre igual */
+    }
+  }
+
+  /**
+   * Da carátula dibujada a todos los libros que no tengan ninguna.
+   *
+   * Sin red y sin bloquear: se lanza tras pintar la biblioteca y cada libro
+   * aparece en cuanto está listo. Solo dibuja; la portada real se busca a
+   * petición, porque salir a internet por cada libro al abrir la app sería
+   * gastar datos sin que nadie lo haya pedido.
+   */
+  async function completarCaratulasQueFaltan(documentos) {
+    const sinTapa = (documentos || []).filter((d) => d && !d.borrado && !d.tienePortada);
+    if (!sinTapa.length) return;
+    let puestas = 0;
+    for (const doc of sinTapa) {
+      if (await ponerCaratula(doc, { buscarReal: false }) !== 'ninguna') puestas += 1;
+    }
+    if (puestas) pintarBiblioteca();
+  }
+
   function tarjetaLibro(doc) {
     const item = document.createElement('li');
     item.className = 'pdf-libro';
@@ -385,6 +430,27 @@ export function inicializarLectorPdf(deps = {}) {
       sincronizarAhora({ silencioso: true });
     });
 
+    /* Buscar la carátula de verdad. Se ofrece siempre, no solo a los libros
+     * sin tapa: una portada dibujada puede cambiarse por la real si el libro
+     * aparece en el catálogo. */
+    const buscarTapa = document.createElement('button');
+    buscarTapa.type = 'button';
+    buscarTapa.className = 'mini-btn';
+    buscarTapa.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Buscar carátula</span>';
+    buscarTapa.title = `Buscar la carátula real de ${doc.titulo || 'este libro'}`;
+    buscarTapa.setAttribute('aria-label', `Buscar la carátula real de ${doc.titulo || 'este libro'}`);
+    buscarTapa.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      avisar('Buscando la carátula…', 'info');
+      const origen = await ponerCaratula(doc, { buscarReal: true, forzar: true });
+      if (origen === 'real') avisar(`Carátula encontrada para «${doc.titulo}».`, 'ok', { efimero: true });
+      else if (origen === 'dibujada') avisar('No aparece en el catálogo: se dibujó una carátula.', 'info', { efimero: true });
+      else avisar('No se pudo poner carátula a este libro.', 'warn');
+      await pintarBiblioteca();
+      refrescarInicio();
+    });
+
     const borrar = document.createElement('button');
     borrar.type = 'button';
     borrar.className = 'mini-btn';
@@ -396,7 +462,7 @@ export function inicializarLectorPdf(deps = {}) {
       confirmarBorrado(borrar, doc);
     });
 
-    pop.append(reiniciar, borrar);
+    pop.append(reiniciar, buscarTapa, borrar);
     menu.append(summary, pop);
     item.appendChild(menu);
 
@@ -507,6 +573,11 @@ export function inicializarLectorPdf(deps = {}) {
     } else {
       el.espacio.textContent = '';
     }
+
+    /* Los libros sin tapa reciben la suya dibujada, sin bloquear el pintado.
+     * `pintarBiblioteca` se llama sola al terminar, y como para entonces ya
+     * tienen portada, no vuelve a entrar aquí: no hay bucle. */
+    completarCaratulasQueFaltan(documentos).catch(() => {});
   }
 
   async function pintarContinuar() {

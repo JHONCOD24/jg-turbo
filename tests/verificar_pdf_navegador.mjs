@@ -561,9 +561,14 @@ console.log('\n── Biblioteca y continuidad ───────────
   await pagina.locator('.pdf-filtro[data-filtro="todos"]').click();
   await pagina.waitForTimeout(400);
 
+  /* Los botones del menú se buscan por su texto, no por su posición: con
+   * `nth(1)` la prueba se rompía en cuanto se añadía una opción al menú, y el
+   * fallo señalaba a «borrar» cuando el cambio no tenía nada que ver. */
   const tarjeta = pagina.locator('#pdfRejilla .pdf-libro').first();
+  const opcion = (nombre) => tarjeta.locator('.pdf-libro-menu-pop .mini-btn', { hasText: nombre });
+
   await tarjeta.locator('details.pdf-libro-menu').evaluate((m) => { m.open = true; });
-  await tarjeta.locator('.pdf-libro-menu-pop .mini-btn').first().click();
+  await opcion('Reiniciar').click();
   await pagina.waitForTimeout(800);
   comprobar(
     (await tarjeta.locator('.pdf-libro-estado').textContent()) === 'Sin empezar',
@@ -571,13 +576,14 @@ console.log('\n── Biblioteca y continuidad ───────────
   );
 
   await tarjeta.locator('details.pdf-libro-menu').evaluate((m) => { m.open = true; });
-  await tarjeta.locator('.pdf-libro-menu-pop .mini-btn').nth(1).click();
+  const borrarBtn = opcion('Borrar');
+  await borrarBtn.click();
   await pagina.waitForTimeout(300);
   comprobar(
-    (await tarjeta.locator('.pdf-libro-menu-pop .mini-btn').nth(1).textContent())?.includes('Seguro'),
+    (await tarjeta.locator('.pdf-libro-menu-pop .mini-btn.danger').textContent())?.includes('Seguro'),
     'borrar pide confirmación'
   );
-  await tarjeta.locator('.pdf-libro-menu-pop .mini-btn').nth(1).click();
+  await tarjeta.locator('.pdf-libro-menu-pop .mini-btn.danger').click();
   await pagina.waitForTimeout(900);
   await abrirPestana(pagina);
   comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 0, 'el borrado persiste tras recargar');

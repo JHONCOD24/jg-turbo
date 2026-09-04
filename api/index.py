@@ -1944,6 +1944,14 @@ except Exception as _e:  # pragma: no cover
     # el aviso tiene que verse en los registros: si no, el 404 desconcierta.
     print(f"[jg-sync] NO se cargó la sincronización: {type(_e).__name__}: {_e}")
 
+# Portada real de un libro. Va aparte por lo mismo que la sincronización, y
+# porque es opcional: sin ella el lector dibuja la carátula y sigue igual.
+try:
+    from api.portada import router as portada_router
+    app.include_router(portada_router)
+except Exception as _e:  # pragma: no cover
+    print(f"[jg-portada] NO se cargó la búsqueda de portadas: {type(_e).__name__}: {_e}")
+
 
 @app.get("/api/ping")
 def ping():

@@ -699,6 +699,42 @@ export async function guardarPortadaRecibida(id, dataURL) {
   }
 }
 
+/**
+ * Guarda una carátula que no venía del PDF: la real encontrada en el catálogo
+ * o la dibujada en el aparato.
+ *
+ * Cuenta como contenido nuevo del libro (`contenidoActualizado`), y por eso
+ * `portadaSincronizada` se pone a 0: hay que enviarla a los demás aparatos,
+ * al revés que una carátula recibida, que ya está en la nube.
+ *
+ * @param {string} id
+ * @param {Blob} portada
+ * @param {'real'|'dibujada'} origen – solo para saber de dónde salió
+ * @returns {Promise<boolean>}
+ */
+export async function guardarPortadaGenerada(id, portada, origen = 'dibujada') {
+  if (!id || !portada || !portada.size) return false;
+  try {
+    await conAlmacenes([ARCHIVOS], 'readwrite', async (archivos) => {
+      const antes = (await esperar(archivos.get(id))) || { id };
+      await esperar(archivos.put({ id, pdf: antes.pdf || null, portada }));
+    });
+    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return;
+      doc.tienePortada = true;
+      doc.origenPortada = origen;
+      doc.contenidoActualizado = Date.now();
+      doc.actualizado = Date.now();
+      doc.portadaSincronizada = 0;      /* la nube todavía no la tiene */
+      await esperar(docs.put(doc));
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /** Anota que la carátula de este libro ya está en la nube. */
 export async function marcarPortadaSincronizada(id, marca = Date.now()) {
   try {

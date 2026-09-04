@@ -1,4 +1,4 @@
-<!-- v2.29.1 · Arreglado el scroll de la biblioteca (faltaba soltar .wrap) -->
+<!-- v2.30.0 · Caratula automatica: la real del catalogo o una dibujada con el titulo -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -15390,7 +15390,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v66';
+const JG_JS_V = 'v68';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,
