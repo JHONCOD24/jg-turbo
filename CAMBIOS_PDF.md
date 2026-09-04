@@ -36,7 +36,14 @@
 ### Versión
 - `index.html`: `v2.33.0` y módulos `v71`.
 - `sw.js`: `jg-turbo-shell-v71`.
-- Producción: pendiente de registrar en esta entrega.
+- Producción: `dpl_7FW8kHs5LnvnWTTKoyspPZrS8kGS` → alias
+  **https://jg-turbo.vercel.app**.
+- Verificación sin caché: HTML 200 con marcador v2.33 y asistente; `sw.js` 200 con v71;
+  `kindleImport.js`, `pdfController.js`, `biblioteca.js` y `nube.js` 200 con sus marcadores;
+  `/api/health` 200 con `status: ok`.
+- Verificación visible del alias: el asistente se despliega, la selección es múltiple, el destino
+  local está marcado, nube queda deshabilitada sin conexión, Amazon abre en otra pestaña y la
+  consola informa cero errores.
 
 ---
 
