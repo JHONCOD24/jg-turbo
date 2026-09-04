@@ -65,7 +65,15 @@ segunda petición de IA.
 
 - `index.html`: `v2.35.0` y módulos `v73`.
 - `sw.js`: `jg-turbo-shell-v73`.
-- Producción: pendiente de desplegar y verificar.
+- Producción desplegada el 2026-09-04: `dpl_75aow6hXDVwUh8uXm4i9EQiJs1ae`, disponible en
+  `https://jg-turbo.vercel.app`.
+- Verificación pública sin caché: HTML, `sw.js`, `pdfController.js`, `limpiezaTexto.js`,
+  `pulido.js` y `/api/health` respondieron 200. Se confirmaron `v2.35.0`, módulos y shell `v73`,
+  `VERSION_TROCEO = 4`, estado `lectura_segura`, candidatos de unión, validador
+  `mismasPalabrasLectura`, ausencia del control y del módulo Kindle, y `status: ok`.
+- La apertura visual del alias no se ejecutó: la configuración del usuario prohíbe abrir un
+  navegador sin una solicitud explícita. La validación visible local anterior sí terminó con
+  **115/115** comprobaciones en Chromium.
 
 ---
 
