@@ -8,6 +8,7 @@
  * para no hacer más lenta la app a quien no use esta pestaña.
  */
 import { agruparLineas, componerTexto } from './limpiezaTexto.js';
+import { extraerAtomosDeTextContent, asociarEstructura } from './atomos.js';
 
 const RUTA_MOTOR = '/js/vendor/pdfjs/pdf.min.mjs';
 const RUTA_TRABAJADOR = '/js/vendor/pdfjs/pdf.worker.min.mjs';
@@ -165,33 +166,24 @@ export async function extraerPaginas(doc, opciones = {}) {
           if (tree && tree.children) structInfo = tree;
         }
       } catch (_) {}
-      const textContent = await pagina.getTextContent();
-      const items = textContent.items || [];
-
-      const trocitos = [];
-      for (const item of items) {
-        if (!item || typeof item.str !== 'string' || !item.str.length) continue;
-        const t = item.transform || [1, 0, 0, 1, 0, 0];
-        const [vx, vy] = vista.convertToViewportPoint(t[4], t[5]);
-        const alturaFuente = Math.hypot(t[2] || 0, t[3] || 0) || item.height || 0;
-        const hasEOL = !!item.hasEOL;
-        const dir = item.dir || 'ltr';
-        const fontName = item.fontName || '';
-        trocitos.push({
-          str: item.str,
-          x: vx,
-          y: vista.height - vy,
-          altura: alturaFuente,
-          ancho: item.width || 0,
-          hasEOL,
-          dir,
-          fontName,
-          transform: t,
-        });
-      }
+      const textContent = await pagina.getTextContent({ includeMarkedContent: true });
+      const atomos = extraerAtomosDeTextContent(textContent, { page: numero, viewport: vista });
+      asociarEstructura(atomos, structInfo);
+      const trocitos = atomos.map((a) => ({
+        str: a.str,
+        x: a.x,
+        y: a.y,
+        altura: a.height,
+        ancho: a.width,
+        hasEOL: a.hasEOL,
+        dir: a.dir,
+        fontName: a.fontName,
+        transform: a.transform,
+      }));
 
       paginas.push({
         numero,
+        atomos,
         lineas: agruparLineas(trocitos),
         ancho: vista.width,
         alto: vista.height,
