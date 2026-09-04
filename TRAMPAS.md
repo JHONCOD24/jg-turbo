@@ -103,7 +103,19 @@ Y **prueba el camino del dato ya guardado**, no solo el de los datos nuevos: es 
 gente. `tests/verificar_pdf_retroceo.mjs` hace justo eso — siembra un libro con el defecto y
 comprueba que al abrirlo queda arreglado.
 
-### 1.5 Pruebas huérfanas que nadie mira
+### 1.6 Una prueba puede mover el defecto y aun así quedar verde
+
+**Ocurrió** (2026-09-04, revisión de v2.32.0): la migración unía las unidades guardadas con dos
+saltos de línea. El corte `es` / `ta conclusión` dejó de aparecer en los extremos y la prueba pasó,
+pero el resultado era `es\n\nta conclusión`, no `esta conclusión`. Para empeorar el caso, el libro
+quedó marcado como migrado y no se revisaba en aperturas posteriores.
+
+**Regla:** una regresión de integridad debe comprobar el contenido exacto reparado, no solo la
+ausencia del patrón viejo. Si el dato original todavía existe, como el PDF guardado, vuelve a esa
+fuente. Si no existe, conserva lo disponible y no adivines uniones. Toda migración persistente debe
+tener una versión nueva cuando se descubre que la versión anterior fue defectuosa.
+
+### 1.7 Pruebas huérfanas que nadie mira
 
 **Estado actual:** `python -m pytest backend/tests` falla al recolectar 5 módulos
 (`test_ai_youtube`, `test_marcas_de_tiempo`, `test_pulido_subtitulos`, `test_transcribe`,

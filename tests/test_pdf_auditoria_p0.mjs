@@ -101,6 +101,8 @@ console.log('\n--- 4) UI de revisión y backend presentes ---');
   comprobar(controller.includes('aplicarSignos'), 'El controlador aplica signos (capa revisadoSeguro real)');
   comprobar(controller.includes('repriorizar'), 'El controlador reprioriza la cola al cambiar de capítulo');
   comprobar(controller.includes('cargarBloquesDocumento'), 'El controlador restaura bloques al reabrir el libro');
+  comprobar(controller.includes("fila.huella === construirHuella(actual.texto)"),
+    'Una auditoría vieja solo se aplica si la huella todavía coincide con el texto');
   comprobar(backend.includes('@app.post("/api/improve"'), 'Backend local expone el alias /api/improve');
 }
 

@@ -416,6 +416,34 @@ export function ajustarAPalabra(texto, posicion) {
 }
 
 /**
+ * Lleva un corte al inicio del párrafo que lo contiene.
+ *
+ * Las posiciones del índice se obtienen localizando el comienzo de una página
+ * física. Esa página puede comenzar en medio de una palabra o de un párrafo.
+ * En el lector no se usa ese punto crudo: el párrafo completo viaja unido a
+ * una sola unidad de lectura.
+ */
+export function ajustarAParrafo(texto, posicion) {
+  const t = String(texto || '');
+  if (!t.length) return 0;
+  let p = Math.max(0, Math.min(Math.floor(Number(posicion) || 0), t.length));
+  if (p === 0 || p === t.length) return p;
+
+  /* Si cayó dentro del separador, pertenece al párrafo siguiente. */
+  while (p < t.length && /\s/.test(t[p])) p += 1;
+  if (p >= t.length) return t.length;
+  const separador = t.lastIndexOf('\n\n', Math.max(0, p - 1));
+  if (separador === -1) {
+    /* En un folleto corto puede no haber separadores aunque el índice sí
+     * tenga dos secciones legítimas. No se colapsan por falta de evidencia. */
+    return p < MIN_CAPITULO ? ajustarAPalabra(t, p) : 0;
+  }
+  let inicio = separador + 2;
+  while (inicio < t.length && /[\n\r\t ]/.test(t[inicio])) inicio += 1;
+  return inicio;
+}
+
+/**
  * Quita del índice de un libro lo que no es un capítulo.
  *
  * El índice de un PDF trae una entrada por cada página de cortesía: el nombre
@@ -461,6 +489,24 @@ export function depurarCapitulos(capitulos, largoTexto) {
     aceptados.unshift(lista[0]);
   }
   return aceptados;
+}
+
+/** Capítulos listos para el lector: sin migas y siempre entre párrafos. */
+export function prepararCapitulosLectura(texto, capitulos) {
+  const t = String(texto || '');
+  if (!t.length) return [];
+  const depurados = depurarCapitulos(capitulos, t.length)
+    .map((c) => ({ ...c, posicion: ajustarAParrafo(t, ajustarAPalabra(t, c.posicion)) }));
+
+  /* Al moverlos al inicio de párrafo, dos entradas pueden caer en el mismo
+   * punto. Se conserva una sola para que no reaparezcan páginas vacías. */
+  const unicos = [];
+  for (const cap of depurados) {
+    const anterior = unicos[unicos.length - 1];
+    if (anterior && anterior.posicion === cap.posicion) continue;
+    unicos.push(cap);
+  }
+  return depurarCapitulos(unicos, t.length);
 }
 
 export function componerTexto(paginas, opciones = {}) {
@@ -634,9 +680,7 @@ export function componerTexto(paginas, opciones = {}) {
      * libro de 300 páginas y son el documento entero en un folleto de dos. */
     /* La regla vive en `depurarCapitulos` para poder aplicarla también a los
      * libros que ya estaban guardados, sin volver a leer su PDF. */
-    capitulos = depurarCapitulos(capitulos, texto.length)
-      /* Y ninguna posición puede caer dentro de una palabra. */
-      .map((c) => ({ ...c, posicion: ajustarAPalabra(texto, c.posicion) }));
+    capitulos = prepararCapitulosLectura(texto, capitulos);
   } else {
     // buscar títulos en texto final para capítulos (posiciones reales post-pulido)
     const titulosEnTexto = [];

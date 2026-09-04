@@ -12,9 +12,11 @@
  * que queda arreglado y que el progreso de lectura sobrevive.
  */
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { join, extname, resolve, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { crearLibroConPalabraEntrePaginas } from './generarPdfPrueba.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(AQUI, '..');
@@ -50,6 +52,10 @@ const servidor = createServer(async (peticion, respuesta) => {
 });
 await new Promise((listo) => servidor.listen(0, '127.0.0.1', listo));
 const BASE = `http://127.0.0.1:${servidor.address().port}/`;
+const temporal = await mkdtemp(join(tmpdir(), 'jg-retroceo-'));
+const pdfOriginal = join(temporal, 'libro-original.pdf');
+crearLibroConPalabraEntrePaginas(pdfOriginal);
+const pdfBase64 = (await readFile(pdfOriginal)).toString('base64');
 
 let fallos = 0;
 const comprobar = (condicion, mensaje) => {
@@ -57,7 +63,7 @@ const comprobar = (condicion, mensaje) => {
   else { fallos += 1; console.error(`FALLO: ${mensaje}`); }
 };
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 const pagina = await navegador.newPage({ viewport: { width: 1280, height: 860 } });
 await pagina.goto(BASE, { waitUntil: 'domcontentloaded' });
 await pagina.waitForTimeout(600);
@@ -66,39 +72,52 @@ await pagina.waitForTimeout(400);
 
 /* Un libro tal como lo dejó el troceo antiguo: migas al principio, tres
  * unidades con la misma página, y una palabra partida entre dos partes. */
-await pagina.evaluate(async () => {
+await pagina.evaluate(async (originalBase64) => {
   const bd = await new Promise((ok, err) => {
     const p = indexedDB.open('jg-turbo-pdf', 5);
     p.onsuccess = () => ok(p.result); p.onerror = () => err(p.error);
   });
-  const cuerpo = 'Contenido corrido y extenso del libro que continúa sin cortes. '.repeat(90);
+  const apendice = 'APENDICE MEDITACION\n\nEste apendice conserva un parrafo completo que cruza el limite fisico de la pagina. La explicacion conduce a una idea importante y es';
+  const prologo = 'ta conclusion debe seguir siendo una sola palabra y un solo parrafo.\n\nDespues comienza otro parrafo completo para continuar la lectura.';
   const partes = [
     { titulo: 'Portada', texto: '', pagina: 5 },
     { titulo: 'Descubre el poder de tu mente', texto: 'Descubre el poder de tu mente', pagina: 5 },
     { titulo: 'Urano', texto: 'Urano', pagina: 5 },
-    { titulo: 'Apéndice', texto: `${cuerpo}Y es`, pagina: 10 },
-    { titulo: 'Prólogo', texto: `ta conclusión cierra el argumento. ${cuerpo}`, pagina: 11 },
+    { titulo: 'Apéndice', texto: apendice, pagina: 10 },
+    { titulo: 'Prólogo', texto: prologo, pagina: 11 },
   ];
-  const tx = bd.transaction(['documentos', 'contenido'], 'readwrite');
+  let posicion = 0;
+  const capitulos = partes.map((parte) => {
+    const capitulo = { titulo: parte.titulo, pagina: parte.pagina, posicion };
+    posicion += parte.texto.length + 2;
+    return capitulo;
+  });
+  const cita = 'Despues comienza otro parrafo completo';
+  const tx = bd.transaction(['documentos', 'contenido', 'archivos'], 'readwrite');
   tx.objectStore('documentos').put({
     id: 'libro-viejo', titulo: 'El placebo eres tú', totalPaginas: 300,
     caracteres: partes.reduce((s, p) => s + p.texto.length, 0), idioma: 'es',
     titulosPartes: partes.map((p) => p.titulo), tieneArchivo: false, tienePortada: false,
-    capitulos: [
-      { titulo: 'Portada', pagina: 5, posicion: 0 },
-      { titulo: 'Descubre el poder de tu mente', pagina: 5, posicion: 0 },
-      { titulo: 'Urano', pagina: 5, posicion: 29 },
-      { titulo: 'Apéndice', pagina: 10, posicion: 34 },
-      { titulo: 'Prólogo', pagina: 11, posicion: 34 + cuerpo.length + 4 },
-    ],
-    progreso: { parte: 3, desplazamiento: 0.5, caracter: 100, cita: '', antes: '', maxParte: 3, actualizado: Date.now() },
+    capitulos,
+    progreso: {
+      parte: 4, desplazamiento: 0.6, caracter: prologo.indexOf(cita), cita,
+      antes: 'un solo parrafo.', maxParte: 4, actualizado: Date.now(),
+    },
     estado: 'leyendo', creado: Date.now(), actualizado: Date.now(),
     contenidoActualizado: Date.now(), sincronizado: 0,
-    /* Sin `versionTroceo`: así estaban los libros de antes. */
+    /* La migración defectuosa ya lo marcó como versión 2, aunque el contenido
+     * sigue roto. La siguiente versión tiene que volver a intervenirlo. */
+    versionTroceo: 2,
   });
   tx.objectStore('contenido').put({ id: 'libro-viejo', partes });
+  const bytes = Uint8Array.from(atob(originalBase64), (c) => c.charCodeAt(0));
+  tx.objectStore('archivos').put({
+    id: 'libro-viejo',
+    pdf: new Blob([bytes], { type: 'application/pdf' }),
+    portada: null,
+  });
   await new Promise((ok) => { tx.oncomplete = ok; tx.onerror = ok; });
-});
+}, pdfBase64);
 
 await pagina.reload({ waitUntil: 'domcontentloaded' });
 await pagina.locator('#tabPdf').click();
@@ -129,11 +148,13 @@ const despues = await pagina.evaluate(async () => {
     partes: (c?.partes || []).map((p) => ({ titulo: p.titulo, pagina: p.pagina, largo: p.texto.length, texto: p.texto })),
     version: d?.versionTroceo,
     progreso: d?.progreso,
+    capitulos: d?.capitulos || [],
+    textoEnProgreso: String(c?.partes?.[d?.progreso?.parte]?.texto || '').slice(d?.progreso?.caracter || 0, (d?.progreso?.caracter || 0) + 42),
     enPantalla: document.querySelectorAll('#pdfIndiceLista .pdf-cap').length,
   };
 });
 
-comprobar(despues.version === 2, `queda anotada la versión del troceo (${despues.version})`);
+comprobar(despues.version === 3, `queda anotada la versión del troceo (${despues.version})`);
 comprobar(despues.partes.length < antes.length,
   `se retiran las unidades vacías (${antes.length} → ${despues.partes.length})`);
 comprobar(despues.partes.every((p) => p.largo > 0), 'ninguna unidad queda vacía');
@@ -148,9 +169,18 @@ const empiezaMalCortada = despues.partes.some((p) => /^ta conclusión/.test(p.te
 comprobar(!empiezaMalCortada, 'ninguna unidad empieza a mitad de palabra («ta conclusión»)');
 const acabaMalCortada = despues.partes.some((p) => /\bY es$/.test(p.texto.trim()));
 comprobar(!acabaMalCortada, 'ninguna unidad termina a mitad de palabra («Y es»)');
+const textoRehecho = despues.partes.map((p) => p.texto).join('\n\n');
+const puntoConclusion = textoRehecho.toLowerCase().indexOf('conclusion');
+const muestraConclusion = textoRehecho.slice(Math.max(0, puntoConclusion - 24), puntoConclusion + 36);
+comprobar(/\bY esta conclusi[oó]n\b/i.test(textoRehecho),
+  `la palabra se recompone de verdad: «es» + «ta» vuelve a ser «esta» (${muestraConclusion})`);
 
 comprobar(despues.progreso && Number.isFinite(despues.progreso.parte),
   'el progreso de lectura sobrevive al rehacer las unidades');
+comprobar(despues.textoEnProgreso.startsWith('Despues comienza otro parrafo completo'),
+  'el progreso vuelve al mismo párrafo, aunque cambie el número de unidad');
+comprobar(despues.capitulos.length === despues.partes.length,
+  'los capítulos nuevos quedan guardados junto con las unidades nuevas');
 
 /* Al reabrir no debe volver a rehacerse. */
 await pagina.locator('#btnPdfBack').click();
@@ -166,5 +196,6 @@ comprobar(segunda === despues.partes.length, 'al reabrirlo no se vuelve a rehace
 
 await navegador.close();
 servidor.close();
+await rm(temporal, { recursive: true, force: true });
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);

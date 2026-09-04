@@ -145,6 +145,22 @@ export function crearLibro(ruta, totalPaginas = 4) {
   return armarPdf(flujos, ruta);
 }
 
+/** Caso real de regresión: una palabra continúa entre dos páginas físicas. */
+export function crearLibroConPalabraEntrePaginas(ruta) {
+  const paginaUno = [
+    ['APENDICE MEDITACION', 70, 730, 18],
+    ['Este apendice conserva un parrafo completo que cruza el limite fisico', 90, 685, 11],
+    ['de la pagina. La explicacion conduce a una idea importante y es-', 70, 669, 11],
+    ['10', 295, 40, 9],
+  ];
+  const paginaDos = [
+    ['ta conclusion debe seguir siendo una sola palabra y un solo parrafo.', 70, 730, 11],
+    ['Despues comienza otro parrafo completo para continuar la lectura.', 90, 690, 11],
+    ['11', 295, 40, 9],
+  ];
+  return armarPdf([flujoDeTexto(paginaUno), flujoDeTexto(paginaDos)], ruta);
+}
+
 /** PDF sin capa de texto: solo un rectángulo, como una página escaneada. */
 export function crearEscaneado(ruta, paginas = 6) {
   const flujo = Buffer.from('0.5 0.5 0.5 rg\n50 50 495 742 re f\n', 'latin1');

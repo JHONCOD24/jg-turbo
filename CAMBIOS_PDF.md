@@ -1,5 +1,70 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-04 · v2.34.0 · Párrafos completos y reparación real de libros guardados
+
+### Corrección de la entrega anterior
+
+La v2.32.0 se documentó como corregida, pero su prueba era insuficiente. Comprobaba que `es` y
+`ta conclusión` ya no quedaran justo en los bordes de dos unidades, pero no comprobaba que el
+texto final recuperara literalmente `esta conclusión`. Además, `rehacerTroceo()` reconstruía el
+libro con `join('\n\n')`, lo que convertía las dos mitades en párrafos separados, y después marcaba
+el documento con `versionTroceo: 2`. Por eso el libro seguía roto y ya no volvía a migrarse.
+
+También se encontró que `mejorCorte()` daba prioridad al límite de la página física. Un PDF puede
+terminar una página en mitad de una palabra o de un párrafo, así que ese límite no puede definir
+una unidad de lectura.
+
+### Corrección aplicada
+
+- `VERSION_TROCEO` sube a **3**. Al abrir por primera vez un libro guardado con una versión
+  anterior, JG Turbo vuelve al PDF original almacenado y ejecuta de nuevo la extracción actual.
+  Así recupera la información que ya no existe en dos trozos guardados por separado.
+- Los límites del índice se llevan al inicio del párrafo que contienen. Si varias entradas de los
+  preliminares caen dentro del mismo párrafo, se condensan en una sola unidad y desaparecen las
+  falsas páginas vacías o repetidas.
+- Las páginas físicas dejan de ser candidatas de corte. Para un texto largo, el orden es párrafo,
+  oración y, como último recurso, espacio entre palabras.
+- La migración guarda juntas las unidades, capítulos, bloques de auditoría y posición de lectura.
+  El progreso se relocaliza mediante una cita de texto, no por el número antiguo de unidad.
+- Una auditoría anterior solo se vuelve a aplicar cuando la huella del bloque coincide con el
+  texto reprocesado. Las decisiones incompatibles se conservan en IndexedDB, pero no modifican
+  una fuente distinta.
+- Si un documento sincronizado ya no conserva el PDF original, se consolida únicamente el texto
+  disponible. Se unen cortes con guion explícito; no se adivinan palabras a partir de sílabas.
+- Los PDF importados desde esta versión nacen con `versionTroceo: 3` y no hacen una migración
+  innecesaria al abrirse.
+
+### Regresión exacta de «El placebo eres tú»
+
+`tests/verificar_pdf_retroceo.mjs` crea un PDF original de dos páginas donde la primera termina
+en `es-` y la segunda comienza con `ta conclusion`. Después siembra en IndexedDB las cinco
+unidades defectuosas reportadas, incluidas tres entradas de página 5 y un documento ya marcado
+como versión 2. Al abrirlo se verifican **13/13** condiciones:
+
+- migra a versión 3 y pasa de cinco unidades rotas a una unidad completa en este caso mínimo;
+- no queda ninguna unidad vacía, repetida ni iniciada o terminada a mitad de palabra;
+- el texto contiene literalmente `Y esta conclusion`;
+- el progreso vuelve al mismo párrafo y los capítulos nuevos quedan guardados;
+- una segunda apertura no vuelve a reprocesar el libro.
+
+### Verificación completa
+
+- 16 archivos de pruebas unitarias PDF y TTS: **567 OK, 0 fallos**.
+- `backend/tests/test_pdf_ask.py`: **14/14**.
+- `verificar_pdf_retroceo.mjs`: **13/13** en Chromium visible.
+- `verificar_pdf_geometria.mjs`: **42/42** en móvil, tableta y escritorio.
+- `verificar_pdf_scroll.mjs`: **39/39**.
+- `verificar_pdf_navegador.mjs`: **118/118** en Chromium visible, incluido un libro de 300
+  páginas, continuidad, búsqueda, OCR, exportaciones, archivos dañados e importación Kindle.
+
+### Versión
+
+- `index.html`: `v2.34.0` y módulos `v72`.
+- `sw.js`: `jg-turbo-shell-v72`.
+- Producción: pendiente de desplegar después de la revisión final.
+
+---
+
 ## Entrega 2026-09-03 · v2.33.0 · Importación segura desde Kindle
 
 ### Alcance

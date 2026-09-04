@@ -766,23 +766,32 @@ export async function guardarPortadaGenerada(id, portada, origen = 'dibujada') {
  *
  * @param {string} id
  * @param {number} version
- * @param {object[]|null} partes – null si no hizo falta rehacer nada
+ * @param {{partes?:object[],capitulos?:object[],progreso?:object,bloques?:object[]}|null} cambios
  * @returns {Promise<boolean>}
  */
-export async function marcarTroceo(id, version, partes = null) {
+export async function marcarTroceo(id, version, cambios = null) {
   if (!id) return false;
   try {
-    if (Array.isArray(partes) && partes.length) {
-      await conAlmacenes([CONTENIDO], 'readwrite', (contenido) =>
-        esperar(contenido.put({ id, partes })));
-    }
-    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+    const partes = Array.isArray(cambios?.partes) ? cambios.partes : null;
+    const bloques = Array.isArray(cambios?.bloques) ? cambios.bloques : null;
+    await conAlmacenes([DOCUMENTOS, CONTENIDO], 'readwrite', async (docs, contenido) => {
       const doc = await esperar(docs.get(id));
       if (!doc) return;
+      if (partes?.length) await esperar(contenido.put({ id, partes }));
+      if (bloques?.length) {
+        await esperar(contenido.put({
+          id: `bloques|${id}`,
+          bloques: bloques.map((b) => ({
+            id: b.id, texto: b.texto, tipo: b.tipo, capitulo: b.capitulo,
+          })),
+        }));
+      }
       doc.versionTroceo = version;
-      if (Array.isArray(partes) && partes.length) {
+      if (partes?.length) {
         doc.titulosPartes = partes.map((p) => p.titulo);
         doc.caracteres = partes.reduce((suma, p) => suma + String(p.texto || '').length, 0);
+        doc.capitulos = Array.isArray(cambios?.capitulos) ? cambios.capitulos : (doc.capitulos || []);
+        if (cambios?.progreso) doc.progreso = cambios.progreso;
         doc.contenidoActualizado = Date.now();
         doc.actualizado = Date.now();
       }

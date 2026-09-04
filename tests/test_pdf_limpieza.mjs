@@ -10,6 +10,8 @@ import {
   componerTexto,
   depurarCapitulos,
   ajustarAPalabra,
+  ajustarAParrafo,
+  prepararCapitulosLectura,
   esNumeroDePagina,
   normalizarClave,
   pareceTitulo,
@@ -448,6 +450,30 @@ const LIBRO_CON_INDICE = {
   comprobar(ajustarAPalabra(texto, 0) === 0, 'el principio del texto se respeta');
   comprobar(ajustarAPalabra(texto, texto.length) === texto.length, 'el final del texto se respeta');
   comprobar(ajustarAPalabra('', 5) === 0, 'texto vacío no rompe');
+}
+
+/* ── Los cambios de unidad respetan párrafos completos ─────────────── */
+{
+  const texto = [
+    'Portada y datos editoriales.',
+    'Y esta conclusión empieza en la página física anterior y termina completa en la siguiente.',
+    'PRÓLOGO\nContenido completo del prólogo que debe comenzar después del título.',
+  ].join('\n\n');
+  const dentroDeEsta = texto.indexOf('ta conclusión');
+  const inicioParrafo = texto.indexOf('Y esta conclusión');
+  comprobar(ajustarAParrafo(texto, dentroDeEsta) === inicioParrafo,
+    'un corte dentro de «esta conclusión» vuelve al inicio del párrafo completo');
+
+  const capitulos = prepararCapitulosLectura(texto, [
+    { titulo: 'Portada', pagina: 5, posicion: 0 },
+    { titulo: 'Descubre el poder de tu mente', pagina: 5, posicion: 4 },
+    { titulo: 'Urano', pagina: 5, posicion: 10 },
+    { titulo: 'Prólogo', pagina: 11, posicion: dentroDeEsta },
+  ]);
+  comprobar(capitulos.filter((c) => c.pagina === 5).length === 1,
+    'las tres entradas diminutas de la página 5 se condensan en una');
+  comprobar(capitulos.every((c) => c.posicion === 0 || texto.slice(c.posicion - 2, c.posicion) === '\n\n'),
+    'todos los capítulos empiezan entre párrafos, nunca dentro de uno');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas pasaron.' : `\n${fallos} prueba(s) fallaron.`);

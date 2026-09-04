@@ -12,7 +12,7 @@
  *    en capítulos y se muestra uno, sin perder el resto.
  */
 import { procesarPdf, ErrorPdf } from './extractorPdf.js';
-import { componerTexto, pulirParaLectura, depurarCapitulos, ajustarAPalabra } from './limpiezaTexto.js';
+import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
 import { prepararParaVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
 import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, esCompleta } from './auditoria.js';
@@ -40,7 +40,7 @@ const MINIMO_PARA_CAPITULOS = 8000;
  * libros guardados con una versión anterior se rehacen solos al abrirlos: el
  * troceo se guarda con el documento, así que arreglar el código no arregla lo
  * que ya estaba en la biblioteca. */
-const VERSION_TROCEO = 2;
+const VERSION_TROCEO = 3;
 /* Cuánto texto se le manda a la IA como contexto de una pregunta. */
 const LIMITE_CONTEXTO_IA = 12000;
 const TAM_BLOQUE_BUSQUEDA = 2000;
@@ -271,7 +271,7 @@ export function inicializarLectorPdf(deps = {}) {
 
   /**
    * Dónde conviene cortar antes de `limite`, de mejor a peor:
-   * final de página → final de párrafo → final de frase → hueco entre palabras.
+   * final de párrafo → final de frase → hueco entre palabras.
    *
    * Nunca a mitad de palabra, que es lo que hacía antes cuando no encontraba
    * un salto de párrafo: la unidad de lectura empezaba con media palabra y la
@@ -280,46 +280,35 @@ export function inicializarLectorPdf(deps = {}) {
    * @param {string} texto
    * @param {number} desde  – dónde empieza este trozo
    * @param {number} limite – tope al que no se debe llegar
-   * @param {number[]} cortesPagina – posiciones de inicio de página, en orden
    */
-  function mejorCorte(texto, desde, limite, cortesPagina) {
+  function mejorCorte(texto, desde, limite) {
     const minimo = desde + Math.floor((limite - desde) * 0.5);
 
-    /* 1) Un límite de página real: lo que pidió el usuario, que una unidad de
-     *    lectura no parta una página por la mitad. */
-    let mejor = -1;
-    for (const pos of cortesPagina) {
-      if (pos > minimo && pos <= limite && pos > mejor) mejor = pos;
-      if (pos > limite) break;
-    }
-    if (mejor > desde) return mejor;
-
-    /* 2) Un párrafo entero. */
+    /* 1) Un párrafo entero. Una página física del PDF puede terminar a mitad
+     * de palabra; por eso nunca manda sobre el párrafo. */
     const parrafo = texto.lastIndexOf('\n\n', limite);
     if (parrafo > minimo) return parrafo;
 
-    /* 3) El final de una frase. */
+    /* 2) El final de una frase, solo para párrafos patológicamente largos. */
     for (let i = limite; i > minimo; i -= 1) {
       if ('.!?…'.includes(texto[i]) && /\s/.test(texto[i + 1] || ' ')) return i + 1;
     }
 
-    /* 4) Y como último recurso, un espacio: nunca a mitad de palabra. */
+    /* 3) Y como último recurso, un espacio: nunca a mitad de palabra. */
     const espacio = texto.lastIndexOf(' ', limite);
     return espacio > minimo ? espacio : limite;
   }
 
   function partirTexto(texto, capitulos, paginas = []) {
     if (!texto) return [];
-    /* Posiciones de inicio de página, para cortar por donde el libro corta. */
-    const cortesPagina = (Array.isArray(paginas) ? paginas : [])
-      .map((p) => Number(p?.posicion))
-      .filter((n) => Number.isFinite(n) && n > 0)
-      .sort((a, b) => a - b);
+    /* Las páginas físicas solo sirven como referencia del índice. Los cortes
+     * visibles se llevan al inicio de un párrafo completo. */
+    const capitulosLectura = prepararCapitulosLectura(texto, capitulos);
     /* Si el documento trae capítulos, se respetan aunque el texto sea corto:
      * el usuario quiere ver por qué capítulo va, no un bloque único. El corte
      * por tamaño existe para que el editor no se congele, no para decidir la
      * estructura del libro. */
-    const hayCapitulos = Array.isArray(capitulos) && capitulos.length > 1;
+    const hayCapitulos = capitulosLectura.length > 1;
     const vale = hayCapitulos && texto.length > MINIMO_PARA_CAPITULOS;
     if (!vale && texto.length <= LIMITE_PARTE) {
       return [{ titulo: 'Documento completo', texto, pagina: 1 }];
@@ -327,10 +316,10 @@ export function inicializarLectorPdf(deps = {}) {
 
     const cortes = [];
     if (hayCapitulos) {
-      capitulos.forEach((cap, i) => {
+      capitulosLectura.forEach((cap, i) => {
         const inicio = Math.max(0, Math.min(cap.posicion, texto.length));
-        const fin = i + 1 < capitulos.length
-          ? Math.max(inicio, Math.min(capitulos[i + 1].posicion, texto.length))
+        const fin = i + 1 < capitulosLectura.length
+          ? Math.max(inicio, Math.min(capitulosLectura[i + 1].posicion, texto.length))
           : texto.length;
         if (i === 0 && inicio > 0) cortes.push({ titulo: 'Antes del primer capítulo', desde: 0, hasta: inicio, pagina: 1 });
         if (fin > inicio) cortes.push({ titulo: cap.titulo, desde: inicio, hasta: fin, pagina: cap.pagina || 1 });
@@ -342,7 +331,7 @@ export function inicializarLectorPdf(deps = {}) {
       let numero = 1;
       while (desde < texto.length) {
         let hasta = Math.min(desde + LIMITE_PARTE, texto.length);
-        if (hasta < texto.length) hasta = mejorCorte(texto, desde, hasta, cortesPagina);
+        if (hasta < texto.length) hasta = mejorCorte(texto, desde, hasta);
         cortes.push({ titulo: `Parte ${numero}`, desde, hasta, pagina: 1 });
         desde = hasta;
         numero += 1;
@@ -357,15 +346,11 @@ export function inicializarLectorPdf(deps = {}) {
         partes.push({ titulo: corte.titulo, texto: trozo, pagina: corte.pagina });
         continue;
       }
-      /* Los cortes de página de este trozo, en coordenadas del trozo. */
-      const cortesDelTrozo = cortesPagina
-        .filter((p) => p > corte.desde && p < corte.hasta)
-        .map((p) => p - corte.desde);
       let desde = 0;
       let sub = 1;
       while (desde < trozo.length) {
         let hasta = Math.min(desde + LIMITE_PARTE, trozo.length);
-        if (hasta < trozo.length) hasta = mejorCorte(trozo, desde, hasta, cortesDelTrozo);
+        if (hasta < trozo.length) hasta = mejorCorte(trozo, desde, hasta);
         partes.push({ titulo: `${corte.titulo} (${sub})`, texto: trozo.slice(desde, hasta).trim(), pagina: corte.pagina });
         desde = hasta;
         sub += 1;
@@ -1209,46 +1194,128 @@ export function inicializarLectorPdf(deps = {}) {
    * varios con el mismo número de página y palabras partidas entre dos
    * unidades. Arreglar el troceo no bastaba; había que rehacer lo guardado.
    *
-   * Se hace sin volver a leer el PDF: el texto ya está aquí. Se juntan las
-   * partes, se depuran los capítulos con la regla nueva y se vuelve a cortar,
-   * ahora sin partir palabras. El progreso de lectura no se pierde porque se
-   * guarda como ancla de texto y se vuelve a localizar por contenido.
+   * Se vuelve a leer el PDF original guardado, porque es la única fuente que
+   * todavía sabe que «es» y «ta» eran una sola palabra. Si el archivo ya no
+   * existe, se conserva el texto disponible sin adivinar uniones. El progreso
+   * se relocaliza mediante una ancla de texto.
    *
-   * @returns {{partes:object[], capitulos:object[]}|null} null si no hacía falta
+   * @returns {Promise<{partes:object[],capitulos:object[],progreso:object,bloques:object[]}|null>}
    */
-  function rehacerTroceo(doc, partes) {
-    if (!Array.isArray(partes) || partes.length < 2) return null;
-
-    /* Se reconstruye el texto tal como estaba: las partes se cortaron de un
-     * texto continuo separado por líneas en blanco. */
-    const texto = partes.map((p) => String(p?.texto || '')).join('\n\n');
-    if (!texto.trim()) return null;
-
-    /* Los capítulos guardados apuntan al texto original. Si no los hay, se
-     * reconstruyen desde dónde empieza cada parte. */
-    let capitulos = Array.isArray(doc.capitulos) && doc.capitulos.length
-      ? doc.capitulos
-      : (() => {
-        const lista = [];
-        let pos = 0;
-        for (const p of partes) {
-          lista.push({ titulo: p.titulo || 'Parte', pagina: p.pagina || 1, posicion: pos });
-          pos += String(p.texto || '').length + 2;
+  function reconstruirPartesGuardadas(partes) {
+    let texto = '';
+    const capitulos = [];
+    for (const parte of partes || []) {
+      const trozo = String(parte?.texto || '').trim();
+      if (!trozo) continue;
+      let separador = texto ? '\n\n' : '';
+      if (texto) {
+        const ultima = texto.match(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)[-‐­‑]?$/)?.[1] || '';
+        const primera = trozo.match(/^([a-záéíóúüñ]+)/)?.[1] || '';
+        if (/[-‐­‑]$/.test(texto) && primera) {
+          texto = texto.replace(/[-‐­‑]$/, '');
+          separador = '';
+        } else if (ultima && primera) {
+          /* Sin el PDF original no hay evidencia para decidir si dos sílabas
+           * eran una palabra o dos palabras reales. Se conserva el contenido
+           * y se evita inventar una unión. */
+          separador = ' ';
         }
-        return lista;
-      })();
+      }
+      const posicion = texto.length + separador.length;
+      texto += separador + trozo;
+      capitulos.push({
+        titulo: parte?.titulo || 'Parte',
+        pagina: parte?.pagina || 1,
+        posicion,
+      });
+    }
+    return { texto, capitulos };
+  }
 
-    capitulos = depurarCapitulos(capitulos, texto.length)
-      .map((c) => ({ ...c, posicion: ajustarAPalabra(texto, c.posicion) }));
+  function reubicarProgreso(progreso, anteriores, nuevas) {
+    const base = progreso || progresoInicial();
+    if (!anteriores?.length || !nuevas?.length) return base;
+    const unir = (lista) => lista.map((p) => String(p?.texto || '')).join('\n\n');
+    const textoAnterior = unir(anteriores);
+    const textoNuevo = unir(nuevas);
+    if (!textoAnterior || !textoNuevo) return base;
 
-    const nuevas = partirTexto(texto, capitulos, []);
+    const indiceAnterior = Math.max(0, Math.min(anteriores.length - 1, Number(base.parte) || 0));
+    let absolutoAnterior = 0;
+    for (let i = 0; i < indiceAnterior; i += 1) absolutoAnterior += String(anteriores[i]?.texto || '').length + 2;
+    absolutoAnterior += resolverAncla(String(anteriores[indiceAnterior]?.texto || ''), base);
+    const anclaGlobal = construirAncla(textoAnterior, absolutoAnterior);
+    const absolutoNuevo = resolverAncla(textoNuevo, anclaGlobal);
+
+    let inicio = 0;
+    let parte = nuevas.length - 1;
+    for (let i = 0; i < nuevas.length; i += 1) {
+      const fin = inicio + String(nuevas[i]?.texto || '').length;
+      if (absolutoNuevo <= fin) { parte = i; break; }
+      inicio = fin + 2;
+    }
+    const textoParte = String(nuevas[parte]?.texto || '');
+    const caracter = Math.max(0, Math.min(textoParte.length, absolutoNuevo - inicio));
+    const anclaLocal = construirAncla(textoParte, caracter);
+
+    /* maxParte es un hito de avance, no la posición actual. Se conserva por
+     * proporción para que reorganizar preliminares no devuelva capítulos a
+     * «pendiente». */
+    const maxAnterior = Math.max(indiceAnterior, Math.min(anteriores.length - 1, Number(base.maxParte) || 0));
+    const proporcionMax = anteriores.length <= 1 ? 0 : maxAnterior / (anteriores.length - 1);
+    const maxParte = Math.max(parte, Math.round(proporcionMax * Math.max(0, nuevas.length - 1)));
+    return {
+      ...base,
+      parte,
+      caracter: anclaLocal.caracter,
+      cita: anclaLocal.cita,
+      antes: anclaLocal.antes,
+      desplazamiento: textoParte.length ? caracter / textoParte.length : 0,
+      maxParte,
+    };
+  }
+
+  async function rehacerTroceo(doc, partes) {
+    if (!Array.isArray(partes) || !partes.length) return null;
+
+    /* La única fuente capaz de recuperar exactamente «es» + «ta» como
+     * «esta» es el PDF original. Unir trozos ya recortados no contiene la
+     * información suficiente. */
+    const archivo = await almacen.cargarArchivo(doc.id);
+    if (archivo) {
+      try {
+        const resultado = await procesarPdf(archivo, { conPortada: false });
+        if (!resultado.cancelado && !resultado.escaneado && resultado.texto?.trim()) {
+          const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
+          const nuevas = partirTexto(resultado.texto, capitulos, resultado.paginas);
+          if (nuevas.length) {
+            return {
+              partes: nuevas,
+              capitulos,
+              progreso: reubicarProgreso(doc.progreso, partes, nuevas),
+              bloques: construirBloquesAuditoria(resultado.texto, resultado.bloques, capitulos),
+            };
+          }
+        }
+      } catch (error) {
+        console.warn('[jg-pdf] no se pudo reprocesar el PDF guardado; se usará el texto local', error);
+      }
+    }
+
+    /* Un documento recibido de otro aparato puede no traer el PDF. En ese
+     * caso se conserva todo el texto disponible y se eliminan los límites
+     * inseguros. No se inventan palabras. */
+    const reconstruido = reconstruirPartesGuardadas(partes);
+    if (!reconstruido.texto.trim()) return null;
+    const capitulos = prepararCapitulosLectura(reconstruido.texto, reconstruido.capitulos);
+    const nuevas = partirTexto(reconstruido.texto, capitulos, []);
     if (!nuevas.length) return null;
-    /* Si el resultado es el mismo, no se toca nada: reescribir la biblioteca
-     * sin motivo gasta tiempo y arriesga sin ganar nada. */
-    const igual = nuevas.length === partes.length
-      && nuevas.every((n, i) => n.texto === partes[i].texto);
-    if (igual) return null;
-    return { partes: nuevas, capitulos };
+    return {
+      partes: nuevas,
+      capitulos,
+      progreso: reubicarProgreso(doc.progreso, partes, nuevas),
+      bloques: construirBloquesAuditoria(reconstruido.texto, [], capitulos),
+    };
   }
 
   async function abrirDocumento(id) {
@@ -1263,14 +1330,24 @@ export function inicializarLectorPdf(deps = {}) {
     /* Libros guardados con el troceo antiguo: se rehacen una vez y queda
      * anotado, para no repetirlo en cada apertura. */
     let capitulos = doc.capitulos || [];
+    let progreso = doc.progreso;
+    let bloquesRehechos = null;
     if (doc.versionTroceo !== VERSION_TROCEO) {
-      const rehecho = rehacerTroceo(doc, partes);
+      avisar('Reorganizando el libro por párrafos completos…', 'info');
+      const rehecho = await rehacerTroceo(doc, partes);
       if (rehecho) {
         partes = rehecho.partes;
         capitulos = rehecho.capitulos;
-        avisar('Se reorganizaron las páginas de este libro.', 'info', { efimero: true });
+        progreso = rehecho.progreso;
+        bloquesRehechos = rehecho.bloques;
+        avisar('Se reorganizó el libro sin cortar palabras ni párrafos.', 'info', { efimero: true });
       }
-      await almacen.marcarTroceo(id, VERSION_TROCEO, rehecho ? partes : null);
+      await almacen.marcarTroceo(id, VERSION_TROCEO, rehecho ? {
+        partes,
+        capitulos,
+        progreso,
+        bloques: rehecho.bloques,
+      } : null);
     }
 
     estado.archivo = null;
@@ -1280,8 +1357,9 @@ export function inicializarLectorPdf(deps = {}) {
       partes,
       totalPaginas: doc.totalPaginas,
       idioma: doc.idioma,
-      progreso: doc.progreso,
+      progreso,
       capitulos,
+      bloques: bloquesRehechos,
     });
     avisar('');
     el.resultArea.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -1498,21 +1576,32 @@ export function inicializarLectorPdf(deps = {}) {
     // Hidratar auditoría previa (respuestas, decisiones y caché) para que
     // cerrar y reabrir el libro NO pierda el trabajo ya hecho.
     almacen.listarAuditoriaDoc(estado.id).then(async (filas) => {
-      for (const b of filas) {
+      const bloquesActuales = new Map(estado.bloques.map((b) => [b.id, b]));
+      const compatibles = filas.filter((fila) => {
+        const actual = bloquesActuales.get(fila.bloqueId);
+        if (!actual) return false;
+        /* El re-troceo puede conservar el id b0 pero cambiar su texto. Las
+         * decisiones antiguas se preservan en IndexedDB, pero no se aplican
+         * sobre una fuente distinta. */
+        return !fila.huella || fila.huella === construirHuella(actual.texto);
+      });
+      for (const b of compatibles) {
         if (b.propuestas) estado.propuestasPorBloque.set(b.bloqueId, b.propuestas);
         if (b.textoSeguro) estado.textoSeguroPorBloque.set(b.bloqueId, b.textoSeguro);
       }
-      await Promise.all(filas.map(async (b) => {
+      await Promise.all(compatibles.map(async (b) => {
         const reg = await almacen.cargarPulidoRegistro(estado.id, `bloque_${b.bloqueId}`);
-        if (reg?.decisiones && typeof reg.decisiones === 'object') {
+        const actual = bloquesActuales.get(b.bloqueId);
+        const mismaFuente = !reg?.huellaOrigen || reg.huellaOrigen === construirHuella(actual?.texto || '');
+        if (mismaFuente && reg?.decisiones && typeof reg.decisiones === 'object') {
           estado.decisionesPorBloque.set(b.bloqueId, new Map(Object.entries(reg.decisiones)));
           if (reg.textoAprobado) estado.textoAprobadoPorBloque.set(b.bloqueId, reg.textoAprobado);
         }
       }));
-      if (estado.auditor && filas.length) await estado.auditor.hidratar(filas.map((b) => b.bloqueId));
+      if (estado.auditor && compatibles.length) await estado.auditor.hidratar(compatibles.map((b) => b.bloqueId));
       /* Solo hay algo que reconstruir si el trabajo previo incluyó decisiones:
        * sin ellas, la vista sigue en su capa local (nada aprobado que aplicar). */
-      const conDecisiones = filas.some((b) => (estado.decisionesPorBloque.get(b.bloqueId)?.size || 0) > 0);
+      const conDecisiones = compatibles.some((b) => (estado.decisionesPorBloque.get(b.bloqueId)?.size || 0) > 0);
       if (conDecisiones) reconstruirAprobado({ guardar: false });
       actualizarEstadoAuditoria();
     }).catch(()=>{});
@@ -1987,13 +2076,14 @@ export function inicializarLectorPdf(deps = {}) {
     estado.localTexto = resultado.texto; // local ya es texto con limpieza sin IA (pulirParaLectura puro)
     estado.bloquesEstructurales = resultado.bloques || [];
     estado.omisiones = resultado.omisiones || [];
+    const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
     // dividir en bloques semánticos de 3000 para auditoría, con contexto
-    const bloques = construirBloquesAuditoria(resultado.texto, resultado.bloques, resultado.capitulos);
+    const bloques = construirBloquesAuditoria(resultado.texto, resultado.bloques, capitulos);
     estado.bloques = bloques;
     estado.auditoriaProgreso = { total: bloques.length, completados: 0, fallos: 0 };
     estado.capa = { original: resultado.texto, local: resultado.texto, revisadoSeguro: '', aprobado: '' };
 
-    const partes = partirTexto(resultado.texto, resultado.capitulos, resultado.paginas);
+    const partes = partirTexto(resultado.texto, capitulos, resultado.paginas);
     const titulo = resultado.titulo
       || (archivo?.name || 'Documento').replace(/\.pdf$/i, '');
     const idioma = deps.detectarIdioma
@@ -2016,9 +2106,10 @@ export function inicializarLectorPdf(deps = {}) {
           totalPaginas: resultado.totalPaginas || 0,
           paginasLeidas: resultado.paginasLeidas || 0,
           origen,
+          versionTroceo: VERSION_TROCEO,
           ...(huella ? { huella } : {}),
           sincronizar: sincronizarDocumento !== false,
-          capitulos: resultado.capitulos || [],
+          capitulos,
           bytes: archivo?.size || 0,
           progreso: progresoInicial(),
           estado: 'sin-empezar',
@@ -2036,7 +2127,7 @@ export function inicializarLectorPdf(deps = {}) {
     }
 
     if (abrir) {
-      await montarDocumento({ id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, bloques });
+      await montarDocumento({ id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, capitulos, bloques });
     }
     if (refrescar) await refrescarInicio();
     if (sincronizarAlGuardar) sincronizarAhora({ silencioso: true });
