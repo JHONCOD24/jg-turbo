@@ -66,7 +66,7 @@ Consulta [Cómo funciona la captura, transcripción y traducción mejoradas](PRE
 1.  **Voz en vivo (Micrófono)**: Ideal para dictados rápidos y transcripciones inmediatas con formateo inteligente.
 2.  **Archivos locales**: Procesa grabaciones largas, reuniones o notas de voz subidas en formatos de audio común (MP3, WAV, M4A, etc.).
 3.  **Videos de YouTube**: Pega el enlace y la app trae el texto sola. Si el video no tiene subtítulos, lo transcribe con IA sin que hagas nada. Ver [Transcripción de YouTube](CAMBIOS_YOUTUBE.md).
-4.  **Documentos PDF**: Una biblioteca de lectura. Saca el texto limpio de un PDF o de un libro completo (sin límite de tamaño, sin subir el archivo a ningún servidor) y **lo guarda en tu dispositivo con tu progreso**: al volver, sigues donde ibas sin buscar el archivo otra vez. Índice de capítulos navegable, lectura continua, audiolibro, traducción al español dentro del panel, exportación a Word/PDF/Markdown, resumen con IA y OCR para escaneados. Ver [Lector de PDF](CAMBIOS_PDF.md).
+4.  **Documentos PDF**: Una biblioteca de lectura. Saca el texto limpio de un PDF o de un libro completo (sin límite de tamaño, sin subir el archivo a ningún servidor) y **lo guarda en tu dispositivo con tu progreso**: al volver, sigues donde ibas sin buscar el archivo otra vez. La lectura se reanuda en la frase exacta donde quedó (ancla de texto portable entre pantallas) y el avance se sincroniza entre dispositivos sin resubir el libro. Índice de capítulos navegable, lectura continua, audiolibro, traducción al español dentro del panel, exportación a Word/PDF/Markdown, resumen con IA y OCR para escaneados. Ver [Lector de PDF](CAMBIOS_PDF.md).
 
 ---
 

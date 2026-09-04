@@ -1510,6 +1510,11 @@ class ImproveRequest(BaseModel):
     provider: str = "gemini"   # "gemini" | "anthropic" | "mistral" | "openrouter"
     api_key: str = ""
     openrouter_model: Optional[str] = None
+    context: str = ""
+    preserve_segments: bool = False
+    mode: Optional[str] = "transcripcion"
+    candidatos_union: Optional[list] = None
+    limites: Optional[list] = None
 
 _REPETICIONES_VALIDAS = {
     "casi", "nada", "poco", "apenas", "vamos", "corre", "lento", "despacio",
@@ -1721,6 +1726,50 @@ async def improve_text(req: ImproveRequest, request: Request):
     )
 
     def _prompt_mejora(bloque: str) -> str:
+        if (req.mode or "") == "pdf_boundary_decisions":
+            items = []
+            for lim in (req.limites or []):
+                if not isinstance(lim, dict):
+                    continue
+                bid = str(lim.get("boundaryId") or "").strip()
+                if not bid:
+                    continue
+                items.append(
+                    f"- {bid[:120]}: «{str(lim.get('leftFragment') or '')[:40]}» + "
+                    f"«{str(lim.get('rightFragment') or '')[:40]}» ({str(lim.get('kind') or '')[:32]})"
+                )
+            lista = "\n".join(items) if items else "- NINGUNO"
+            return (
+                f"Eres un árbitro de SEPARADORES en texto extraído de un PDF, idioma «{lang}».\n"
+                "NO reescribas el texto. NO cambies letras. NO inventes palabras.\n"
+                "Para cada límite decide UNA acción: join, space, paragraph o pending.\n"
+                "Responde SOLO un JSON array, sin markdown:\n"
+                '[{"boundaryId":"...","action":"join|space|paragraph|pending","confidence":0.0,"reason":"..."}]\n\n'
+                f"LÍMITES:\n{lista}\n"
+            )
+        if (req.mode or "") == "lectura":
+            uniones = []
+            for candidato in (req.candidatos_union or [])[:300]:
+                if not isinstance(candidato, dict):
+                    continue
+                izquierda = str(candidato.get("izquierda") or "").strip()
+                derecha = str(candidato.get("derecha") or "").strip()
+                if (re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20}", izquierda)
+                        and re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20}", derecha)):
+                    uniones.append(f"- {izquierda} + {derecha}")
+            lista_uniones = "\n".join(uniones) if uniones else "- NINGUNA"
+            return (
+                f"CORRECTOR CONSERVADOR PARA LECTURA DE PDF. Idioma: {lang}.\n\n"
+                "Devuelve la misma secuencia de letras y cifras, en el mismo orden. "
+                "Corrige únicamente espacios, puntuación, tildes y mayúsculas.\n"
+                "Puedes quitar el espacio entre dos fragmentos solo cuando el par exacto "
+                "aparezca en UNIONES PERMITIDAS y sea claramente una sola palabra.\n"
+                "No agregues, quites, sustituyas, reordenes, traduzcas ni resumas contenido. "
+                "Conserva los párrafos existentes. Devuelve únicamente el texto.\n\n"
+                "UNIONES PERMITIDAS (límite izquierdo + límite derecho):\n"
+                f"{lista_uniones}\n\n"
+                f"TEXTO:\n<<<\n{bloque}\n>>>"
+            )
         return (
             f"EDITOR ESTRICTO DE TEXTOS — Idioma: {lang}\n\n"
             "Tu ÚNICO trabajo es corregir el texto que te paso. NO puedes inventar nada.\n\n"
@@ -1742,6 +1791,45 @@ async def improve_text(req: ImproveRequest, request: Request):
 
     if api_key:
         try:
+            if (req.mode or "") == "pdf_boundary_decisions":
+                import json as _json
+                loop = asyncio.get_event_loop()
+                bruto, provider_name = await loop.run_in_executor(
+                    _IA_EXECUTOR,
+                    _mejorar_con_ia_sync,
+                    provider_resuelto, api_key, _prompt_mejora(txt), openrouter_model,
+                )
+                limpio = (bruto or "").strip()
+                m = re.search(r"\[[\s\S]*\]", limpio)
+                if m:
+                    limpio = m.group(0)
+                data = _json.loads(limpio)
+                if not isinstance(data, list):
+                    raise Exception("JSON de límites no es una lista")
+                decisiones = []
+                vistos = set()
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    bid = str(item.get("boundaryId") or "").strip()
+                    action = str(item.get("action") or "").strip()
+                    if not bid or bid in vistos or action not in ("join", "space", "paragraph", "pending"):
+                        continue
+                    if item.get("text"):
+                        continue
+                    vistos.add(bid)
+                    decisiones.append({
+                        "boundaryId": bid,
+                        "action": action,
+                        "confidence": item.get("confidence"),
+                        "reason": str(item.get("reason") or "")[:240],
+                    })
+                return {
+                    "decisions": decisiones,
+                    "ia_used": True,
+                    "provider": provider_name,
+                    "text": txt,
+                }
             loop = asyncio.get_event_loop()
             bloques = _dividir_en_bloques_ia(txt)
             salidas = []

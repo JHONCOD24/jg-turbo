@@ -100,3 +100,112 @@ export function marcarBorrado(documento, ahora = Date.now()) {
     actualizado: ahora,
   };
 }
+
+/**
+ * ¿Hace falta volver a subir el TEXTO de este documento, o basta con el
+ * registro ligero?
+ *
+ * Avanzar en la lectura cambia `actualizado` (para que el progreso viaje),
+ * pero no cambia `contenidoActualizado`. Distinguirlos es lo que permite
+ * sincronizar el avance cada minuto sin resubir un libro de 40 capítulos
+ * cada minuto.
+ *
+ * Un documento sin `contenidoActualizado` es anterior a esta versión: se
+ * comporta como antes y sube todo. Preferimos gastar de más una vez a
+ * dejar un libro sin texto en el otro dispositivo.
+ */
+export function necesitaSubirContenido(documento) {
+  if (!documento) return false;
+  const sincronizado = Number(documento.sincronizado) || 0;
+  if (!sincronizado) return true;                       /* nunca se subió */
+  const contenido = Number(documento.contenidoActualizado) || 0;
+  if (!contenido) return true;                          /* registro antiguo */
+  return contenido > sincronizado;
+}
+
+/**
+ * ¿Vale la pena mirar si a este libro le falta enviar la carátula?
+ *
+ * Es un filtro barato, hecho solo con lo que ya está en memoria, para no
+ * consultar la base por cada libro en cada sincronización. Quien diga que sí
+ * todavía tiene que confirmarlo mirando si de verdad hay una imagen guardada.
+ */
+export function puedeFaltarPortada(documento) {
+  if (!esSincronizable(documento) || documento.borrado) return false;
+  return !documento.portadaSincronizada;
+}
+
+/** `false` explícito significa que el libro no puede salir del dispositivo. */
+export function esSincronizable(documento) {
+  return Boolean(documento) && documento.sincronizar !== false;
+}
+
+/**
+ * ¿Hay que enviar este libro a la nube?
+ *
+ * Antes esta decisión vivía suelta dentro de `nube.js` y solo miraba si el
+ * libro había cambiado. Por eso las carátulas no llegaban nunca: un libro
+ * sincronizado hace meses está «al día», así que quedaba fuera de la lista de
+ * envío y la comprobación de su carátula —que estaba DENTRO del bucle sobre
+ * esa lista— no llegaba a ejecutarse jamás. La carátula existía en el aparato,
+ * el código para enviarla existía, y aun así no salía de ahí.
+ *
+ * Ahora la regla está aquí, junto a las demás y con pruebas.
+ *
+ * @param {object|null} local – resumen del documento en este aparato
+ * @param {object} opciones
+ * @param {string} [opciones.cursor] – marca de la última sincronización
+ * @param {object|null} [opciones.remoto] – lo que la nube tiene de este libro
+ * @param {boolean} [opciones.faltaPortada] – confirmado: hay carátula sin enviar
+ * @returns {boolean}
+ */
+/**
+ * Carátulas que llegaron de la nube y aquí hacen falta.
+ *
+ * Enviar una carátula no cambia `actualizado`: mandar la tapa de un libro no
+ * es haberlo leído. Por eso el receptor comparaba las marcas de tiempo, veía
+ * «nada que hacer» y descartaba el documento entero —con la imagen dentro—.
+ * La carátula llegaba hasta el navegador y se tiraba.
+ *
+ * Una carátula no compite con nada: no pisa progreso ni texto, solo añade una
+ * imagen que faltaba. Así que se aplica al margen de quién gane el documento.
+ * Lo único que no se hace es inventar un libro que aquí no existe: ese lo trae
+ * la bajada normal, con su carátula incluida.
+ *
+ * @param {{id:string, borrado?:number, datos?:object}[]} llegados
+ * @param {{id:string, tienePortada?:boolean}[]} locales
+ * @returns {{id:string, portadaMini:string}[]}
+ */
+export function portadasARescatar(llegados, locales) {
+  const aqui = new Map();
+  for (const documento of locales || []) {
+    if (documento && documento.id) aqui.set(documento.id, documento);
+  }
+
+  const rescate = [];
+  for (const remoto of llegados || []) {
+    if (!remoto || !remoto.id || remoto.borrado) continue;
+    const mini = remoto.datos?.portadaMini;
+    /* Tiene que parecer una imagen: lo que viene de fuera no se guarda a ciegas. */
+    if (typeof mini !== 'string' || !mini.startsWith('data:image/')) continue;
+    const local = aqui.get(remoto.id);
+    if (!local || local.tienePortada) continue;
+    rescate.push({ id: remoto.id, portadaMini: mini });
+  }
+  return rescate;
+}
+
+export function debeSubir(local, { cursor = '', remoto = null, faltaPortada = false } = {}) {
+  if (!esSincronizable(local)) return false;
+
+  /* Una carátula pendiente es motivo suficiente por sí sola, pero nunca para
+   * un libro borrado: de eso solo viaja la lápida. */
+  if (faltaPortada && !local.borrado) return true;
+
+  /* Con cursor basta comparar contra lo último que se envió desde aquí. */
+  if (cursor) return (Number(local.actualizado) || 0) > (Number(local.sincronizado) || 0);
+
+  /* Sin cursor (primera vez, o tras desvincular) manda la comparación con la
+   * nube, que es la regla de siempre. */
+  return decidir(local, remoto) === 'subir';
+}

@@ -258,13 +258,17 @@ class ImproveRequest(BaseModel):
     context: str = ""
     # Protege los marcadores y límites temporales del doblaje de YouTube.
     preserve_segments: bool = False
-    mode: Optional[str] = "transcripcion"  # "transcripcion" | "lectura" | "auditoria_pdf"
+    mode: Optional[str] = "transcripcion"  # "transcripcion" | "lectura" | "auditoria_pdf" | "pdf_boundary_decisions"
     # Auditoría PDF: bloque estructurado con contexto y huella
     bloque_id: Optional[str] = None
     huella_origen: Optional[str] = None
     contexto_anterior: Optional[str] = None
     contexto_posterior: Optional[str] = None
     tokens_estables: Optional[list] = None
+    # Lectura PDF: únicos límites físicos en los que se permite unir 2 tokens.
+    candidatos_union: Optional[list] = None
+    # v2.37: decisiones de separador por boundaryId. No reescribe texto.
+    limites: Optional[list] = None
 
 
 class TranslateRequest(BaseModel):
@@ -1944,6 +1948,14 @@ except Exception as _e:  # pragma: no cover
     # el aviso tiene que verse en los registros: si no, el 404 desconcierta.
     print(f"[jg-sync] NO se cargó la sincronización: {type(_e).__name__}: {_e}")
 
+# Portada real de un libro. Va aparte por lo mismo que la sincronización, y
+# porque es opcional: sin ella el lector dibuja la carátula y sigue igual.
+try:
+    from api.portada import router as portada_router
+    app.include_router(portada_router)
+except Exception as _e:  # pragma: no cover
+    print(f"[jg-portada] NO se cargó la búsqueda de portadas: {type(_e).__name__}: {_e}")
+
 
 @app.get("/api/ping")
 def ping():
@@ -2567,15 +2579,62 @@ async def improve(req: ImproveRequest):
                     "- Si no hay cambios, devuelve listas vacías.\n\n"
                     f"BLOQUE ACTUAL:\n<<<\n{bloque}\n>>>"
                 )
+            if (getattr(req, "mode", "transcripcion") or "") == "pdf_boundary_decisions":
+                items = []
+                for lim in (req.limites or []):
+                    if not isinstance(lim, dict):
+                        continue
+                    bid = str(lim.get("boundaryId") or "").strip()
+                    if not bid:
+                        continue
+                    items.append(
+                        {
+                            "boundaryId": bid[:120],
+                            "leftFragment": str(lim.get("leftFragment") or "")[:40],
+                            "rightFragment": str(lim.get("rightFragment") or "")[:40],
+                            "kind": str(lim.get("kind") or "")[:32],
+                            "language": str(lim.get("language") or lang_base)[:8],
+                            "evidence": lim.get("evidence") if isinstance(lim.get("evidence"), dict) else {},
+                            "leftContext": str(lim.get("leftContext") or "")[:80],
+                            "rightContext": str(lim.get("rightContext") or "")[:80],
+                        }
+                    )
+                lista = "\n".join(
+                    f"- {it['boundaryId']}: «{it['leftFragment']}» + «{it['rightFragment']}» "
+                    f"({it['kind']})"
+                    for it in items
+                ) or "- NINGUNO"
+                return (
+                    f"Eres un árbitro de SEPARADORES en texto extraído de un PDF, idioma «{lang_base}».\n"
+                    "NO reescribas el texto. NO cambies letras. NO inventes palabras.\n"
+                    "Para cada límite decide UNA acción: join, space, paragraph o pending.\n"
+                    "join = unir sin espacio; space = dejar un espacio; paragraph = párrafo nuevo; "
+                    "pending = no estás seguro.\n"
+                    "Responde SOLO un JSON array, sin markdown:\n"
+                    '[{"boundaryId":"...","action":"join|space|paragraph|pending","confidence":0.0,"reason":"..."}]\n\n'
+                    "LÍMITES:\n"
+                    f"{lista}\n"
+                )
             if getattr(req, "mode", "transcripcion") == "lectura":
+                uniones = []
+                for candidato in (req.candidatos_union or [])[:300]:
+                    if not isinstance(candidato, dict):
+                        continue
+                    izquierda = str(candidato.get("izquierda") or "").strip()
+                    derecha = str(candidato.get("derecha") or "").strip()
+                    if (re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20}", izquierda)
+                            and re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20}", derecha)):
+                        uniones.append(f"- {izquierda} + {derecha}")
+                lista_uniones = "\n".join(uniones) if uniones else "- NINGUNA"
                 return (
                     f"Eres corrector de puntuación para lectura en voz alta, en «{lang_base}».\n\n"
                     "Este texto salió de un PDF. Al extraerlo se perdieron puntos, comas y signos "
                     "de apertura, y hay frases que quedaron pegadas o partidas. Alguien va a "
                     "ESCUCHARLO con una voz sintética: si falta un punto, la voz no respira; si "
                     "falta una coma, atropella.\n\n"
-                    "TU ÚNICO TRABAJO es devolver EXACTAMENTE LAS MISMAS PALABRAS, EN EL MISMO "
-                    "ORDEN, con la puntuación correcta.\n\n"
+                    "TU ÚNICO TRABAJO es devolver la MISMA SECUENCIA DE LETRAS Y CIFRAS, EN EL "
+                    "MISMO ORDEN, con la puntuación correcta. Solo puedes quitar un espacio "
+                    "entre dos fragmentos si ese par aparece en UNIONES PERMITIDAS.\n\n"
                     "SÍ debes:\n"
                     "1) Poner los puntos que faltan al final de cada oración.\n"
                     "2) Poner las comas que pide la sintaxis: incisos, enumeraciones, vocativos, "
@@ -2584,7 +2643,8 @@ async def improve(req: ImproveRequest):
                     "4) Poner las tildes que falten y corregir las que estén mal.\n"
                     "5) Mayúscula después de punto y en nombres propios.\n"
                     "6) Separar en párrafos donde claramente cambia el tema, con una línea en blanco.\n"
-                    "7) Unir una palabra que quedó partida («compren dido» → «comprendido»).\n\n"
+                    "7) Unir una palabra partida únicamente cuando sus dos fragmentos estén en "
+                    "UNIONES PERMITIDAS y formen claramente una sola palabra.\n\n"
                     "NUNCA debes:\n"
                     "- Cambiar una palabra por otra, ni siquiera por un sinónimo mejor.\n"
                     "- Añadir una sola palabra que no esté en el original.\n"
@@ -2592,10 +2652,13 @@ async def improve(req: ImproveRequest):
                     "- Reordenar, resumir, ampliar, explicar ni embellecer.\n"
                     "- Traducir nada.\n"
                     "- Cambiar cifras, nombres propios, marcas, siglas, URLs ni unidades.\n"
+                    "- Unir dos palabras que no aparezcan como par exacto en UNIONES PERMITIDAS.\n"
                     "- Escribir comentarios, títulos, markdown ni comillas envolventes.\n\n"
                     "Si una frase te parece rara, DÉJALA IGUAL. No es tu trabajo arreglarla. "
-                    "Se va a comparar tu salida palabra por palabra con el original: si cambias "
-                    "una sola palabra, tu trabajo se descarta entero.\n\n"
+                    "Se va a comparar tu salida letra por letra con el original: si agregas, "
+                    "quitas, sustituyes o reordenas una letra o cifra, se descarta entera.\n\n"
+                    "UNIONES PERMITIDAS (límite izquierdo + límite derecho):\n"
+                    f"{lista_uniones}\n\n"
                     "SALIDA: solo el texto, en texto plano.\n\n"
                     f"TEXTO:\n<<<\n{bloque}\n>>>"
                 )
@@ -2638,6 +2701,46 @@ async def improve(req: ImproveRequest):
             )
 
         try:
+            if (getattr(req, "mode", "") or "") == "pdf_boundary_decisions":
+                prompt = construir_prompt(txt)
+                bruto, provider_name = _llamar_ia_con_respaldo(
+                    req.api_key or "", req.provider or "", prompt, req.openrouter_model, 2000
+                )
+                limpio = (bruto or "").strip()
+                import json as _js
+                m = re.search(r"\[[\s\S]*\]", limpio)
+                if m:
+                    limpio = m.group(0)
+                try:
+                    data = _js.loads(limpio)
+                except Exception:
+                    raise Exception("Respuesta no JSON de límites: " + limpio[:300])
+                if not isinstance(data, list):
+                    raise Exception("JSON de límites no es una lista")
+                decisiones = []
+                vistos = set()
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    bid = str(item.get("boundaryId") or "").strip()
+                    action = str(item.get("action") or "").strip()
+                    if not bid or bid in vistos or action not in ("join", "space", "paragraph", "pending"):
+                        continue
+                    if item.get("text"):
+                        continue
+                    vistos.add(bid)
+                    decisiones.append({
+                        "boundaryId": bid,
+                        "action": action,
+                        "confidence": item.get("confidence"),
+                        "reason": str(item.get("reason") or "")[:240],
+                    })
+                return {
+                    "decisions": decisiones,
+                    "ia_used": True,
+                    "provider": provider_name,
+                    "text": txt,
+                }
             if (getattr(req, "mode", "") or "") == "auditoria_pdf":
                 # Auditoría estructurada: devolver JSON validado
                 prompt = construir_prompt(txt)
@@ -4019,6 +4122,17 @@ FISH_CATALOGO_BASE = (
     ("paula", "female", "Paula", "c2623f0c075b4492ac367989aee1576f", "", "en"),
     ("adrian", "male", "Adrian", "bf322df2096a46f18c579d0baa36f41d", "", "en"),
     ("ethan", "male", "Ethan", "536d3a5e000945adb7038665781a4aca", "", "en"),
+    # Voces nuevas pedidas por el usuario (2026-09): el slug es corto para la
+    # app y el reference_id es la ficha pública de fish.audio.
+    ("julio-ciencia", "male", "Julio Ciencia", "49143b926e1043c491cfe386758d09a0", "", "es"),
+    ("sheyla", "female", "Sheyla", "c42d566a928a4049a01262e4f63a1efb", "", "es"),
+    ("farick", "male", "Farick", "dfa5b230c8054f429e434f4a6e9bbdec", "", "es"),
+    ("sabio-expandido", "male", "Sabio expandido", "60a33602dacc4d899cb671b024e66d8c", "", "es"),
+    ("enrique-hoffman", "male", "Enrique Hoffman", "8926506428ad4ae898d35ede47524240", "", "es"),
+    ("voz-locutor", "male", "Voz locutor", "4110ff39a33e46b8bac2a9e7f8e00ced", "", "es"),
+    ("brian-tracy", "male", "Brian Tracy", "cd803cbf78a4454fa98b601abbf8966a", "", "es"),
+    ("morgan-freeman", "male", "Morgan Freeman", "7c76e349434d4f1e97078d924acea65f", "", "es"),
+    ("mario-alonso-puig", "male", "Mario Alonso Puig", "b9a077022c424e89b0705cb98085e36a", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {"clara": "nico-robin", "nestor": "locutor-k"}

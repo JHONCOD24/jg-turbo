@@ -1,4 +1,4 @@
-<!-- JG Turbo v2.26.0 · PDF revisión de sugerencias visible + reanudación y prioridad de auditoría -->
+<!-- v2.37.0 · Continuidad de palabras y párrafos en el motor PDF -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1306,6 +1306,9 @@
   .cmd-grid h4:first-child{margin-top:0}
 
   .notice{margin:12px 16px;padding:10px 12px;border-radius:10px;font-size:12.5px;display:flex;gap:9px;align-items:flex-start;flex:none}
+  /* `display:flex` le gana al `[hidden]` del navegador: sin esto, la caja de
+   * avisos se veía siempre, vacía, como una línea marrón sin texto. */
+  .notice[hidden]{display:none !important}
   .notice.warn{background:rgba(255,122,24,.08);border:1px solid rgba(255,122,24,.25);color:#FFC79A}
   .notice.info{background:rgba(39,225,193,.07);border:1px solid var(--cyan-glow);color:#9DEBDC}
   .notice.err{background:rgba(255,59,92,.07);border:1px solid rgba(255,59,92,.25);color:#FF8FA3}
@@ -1441,6 +1444,48 @@
   .pdf-area.has-results{overflow-x:hidden;overflow-y:auto;gap:12px}
   @media (min-width:1024px){
     .pdf-area.has-results{max-width:1200px;margin-inline:auto;width:100%}
+  }
+
+  /* ── La biblioteca fluye con la página ───────────────────────────────
+     `.card` (flex:1 + overflow:hidden) y `.pdf-area` (height:100% +
+     overflow-y:auto) encerraban la biblioteca en una caja de altura fija con
+     scroll propio. Al desplazarse, la lista se movía DENTRO del recuadro
+     mientras el resto de la página seguía quieto: en escritorio y tablet
+     parecía una ventana flotante pegada encima, y en el celular dejaba los
+     libros asomando por una rendija de pantalla.
+
+     Una biblioteca es una lista larga: tiene que crecer y dejar que baje la
+     página entera, como cualquier listado.
+
+     En modo lectura el scroll interno SÍ hace falta —el dock de reproducción
+     va anclado abajo y el texto tiene que correr por debajo—, así que esto
+     solo aplica fuera de la lectura. */
+     `flex:1 0 auto` y no `0 0 auto`: con pocos libros la tarjeta sigue
+     llenando la pantalla (si no, quedaría un recuadro corto flotando arriba,
+     que es el mismo defecto por el otro lado), y con muchos crece hacia
+     abajo y desplaza la página.
+
+     Para que esto funcione hay que soltar la cadena ENTERA, no solo el área:
+     de `html` a `.wrap`. La app está diseñada como pantalla fija con scroll
+     interno (`.wrap{height:100dvh;overflow:hidden}` en «9. Alto de la
+     ventana»), y eso es lo correcto para el lector, el micrófono o YouTube,
+     donde el contenido tiene un alto acotado. Una biblioteca no: crece con
+     cada libro que añades.
+
+     Si se libera solo `.pdf-area`, `.wrap` sigue recortando a la altura de la
+     ventana y no queda NADA que desplazar: la lista se corta y el scroll deja
+     de responder. */
+  html:has(#panelPdf.active){height:auto;min-height:100%}
+  body:not(.jg-leyendo):not(.jg-pantalla):has(#panelPdf.active){
+    height:auto;min-height:100%;
+  }
+  body:not(.jg-leyendo):not(.jg-pantalla):has(#panelPdf.active) > .wrap{
+    height:auto;min-height:100dvh;overflow:visible;
+  }
+  body:not(.jg-leyendo) #panelPdf{flex:1 0 auto;min-height:0}
+  body:not(.jg-leyendo) #panelPdf > .card{flex:1 0 auto;min-height:0}
+  body:not(.jg-leyendo) #panelPdf .pdf-area{
+    height:auto;min-height:0;overflow:visible;
   }
   .pdf-area::-webkit-scrollbar{width:4px}
   .pdf-area::-webkit-scrollbar-track{background:transparent}
@@ -2107,13 +2152,63 @@
   /* Cabecera de la biblioteca */
   .pdf-biblioteca{display:flex;flex-direction:column;gap:14px}
   .pdf-biblioteca[hidden]{display:none}
-  .pdf-biblioteca-cab{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
-  .pdf-biblioteca-tit{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+
+  /* ── Cabecera de la biblioteca ───────────────────────────────────────
+     Rejilla en vez de `flex-wrap`. Con flex, el título llevaba `flex:1` y
+     empujaba los dos botones a la línea siguiente en cuanto la pantalla se
+     estrechaba; con `align-items:flex-end` quedaban además desalineados entre
+     sí. En un celular de 360 px el resultado era un escalón de tres alturas
+     distintas. La rejilla fija dónde va cada cosa en cada tamaño. */
+  .pdf-biblioteca-cab{
+    display:grid;grid-template-columns:1fr auto auto;
+    align-items:center;gap:10px 12px;
+  }
+  .pdf-biblioteca-tit{min-width:0;display:flex;flex-direction:column;gap:2px}
   .pdf-biblioteca-cab h3{
-    font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;color:var(--text);margin:0;
+    font-family:'Bricolage Grotesque',sans-serif;
+    font-size:clamp(16px,4.2vw,19px);font-weight:700;color:var(--text);margin:0;
+    line-height:1.25;
   }
   .pdf-biblioteca-conteo{color:var(--muted-2);font-size:var(--fs-xs)}
-  .pdf-anadir{flex:none;min-height:42px;padding:8px 14px}
+  /* Con `.pdf-actualizar` a secas no basta: más abajo hay una regla general
+     (`.chip,.tts-pill,…,.mini-btn{min-height:36px}`) que, por ir después y
+     tener la misma especificidad, ganaba y dejaba el botón en 36 px. Se
+     nombra también la cabecera para que este botón sí llegue a los 44 px que
+     necesita un dedo en tablet. */
+  .pdf-biblioteca-cab .pdf-anadir{flex:none;min-height:44px;padding:8px 14px;white-space:nowrap}
+  .pdf-biblioteca-cab .pdf-actualizar{
+    flex:none;min-height:44px;padding:8px 14px;gap:7px;white-space:nowrap;font-size:12px;
+  }
+  .pdf-actualizar svg{width:15px;height:15px;flex:none}
+  /* Mientras trae los libros, el icono gira: en un celular con datos lentos,
+     un botón que no se mueve durante diez segundos parece uno que no funciona. */
+  .pdf-actualizar:disabled{opacity:.75;cursor:progress}
+  .pdf-actualizar:disabled svg{animation:pdfGirar 1s linear infinite}
+  @keyframes pdfGirar{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){
+    .pdf-actualizar:disabled svg{animation:none}
+  }
+
+  /* Celular: el título manda una línea entera y los botones ocupan la
+     siguiente, «Añadir» a lo ancho por ser la acción principal. */
+  @media (max-width:559px){
+    .pdf-biblioteca-cab{
+      grid-template-columns:1fr auto;
+      grid-template-areas:"titulo titulo" "anadir actualizar";
+    }
+    .pdf-biblioteca-tit{grid-area:titulo}
+    .pdf-anadir{grid-area:anadir;width:100%;justify-content:center}
+    .pdf-actualizar{grid-area:actualizar}
+  }
+  /* Pantalla muy estrecha (≤380 px): la palabra «Actualizar» se va y queda el
+     icono, que el `aria-label` y el `title` siguen explicando. */
+  @media (max-width:380px){
+    .pdf-actualizar{padding-inline:12px}
+    .pdf-actualizar #pdfActualizarBiblioLabel{
+      position:absolute;width:1px;height:1px;overflow:hidden;
+      clip:rect(0,0,0,0);white-space:nowrap;
+    }
+  }
 
   /* Filtros y buscador */
   .pdf-biblioteca-filtros{display:flex;flex-direction:column;gap:10px}
@@ -2291,6 +2386,7 @@
     font-size:11px;font-weight:700;line-height:1;
     color:var(--cyan);background:rgba(39,225,193,.10);border:1px solid rgba(39,225,193,.28);
     padding:4px 9px;border-radius:999px;white-space:nowrap;animation:pdfPulidoIn .18s ease;
+    cursor:pointer;
   }
   .pdf-pulido-estado[hidden]{display:none !important}
   .pdf-pulido-estado::before{
@@ -2324,6 +2420,23 @@
     .btn-back#btnPdfBack span{display:none}
     .btn-back#btnPdfBack{padding-inline:12px}
   }
+  /* Aviso de reanudación: aparece unos segundos al abrir un libro empezado.
+     Sin él, aterrizar a mitad de un capítulo parece un error de la app. */
+  .pdf-reanudar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    margin:6px 0 0;padding:8px 12px;
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent);
+    border:1px solid color-mix(in srgb, var(--lec-acento, var(--cyan)) 34%, transparent);
+    border-radius:10px;
+    font-size:13px;line-height:1.4;
+    animation:pdfReanudarEntra .28s ease both;
+  }
+  .pdf-reanudar[hidden]{display:none !important}
+  .pdf-reanudar-txt{flex:1 1 auto;min-width:0}
+  .pdf-reanudar .mini-btn{flex:0 0 auto;min-height:var(--h-touch)}
+  @keyframes pdfReanudarEntra{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.pdf-reanudar{animation:none}}
+  @media (max-width:640px){ .pdf-reanudar{font-size:12.5px;padding:8px 10px} }
 
   /* Menú ⋯ (Opciones) — pulido visual */
   .pdf-mas-menu{position:relative}
@@ -2389,6 +2502,14 @@
   .pdf-rev-motivo{font-size:.78rem;color:var(--muted)}
   .pdf-rev-acciones{display:flex;gap:8px}
   .pdf-rev-vacia{color:var(--muted);font-size:.92rem;margin:0}
+  /* Hoja de consentimiento de la revisión: mismo armazón que la hoja de
+     revisión (pdf-revision-panel + pdf-hoja-cab); solo el cuerpo es propio. */
+  .pdf-aud-cuerpo{display:flex;flex-direction:column;gap:10px}
+  .pdf-aud-cuerpo p{margin:0;color:var(--text);font-size:.92rem;line-height:1.55;overflow-wrap:anywhere}
+  .pdf-aud-cuerpo .pdf-aud-nota{color:var(--muted);font-size:.85rem}
+  .pdf-aud-pie{display:flex;gap:10px;flex-wrap:wrap}
+  .pdf-aud-pie .btn{flex:1 1 200px;min-height:44px}
+  @media (max-width:640px){ .pdf-aud-cuerpo p{font-size:.88rem} }
 
   /* ── Hojas del lector: cabecera común (asa, título y cerrar) ──────── */
   .pdf-hoja-cab{
@@ -2444,6 +2565,10 @@
 
   .pdf-mas-ayuda{
     margin:-2px 0 2px;font-size:11.5px;line-height:1.45;color:var(--muted);
+  }
+  .pdf-ayuda-gesto{
+    margin:4px 0 0;font-size:12px;line-height:1.45;
+    color:var(--muted);
   }
 
   .pdf-mas-seccion{display:flex;flex-direction:column;gap:8px}
@@ -4871,6 +4996,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Añadir un PDF
             </button>
+            <button type="button" class="mini-btn pdf-actualizar" id="btnPdfActualizarBiblio" title="Traer los libros y carátulas de tus otros aparatos" aria-label="Actualizar biblioteca desde tus otros aparatos">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              <span id="pdfActualizarBiblioLabel">Actualizar</span>
+            </button>
           </header>
 
           <div class="pdf-biblioteca-filtros">
@@ -5099,10 +5228,16 @@
                 <h3 id="pdfResultTitle">Tu texto</h3>
                 <div class="pdf-doc-linea">
                   <p class="pdf-doc-donde" id="pdfDocDonde">—</p>
-                  <span class="pdf-pulido-estado" id="pdfPulidoEstado" hidden aria-live="polite"></span>
+                  <span class="pdf-pulido-estado" id="pdfPulidoEstado" hidden aria-live="polite" role="button" tabindex="0" title="Ver qué está haciendo"></span>
                 </div>
               </div>
               <div class="pdf-doc-acciones">
+                <button type="button" class="mini-btn" id="btnPdfCapPrev" title="Capítulo anterior" aria-label="Capítulo anterior">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:15px;height:15px"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <button type="button" class="mini-btn" id="btnPdfCapNext" title="Capítulo siguiente" aria-label="Capítulo siguiente">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:15px;height:15px"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
                 <button class="mini-btn pdf-btn-solo-icono" id="btnPdfBuscarToggle" type="button" aria-expanded="false" aria-controls="pdfSearchRow" title="Buscar en el documento" aria-label="Buscar en el documento">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 </button>
@@ -5163,6 +5298,7 @@
                           </div>
                         </div>
                         <p class="pdf-mas-ayuda">Resalta la frase que suena y arrastra el texto tras ella. Si te desplazas a mano, te deja mirar unos segundos antes de retomar.</p>
+                        <p class="pdf-ayuda-gesto">Toca dos veces cualquier párrafo para leer desde ahí.</p>
                         <label class="task-field" for="pdfDormir">
                           <span class="task-field-label">Apagar la voz sola</span>
                           <select id="pdfDormir">
@@ -5272,6 +5408,10 @@
                 <span class="count" id="pdfCount">0 palabras</span>
               </div>
             </header>
+            <div class="pdf-reanudar" id="pdfReanudar" hidden role="status" aria-live="polite">
+              <span class="pdf-reanudar-txt" id="pdfReanudarTxt"></span>
+              <button type="button" class="mini-btn" id="btnPdfReanudarInicio">Empezar de cero</button>
+            </div>
 
             <div class="pdf-barra pdf-barra--doc" id="pdfProgresoDoc" role="progressbar" aria-label="Progreso de lectura" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <div class="pdf-barra-relleno" id="pdfProgresoRelleno"></div>
@@ -5290,6 +5430,49 @@
             <p class="pdf-rev-vacia" id="pdfRevisionVacio">Este capítulo ya no tiene sugerencias pendientes.</p>
             <div id="pdfRevisionLista" class="pdf-rev-lista"></div>
             <button type="button" class="btn primary" id="btnPdfRevisionAceptarTodo">Aceptar todos los cambios de este capítulo</button>
+          </div>
+
+          <!-- Hoja de consentimiento de la corrección de lectura: qué hace,
+               qué NO hace y qué se envía, antes de mandar nada a la IA. -->
+          <div class="pdf-revision-panel" id="pdfAuditoriaHoja" hidden role="dialog" aria-modal="true" aria-labelledby="pdfAuditoriaTitulo">
+            <div class="pdf-hoja-cab">
+              <h4 class="pdf-hoja-titulo" id="pdfAuditoriaTitulo">Corregir cortes y puntuación del libro</h4>
+              <button type="button" class="pdf-hoja-cerrar" id="btnPdfAuditoriaCerrar" aria-label="Cerrar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="pdf-aud-cuerpo">
+              <p><strong>Qué hace.</strong> Un PDF guarda letras con coordenadas, no párrafos reales.
+              Al extraerlo puede separar fragmentos de palabras, como «bos ton», o pegar dos oraciones.
+              La revisión corrige esos cortes, espacios y signos para que la lectura sea continua.</p>
+
+              <p><strong>Protección del texto.</strong> Solo se permite unir dos fragmentos que el
+              extractor haya encontrado en un límite físico de renglón o página. La secuencia de letras,
+              cifras y su orden debe quedar intacta; si la IA cambia una sola, el resultado se descarta.
+              Las correcciones editoriales que sí cambian una palabra quedan como sugerencias para que
+              tú decidas si las aceptas.</p>
+
+              <p><strong>Qué se envía.</strong> El <em>texto</em> extraído del PDF, por trozos, al
+              proveedor de IA que tengas configurado (<span id="pdfAuditoriaProveedor">—</span>).
+              <strong>El archivo PDF nunca sale de tu dispositivo.</strong></p>
+
+              <p><strong>Qué significa el contador.</strong> «Corrigiendo lectura 2 de 40» indica
+              cuántas partes reales del lector ya fueron revisadas. No cuenta páginas ni renglones.
+              Cada parte cambia en pantalla apenas termina; no necesitas esperar a que acabe todo el
+              libro para comprobar el capítulo abierto.</p>
+
+              <p><strong>Cuánto tarda.</strong> Depende del tamaño del libro. Empieza por la parte que
+              estás leyendo y continúa en segundo plano. «Partes sin corregir» significa que hubo un
+              fallo de conexión o del proveedor y esas partes se intentarán de nuevo al abrir el libro.</p>
+
+              <p class="pdf-aud-nota">Si prefieres no enviar nada, el modo local sigue funcionando: junta
+              las líneas, arregla los guiones de corte y quita cabeceras repetidas, todo en tu
+              dispositivo.</p>
+            </div>
+            <div class="pdf-aud-pie">
+              <button type="button" class="btn primary" id="btnPdfAuditoriaAceptar">Sí, corregir la lectura</button>
+              <button type="button" class="btn ghost" id="btnPdfAuditoriaRechazar">No, solo modo local</button>
+            </div>
           </div>
 
           <section class="pdf-trad" id="pdfTradBar" hidden aria-labelledby="pdfTradTexto">
@@ -5836,16 +6019,9 @@
         <span class="cfg-voz__ayuda">Lo que elijas aquí es lo que usará el botón <b>Escuchar</b> en todas las pestañas. Puedes cambiarlo puntualmente desde el selector que hay junto a ese botón.</span>
 
         <div class="cfg-voz__grid">
-          <div class="cfg-campo" id="settingsTtsAccentBox">
+          <div class="cfg-campo" id="settingsTtsAccentBox" hidden>
             <label for="settingsTtsAccent">Acento del español</label>
-            <select id="settingsTtsAccent">
-              <option value="es-CO">Colombia · recomendado</option>
-              <option value="es-MX">México</option>
-              <option value="es-AR">Argentina</option>
-              <option value="es-CL">Chile</option>
-              <option value="es-PE">Perú</option>
-              <option value="es-US">Latino de EE. UU.</option>
-            </select>
+            <select id="settingsTtsAccent"></select>
           </div>
           <div class="cfg-campo">
             <label for="settingsTtsVoiceName">Quién lee</label>
@@ -7802,9 +7978,9 @@ function resumenValidacionTraduccion(validacion){
 }
 
 /* ── Pulido de textos con IA ───────────────────────────────────────────────
- * Puerta ÚNICA a /api/improve. Trocea en bloques de ≤ 6000 caracteres para
- * garantizar que ninguna petición supere los límites de tiempo en servidor. */
-const PULIR_MAX_CHARS_POR_PETICION = 6000;
+ * Puerta ÚNICA a /api/improve. Trocea en bloques menores que el límite interno
+ * del servidor para que un posible corte de palabra no vuelva a dividirse. */
+const PULIR_MAX_CHARS_POR_PETICION = 3000;
 const PULIR_PETICIONES_EN_PARALELO = 2;
 
 /** Una petición de pulido, con un reintento ante fallo pasajero. */
@@ -7829,12 +8005,56 @@ async function jgPedirPulido(cuerpo, timeoutMs){
   throw ultimoError || new Error('No se pudo pulir el texto');
 }
 
+function jgCandidatosUnionDelTrozo(texto, candidatos){
+  if(!Array.isArray(candidatos) || !candidatos.length) return [];
+  const tokens = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const disponibles = new Map();
+  for(let i = 0; i + 1 < tokens.length; i++){
+    const clave = `${tokens[i]}\u0000${tokens[i + 1]}`;
+    disponibles.set(clave, (disponibles.get(clave) || 0) + 1);
+  }
+  return candidatos.filter((candidato) => {
+    const izq = String(candidato?.izquierda || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const der = String(candidato?.derecha || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const clave = `${izq}\u0000${der}`;
+    const quedan = disponibles.get(clave) || 0;
+    if(!quedan) return false;
+    disponibles.set(clave, quedan - 1);
+    return true;
+  }).slice(0, 300).map((candidato) => ({
+    izquierda: String(candidato.izquierda || '').slice(0, 20),
+    derecha: String(candidato.derecha || '').slice(0, 20),
+  }));
+}
+
+function jgProtegerCandidatosEntreTrozos(trozos, candidatos){
+  if(!Array.isArray(trozos) || trozos.length < 2 || !Array.isArray(candidatos)) return trozos;
+  const clave = (valor) => String(valor || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const permitidos = new Set(candidatos.map((c) => `${clave(c?.izquierda)}\u0000${clave(c?.derecha)}`));
+  const salida = [...trozos];
+  for(let i = 0; i + 1 < salida.length; i++){
+    const final = salida[i].match(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20})\s*$/);
+    const inicio = salida[i + 1].match(/^\s*([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20})/);
+    if(!final || !inicio || !permitidos.has(`${clave(final[1])}\u0000${clave(inicio[1])}`)) continue;
+    /* Los dos fragmentos deben llegar juntos a una petición. Se mueve solo
+       el fragmento izquierdo, sin alterar ninguna letra ni su orden. */
+    salida[i] = salida[i].slice(0, final.index).trimEnd();
+    salida[i + 1] = `${final[1]} ${salida[i + 1].trimStart()}`;
+  }
+  return salida.filter((trozo) => trozo.trim());
+}
+
 async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
   if(!texto || !texto.trim()) return { text: texto, validation: null, ia_used: false };
   const txtLimpio = String(texto).trim();
   const lang = normalizarLangApi(idioma) || 'es';
   const creds = jgCredencialesIA();
-  const trozos = jgTrocearParaTraducir(txtLimpio, PULIR_MAX_CHARS_POR_PETICION);
+  const trozos = jgProtegerCandidatosEntreTrozos(
+    jgTrocearParaTraducir(txtLimpio, PULIR_MAX_CHARS_POR_PETICION),
+    opts.candidatosUnion
+  );
   const cuerpoBase = {
     language: lang,
     provider: creds.provider,
@@ -7848,7 +8068,11 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
 
   if(trozos.length === 1){
     try{
-      const data = await jgPedirPulido({ ...cuerpoBase, text: trozos[0] }, timeoutMs);
+      const data = await jgPedirPulido({
+        ...cuerpoBase,
+        text: trozos[0],
+        candidatos_union: jgCandidatosUnionDelTrozo(trozos[0], opts.candidatosUnion),
+      }, timeoutMs);
       const out = (data.text || '').trim();
       if(!out) return { ...data, text: txtLimpio, ia_used: false };
       return { ...data, text: out };
@@ -7866,7 +8090,11 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
 
   const partes = await jgMapaConLimite(trozos, PULIR_PETICIONES_EN_PARALELO, async (trozo) => {
     try{
-      const data = await jgPedirPulido({ ...cuerpoBase, text: trozo }, timeoutMs);
+      const data = await jgPedirPulido({
+        ...cuerpoBase,
+        text: trozo,
+        candidatos_union: jgCandidatosUnionDelTrozo(trozo, opts.candidatosUnion),
+      }, timeoutMs);
       hechos += 1;
       avisar();
       const out = (data.text || '').trim();
@@ -7886,10 +8114,32 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
     provider: (partes.find((p) => p && p.provider) || {}).provider || null,
     model: (partes.find((p) => p && p.model) || {}).model || null,
     bloques: trozos.length,
+    bloques_fallidos: partes.filter((p) => !p || !p.ia_used).length,
   };
 }
 
 window.jgPulirTextoDetallado = jgPulirTextoDetallado;
+
+async function jgPedirDecisionesLimites(limites, idioma = 'es'){
+  const lista = Array.isArray(limites) ? limites : [];
+  if(!lista.length) return { decisions: [], ia_used: false };
+  const creds = jgCredencialesIA();
+  const data = await jgPedirPulido({
+    text: 'limites',
+    language: normalizarLangApi(idioma) || 'es',
+    provider: creds.provider,
+    api_key: creds.api_key,
+    openrouter_model: creds.openrouter_model,
+    mode: 'pdf_boundary_decisions',
+    limites: lista,
+  }, 90000);
+  return {
+    decisions: Array.isArray(data && data.decisions) ? data.decisions : [],
+    ia_used: !!(data && data.ia_used),
+    provider: data && data.provider,
+  };
+}
+window.jgPedirDecisionesLimites = jgPedirDecisionesLimites;
 
 function mostrarValidacionTraduccion(validacion, destinoEl = null){
   const el = destinoEl || document.getElementById('transValidation');
@@ -11481,15 +11731,11 @@ const TTS_SAMPLES = {
 const TTS_FEMALE_RE = /female|femenin|woman|girl|sabina|helena|paulina|zira|susan|samantha|salom[eé]|dalia|elena|paloma|ava|jenny|marisol|luciana|google\s*espa[nñ]ol.*femenino|microsoft\s*(sabina|helena|dalia|salom|elena|paloma|ava)/i;
 const TTS_MALE_RE = /male|masculin|\bman\b|boy|alvaro|jorge|pablo|david|gonzalo|tomas|alonso|andrew|guy|christopher|carlos|google\s*espa[nñ]ol.*masculino|microsoft\s*(alvaro|pablo|jorge|gonzalo|tomas|alonso|andrew|guy|christopher)/i;
 const TTS_LATAM_LOCALES = ['es-MX','es-US','es-419','es-CO','es-AR','es-CL','es-PE','es-VE','es-EC','es-GT','es-CR','es-PA','es-UY','es-BO','es-PY','es-HN','es-SV','es-NI','es-DO','es-PR','es-CU'];
-const TTS_NEURAL_ACCENTS = [
-  { value:'auto', label:'Recomendado · Colombia · Salomé / Gonzalo' },
-  { value:'es-CO', label:'Colombia · Salomé / Gonzalo' },
-  { value:'es-MX', label:'México · Dalia / Jorge' },
-  { value:'es-AR', label:'Argentina · Elena / Tomás' },
-  { value:'es-CL', label:'Chile · Catalina / Lorenzo' },
-  { value:'es-PE', label:'Perú · Camila / Alex' },
-  { value:'es-US', label:'Latino de Estados Unidos · Paloma / Alonso' },
-];
+/* Acentos regionales retirados de la biblioteca (vienen reemplazos): la lista
+ * queda vacía a propósito. Las tablas de nombres se conservan para que las
+ * preferencias ya guardadas (`neural:es-CO:female`, etc.) sigan sonando hasta
+ * que lleguen las voces nuevas, pero ya no se ofrecen en ningún listado. */
+const TTS_NEURAL_ACCENTS = [];
 const TTS_ACCENT_LABELS = { auto:'Colombia', 'es-CO':'Colombia', 'es-MX':'México', 'es-AR':'Argentina', 'es-CL':'Chile', 'es-PE':'Perú', 'es-US':'Latino de EE. UU.' };
 const TTS_NOMBRES_NEURAL = {
   auto: { female:'Salomé', male:'Gonzalo' },
@@ -11598,7 +11844,22 @@ const TTS_ES_WORDS = new Set('el la los las un una unos unas y o pero es son fue
 // Cognados que suenan bien en español y NO deben forzar cambio a voz inglesa.
 // Importante: NO incluir tech (app, code, web, API, model…) — esas van en inglés real.
 const TTS_ES_SAFE = new Set('real simple normal total ideal final global local digital original personal material natural video radio hotel idea plan caso tiempo fecha color estilo grupo equipo casa página sitio precio marca control acceso estado acción opción opciones número valor valores mensaje mensajes éxito listo activo inactivo público privado general especial básico avanzado estándar premium gratis completo verdadero falso sí no ok hola gracias'.split(' '));
-const TTS_ES_ACRONYMS = new Set(['SI','NO','YA','OK','TV','PC','CD','DVD','USB','PDF','JPG','PNG','MP3','MP4','GIF','WWW','USA','UE','EEUU','LATAM','IVA','NIT','CC','ID']);
+/* Siglas que en un texto en español se leen CON VOZ ESPAÑOLA.
+ * La lista corta anterior dejaba fuera las más comunes de un libro: «la ONU»,
+ * «la OMS» o «el PIB» se pronunciaban con acento inglés a media frase, que es
+ * justo lo que hacía pensar que la voz cambiaba de idioma sola. */
+const TTS_ES_ACRONYMS = new Set([
+  'SI','NO','YA','OK','TV','PC','CD','DVD','USB','PDF','JPG','PNG','MP3','MP4','GIF','WWW',
+  'USA','UE','EEUU','LATAM','IVA','NIT','CC','ID',
+  /* Organismos y siglas de uso corriente en libros y prensa en español */
+  'ONU','OTAN','OMS','OIT','OEA','FMI','BCE','BID','CAF','UNESCO','UNICEF','ACNUR','FAO',
+  'ONG','ONGS','PIB','IPC','RAE','DNI','NIE','SA','SL','SAS','URSS','RDA','RFA','EEUU',
+  'MERCOSUR','CAN','ALADI','CEPAL','OCDE','OPEP','FIFA','COI',
+  /* Colombia y región */
+  'DANE','DIAN','SENA','ICBF','EPS','IPS','ARL','AFP','POS','SISBEN','FARC','ELN','UNAL',
+  /* Cronología y referencias que aparecen en cualquier ensayo */
+  'AC','DC','ANE','DNE','NN','AAVV','VVAA',
+]);
 
 /**
  * Palabras que existen igual en varios idiomas ("de", "sistema", "que"…).
@@ -11643,40 +11904,57 @@ function ttsSupportedBrowser(){
 }
 
 /* Catálogo Fish: solo se ofrece en el listado si el servidor lo tiene activo.
-   La persona elige; no se aplica sola. Los slugs coinciden con el servidor
-   para que `fish:female` (histórico) y `fish:nico-robin` apunten a lo mismo. */
+   La persona elige; no se aplica sola. `ttsFishLista()` filtra las retiradas;
+   `ttsFishPorId()` redirige sus ids a las equivalentes que quedan. */
 const TTS_FISH_CATALOGO_LOCAL = [
-  { id:'nico-robin', gender:'female', name:'Nico Robin', lang:'es' },
   { id:'narradora', gender:'female', name:'Narradora', lang:'es' },
-  { id:'chica', gender:'female', name:'Chica', lang:'es' },
-  { id:'nagi', gender:'female', name:'Nagi', lang:'es' },
   { id:'colombiana', gender:'female', name:'Colombiana', lang:'es' },
   { id:'latina', gender:'female', name:'Latina', lang:'es' },
   { id:'voz-a', gender:'female', name:'Voz A', lang:'es' },
-  { id:'locutor-k', gender:'male', name:'Locutor K', lang:'es' },
-  { id:'narrador', gender:'male', name:'Narrador', lang:'es' },
-  { id:'loquendo', gender:'male', name:'Loquendo', lang:'es' },
   { id:'valentino', gender:'male', name:'Valentino', lang:'es' },
   { id:'sabio', gender:'male', name:'Sabio', lang:'es' },
   { id:'terror', gender:'male', name:'Terror', lang:'es' },
   { id:'leonardo', gender:'male', name:'Leonardo', lang:'es' },
-  { id:'sarah', gender:'female', name:'Sarah', lang:'en' },
-  { id:'paula', gender:'female', name:'Paula', lang:'en' },
-  { id:'adrian', gender:'male', name:'Adrian', lang:'en' },
-  { id:'ethan', gender:'male', name:'Ethan', lang:'en' },
+  { id:'julio-ciencia', gender:'male', name:'Julio Ciencia', lang:'es' },
+  { id:'sheyla', gender:'female', name:'Sheyla', lang:'es' },
+  { id:'farick', gender:'male', name:'Farick', lang:'es' },
+  { id:'sabio-expandido', gender:'male', name:'Sabio expandido', lang:'es' },
+  { id:'enrique-hoffman', gender:'male', name:'Enrique Hoffman', lang:'es' },
+  { id:'voz-locutor', gender:'male', name:'Voz locutor', lang:'es' },
+  { id:'brian-tracy', gender:'male', name:'Brian Tracy', lang:'es' },
+  { id:'morgan-freeman', gender:'male', name:'Morgan Freeman', lang:'es' },
+  { id:'mario-alonso-puig', gender:'male', name:'Mario Alonso Puig', lang:'es' },
 ];
+
+/* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
+ * Locutor K, Narrador, Loquendo y las cuatro inglesas (Sarah, Paula, Adrian,
+ * Ethan). No se ofrecen aunque el servidor las siga mandando en su catálogo:
+ * las guardadas con esos ids se redirigen a las equivalentes que quedan. */
+const TTS_FISH_RETIRADAS = new Set([
+  'nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo',
+  'sarah', 'paula', 'adrian', 'ethan',
+]);
+
+/* Ids retirados → equivalente que queda (mismo género e idioma). */
+const TTS_FISH_EQUIVALENTES = {
+  'female': 'narradora', 'clara': 'narradora',
+  'nico-robin': 'narradora', 'chica': 'narradora', 'nagi': 'narradora',
+  'male': 'valentino', 'nestor': 'valentino',
+  'locutor-k': 'valentino', 'narrador': 'valentino', 'loquendo': 'valentino',
+};
 
 let ttsFishInfo = {
   active: false,
   cargado: false,
-  voices: { female: 'Nico Robin', male: 'Locutor K' },
+  voices: { female: 'Narradora', male: 'Valentino' },
   list: TTS_FISH_CATALOGO_LOCAL.slice(),
 };
 
 function ttsFishLista(){
-  return (ttsFishInfo.list && ttsFishInfo.list.length)
+  const base = (ttsFishInfo.list && ttsFishInfo.list.length)
     ? ttsFishInfo.list
     : TTS_FISH_CATALOGO_LOCAL;
+  return base.filter(v => v && v.id && !TTS_FISH_RETIRADAS.has(String(v.id).toLowerCase()));
 }
 
 function ttsFishIdioma(item){
@@ -11707,9 +11985,8 @@ function ttsFishOrdenadas(){
 function ttsFishPorId(clave){
   const slug = String(clave || '').replace(/^fish:/, '').trim().toLowerCase();
   if(!slug) return null;
-  if(slug === 'female' || slug === 'clara') return ttsFishPorId('nico-robin');
-  if(slug === 'male' || slug === 'nestor') return ttsFishPorId('locutor-k');
-  return ttsFishLista().find(v => v.id === slug) || null;
+  const final = TTS_FISH_EQUIVALENTES[slug] || slug;
+  return ttsFishLista().find(v => v.id === final) || null;
 }
 
 function ttsNombreFish(genderOrId){
@@ -11719,7 +11996,7 @@ function ttsNombreFish(genderOrId){
   const porGenero = ttsFishLista().find(v => v.gender === clave);
   return (porGenero && porGenero.name)
     || ttsFishInfo.voices[clave]
-    || (clave === 'male' ? 'Locutor K' : 'Nico Robin');
+    || (clave === 'male' ? 'Valentino' : 'Narradora');
 }
 
 function ttsParseVoz(valor){
@@ -11731,7 +12008,7 @@ function ttsParseVoz(valor){
       provider:'fish',
       locale:'auto',
       gender: item ? item.gender : (slug === 'male' ? 'male' : 'female'),
-      fishId: item ? item.id : (slug === 'male' ? 'locutor-k' : (slug === 'female' ? 'nico-robin' : slug)),
+      fishId: item ? item.id : (slug === 'male' ? 'valentino' : (slug === 'female' ? 'narradora' : slug)),
     };
   }
   if(raw.indexOf('neural:') === 0){
@@ -11749,7 +12026,7 @@ function ttsClaveVoz(voz){
   if(!voz) return 'neural:auto:female';
   if(voz.provider === 'fish'){
     const item = ttsFishPorId(voz.fishId || voz.gender);
-    return 'fish:' + ((item && item.id) || (voz.gender === 'male' ? 'locutor-k' : 'nico-robin'));
+    return 'fish:' + ((item && item.id) || (voz.gender === 'male' ? 'valentino' : 'narradora'));
   }
   return 'neural:' + (voz.locale || 'auto') + ':' + (voz.gender === 'male' ? 'male' : 'female');
 }
@@ -11844,13 +12121,13 @@ function ttsSincronizarConfigVoz(){
       op.textContent = item.name;
       contenedor.appendChild(op);
     });
-    const elegido = voz.fishId || (voz.gender === 'male' ? 'locutor-k' : 'nico-robin');
+    const elegido = voz.fishId || (voz.gender === 'male' ? 'valentino' : 'narradora');
     if([...vozEl.options].some(o => o.value === elegido)) vozEl.value = elegido;
   } else {
     const nombres = motor === 'neural'
       ? ((modo === 'unified')
         ? { female:'Ava', male:'Andrew' }
-        : (TTS_NOMBRES_NEURAL[acentoEl.value] || TTS_NOMBRES_NEURAL.auto))
+        : (TTS_NEURAL_ACCENTS.length ? (TTS_NOMBRES_NEURAL[acentoEl.value] || TTS_NOMBRES_NEURAL.auto) : null))
       : null;
     const etiquetas = nombres
       ? { female: nombres.female + ' · femenina', male: nombres.male + ' · masculina' }
@@ -11865,8 +12142,9 @@ function ttsSincronizarConfigVoz(){
   }
 
   // El acento solo tiene efecto con voces neurales regionales o del navegador.
+  // Sin acentos en la biblioteca (retirados), la caja se esconde siempre.
   const acentoBox = document.getElementById('settingsTtsAccentBox');
-  if(acentoBox) acentoBox.style.display = (motor === 'fish' || (motor === 'neural' && modo === 'unified')) ? 'none' : 'flex';
+  if(acentoBox) acentoBox.style.display = (motor === 'fish' || (motor === 'neural' && modo === 'unified') || !TTS_NEURAL_ACCENTS.length) ? 'none' : 'flex';
 
   ttsActualizarHintVoz();
 }
@@ -11881,7 +12159,7 @@ function ttsGuardarConfigVoz(){
   try{ localStorage.setItem('jg_tts_engine', motor === 'browser' ? 'browser' : 'neural'); }catch(_){}
   if(motor === 'fish'){
     const item = ttsFishPorId(vozEl.value) || ttsFishLista()[0];
-    ttsGuardarVoz('fish:' + ((item && item.id) || 'nico-robin'));
+    ttsGuardarVoz('fish:' + ((item && item.id) || 'narradora'));
   } else {
     const gender = vozEl.value === 'male' ? 'male' : 'female';
     ttsGuardarVoz('neural:' + ((acentoEl && acentoEl.value) || 'es-CO') + ':' + gender);
@@ -11994,7 +12272,7 @@ function ttsPrefs(){
     gender: voz.gender,
     locale: voz.locale || 'auto',
     preferFish: voz.provider === 'fish',
-    fishId: voz.provider === 'fish' ? (voz.fishId || (voz.gender === 'male' ? 'locutor-k' : 'nico-robin')) : '',
+    fishId: voz.provider === 'fish' ? (voz.fishId || (voz.gender === 'male' ? 'valentino' : 'narradora')) : '',
     voiceKey: ttsClaveVoz(voz),
     tone: jgCfgGet('jg_tts_tone', 'neutral') || 'neutral',
     bilingualMode,
@@ -12162,6 +12440,12 @@ function ttsNormalizarTextoNarracion(texto){
     .replace(/\[([^\]]+)\]\((?:https?:\/\/)?[^)]+\)/g, '$1')
     .replace(/```([\s\S]*?)```/g, (_, code) => String(code || '').replace(/\s+/g, ' ').trim())
     .replace(/`([^`]+)`/g, '$1')
+    // Llamadas de nota y referencias: «[12]», «[3, 4]», «[ii]», «[*]». Solo
+    // cuando dentro no hay ni una palabra, para no perder una acotación como
+    // «[sic]» o «[el rey]». Un texto pegado desde un libro las trae, y oírlas
+    // interrumpe la lectura con números sueltos.
+    .replace(/\[\s*(?:[\divxlcdmIVXLCDM*†‡]+\s*[,;–—-]?\s*)+\]/g, (m) =>
+      /[a-záéíóúüñA-ZÁÉÍÓÚÜÑ]{2,}/.test(m.replace(/[ivxlcdmIVXLCDM]/g, '')) ? m : '')
     .replace(/[*_~]+/g, '')
     .replace(/^\s*>\s?/gm, '')
     .replace(/^\s*#{1,6}\s+/gm, '')
@@ -12286,8 +12570,16 @@ function ttsPareceTokenIngles(token){
   if(TTS_ES_SAFE.has(lower)) return false;
   // CamelCase / PascalCase (OpenAI, GitHub, ChatGPT)
   if(/[a-z][A-Z]/.test(w) || /[A-Z]{2,}[a-z]/.test(w)) return true;
-  // Letras + números: GPT-4, H264, ES2024
-  if(/[A-Za-z]\d|\d[A-Za-z]/.test(w)) return true;
+  // Letras + números: GPT-4, H264, ES2024.
+  // Se exige que la parte alfabética NO parezca una palabra española: al
+  // extraer un PDF, las llamadas de nota quedan cosidas al texto («estudio12»,
+  // «evolucion3») y esta regla las mandaba a voz inglesa a media frase. Una
+  // palabra larga y toda en minúsculas es prosa, no un nombre técnico.
+  if(/[A-Za-z]\d|\d[A-Za-z]/.test(w)){
+    const soloLetras = w.replace(/[\d._+#'@-]/g, '');
+    const pareceProsa = soloLetras.length >= 4 && soloLetras === soloLetras.toLowerCase();
+    if(!pareceProsa) return true;
+  }
   // Extensiones y nombres de archivo técnicos
   if(/\.(js|ts|tsx|jsx|mjs|cjs|py|rb|go|rs|java|kt|swift|php|cs|cpp|h|json|jsonl|ya?ml|toml|md|txt|csv|sql|html?|css|scss|vue|svelte|wasm|map|lock|env|gitignore|dockerfile)$/i.test(w)) return true;
   // Acrónimos punteados (U.S.A., A.P.I.) — se leen con voz inglesa
@@ -13400,6 +13692,10 @@ function ttsFinLectura(){
 /* ── Avanzar y retroceder (como en un reproductor de video) ─────────────── */
 function ttsBuscar(segundos){
   if(!ttsState.queue.length) return;
+  /* Quien mueva la barra está pidiendo ir a otro sitio, quizá hacia atrás. La
+     guía de lectura no retrocede sola (para no parpadear), así que hay que
+     avisarla de que este salto sí es intencionado. */
+  document.dispatchEvent(new CustomEvent('jg-tts-salto'));
   if(ttsState.engineUsed === 'browser'){
     if(typeof _mostrarToastMejora === 'function'){
       _mostrarToastMejora('Con las voces del navegador no se puede avanzar el audio', false);
@@ -13443,6 +13739,23 @@ function ttsBuscar(segundos){
 function ttsSaltar(delta){
   ttsBuscar(ttsTiempoActual() + ttsTiempoAudio(delta));
 }
+/* Salto a un bloque concreto de la cola, no a un segundo.
+ *
+ * El reproductor razona en segundos, pero el lector razona en frases. Esta
+ * función es el puente: le dices «bloque 7, al 30 % de su contenido» y ella
+ * calcula el segundo que corresponde. La usa el lector de PDF cuando tocas
+ * un párrafo para empezar a leer ahí.
+ */
+function ttsIrABloque(indiceBloque, dentro = 0){
+  if(!ttsState.queue.length) return;
+  const i = Math.max(0, Math.min(ttsState.queue.length - 1, Math.floor(indiceBloque) || 0));
+  let acumulado = 0;
+  for(let k = 0; k < i; k++) acumulado += ttsDuracionBloque(ttsState.queue[k]);
+  const dur = ttsDuracionBloque(ttsState.queue[i]);
+  const proporcion = Math.max(0, Math.min(1, Number(dentro) || 0));
+  ttsBuscar(acumulado + dur * proporcion);
+}
+window.ttsIrABloque = ttsIrABloque;
 
 function ttsHablarBrowserDesde(startIdx, token){
   if(!ttsSupportedBrowser()){
@@ -13737,13 +14050,11 @@ function ttsMontarTransporte(consoleEl){
   fila.setAttribute('data-tts-transport', '');
   fila.hidden = false;
   fila.innerHTML =
-    '<button type="button" class="tts-nav" data-tts-action="back" title="Retroceder ' + TTS_SALTO_SEG + ' segundos" aria-label="Retroceder ' + TTS_SALTO_SEG + ' segundos">' +
+    '<button type="button" class="tts-nav" data-tts-action="back" title="Frase anterior" aria-label="Frase anterior">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg>' +
-      '<span class="tts-nav-num">' + TTS_SALTO_SEG + '</span>' +
     '</button>' +
     '<input type="range" class="tts-seek" data-tts-seek min="0" max="100" step="0.1" value="0" aria-label="Posición de la lectura">' +
-    '<button type="button" class="tts-nav" data-tts-action="fwd" title="Avanzar ' + TTS_SALTO_SEG + ' segundos" aria-label="Avanzar ' + TTS_SALTO_SEG + ' segundos">' +
-      '<span class="tts-nav-num">' + TTS_SALTO_SEG + '</span>' +
+    '<button type="button" class="tts-nav" data-tts-action="fwd" title="Frase siguiente" aria-label="Frase siguiente">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg>' +
     '</button>' +
     '<span class="tts-time" data-tts-time aria-live="off">0:00 / 0:00</span>';
@@ -13807,7 +14118,13 @@ function ttsActualizarProgreso(){
       }
     }
     if(etiqueta && !ttsState.arrastrando){
-      etiqueta.textContent = ttsFormatearTiempo(tActual) + ' / ' + ttsFormatearTiempo(tTotal);
+      let txt = ttsFormatearTiempo(tActual) + ' / ' + ttsFormatearTiempo(tTotal);
+      /* En un libro, «12:30 de 48:00» no ubica a nadie. El capítulo sí. */
+      if(id === 'pdf' && window.jgPdfContexto){
+        const ctx = window.jgPdfContexto();
+        if(ctx) txt = ctx + ' · ' + txt;
+      }
+      etiqueta.textContent = txt;
       etiqueta.title = tTotal > 0
         ? ('Duración de escucha a ' + velocidad.toFixed(2) + '×')
         : 'Duración de escucha';
@@ -14054,8 +14371,21 @@ function ttsBindUI(){
     const action = actionBtn.getAttribute('data-tts-action');
     if(action === 'stop'){ ttsDetener(); return; }
     if(action === 'download'){ ttsDescargarAudio(sourceEl, sourceId, langHint, actionBtn); return; }
-    if(action === 'back'){ ttsSaltar(-TTS_SALTO_SEG); return; }
-    if(action === 'fwd'){ ttsSaltar(TTS_SALTO_SEG); return; }
+    if(action === 'back' || action === 'fwd'){
+      const haciaDelante = action === 'fwd';
+      /* En el PDF se salta por frases: es como piensa quien escucha un libro.
+       * El lector responde a este evento porque es el único que sabe dónde
+       * empieza y acaba cada frase del capítulo abierto. */
+      if(ttsState.sourceId === 'pdf'){
+        const ev = new CustomEvent('jg-tts-salto-frase', { detail: { haciaDelante } });
+        document.dispatchEvent(ev);
+        if(ev.detail.atendido) return;
+      }
+      /* Fuera del PDF (micrófono, archivo, YouTube) se conserva el salto por
+       * tiempo: ahí no hay un texto estructurado al que agarrarse. */
+      ttsSaltar(haciaDelante ? TTS_SALTO_SEG : -TTS_SALTO_SEG);
+      return;
+    }
     if(action === 'toggle'){ ttsToggleFromSource(sourceEl, sourceId, langHint); }
   });
 
@@ -15147,7 +15477,12 @@ actualizarContador();
 
 // El flujo sincronizado vive en módulos para mantener separadas la extracción,
 // traducción, reproducción, sincronización y presentación.
-import('/js/youtube/youtubeSyncController.js').then(({ inicializarYoutubeSincronizado }) => {
+/* Versión de los módulos /js/: el service worker sirve esos archivos desde el
+ * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
+ * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
+ * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
+const JG_JS_V = 'v75';
+import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,
     estaServidorOnline: () => Boolean(serverInfo.online),
@@ -15167,7 +15502,7 @@ import('/js/youtube/youtubeSyncController.js').then(({ inicializarYoutubeSincron
  * esta pestaña no paga ese peso al abrir la app. */
 const pdfOutput = document.getElementById('pdfOutput');
 let jgPdfListo = null;
-import('/js/pdf/pdfController.js').then(({ inicializarLectorPdf }) => {
+import('/js/pdf/pdfController.js?v=' + JG_JS_V).then(({ inicializarLectorPdf }) => {
   jgPdfListo = inicializarLectorPdf({
     contarPalabras,
     /* Preguntar al documento: reutiliza la clave de IA ya configurada y su

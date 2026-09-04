@@ -1,5 +1,20 @@
 # Sincronización entre dispositivos · Proyecto B
 
+## Entrega 2026-09-04 · PDF v2.37 · anclas y decisiones de límites
+
+Las partes sincronizadas pueden llevar, además del texto, `atomStart`, `atomEnd`,
+`boundaryIds`, `continuation`, `anclaInicio` y `anclaFin`. El documento puede llevar
+`versionReconstruccion`, `pendientesLimites`, `listoParaLectura` y `needsSource`.
+
+Un cliente antiguo **ignora** esos campos y sigue leyendo título/texto/página. Un cliente
+nuevo los usa para no volver a partir palabras y para conservar la posición de lectura
+con anclas textuales tras migrar de v5 a v6.
+
+Si un libro llegó sin PDF y sin manifiesto, el receptor no finge una reconstrucción
+perfecta: conserva el texto y marca `needsSource`.
+
+---
+
 ## Entrega 2026-09-01 · v1.0 · la biblioteca viaja entre tu celular y tu PC
 
 La biblioteca del Proyecto A vive en cada dispositivo: lo que lees en el

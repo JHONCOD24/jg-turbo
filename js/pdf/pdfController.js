@@ -12,25 +12,39 @@
  *    en capítulos y se muestra uno, sin perder el resto.
  */
 import { procesarPdf, ErrorPdf } from './extractorPdf.js';
-import { componerTexto, pulirParaLectura } from './limpiezaTexto.js';
+import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
+import { partirTextoCanonico, mejorCorte as mejorCorteCanonico, LIMITE_PARTE as LIMITE_PARTE_CANONICO } from './particion.js';
+import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR } from './reconstruccion.js';
+import { reconstruirDesdeAtomos } from './reconstruccion.js';
+import { aceptarDecisionesIA, contarPendientes } from './limites.js';
+import { planMigracionV6, serializarReconstruccion, marcarNeedsSource } from './manifiesto.js';
 import { prepararParaVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
-import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, esCompleta } from './auditoria.js';
+import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto, esCompleta } from './auditoria.js';
 import { construirIndice, buscarRelevantes } from './busqueda.js';
 import { construirDocx, construirHtmlImpresion, construirMarkdown } from './exportar.js';
 import { crearTraductor, necesitaTraduccion } from './traduccion.js';
 import {
   progresoInicial, avanzarProgreso, calcularPorcentaje, estadoDeLectura,
-  etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano,
+  etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
 } from './progreso.js';
+import { construirAncla, resolverAncla } from './anclaTexto.js';
+import { limpiarNombreLibro, conseguirCaratula } from './caratula.js';
 import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 
 /* A partir de aquí el texto se parte para que el editor siga siendo ágil. */
-const LIMITE_PARTE = 90000;
+const LIMITE_PARTE = LIMITE_PARTE_CANONICO;
 /* Por debajo de esto no vale la pena partir por capítulos: un folleto de dos
  * páginas se lee entero de una vez, no en tres pedazos. */
 const MINIMO_PARA_CAPITULOS = 8000;
+/* Sube cuando cambie la forma de cortar el libro en unidades de lectura. Los
+ * libros guardados con una versión anterior se rehacen solos al abrirlos: el
+ * troceo se guarda con el documento, así que arreglar el código no arregla lo
+ * que ya estaba en la biblioteca. */
+const VERSION_TROCEO = VERSION_TROCEO_MOTOR;
+/* Invalida el pulido v5 que reescribía capítulos para unir palabras. */
+const VERSION_PULIDO_LECTURA = 6;
 /* Cuánto texto se le manda a la IA como contexto de una pregunta. */
 const LIMITE_CONTEXTO_IA = 12000;
 const TAM_BLOQUE_BUSQUEDA = 2000;
@@ -63,6 +77,9 @@ export function inicializarLectorPdf(deps = {}) {
 
     titulo: $('pdfResultTitle'), donde: $('pdfDocDonde'), count: $('pdfCount'),
     salida: $('pdfOutput'), realce: $('pdfRealce'), volver: $('btnPdfBack'),
+    capPrev: $('btnPdfCapPrev'), capNext: $('btnPdfCapNext'),
+    actualizarBiblio: $('btnPdfActualizarBiblio'),
+    actualizarBiblioLabel: $('pdfActualizarBiblioLabel'),
     barraDoc: $('pdfProgresoDoc'), barraRelleno: $('pdfProgresoRelleno'),
     btnIndice: $('btnPdfIndice'), indice: $('pdfIndice'), indiceLista: $('pdfIndiceLista'),
     navbar: $('pdfNavbar'), prev: $('btnPdfPrev'), next: $('btnPdfNext'), navPos: $('pdfNavPos'),
@@ -105,6 +122,11 @@ export function inicializarLectorPdf(deps = {}) {
     revisionHoja: $('pdfRevisionHoja'), revisionTitulo: $('pdfRevisionTitulo'),
     revisionLista: $('pdfRevisionLista'), revisionVacio: $('pdfRevisionVacio'),
     revisionAceptarTodo: $('btnPdfRevisionAceptarTodo'), revisionCerrar: $('btnPdfRevisionCerrar'),
+    auditoriaHoja: $('pdfAuditoriaHoja'), auditoriaProveedor: $('pdfAuditoriaProveedor'),
+    auditoriaAceptar: $('btnPdfAuditoriaAceptar'), auditoriaRechazar: $('btnPdfAuditoriaRechazar'),
+    auditoriaCerrar: $('btnPdfAuditoriaCerrar'),
+    reanudar: $('pdfReanudar'), reanudarTxt: $('pdfReanudarTxt'),
+    reanudarInicio: $('btnPdfReanudarInicio'),
 
     nube: $('pdfNube'), nubePunto: $('pdfNubePunto'), nubeEstado: $('pdfNubeEstado'),
     nubeMas: $('btnPdfNubeMas'), nubeOpciones: $('pdfNubeOpciones'),
@@ -131,6 +153,7 @@ export function inicializarLectorPdf(deps = {}) {
     parteActual: 0,
     totalPaginas: 0,
     progreso: progresoInicial(),
+    temporizadorReanudar: null,
     traductor: null,
     traducido: new Map(),
     pulidor: null,
@@ -155,11 +178,17 @@ export function inicializarLectorPdf(deps = {}) {
     consentido: false,
     auditoriaEstado: 'Solo local',
     auditoriaProgreso: { total: 0, completados: 0, fallos: 0 },
+    correccionProgreso: { total: 0, completados: 0, fallos: 0, ejecutando: false, token: 0 },
     capa: { original: '', local: '', revisadoSeguro: '', aprobado: '' },
     textoAprobadoPorBloque: new Map(),
     textoSeguroPorBloque: new Map(),
     propuestasPorBloque: new Map(),
     decisionesPorBloque: new Map(),
+    limites: [],
+    atomos: [],
+    offsetDeAtomo: new Map(),
+    pendientesLimites: 0,
+    needsSource: false,
   };
 
   /* ── Ayudas ──────────────────────────────────────────────────────── */
@@ -243,67 +272,33 @@ export function inicializarLectorPdf(deps = {}) {
 
   /* ── Partir el texto en capítulos manejables ─────────────────────── */
 
-  function partirTexto(texto, capitulos) {
+  /**
+   * Dónde conviene cortar antes de `limite`, de mejor a peor:
+   * final de párrafo → final de frase → hueco entre palabras.
+   *
+   * Nunca a mitad de palabra, que es lo que hacía antes cuando no encontraba
+   * un salto de párrafo: la unidad de lectura empezaba con media palabra y la
+   * voz la leía partida.
+   *
+   * @param {string} texto
+   * @param {number} desde  – dónde empieza este trozo
+   * @param {number} limite – tope al que no se debe llegar
+   */
+  function mejorCorte(texto, desde, limite) {
+    return mejorCorteCanonico(texto, desde, limite);
+  }
+
+  function partirTexto(texto, capitulos, paginas = [], _candidatosUnion = [], extra = {}) {
     if (!texto) return [];
-    /* Si el documento trae capítulos, se respetan aunque el texto sea corto:
-     * el usuario quiere ver por qué capítulo va, no un bloque único. El corte
-     * por tamaño existe para que el editor no se congele, no para decidir la
-     * estructura del libro. */
-    const hayCapitulos = Array.isArray(capitulos) && capitulos.length > 1;
-    const vale = hayCapitulos && texto.length > MINIMO_PARA_CAPITULOS;
-    if (!vale && texto.length <= LIMITE_PARTE) {
-      return [{ titulo: 'Documento completo', texto, pagina: 1 }];
-    }
-
-    const cortes = [];
-    if (hayCapitulos) {
-      capitulos.forEach((cap, i) => {
-        const inicio = Math.max(0, Math.min(cap.posicion, texto.length));
-        const fin = i + 1 < capitulos.length
-          ? Math.max(inicio, Math.min(capitulos[i + 1].posicion, texto.length))
-          : texto.length;
-        if (i === 0 && inicio > 0) cortes.push({ titulo: 'Antes del primer capítulo', desde: 0, hasta: inicio, pagina: 1 });
-        if (fin > inicio) cortes.push({ titulo: cap.titulo, desde: inicio, hasta: fin, pagina: cap.pagina || 1 });
-      });
-    }
-
-    if (!cortes.length) {
-      let desde = 0;
-      let numero = 1;
-      while (desde < texto.length) {
-        let hasta = Math.min(desde + LIMITE_PARTE, texto.length);
-        if (hasta < texto.length) {
-          const corte = texto.lastIndexOf('\n\n', hasta);
-          if (corte > desde + LIMITE_PARTE * 0.5) hasta = corte;
-        }
-        cortes.push({ titulo: `Parte ${numero}`, desde, hasta, pagina: 1 });
-        desde = hasta;
-        numero += 1;
-      }
-    }
-
-    const partes = [];
-    for (const corte of cortes) {
-      const trozo = texto.slice(corte.desde, corte.hasta).trim();
-      if (!trozo) continue;
-      if (trozo.length <= LIMITE_PARTE * 1.6) {
-        partes.push({ titulo: corte.titulo, texto: trozo, pagina: corte.pagina });
-        continue;
-      }
-      let desde = 0;
-      let sub = 1;
-      while (desde < trozo.length) {
-        let hasta = Math.min(desde + LIMITE_PARTE, trozo.length);
-        if (hasta < trozo.length) {
-          const corteSuave = trozo.lastIndexOf('\n\n', hasta);
-          if (corteSuave > desde + LIMITE_PARTE * 0.5) hasta = corteSuave;
-        }
-        partes.push({ titulo: `${corte.titulo} (${sub})`, texto: trozo.slice(desde, hasta).trim(), pagina: corte.pagina });
-        desde = hasta;
-        sub += 1;
-      }
-    }
-    return partes.length ? partes : [{ titulo: 'Documento completo', texto, pagina: 1 }];
+    const capitulosLectura = prepararCapitulosLectura(texto, capitulos);
+    return partirTextoCanonico(texto, {
+      capitulos: capitulosLectura,
+      bloques: extra.bloques || estado.bloquesLectura || [],
+      limites: extra.limites || estado.limites || [],
+      atomos: extra.atomos || estado.atomos || [],
+      offsetDeAtomo: extra.offsetDeAtomo || estado.offsetDeAtomo || new Map(),
+      limiteParte: LIMITE_PARTE,
+    });
   }
 
   /* ── Biblioteca ──────────────────────────────────────────────────── */
@@ -311,6 +306,50 @@ export function inicializarLectorPdf(deps = {}) {
   function liberarPortadas() {
     for (const url of estado.urlsPortada) URL.revokeObjectURL(url);
     estado.urlsPortada = [];
+  }
+
+  /* ── Carátulas de los libros que no traen ninguna ───────────────────
+   *
+   * Un PDF de solo texto no tiene tapa, y una estantería de rectángulos con
+   * una letra no se puede recorrer con la vista. Se resuelve en dos pasos:
+   * se busca la portada REAL del libro y, si no aparece, se dibuja una con su
+   * título, su autor y un color propio.
+   *
+   * La dibujada no necesita internet ni cuesta nada, así que se pone sola. La
+   * búsqueda de la real sí sale a la red: se hace al pulsar «Buscar carátula»
+   * y al procesar un libro nuevo, no cada vez que se abre la biblioteca.
+   */
+  async function ponerCaratula(doc, { buscarReal = false, forzar = false } = {}) {
+    if (!doc || !doc.id) return 'ninguna';
+    if (doc.tienePortada && !forzar) return 'ninguna';
+    try {
+      const { titulo, autor } = limpiarNombreLibro(doc.titulo || doc.nombreArchivo || '');
+      if (!titulo) return 'ninguna';
+      const { blob, origen } = await conseguirCaratula({ titulo, autor, buscarReal });
+      if (!blob) return 'ninguna';
+      await almacen.guardarPortadaGenerada(doc.id, blob, origen);
+      return origen;
+    } catch (_) {
+      return 'ninguna';   /* sin carátula el libro se abre igual */
+    }
+  }
+
+  /**
+   * Da carátula dibujada a todos los libros que no tengan ninguna.
+   *
+   * Sin red y sin bloquear: se lanza tras pintar la biblioteca y cada libro
+   * aparece en cuanto está listo. Solo dibuja; la portada real se busca a
+   * petición, porque salir a internet por cada libro al abrir la app sería
+   * gastar datos sin que nadie lo haya pedido.
+   */
+  async function completarCaratulasQueFaltan(documentos) {
+    const sinTapa = (documentos || []).filter((d) => d && !d.borrado && !d.tienePortada);
+    if (!sinTapa.length) return;
+    let puestas = 0;
+    for (const doc of sinTapa) {
+      if (await ponerCaratula(doc, { buscarReal: false }) !== 'ninguna') puestas += 1;
+    }
+    if (puestas) pintarBiblioteca();
   }
 
   function tarjetaLibro(doc) {
@@ -375,6 +414,27 @@ export function inicializarLectorPdf(deps = {}) {
       sincronizarAhora({ silencioso: true });
     });
 
+    /* Buscar la carátula de verdad. Se ofrece siempre, no solo a los libros
+     * sin tapa: una portada dibujada puede cambiarse por la real si el libro
+     * aparece en el catálogo. */
+    const buscarTapa = document.createElement('button');
+    buscarTapa.type = 'button';
+    buscarTapa.className = 'mini-btn';
+    buscarTapa.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Buscar carátula</span>';
+    buscarTapa.title = `Buscar la carátula real de ${doc.titulo || 'este libro'}`;
+    buscarTapa.setAttribute('aria-label', `Buscar la carátula real de ${doc.titulo || 'este libro'}`);
+    buscarTapa.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      avisar('Buscando la carátula…', 'info');
+      const origen = await ponerCaratula(doc, { buscarReal: true, forzar: true });
+      if (origen === 'real') avisar(`Carátula encontrada para «${doc.titulo}».`, 'ok', { efimero: true });
+      else if (origen === 'dibujada') avisar('No aparece en el catálogo: se dibujó una carátula.', 'info', { efimero: true });
+      else avisar('No se pudo poner carátula a este libro.', 'warn');
+      await pintarBiblioteca();
+      refrescarInicio();
+    });
+
     const borrar = document.createElement('button');
     borrar.type = 'button';
     borrar.className = 'mini-btn';
@@ -386,7 +446,7 @@ export function inicializarLectorPdf(deps = {}) {
       confirmarBorrado(borrar, doc);
     });
 
-    pop.append(reiniciar, borrar);
+    pop.append(reiniciar, buscarTapa, borrar);
     menu.append(summary, pop);
     item.appendChild(menu);
 
@@ -425,7 +485,10 @@ export function inicializarLectorPdf(deps = {}) {
     /* La portada se pide aparte: la lista se pinta sin esperar por las tapas. */
     if (doc.tienePortada) {
       almacen.cargarPortada(doc.id).then((blob) => {
-        if (!blob) return;
+        /* El registro dice que hay carátula pero el archivo no está (libro que
+         * llegó por sincronización antes de que las carátulas viajaran):
+         * se muestra la inicial en vez de un cuadro vacío. */
+        if (!blob) { tapa.dataset.sinPortada = '1'; return; }
         const url = URL.createObjectURL(blob);
         estado.urlsPortada.push(url);
         tapa.style.backgroundImage = `url("${url}")`;
@@ -494,6 +557,11 @@ export function inicializarLectorPdf(deps = {}) {
     } else {
       el.espacio.textContent = '';
     }
+
+    /* Los libros sin tapa reciben la suya dibujada, sin bloquear el pintado.
+     * `pintarBiblioteca` se llama sola al terminar, y como para entonces ya
+     * tienen portada, no vuelve a entrar aquí: no hay bucle. */
+    completarCaratulasQueFaltan(documentos).catch(() => {});
   }
 
   async function pintarContinuar() {
@@ -538,7 +606,7 @@ export function inicializarLectorPdf(deps = {}) {
       estado.textoAprobadoPorBloque.set(bloqueId, nuevo);
       estado.textoAprobadoPorBloque.set(`cap_${estado.parteActual}`, nuevo);
       almacen.guardarPulidoEstructurado(estado.id, estado.parteActual, {
-        version: 4,
+        version: VERSION_PULIDO_LECTURA,
         huellaOrigen: construirHuella(nuevo),
         estado: 'edicion_manual',
         progreso: { total: 1, aceptadas: 1 },
@@ -744,6 +812,8 @@ export function inicializarLectorPdf(deps = {}) {
       el.prev.disabled = estado.parteActual === 0;
       el.next.disabled = estado.parteActual >= estado.partes.length - 1;
     }
+    if (el.capPrev) el.capPrev.disabled = estado.parteActual <= 0;
+    if (el.capNext) el.capNext.disabled = estado.parteActual + 1 >= estado.partes.length;
     el.navbar.hidden = !varias;
     if (el.audiolibroBox) el.audiolibroBox.hidden = !varias;
     if (el.resumenTodo) el.resumenTodo.hidden = !varias;
@@ -762,17 +832,110 @@ export function inicializarLectorPdf(deps = {}) {
     }, ESPERA_GUARDADO_MS);
   }
 
-  /** Fracción desplazada dentro del capítulo que se está leyendo. */
+  /** Fracción desplazada dentro del capítulo (se conserva por compatibilidad). */
   function desplazamientoActual() {
     const alto = el.salida.scrollHeight - el.salida.clientHeight;
     if (alto <= 0) return 0;
     return Math.max(0, Math.min(1, el.salida.scrollTop / alto));
   }
 
-  function anotarPosicion({ desplazamiento } = {}) {
+  /**
+   * Carácter que está arriba del todo en la pantalla.
+   *
+   * Un <textarea> no dice qué carácter se ve, así que se estima por la
+   * proporción desplazada y luego se ajusta al comienzo de la frase más
+   * cercana: aterrizar a mitad de una frase se siente como un error, y
+   * empezar la frase de nuevo se siente natural.
+   */
+  function caracterVisible() {
+    const texto = el.salida.value || '';
+    if (!texto) return 0;
+    const bruto = Math.round(desplazamientoActual() * texto.length);
+    const frases = partirEnFrases(texto);
+    if (!frases.length) return Math.max(0, Math.min(texto.length, bruto));
+    const rango = fraseEn(frases, Math.max(0, Math.min(texto.length - 1, bruto)));
+    return rango ? rango[0] : bruto;
+  }
+
+  /**
+   * Lleva la vista a un carácter del texto.
+   *
+   * Se mide sobre `el.realce`, la capa gemela que ya existe para resaltar la
+   * frase que suena: tiene el mismo texto, la misma tipografía y los mismos
+   * márgenes que el textarea, pero sus nodos SÍ se pueden medir. Sin ella
+   * habría que adivinar.
+   */
+  function irAPosicion(caracter, { centrar = true } = {}) {
+    const texto = el.salida.value || '';
+    if (!texto) return;
+    const pos = Math.max(0, Math.min(texto.length, Math.floor(Number(caracter) || 0)));
+    const alto = el.salida.scrollHeight - el.salida.clientHeight;
+    if (alto <= 0) return;
+
+    let destino = null;
+    if (el.realce) {
+      /* Se pinta el texto partido en el punto buscado y se mide dónde cae. */
+      const marca = document.createElement('span');
+      marca.textContent = '\u200b';           /* invisible, pero ocupa una posición */
+      el.realce.textContent = '';
+      el.realce.append(
+        document.createTextNode(texto.slice(0, pos)),
+        marca,
+        document.createTextNode(texto.slice(pos)),
+      );
+      destino = marca.offsetTop - (centrar ? el.salida.clientHeight * 0.30 : 0);
+      /* La guía se limpia: quien la necesite la volverá a pintar. */
+      limpiarGuia();
+    }
+    if (destino == null) destino = alto * (pos / Math.max(1, texto.length));
+    el.salida.scrollTop = Math.max(0, Math.min(alto, destino));
+    sincronizarRealce();
+  }
+
+  /**
+   * Restaura la posición guardada del capítulo abierto.
+   *
+   * Se llama en cada momento en que el texto del textarea se reemplaza (montar,
+   * pulir, traducir, volver al original): reemplazar el contenido de un
+   * <textarea> lo devuelve al principio, y ese era el motivo por el que un
+   * libro «volvía a empezar el capítulo» al reabrirlo.
+   *
+   * Se intenta en dos tiempos porque la primera vez el navegador todavía no ha
+   * terminado de maquetar y `scrollHeight` aún no es el definitivo.
+   */
+  function restaurarPosicionGuardada() {
+    const progreso = estado.progreso;
+    if (!progreso) return;
+    const aplicar = () => {
+      const texto = el.salida.value || '';
+      if (!texto) return;
+      if (progreso.cita || progreso.caracter) {
+        irAPosicion(resolverAncla(texto, progreso));
+      } else {
+        /* Documento guardado antes de esta versión: solo hay la fracción. */
+        const alto = el.salida.scrollHeight - el.salida.clientHeight;
+        if (alto > 0) el.salida.scrollTop = alto * Math.max(0, Math.min(1, progreso.desplazamiento || 0));
+      }
+    };
+    requestAnimationFrame(() => {
+      aplicar();
+      /* Segundo intento tras la maquetación real (fuentes, imágenes, envolturas). */
+      setTimeout(aplicar, 120);
+    });
+  }
+
+  function anotarPosicion({ desplazamiento, caracter } = {}) {
+    const texto = el.salida.value || '';
+    /* Si quien llama sabe el carácter exacto (la voz lo sabe), se usa; si no,
+     * se deduce de la pantalla. */
+    const punto = caracter != null ? caracter : caracterVisible();
+    const ancla = construirAncla(texto, punto);
     estado.progreso = avanzarProgreso(estado.progreso, {
       parte: estado.parteActual,
       desplazamiento: desplazamiento != null ? desplazamiento : desplazamientoActual(),
+      caracter: ancla.caracter,
+      cita: ancla.cita,
+      antes: ancla.antes,
     });
     actualizarBarraDoc();
     guardarProgresoPronto();
@@ -781,6 +944,9 @@ export function inicializarLectorPdf(deps = {}) {
   async function mostrarParte(indice, { seleccionar = null, desplazamiento = 0 } = {}) {
     if (!hayDocumento()) return;
     const nuevo = Math.max(0, Math.min(indice, estado.partes.length - 1));
+    /* ¿Estamos volviendo al capítulo que el progreso dice que se estaba
+     * leyendo? Solo entonces hay una posición guardada que respetar. */
+    const indiceEsElGuardado = nuevo === (estado.progreso?.parte ?? -1);
     if (nuevo !== estado.parteActual) guardarEdicionActual();
     estado.parteActual = nuevo;
 
@@ -800,12 +966,14 @@ export function inicializarLectorPdf(deps = {}) {
     actualizarContador();
 
     /* Restaurar el punto exacto donde se quedó la lectura. */
-    requestAnimationFrame(() => {
-      const alto = el.salida.scrollHeight - el.salida.clientHeight;
-      el.salida.scrollTop = alto > 0 ? alto * Math.max(0, Math.min(1, desplazamiento)) : 0;
+    estado.progreso = avanzarProgreso(estado.progreso, {
+      parte: nuevo,
+      desplazamiento,
+      /* Al llegar a un capítulo nuevo (no al reabrir el que se leía) no hay
+       * ancla que conservar: se entra por el principio. */
+      ...(indiceEsElGuardado ? {} : { caracter: 0, cita: '', antes: '' }),
     });
-
-    estado.progreso = avanzarProgreso(estado.progreso, { parte: nuevo, desplazamiento });
+    restaurarPosicionGuardada();
     actualizarBarraDoc();
     pintarIndice();
     guardarProgresoPronto();
@@ -844,6 +1012,7 @@ export function inicializarLectorPdf(deps = {}) {
      * de capas retira las dos de un salto para no dejar entradas huérfanas
      * en el historial. */
     cerrarHojas({ desdeHistorial: true });
+    cerrarHojaAuditoria(null);
     if (!desdeHistorial) capas.cerrar('lector');
     document.body.classList.remove('jg-leyendo');
     document.body.classList.remove('jg-pantalla');
@@ -858,6 +1027,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.buscarToggle) el.buscarToggle.setAttribute('aria-expanded', 'false');
     detenerAudiolibro();
     guardarEdicionActual();
+    clearTimeout(estado.temporizadorReanudar);
     if (estado.id && estado.auditor) { try { estado.auditor.pausar(); } catch(_){} }
     estado.id = '';
     estado.partes = [];
@@ -871,6 +1041,8 @@ export function inicializarLectorPdf(deps = {}) {
     estado.consentido = false;
     estado.auditoriaEstado = 'Solo local';
     estado.auditoriaProgreso = { total: 0, completados: 0, fallos: 0 };
+    estado.correccionProgreso.token += 1;
+    estado.correccionProgreso = { total: 0, completados: 0, fallos: 0, ejecutando: false, token: estado.correccionProgreso.token };
     estado.textoAprobadoPorBloque = new Map();
     estado.textoSeguroPorBloque = new Map();
     estado.propuestasPorBloque = new Map();
@@ -940,19 +1112,229 @@ export function inicializarLectorPdf(deps = {}) {
     await mostrarParte(estado.progreso.parte || 0, {
       desplazamiento: estado.progreso.desplazamiento || 0,
     });
-    if (estado.pulidoActivo && estado.vista === 'original') {
-      asegurarPulido(estado.progreso.parte || 0, { mostrar: true }).catch(() => {});
+    /* Decirle a la persona que la app se acordó de dónde iba. Se retira solo:
+     * es una confirmación, no un cartel permanente. */
+    if (el.reanudar && el.reanudarTxt) {
+      const frase = etiquetaReanudar(estado.progreso, estado.partes);
+      el.reanudar.hidden = !frase;
+      el.reanudarTxt.textContent = frase;
+      if (frase) {
+        clearTimeout(estado.temporizadorReanudar);
+        estado.temporizadorReanudar = setTimeout(() => {
+          if (el.reanudar) el.reanudar.hidden = true;
+        }, 9000);
+      }
     }
+    if (estado.pulidoActivo && estado.vista === 'original' && estado.consentido) {
+      iniciarCorreccionLibro().catch(() => {});
+    }
+  }
+
+  /**
+   * Rehace las unidades de lectura de un libro que ya estaba guardado.
+   *
+   * Las partes se trocean **al procesar el PDF** y se guardan así para
+   * siempre. Cuando se arregló el troceo (v2.31.0), los libros que ya estaban
+   * en la biblioteca siguieron mostrando los cortes viejos: capítulos vacíos,
+   * varios con el mismo número de página y palabras partidas entre dos
+   * unidades. Arreglar el troceo no bastaba; había que rehacer lo guardado.
+   *
+   * Se vuelve a leer el PDF original guardado, porque es la única fuente que
+   * todavía sabe que «es» y «ta» eran una sola palabra. Si el archivo ya no
+   * existe, se conserva el texto disponible sin adivinar uniones. El progreso
+   * se relocaliza mediante una ancla de texto.
+   *
+   * @returns {Promise<{partes:object[],capitulos:object[],progreso:object,bloques:object[]}|null>}
+   */
+  function reconstruirPartesGuardadas(partes) {
+    let texto = '';
+    const capitulos = [];
+    for (const parte of partes || []) {
+      const trozo = String(parte?.texto || '').trim();
+      if (!trozo) continue;
+      let separador = texto ? '\n\n' : '';
+      if (texto) {
+        const ultima = texto.match(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)[-‐­‑]?$/)?.[1] || '';
+        const primera = trozo.match(/^([a-záéíóúüñ]+)/)?.[1] || '';
+        if (/[-‐­‑]$/.test(texto) && primera) {
+          texto = texto.replace(/[-‐­‑]$/, '');
+          separador = '';
+        } else if (ultima && primera) {
+          /* Sin el PDF original no hay evidencia para decidir si dos sílabas
+           * eran una palabra o dos palabras reales. Se conserva el contenido
+           * y se evita inventar una unión. */
+          separador = ' ';
+        }
+      }
+      const posicion = texto.length + separador.length;
+      texto += separador + trozo;
+      capitulos.push({
+        titulo: parte?.titulo || 'Parte',
+        pagina: parte?.pagina || 1,
+        posicion,
+      });
+    }
+    return { texto, capitulos };
+  }
+
+  function reubicarProgreso(progreso, anteriores, nuevas) {
+    const base = progreso || progresoInicial();
+    if (!anteriores?.length || !nuevas?.length) return base;
+    const unir = (lista) => lista.map((p) => String(p?.texto || '')).join('\n\n');
+    const textoAnterior = unir(anteriores);
+    const textoNuevo = unir(nuevas);
+    if (!textoAnterior || !textoNuevo) return base;
+
+    const indiceAnterior = Math.max(0, Math.min(anteriores.length - 1, Number(base.parte) || 0));
+    let absolutoAnterior = 0;
+    for (let i = 0; i < indiceAnterior; i += 1) absolutoAnterior += String(anteriores[i]?.texto || '').length + 2;
+    absolutoAnterior += resolverAncla(String(anteriores[indiceAnterior]?.texto || ''), base);
+    const anclaGlobal = construirAncla(textoAnterior, absolutoAnterior);
+    const absolutoNuevo = resolverAncla(textoNuevo, anclaGlobal);
+
+    let inicio = 0;
+    let parte = nuevas.length - 1;
+    for (let i = 0; i < nuevas.length; i += 1) {
+      const fin = inicio + String(nuevas[i]?.texto || '').length;
+      if (absolutoNuevo <= fin) { parte = i; break; }
+      inicio = fin + 2;
+    }
+    const textoParte = String(nuevas[parte]?.texto || '');
+    const caracter = Math.max(0, Math.min(textoParte.length, absolutoNuevo - inicio));
+    const anclaLocal = construirAncla(textoParte, caracter);
+
+    /* maxParte es un hito de avance, no la posición actual. Se conserva por
+     * proporción para que reorganizar preliminares no devuelva capítulos a
+     * «pendiente». */
+    const maxAnterior = Math.max(indiceAnterior, Math.min(anteriores.length - 1, Number(base.maxParte) || 0));
+    const proporcionMax = anteriores.length <= 1 ? 0 : maxAnterior / (anteriores.length - 1);
+    const maxParte = Math.max(parte, Math.round(proporcionMax * Math.max(0, nuevas.length - 1)));
+    return {
+      ...base,
+      parte,
+      caracter: anclaLocal.caracter,
+      cita: anclaLocal.cita,
+      antes: anclaLocal.antes,
+      desplazamiento: textoParte.length ? caracter / textoParte.length : 0,
+      maxParte,
+    };
+  }
+
+  async function rehacerTroceo(doc, partes) {
+    if (!Array.isArray(partes) || !partes.length) return null;
+    const plan = planMigracionV6({
+      versionTroceo: doc.versionTroceo,
+      versionReconstruccion: doc.versionReconstruccion,
+      tieneArchivo: doc.tieneArchivo,
+      manifiesto: doc.manifiesto,
+      tieneAprobado: Boolean(doc.tieneAprobado),
+    });
+
+    const archivo = await almacen.cargarArchivo(doc.id);
+    if (archivo && (plan.accion === 'reextraer' || plan.accion === 'capa_nueva')) {
+      try {
+        const resultado = await procesarPdf(archivo, { conPortada: false });
+        if (!resultado.cancelado && !resultado.escaneado && resultado.texto?.trim()) {
+          const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
+          const nuevas = partirTexto(resultado.texto, capitulos, resultado.paginas, [], {
+            bloques: resultado.bloquesLectura || resultado.bloques,
+            limites: resultado.limites,
+            atomos: resultado.atomos,
+            offsetDeAtomo: resultado.offsetDeAtomo,
+          });
+          if (nuevas.length) {
+            return {
+              partes: nuevas,
+              capitulos,
+              progreso: reubicarProgreso(doc.progreso, partes, nuevas),
+              bloques: construirBloquesAuditoria(resultado.texto, resultado.bloques, capitulos),
+              reconstruccion: serializarReconstruccion(resultado),
+              pendientesLimites: resultado.pendientes || 0,
+              capaNueva: plan.accion === 'capa_nueva',
+              resultado,
+            };
+          }
+        }
+      } catch (error) {
+        console.warn('[jg-pdf] no se pudo reprocesar el PDF guardado; se usará el texto local', error);
+      }
+    }
+
+    if (plan.accion === 'needs_source' || (!archivo && plan.accion !== 'reconstruir')) {
+      const reconstruido = reconstruirPartesGuardadas(partes);
+      if (!reconstruido.texto.trim()) return { needsSource: true, partes, capitulos: doc.capitulos || [] };
+      return {
+        partes,
+        capitulos: doc.capitulos || reconstruido.capitulos,
+        progreso: doc.progreso,
+        bloques: [],
+        needsSource: true,
+      };
+    }
+
+    const reconstruido = reconstruirPartesGuardadas(partes);
+    if (!reconstruido.texto.trim()) return null;
+    const capitulos = prepararCapitulosLectura(reconstruido.texto, reconstruido.capitulos);
+    const nuevas = partirTexto(reconstruido.texto, capitulos, []);
+    if (!nuevas.length) return null;
+    return {
+      partes: nuevas,
+      capitulos,
+      progreso: reubicarProgreso(doc.progreso, partes, nuevas),
+      bloques: construirBloquesAuditoria(reconstruido.texto, [], capitulos),
+    };
   }
 
   async function abrirDocumento(id) {
     const doc = await almacen.cargarDocumento(id);
-    const partes = await almacen.cargarContenido(id);
+    let partes = await almacen.cargarContenido(id);
     if (!doc || !partes || !partes.length) {
       avisar('Ese documento ya no está guardado.', 'warn');
       refrescarInicio();
       return;
     }
+
+    /* Libros guardados con el troceo antiguo: se rehacen una vez y queda
+     * anotado, para no repetirlo en cada apertura. */
+    let capitulos = doc.capitulos || [];
+    let progreso = doc.progreso;
+    let bloquesRehechos = null;
+    if (doc.versionTroceo !== VERSION_TROCEO || doc.versionReconstruccion !== VERSION_RECONSTRUCCION) {
+      avisar('Reconstruyendo el libro para unir palabras partidas…', 'info');
+      const rehecho = await rehacerTroceo(doc, partes);
+      if (rehecho?.needsSource) {
+        estado.needsSource = true;
+        avisar('Necesita reimportar el PDF o una revisión manual de los límites pendientes.', 'warn');
+        await almacen.marcarTroceo(id, VERSION_TROCEO, {
+          partes: rehecho.partes || partes,
+          capitulos: rehecho.capitulos || capitulos,
+          progreso,
+          needsSource: true,
+        });
+      } else if (rehecho) {
+        if (rehecho.capaNueva) {
+          avisar('Se reconstruyó una capa nueva; el texto que ya habías aprobado se conserva.', 'info', { efimero: true });
+        } else {
+          partes = rehecho.partes;
+          capitulos = rehecho.capitulos;
+          progreso = rehecho.progreso;
+          bloquesRehechos = rehecho.bloques;
+          avisar('Se reorganizó el libro sin cortar palabras ni párrafos.', 'info', { efimero: true });
+        }
+        await almacen.marcarTroceo(id, VERSION_TROCEO, {
+          partes,
+          capitulos,
+          progreso,
+          bloques: rehecho.bloques,
+          versionReconstruccion: VERSION_RECONSTRUCCION,
+          pendientesLimites: rehecho.pendientesLimites || 0,
+          reconstruccion: rehecho.reconstruccion,
+        });
+      } else {
+        await almacen.marcarTroceo(id, VERSION_TROCEO, null);
+      }
+    }
+
     estado.archivo = null;
     await montarDocumento({
       id: doc.id,
@@ -960,8 +1342,9 @@ export function inicializarLectorPdf(deps = {}) {
       partes,
       totalPaginas: doc.totalPaginas,
       idioma: doc.idioma,
-      progreso: doc.progreso,
-      capitulos: doc.capitulos || [],
+      progreso,
+      capitulos,
+      bloques: bloquesRehechos,
     });
     avisar('');
     el.resultArea.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -994,34 +1377,118 @@ export function inicializarLectorPdf(deps = {}) {
     }, ms);
   }
   if (typeof window !== 'undefined') window.jgMostrarPulidoEstado = mostrarPulidoEstado;
+  if (typeof window !== 'undefined') {
+    window.jgPdfContexto = () => {
+      if (!hayDocumento() || estado.partes.length <= 1) return '';
+      return `Cap. ${estado.parteActual + 1}/${estado.partes.length}`;
+    };
+  }
 
   function actualizarEstadoAuditoria() {
     const total = estado.auditoriaProgreso.total || estado.bloques.length || 0;
     const comp = estado.auditoriaProgreso.completados || 0;
     const fallos = estado.auditoriaProgreso.fallos || 0;
-    const est = estadoAuditoriaTexto(total, comp, fallos, total - comp, estado.consentido);
-    estado.auditoriaEstado = esCompleta(total, comp, fallos) ? 'Completa' : est;
+    /* Cuántas sugerencias esperan decisión: solo así el indicador puede decir
+     * la verdad en vez de «cambios por revisar» siempre. */
+    let pendientesRevision = 0;
+    for (const [, lista] of estado.propuestasPorBloque || []) {
+      pendientesRevision += Array.isArray(lista) ? lista.length : 0;
+    }
+    for (const [, decs] of estado.decisionesPorBloque || []) {
+      pendientesRevision -= decs ? decs.size : 0;
+    }
+    pendientesRevision = Math.max(0, pendientesRevision);
+
+    const est = estadoAuditoriaTexto(total, comp, fallos, total - comp, estado.consentido,
+      comp >= total ? pendientesRevision : null);
+    estado.auditoriaEstado = est;
     if (estado.consentido === false && total > 0) estado.auditoriaEstado = 'Esperando permiso';
     else if (!estado.bloques.length) estado.auditoriaEstado = 'Solo local';
-    mostrarPulidoEstado(estado.auditoriaEstado, comp === total && fallos === 0 && total ? 'ok' : '');
-    if (estado.auditoriaEstado === 'Completa') ocultarPulidoEstado(4000);
+    /* Esta auditoría produce signos seguros y sugerencias editoriales. Ya no
+     * ocupa el indicador principal: ese indicador pertenece a la corrección
+     * de lectura que realmente une palabras partidas. */
     actualizarBotonRevision();
   }
 
-  async function pedirConsentimientoAuditoria() {
-    if (estado.consentido) return true;
-    const prov = (typeof window.jgCfgGet === 'function' ? window.jgCfgGet('jg_provider', 'gemini') : deps.provider || 'gemini');
-    const msg = `¿Permitir que el texto extraído de este PDF se envíe a la IA (${prov}) para auditar puntuación y gramática? Se envía solo el texto extraído, no el archivo PDF. Puedes rechazar y seguir usando el modo local.`;
-    const ok = window.confirm(msg);
-    estado.consentido = !!ok;
-    try { localStorage.setItem(`jg_pdf_consent_${estado.id}`, ok ? '1' : '0'); } catch (_) {}
-    if (!ok) {
-      mostrarPulidoEstado('Solo local', 'mecanico');
-      ocultarPulidoEstado(2600);
-    } else {
-      mostrarPulidoEstado('Auditando...', '');
+  function actualizarEstadoCorreccion() {
+    const p = estado.correccionProgreso;
+    const texto = estadoCorreccionLecturaTexto(p.total, p.completados, p.fallos, estado.consentido);
+    mostrarPulidoEstado(texto, !p.ejecutando && p.total > 0 && p.fallos === 0 ? 'ok' : '');
+  }
+
+  /**
+   * Pide permiso para enviar el texto a la IA, explicando de verdad qué pasa.
+   *
+   * Antes era un `window.confirm` con un párrafo dentro: bloqueante, feo en
+   * celular, y sin espacio para explicar qué se envía y qué no. Ahora es una
+   * hoja de la propia app, con el mismo aspecto que el resto.
+   */
+  let resolverConsentimientoAuditoria = null;
+
+  function cerrarHojaAuditoria(decision = null) {
+    if (!el.auditoriaHoja) return;
+    const estabaEsperando = typeof resolverConsentimientoAuditoria === 'function';
+    /* Cerrar la primera solicitud equivale a no autorizar. Al cerrar una hoja
+     * reabierta solo se oculta la explicación y se conserva la decisión. */
+    if (decision == null && estabaEsperando) decision = false;
+    el.auditoriaHoja.hidden = true;
+
+    if (decision != null) {
+      estado.consentido = !!decision;
+      try { localStorage.setItem(`jg_pdf_consent_${estado.id}`, decision ? '1' : '0'); } catch (_) {}
+      if (!decision) {
+        estado.correccionProgreso.token += 1;
+        estado.correccionProgreso.ejecutando = false;
+        if (estado.auditor) estado.auditor.pausar();
+        mostrarPulidoEstado('Solo local', 'mecanico');
+      } else {
+        mostrarPulidoEstado('Preparando corrección de lectura…', '');
+      }
     }
-    return estado.consentido;
+
+    const resolver = resolverConsentimientoAuditoria;
+    resolverConsentimientoAuditoria = null;
+    if (resolver) resolver(decision === true);
+    if (decision === true) setTimeout(() => iniciarCorreccionLibro(), 0);
+  }
+
+  function pedirConsentimientoAuditoria() {
+    if (estado.consentido) return Promise.resolve(true);
+    if (!el.auditoriaHoja) {
+      /* Sin la hoja (HTML antiguo en caché), no se envía nada: ante la duda,
+       * la opción segura es no mandar el texto a ningún sitio. */
+      return Promise.resolve(false);
+    }
+    const prov = (typeof window.jgCfgGet === 'function' ? window.jgCfgGet('jg_provider', 'gemini') : deps.provider || 'gemini');
+    if (el.auditoriaProveedor) el.auditoriaProveedor.textContent = prov;
+
+    return new Promise((resolver) => {
+      resolverConsentimientoAuditoria = resolver;
+      el.auditoriaHoja.hidden = false;
+      el.auditoriaAceptar.focus();
+    });
+  }
+
+  if (el.auditoriaAceptar) el.auditoriaAceptar.addEventListener('click', () => cerrarHojaAuditoria(true));
+  if (el.auditoriaRechazar) el.auditoriaRechazar.addEventListener('click', () => cerrarHojaAuditoria(false));
+  if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', () => cerrarHojaAuditoria(null));
+  if (el.auditoriaHoja) el.auditoriaHoja.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); cerrarHojaAuditoria(null); }
+  });
+
+  /* El chip del estado explica qué hace la revisión: pulsarlo reabre la hoja. */
+  if (el.pulidoEstado) {
+    const reabrirAuditoria = () => {
+      if (!el.auditoriaHoja) return;
+      el.auditoriaHoja.hidden = false;
+      if (el.auditoriaProveedor && typeof window.jgCfgGet === 'function') {
+        el.auditoriaProveedor.textContent = window.jgCfgGet('jg_provider', 'gemini');
+      }
+    };
+    el.pulidoEstado.addEventListener('click', reabrirAuditoria);
+    el.pulidoEstado.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reabrirAuditoria(); }
+    });
   }
 
   function prepararPulidor() {
@@ -1033,6 +1500,14 @@ export function inicializarLectorPdf(deps = {}) {
     estado.decisionesPorBloque = new Map();
     estado.textoAprobadoPorBloque = new Map();
     estado.auditoriaProgreso = { total: 0, completados: 0, fallos: 0 };
+    estado.correccionProgreso.token += 1;
+    estado.correccionProgreso = {
+      total: estado.partes.length,
+      completados: 0,
+      fallos: 0,
+      ejecutando: false,
+      token: estado.correccionProgreso.token,
+    };
     // consentimiento previo por documento
     try {
       const v = localStorage.getItem(`jg_pdf_consent_${estado.id}`);
@@ -1048,22 +1523,41 @@ export function inicializarLectorPdf(deps = {}) {
         if (!estado.consentido) return texto;
         if (typeof window.jgPulirTextoDetallado === 'function') {
           const res = await window.jgPulirTextoDetallado(texto, estado.idioma, opciones);
+          /* Antes, un error de red devolvía el original y se guardaba como si
+           * hubiese sido revisado. Debe quedar pendiente para poder reintentar. */
+          if (opciones?.mode === 'lectura' && (!res?.ia_used || Number(res?.bloques_fallidos) > 0)) {
+            throw new Error('La IA no confirmó la revisión');
+          }
           return res.text;
         }
         if (deps.pulirTexto) return await deps.pulirTexto(texto, opciones);
         return texto;
       },
-      guardar: (indice, texto) => almacen.guardarPulido(estado.id, indice, texto),
+      guardar: (indice, texto) => {
+        const fuente = estado.partes[indice]?.texto || '';
+        return almacen.guardarPulidoEstructurado(estado.id, indice, {
+          version: VERSION_PULIDO_LECTURA,
+          huellaOrigen: construirHuella(fuente),
+          estado: 'lectura_segura',
+          textoSeguro: texto,
+          propuestas: [],
+          decisiones: {},
+          advertencias: [],
+          actualizado: Date.now(),
+        });
+      },
       /* Revalidación contra la fuente: un registro «legado» solo se usa solo
        * si su huella coincide con el texto real del capítulo; los demás se
        * conservan pero no vuelven a la vista por su cuenta. */
       cargar: async (indice) => {
         const reg = await almacen.cargarPulidoRegistro(estado.id, indice);
         if (!reg) return null;
+        const parte = estado.partes[indice];
+        const huellaFuente = parte ? construirHuella(parte.texto) : '';
+        if (reg.huellaOrigen && reg.huellaOrigen !== huellaFuente) return null;
+        if (reg.estado === 'lectura_segura' && Number(reg.version) !== VERSION_PULIDO_LECTURA) return null;
         if (reg.estado === 'legado') {
-          const parte = estado.partes[indice];
-          const huellaFuente = parte ? construirHuella(parte.texto) : '';
-          if (!reg.huellaOrigen || reg.huellaOrigen !== huellaFuente) return null;
+          if (!reg.huellaOrigen) return null;
         }
         return reg.texto || reg.textoAprobado || reg.textoSeguro || null;
       },
@@ -1120,21 +1614,32 @@ export function inicializarLectorPdf(deps = {}) {
     // Hidratar auditoría previa (respuestas, decisiones y caché) para que
     // cerrar y reabrir el libro NO pierda el trabajo ya hecho.
     almacen.listarAuditoriaDoc(estado.id).then(async (filas) => {
-      for (const b of filas) {
+      const bloquesActuales = new Map(estado.bloques.map((b) => [b.id, b]));
+      const compatibles = filas.filter((fila) => {
+        const actual = bloquesActuales.get(fila.bloqueId);
+        if (!actual) return false;
+        /* El re-troceo puede conservar el id b0 pero cambiar su texto. Las
+         * decisiones antiguas se preservan en IndexedDB, pero no se aplican
+         * sobre una fuente distinta. */
+        return !fila.huella || fila.huella === construirHuella(actual.texto);
+      });
+      for (const b of compatibles) {
         if (b.propuestas) estado.propuestasPorBloque.set(b.bloqueId, b.propuestas);
         if (b.textoSeguro) estado.textoSeguroPorBloque.set(b.bloqueId, b.textoSeguro);
       }
-      await Promise.all(filas.map(async (b) => {
+      await Promise.all(compatibles.map(async (b) => {
         const reg = await almacen.cargarPulidoRegistro(estado.id, `bloque_${b.bloqueId}`);
-        if (reg?.decisiones && typeof reg.decisiones === 'object') {
+        const actual = bloquesActuales.get(b.bloqueId);
+        const mismaFuente = !reg?.huellaOrigen || reg.huellaOrigen === construirHuella(actual?.texto || '');
+        if (mismaFuente && reg?.decisiones && typeof reg.decisiones === 'object') {
           estado.decisionesPorBloque.set(b.bloqueId, new Map(Object.entries(reg.decisiones)));
           if (reg.textoAprobado) estado.textoAprobadoPorBloque.set(b.bloqueId, reg.textoAprobado);
         }
       }));
-      if (estado.auditor && filas.length) await estado.auditor.hidratar(filas.map((b) => b.bloqueId));
+      if (estado.auditor && compatibles.length) await estado.auditor.hidratar(compatibles.map((b) => b.bloqueId));
       /* Solo hay algo que reconstruir si el trabajo previo incluyó decisiones:
        * sin ellas, la vista sigue en su capa local (nada aprobado que aplicar). */
-      const conDecisiones = filas.some((b) => (estado.decisionesPorBloque.get(b.bloqueId)?.size || 0) > 0);
+      const conDecisiones = compatibles.some((b) => (estado.decisionesPorBloque.get(b.bloqueId)?.size || 0) > 0);
       if (conDecisiones) reconstruirAprobado({ guardar: false });
       actualizarEstadoAuditoria();
     }).catch(()=>{});
@@ -1154,30 +1659,99 @@ export function inicializarLectorPdf(deps = {}) {
       }
     }).catch(() => {});
 
-    // Si hay bloques y consentimiento, encolar auditoría priorizando el
-    // capítulo abierto (y el que le sigue), no los dos primeros del libro.
-    if (estado.bloques.length && estado.consentido) {
-      const prio = idsBloquesDeCapitulos([estado.parteActual, estado.parteActual + 1]);
-      estado.auditor.encolar(estado.bloques, { prioridad: prio });
-      estado.auditor.iniciar((ev) => {
-        if (ev.estado === 'ok') estado.auditoriaProgreso.completados += 1;
-        else if (ev.estado === 'fallo' || ev.estado === 'error') estado.auditoriaProgreso.fallos += 1;
-        actualizarEstadoAuditoria();
-        // si el bloque auditado es del capítulo abierto, refrescar la vista
-        const bloq = estado.bloques.find((b) => b.id === ev.id);
-        if (bloq && bloq.capitulo === estado.parteActual && estado.pulidoActivo && estado.vista === 'original') {
-          volcarPulido(estado.parteActual);
-        }
-      });
-    } else {
-      actualizarEstadoAuditoria();
-    }
+    /* La cola editorial anterior enviaba una petición por bloque estructural
+     * y podía mostrar 4.950 renglones pendientes. Se conserva únicamente para
+     * leer sugerencias ya guardadas. La corrección automática nueva recorre
+     * las partes reales del lector mediante `iniciarCorreccionLibro`. */
+    actualizarEstadoAuditoria();
   }
 
   /** Ids de los bloques de auditoría que pertenecen a los capítulos dados. */
   function idsBloquesDeCapitulos(indices) {
     const set = new Set(indices);
     return estado.bloques.filter((b) => set.has(b.capitulo)).map((b) => b.id);
+  }
+
+  /** Revisa todas las unidades reales del lector, empezando por la abierta. */
+  async function iniciarCorreccionLibro() {
+    if (!estado.consentido || !estado.partes.length) return;
+    if (estado.correccionProgreso.ejecutando) return;
+    const pendientes = (estado.limites || []).filter((l) => l.decision === 'pending');
+    if (!pendientes.length) {
+      estado.correccionProgreso = {
+        total: 1, completados: 1, fallos: 0, ejecutando: false,
+        token: estado.correccionProgreso.token + 1,
+      };
+      actualizarEstadoCorreccion();
+      return;
+    }
+    if (typeof window.jgPedirDecisionesLimites !== 'function') return;
+
+    const docId = estado.id;
+    const token = estado.correccionProgreso.token + 1;
+    const TAM = 80;
+    const lotes = [];
+    for (let i = 0; i < pendientes.length; i += TAM) lotes.push(pendientes.slice(i, i + TAM));
+    estado.correccionProgreso = {
+      total: lotes.length, completados: 0, fallos: 0, ejecutando: true, token,
+    };
+    actualizarEstadoCorreccion();
+
+    for (const lote of lotes) {
+      if (estado.id !== docId || estado.correccionProgreso.token !== token || !estado.consentido) return;
+      try {
+        const payload = lote.map((lim) => ({
+          boundaryId: lim.id,
+          leftFragment: lim.leftFragment,
+          rightFragment: lim.rightFragment,
+          kind: lim.kind,
+          language: estado.idioma || 'es',
+          evidence: {
+            gap: lim.evidence?.gap,
+            pageChange: lim.evidence?.pageChange,
+            leftHasEOL: lim.evidence?.leftHasEOL,
+          },
+        }));
+        const resp = await window.jgPedirDecisionesLimites(payload, estado.idioma);
+        aceptarDecisionesIA(estado.limites, resp?.decisions || resp || []);
+        estado.correccionProgreso.completados += 1;
+      } catch (_) {
+        estado.correccionProgreso.fallos += 1;
+      }
+      actualizarEstadoCorreccion();
+    }
+
+    estado.pendientesLimites = contarPendientes(estado.limites);
+    if (estado.atomos?.length) {
+      const recon = reconstruirDesdeAtomos(estado.atomos, {
+        decisionesIA: estado.limites
+          .filter((l) => l.source === 'ai' || l.source === 'user')
+          .map((l) => ({ boundaryId: l.id, action: l.decision })),
+        lang: estado.idioma,
+      });
+      estado.limites = recon.limites;
+      estado.pendientesLimites = recon.pendientes;
+      estado.originalTexto = recon.texto;
+      estado.localTexto = recon.texto;
+      const caps = prepararCapitulosLectura(recon.texto, recon.capitulos);
+      const nuevas = partirTexto(recon.texto, caps, recon.paginas, [], {
+        bloques: recon.bloquesLectura, limites: recon.limites,
+        atomos: recon.atomos, offsetDeAtomo: recon.offsetDeAtomo,
+      });
+      if (nuevas.length) {
+        const progreso = reubicarProgreso(estado.progreso, estado.partes, nuevas);
+        estado.partes = nuevas;
+        await almacen.marcarTroceo(estado.id, VERSION_TROCEO, {
+          partes: nuevas, capitulos: caps, progreso,
+          versionReconstruccion: VERSION_RECONSTRUCCION,
+          pendientesLimites: recon.pendientes,
+          reconstruccion: serializarReconstruccion(recon),
+        });
+        el.salida.value = textoDeParte(estado.parteActual);
+      }
+    }
+    estado.correccionProgreso.ejecutando = false;
+    actualizarEstadoCorreccion();
   }
 
   async function asegurarPulido(indice, { mostrar = false } = {}) {
@@ -1191,26 +1765,27 @@ export function inicializarLectorPdf(deps = {}) {
     const esActual = indice === estado.parteActual;
     if (esActual) mostrarPulidoEstado('Puliendo para voz…', '');
     try {
-      // Si no hay consentimiento y hay bloques, pedirlo una vez
-      if (!estado.consentido && estado.bloques.length) {
+      // Sin consentimiento nunca se llama ni se guarda una falsa revisión.
+      if (!estado.consentido) {
         const ok = await pedirConsentimientoAuditoria();
         if (!ok) { if (esActual) { mostrarPulidoEstado('Solo local', 'mecanico'); ocultarPulidoEstado(2000); } return false; }
-        // relanzar cola auditoría (prioridad: capítulo abierto)
-        estado.auditor.encolar(estado.bloques, { prioridad: idsBloquesDeCapitulos([estado.parteActual, estado.parteActual + 1]) });
-        estado.auditor.iniciar(()=>actualizarEstadoAuditoria());
       }
       const texto = await estado.pulidor.obtener(indice, parte);
-      if (!texto) { if (esActual) ocultarPulidoEstado(1200); return false; }
+      const resultado = estado.pulidor.resultado?.(indice);
+      if (!texto || !resultado?.ok) {
+        if (esActual && !estado.correccionProgreso.ejecutando) {
+          mostrarPulidoEstado('No se pudo corregir esta parte', 'mecanico');
+        }
+        return false;
+      }
       estado.pulido.set(indice, texto);
       if (el.pulidoCambio) el.pulidoCambio.hidden = false;
       if (mostrar && estado.pulidoActivo && estado.vista === 'original') volcarPulido(indice);
-      if (esActual) {
+      if (esActual && !estado.correccionProgreso.ejecutando) {
         const cambio = texto !== parte.texto;
         mostrarPulidoEstado(cambio ? '✓ Pulido para voz' : '✓ Listo para escuchar', cambio ? 'ok' : 'mecanico');
         ocultarPulidoEstado(2600);
       }
-      const siguiente = estado.partes[indice + 1];
-      if (siguiente) estado.pulidor.precargar(indice + 1, siguiente);
       return true;
     } catch (error) {
       if (esActual) { mostrarPulidoEstado('Pulido mecánico activo', 'mecanico'); ocultarPulidoEstado(2200); }
@@ -1222,12 +1797,25 @@ export function inicializarLectorPdf(deps = {}) {
     if (indice !== estado.parteActual || estado.vista !== 'original' || !estado.pulidoActivo) return;
     // Si hay texto aprobado/revisadoSeguro para este capítulo, preferirlo
     const progAprobado = estado.textoAprobadoPorBloque.get(`cap_${indice}`);
-    if (progAprobado) { el.salida.value = progAprobado; el.salida.dispatchEvent(new Event('input', { bubbles: true })); actualizarContador(); return; }
+    if (progAprobado) {
+      el.salida.value = progAprobado;
+      el.salida.dispatchEvent(new Event('input', { bubbles: true }));
+      actualizarContador();
+      restaurarPosicionGuardada();   /* reemplazar el texto manda el scroll a 0 */
+      return;
+    }
     const seguro = estado.textoSeguroPorBloque.get(`cap_${indice}`);
-    if (seguro) { el.salida.value = seguro; el.salida.dispatchEvent(new Event('input', { bubbles: true })); actualizarContador(); return; }
+    if (seguro) {
+      el.salida.value = seguro;
+      el.salida.dispatchEvent(new Event('input', { bubbles: true }));
+      actualizarContador();
+      restaurarPosicionGuardada();
+      return;
+    }
     el.salida.value = estado.pulido.get(indice) || el.salida.value;
     el.salida.dispatchEvent(new Event('input', { bubbles: true }));
     actualizarContador();
+    restaurarPosicionGuardada();
   }
 
   function activarPulido() {
@@ -1241,6 +1829,7 @@ export function inicializarLectorPdf(deps = {}) {
       el.salida.value = textoDeParte(estado.parteActual);
       el.salida.dispatchEvent(new Event('input', { bubbles: true }));
       actualizarContador();
+      restaurarPosicionGuardada();
       asegurarPulido(estado.parteActual, { mostrar: true });
     }
   }
@@ -1256,6 +1845,7 @@ export function inicializarLectorPdf(deps = {}) {
       el.salida.value = estado.partes[estado.parteActual]?.texto || '';
       el.salida.dispatchEvent(new Event('input', { bubbles: true }));
       actualizarContador();
+      restaurarPosicionGuardada();
     }
   }
 
@@ -1495,6 +2085,7 @@ export function inicializarLectorPdf(deps = {}) {
     el.salida.value = estado.traducido.get(indice) || el.salida.value;
     el.salida.dispatchEvent(new Event('input', { bubbles: true }));
     actualizarContador();
+    restaurarPosicionGuardada();
   }
 
   async function activarEspanol() {
@@ -1522,6 +2113,7 @@ export function inicializarLectorPdf(deps = {}) {
     el.salida.value = estado.partes[estado.parteActual]?.texto || '';
     el.salida.dispatchEvent(new Event('input', { bubbles: true }));
     actualizarContador();
+    restaurarPosicionGuardada();
   }
 
   /* ── Procesar un PDF nuevo ───────────────────────────────────────── */
@@ -1583,26 +2175,39 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   /** Guarda el documento entero y lo deja abierto para leer. */
-  async function entregarDocumento(resultado, { origen = 'texto', portada = null } = {}) {
+  async function entregarDocumento(resultado, {
+    origen = 'texto', portada = null, archivo = estado.archivo,
+  } = {}) {
     // Capas: original inmutable + local (orden/espacios/guiones ya aplicados en componerTexto)
     estado.originalTexto = resultado.texto;
-    estado.localTexto = resultado.texto; // local ya es texto con limpieza sin IA (pulirParaLectura puro)
+    estado.localTexto = resultado.texto;
     estado.bloquesEstructurales = resultado.bloques || [];
     estado.omisiones = resultado.omisiones || [];
+    estado.limites = resultado.limites || [];
+    estado.atomos = resultado.atomos || [];
+    estado.offsetDeAtomo = resultado.offsetDeAtomo || new Map();
+    estado.pendientesLimites = Number(resultado.pendientes) || 0;
+    estado.needsSource = false;
+    const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
     // dividir en bloques semánticos de 3000 para auditoría, con contexto
-    const bloques = construirBloquesAuditoria(resultado.texto, resultado.bloques, resultado.capitulos);
+    const bloques = construirBloquesAuditoria(resultado.texto, resultado.bloques, capitulos);
     estado.bloques = bloques;
     estado.auditoriaProgreso = { total: bloques.length, completados: 0, fallos: 0 };
     estado.capa = { original: resultado.texto, local: resultado.texto, revisadoSeguro: '', aprobado: '' };
 
-    const partes = partirTexto(resultado.texto, resultado.capitulos);
+    const partes = partirTexto(resultado.texto, capitulos, resultado.paginas, [], {
+      bloques: resultado.bloquesLectura || resultado.bloques,
+      limites: resultado.limites,
+      atomos: resultado.atomos,
+      offsetDeAtomo: resultado.offsetDeAtomo,
+    });
     const titulo = resultado.titulo
-      || (estado.archivo?.name || 'Documento').replace(/\.pdf$/i, '');
+      || (archivo?.name || 'Documento').replace(/\.pdf$/i, '');
     const idioma = deps.detectarIdioma
       ? deps.detectarIdioma(resultado.texto.slice(0, 4000))
       : 'es';
-    const id = estado.archivo
-      ? `${(estado.archivo.name || 'doc').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${estado.archivo.size || 0}`
+    const id = archivo
+      ? `${(archivo.name || 'doc').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${archivo.size || 0}`
       : `doc-${Date.now().toString(36)}`;
 
     /* La primera vez que se guarda algo, se pide al navegador que no lo borre. */
@@ -1613,38 +2218,43 @@ export function inicializarLectorPdf(deps = {}) {
         meta: {
           id,
           titulo,
-          nombreArchivo: estado.archivo?.name || '',
+          nombreArchivo: archivo?.name || '',
           idioma,
           totalPaginas: resultado.totalPaginas || 0,
           paginasLeidas: resultado.paginasLeidas || 0,
           origen,
-          capitulos: resultado.capitulos || [],
-          bytes: estado.archivo?.size || 0,
+          versionTroceo: VERSION_TROCEO,
+          versionReconstruccion: VERSION_RECONSTRUCCION,
+          pendientesLimites: estado.pendientesLimites,
+          listoParaLectura: estado.pendientesLimites === 0,
+          needsSource: false,
+          sincronizar: true,
+          capitulos,
+          bytes: archivo?.size || 0,
           progreso: progresoInicial(),
           estado: 'sin-empezar',
         },
         partes,
-        pdf: estado.archivo || null,
+        pdf: archivo || null,
         portada,
+        reconstruccion: serializarReconstruccion(resultado),
       });
       /* Los bloques viajan aparte para poder reanudar la auditoría al
        * reabrir el libro sin recomputar nada ni repetir gastos de IA. */
-      almacen.guardarBloquesDocumento(id, bloques).catch(() => {});
+      await almacen.guardarBloquesDocumento(id, bloques).catch(() => {});
     } catch (error) {
       avisar(error.message || 'No se pudo guardar el documento en la biblioteca.', 'err');
+      return { ok: false, error };
     }
 
-    await montarDocumento({ id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, bloques });
+    await montarDocumento({ id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, capitulos, bloques });
     await refrescarInicio();
     sincronizarAhora({ silencioso: true });
-
-    if (estado.pulidor) {
-      estado.pulidor.obtener(0, partes[0]).catch(() => {});
-    }
 
     if (permiso.soportado && !permiso.concedido) {
       console.info('[jg-pdf] el navegador no concedió almacenamiento persistente');
     }
+    return { ok: true, id, titulo };
   }
 
   async function procesar() {
@@ -1692,7 +2302,8 @@ export function inicializarLectorPdf(deps = {}) {
         return;
       }
 
-      await entregarDocumento(resultado, { origen: 'texto', portada: resultado.portada });
+      const guardado = await entregarDocumento(resultado, { origen: 'texto', portada: resultado.portada });
+      if (!guardado?.ok) return;
       mostrarProgreso(false);
 
       const recorte = rango.hasta || rango.desde > 1
@@ -2327,6 +2938,41 @@ export function inicializarLectorPdf(deps = {}) {
 
   el.volver.addEventListener('click', () => volverABiblioteca());
 
+  if (el.capPrev) el.capPrev.addEventListener('click', () => {
+    if (hayDocumento() && estado.parteActual > 0) mostrarParte(estado.parteActual - 1);
+  });
+  if (el.capNext) el.capNext.addEventListener('click', () => {
+    if (hayDocumento() && estado.parteActual + 1 < estado.partes.length) mostrarParte(estado.parteActual + 1);
+  });
+
+  /* Actualizar la biblioteca desde la cabecera: trae los libros de los otros
+   * aparatos sin tener que bajar hasta la sección de sincronización. Si este
+   * aparato aún no está vinculado, abre esa sección para vincularlo. */
+  if (el.actualizarBiblio) el.actualizarBiblio.addEventListener('click', () => {
+    if (!nube || !nube.estaVinculada()) {
+      /* Sin nube no hay nada que traer. Se dice con palabras Y se abre la
+       * sección: abrirla sin explicar por qué dejaba al usuario mirando un
+       * panel que no había pedido. */
+      avisar('Este aparato aún no está conectado con los otros. Conéctalo aquí abajo para traer tus libros y sus carátulas.', 'info');
+      if (el.nube) {
+        el.nube.hidden = false;
+        el.nube.open = true;
+        el.nube.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      return;
+    }
+    sincronizarAhora({ desdeCabecera: true });
+  });
+
+  if (el.reanudarInicio) el.reanudarInicio.addEventListener('click', () => {
+    if (!hayDocumento()) return;
+    el.reanudar.hidden = true;
+    mostrarParte(0, { desplazamiento: 0 });
+    estado.progreso = avanzarProgreso(estado.progreso, { parte: 0, desplazamiento: 0, caracter: 0, cita: '', antes: '' });
+    irAPosicion(0, { centrar: false });
+    guardarProgresoPronto();
+  });
+
   el.salida.addEventListener('input', () => {
     guardarEdicionActual();
     actualizarContador();
@@ -2345,11 +2991,44 @@ export function inicializarLectorPdf(deps = {}) {
     temporizadorScroll = setTimeout(() => {
       if (!hayDocumento()) return;
       const fraccion = desplazamientoActual();
+      /* Sin `caracter`: `anotarPosicion` lo deduce de lo que se ve. */
       anotarPosicion({ desplazamiento: fraccion });
       if (fraccion > 0.995 && estado.parteActual + 1 < estado.partes.length) {
         mostrarParte(estado.parteActual + 1);
       }
     }, 220);
+  });
+
+  /* ── Tocar dos veces el texto: leer desde ahí ───────────────────────
+   *
+   * Doble toque y no toque simple: el textarea es editable y seleccionable, y
+   * un toque simple tiene que seguir sirviendo para poner el cursor. El doble
+   * toque no compite con nada y es el gesto que la gente ya usa para
+   * seleccionar una palabra, así que se descubre solo.
+   */
+  el.salida.addEventListener('dblclick', () => {
+    if (!hayDocumento()) return;
+    const punto = el.salida.selectionStart;
+    if (punto == null) return;
+
+    /* Se ancla al comienzo de la frase: empezar a media frase suena a error. */
+    const frases = partirEnFrases(el.salida.value || '');
+    const rango = frases.length ? fraseEn(frases, punto) : null;
+    const desde = rango ? rango[0] : punto;
+
+    anotarPosicion({ caracter: desde });
+
+    /* Si ya hay voz sonando en este capítulo, se salta ahí al instante. */
+    const destino = bloqueDeCaracter(desde);
+    if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
+      guia.saltar = true;   /* salto pedido por la persona: puede ir hacia atrás */
+      window.ttsIrABloque(destino.bloque, destino.dentro);
+      avisar('Leyendo desde aquí.', 'info');
+      return;
+    }
+    /* Si no había voz, se marca el punto y se ofrece empezar. */
+    irAPosicion(desde);
+    avisar('Marcado. Pulsa Escuchar para leer desde aquí.', 'info');
   });
 
   /* ── El texto sigue a la voz ───────────────────────────────────────
@@ -2384,7 +3063,15 @@ export function inicializarLectorPdf(deps = {}) {
    * ajusta al comienzo de la frase más cercana. Es una guía de lectura
    * fiable, no un karaoke palabra por palabra.
    */
-  const guia = { texto: null, frases: [], desde: -1, cola: null, anclas: [], compacto: '', mapa: null };
+  const guia = {
+    texto: null, frases: [], desde: -1, cola: null, anclas: [], compacto: '', mapa: null,
+    /* Cuántos bloques tenía la cola cuando se situaron las anclas: si crece,
+     * hay que volver a situarlas o la marca barre el capítulo entero. */
+    bloques: 0,
+    /* Lo levanta quien salta a propósito (capítulo, doble toque, botones,
+     * barra): es el único caso en que la marca puede ir hacia atrás. */
+    saltar: false,
+  };
 
   /**
    * Reduce un texto a sus caracteres con significado (letras y números, sin
@@ -2464,6 +3151,37 @@ export function inicializarLectorPdf(deps = {}) {
     return guia.mapa[acotado];
   }
 
+  /**
+   * Camino inverso de `posicionDeVoz`: de un punto del texto al bloque de
+   * audio que lo contiene.
+   *
+   * `guia.anclas` dice en qué carácter empieza cada bloque de la cola. Con eso
+   * basta para saber a qué bloque saltar y en qué proporción de él caemos.
+   * Devuelve null si la guía todavía no está situada (no hay lectura en curso).
+   */
+  function bloqueDeCaracter(caracter) {
+    const anclas = guia.anclas;
+    if (!anclas || !anclas.length || !guia.mapa || !guia.mapa.length) return null;
+    /* Las anclas están en el texto compacto; el carácter viene del texto real. */
+    let enCompacto = guia.mapa.indexOf(Math.floor(caracter));
+    if (enCompacto < 0) {
+      /* El carácter puede ser un espacio o un signo, que no está en el mapa:
+       * se busca el siguiente que sí lo esté. */
+      for (let c = Math.floor(caracter); c < guia.mapa.length + Math.floor(caracter); c += 1) {
+        const donde = guia.mapa.indexOf(c);
+        if (donde >= 0) { enCompacto = donde; break; }
+      }
+    }
+    if (enCompacto < 0) return null;
+
+    let i = 0;
+    while (i + 1 < anclas.length && anclas[i + 1] <= enCompacto) i += 1;
+    const inicio = anclas[i];
+    const fin = i + 1 < anclas.length ? anclas[i + 1] : guia.compacto.length;
+    const dentro = fin > inicio ? (enCompacto - inicio) / (fin - inicio) : 0;
+    return { bloque: i, dentro: Math.max(0, Math.min(1, dentro)) };
+  }
+
   /** Corta el texto en frases. Intl.Segmenter respeta abreviaturas («Sr.»). */
   function partirEnFrases(texto) {
     try {
@@ -2502,8 +3220,16 @@ export function inicializarLectorPdf(deps = {}) {
   function limpiarGuia() {
     guia.desde = -1;
     guia.cola = null;
+    guia.bloques = 0;
+    /* Se viene de un cambio de capítulo o de parar la lectura: la próxima
+     * posición es legítima venga de donde venga. */
+    guia.saltar = true;
     if (el.realce) el.realce.textContent = '';
   }
+
+  /* La barra de posición del reproductor avisa de sus saltos: son
+   * intencionados y la guía sí puede retroceder con ellos. */
+  document.addEventListener('jg-tts-salto', () => { guia.saltar = true; });
 
   function sincronizarRealce() {
     if (el.realce) el.realce.scrollTop = el.salida.scrollTop;
@@ -2525,11 +3251,22 @@ export function inicializarLectorPdf(deps = {}) {
     if (!guia.frases.length) return null;
 
     /* Situar los bloques cuesta un rato en un capítulo largo, así que solo se
-     * hace cuando empieza una lectura nueva, no en cada latido. */
-    if (guia.cola !== datos.cola) {
+     * hace cuando hace falta: al empezar una lectura nueva y **cada vez que la
+     * cola crece**.
+     *
+     * Lo segundo es lo que faltaba, y era la causa del parpadeo. El audio se
+     * genera por tandas: cuando arranca la lectura la cola tiene uno o dos
+     * bloques, y solo se calculaban esas dos anclas. Como la última ancla se
+     * extiende «hasta el final del texto» (ver `posicionDeVoz`), cada bloque
+     * que sonaba después hacía que la marca barriera el capítulo entero de
+     * principio a fin y volviera atrás en el siguiente. Medido: con 2 anclas
+     * en un capítulo de 20 000 letras, la marca iba de 900 a 20 000 y vuelta,
+     * una y otra vez. Eso es lo que se veía titilar. */
+    let textos = [];
+    try { textos = (window.ttsTextosDeCola && window.ttsTextosDeCola()) || []; } catch (_) { textos = []; }
+    if (guia.cola !== datos.cola || textos.length !== guia.bloques) {
       guia.cola = datos.cola;
-      let textos = [];
-      try { textos = (window.ttsTextosDeCola && window.ttsTextosDeCola()) || []; } catch (_) { textos = []; }
+      guia.bloques = textos.length;
       guia.anclas = textos.length ? situarBloques(textos) : [];
     }
 
@@ -2542,6 +3279,20 @@ export function inicializarLectorPdf(deps = {}) {
     const rango = fraseEn(guia.frases, punto);
     if (!rango) return null;
     if (rango[0] === guia.desde) return el.realce.querySelector('mark');
+
+    /* La guía no vuelve atrás sola.
+     *
+     * Aunque las anclas ya se recalculan, situar un bloque es aproximado: un
+     * cálculo puede quedar unas frases por detrás del anterior y la marca
+     * daría un salto hacia atrás. Leyendo, eso se ve como un parpadeo y
+     * desorienta más que ayudar. Mientras la lectura avanza, la marca solo
+     * avanza; solo retrocede cuando el usuario lo pide (cambiar de capítulo,
+     * tocar un párrafo, saltar de frase o mover la barra), y esos sitios
+     * levantan `guia.saltar`. */
+    if (!guia.saltar && guia.desde >= 0 && rango[0] < guia.desde) {
+      return el.realce.querySelector('mark');
+    }
+    guia.saltar = false;
     guia.desde = rango[0];
 
     /* Se construye con nodos de texto, nunca con innerHTML: el contenido sale
@@ -2566,12 +3317,20 @@ export function inicializarLectorPdf(deps = {}) {
 
     /* En pausa la guía se queda donde está: quien pausa quiere justamente
      * volver a ese punto, y borrar la marca sería perderlo. Solo desaparece
-     * cuando la lectura termina o se detiene. */
-    if (datos.estado === 'paused') return;
+     * cuando la lectura termina o se detiene.
+     * Además, pausar suele significar «lo dejo aquí»: buen momento para que
+     * el punto llegue a los demás dispositivos. */
+    if (datos.estado === 'paused') {
+      guardarYaMismo().then(() => sincronizarAhora({ silencioso: true }));
+      return;
+    }
     if (!datos.sonando) { limpiarGuia(); return; }
 
-    /* El progreso del libro se anota siempre que suene, se siga el texto o no. */
-    anotarPosicion({ desplazamiento: datos.fraccion });
+    /* El progreso del libro se anota siempre que suene, se siga el texto o no.
+     * Cuando la guía pudo situar el bloque, se conoce el carácter EXACTO que
+     * está sonando: es la mejor posición que puede guardarse. */
+    const exacto = datos.bloque >= 0 ? posicionDeVoz(datos) : null;
+    anotarPosicion({ desplazamiento: datos.fraccion, caracter: exacto != null ? exacto : undefined });
     if (!voz.siguiendo) { limpiarGuia(); return; }
 
     /* Si lo que suena es una selección y no el capítulo entero, la posición
@@ -2597,6 +3356,42 @@ export function inicializarLectorPdf(deps = {}) {
     el.salida.scrollTop = acotado;
     sincronizarRealce();
     requestAnimationFrame(() => { voz.desplazando = false; });
+  });
+
+  /* ── Saltar de frase en frase ───────────────────────────────────────
+   *
+   * El reproductor pide el salto; aquí se resuelve, porque este módulo es el
+   * que conoce el texto del capítulo. Si no se puede atender (todavía no hay
+   * guía situada), se deja `atendido` en falso y el reproductor salta por
+   * tiempo como antes: nunca se queda sin respuesta.
+   */
+  document.addEventListener('jg-tts-salto-frase', (evento) => {
+    const detalle = evento.detail || {};
+    if (!hayDocumento()) return;
+
+    const texto = el.salida.value || '';
+    const frases = partirEnFrases(texto);
+    if (!frases.length) return;
+
+    /* De dónde partimos: de lo que suena si hay voz, de lo que se ve si no. */
+    const actual = ttsSonandoAqui() && guia.desde >= 0 ? guia.desde : caracterVisible();
+    let i = frases.findIndex(([desde, hasta]) => actual >= desde && actual < hasta);
+    if (i < 0) i = 0;
+
+    const destinoIdx = Math.max(0, Math.min(frases.length - 1, i + (detalle.haciaDelante ? 1 : -1)));
+    const caracter = frases[destinoIdx][0];
+
+    anotarPosicion({ caracter });
+    guia.saltar = true;     /* salto pedido por la persona */
+    const destino = bloqueDeCaracter(caracter);
+    if (destino && typeof window.ttsIrABloque === 'function' && ttsSonandoAqui()) {
+      window.ttsIrABloque(destino.bloque, destino.dentro);
+      detalle.atendido = true;
+      return;
+    }
+    /* Sin voz sonando, el salto es visual. */
+    irAPosicion(caracter);
+    detalle.atendido = true;
   });
 
   function pintarSeguirVoz() {
@@ -2775,18 +3570,46 @@ export function inicializarLectorPdf(deps = {}) {
     el.askAnswer.textContent = '';
   });
 
-  /* Guardar la posición aunque se cierre la pestaña de golpe. */
-  window.addEventListener('pagehide', () => {
-    if (!estado.id) return;
+  /* ── Que no se pierda nada al desaparecer la app ────────────────────
+   *
+   * El guardado normal espera 900 ms por si llegan más cambios
+   * (`guardarProgresoPronto`). Cuando el sistema se lleva la app —el usuario
+   * cambia de aplicación, bloquea el celular, o el celular se apaga— esos
+   * 900 ms no llegan a cumplirse y el avance se pierde.
+   *
+   * `visibilitychange` es el único evento fiable en móvil: `beforeunload` no
+   * se dispara en Android ni en iOS cuando el sistema mata la pestaña.
+   */
+  async function guardarYaMismo() {
+    if (!hayDocumento() || !estado.id) return;
     clearTimeout(temporizadorGuardado);
-    almacen.guardarProgreso(estado.id, estado.progreso, estado.partes);
-  });
+    anotarPosicion();
+    try {
+      await almacen.guardarProgreso(estado.id, estado.progreso, estado.partes);
+    } catch (_) { /* si IndexedDB falla, lo local sigue en memoria */ }
+  }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
+    if (document.visibilityState === 'hidden') {
+      guardarYaMismo().then(() => sincronizarAhora({ silencioso: true }));
+    } else if (document.visibilityState === 'visible') {
+      /* Al volver a la app se trae lo que haya cambiado en otros aparatos. */
       sincronizarAhora({ silencioso: true });
     }
   });
+
+  /* Respaldo para navegadores de escritorio, donde sí es fiable. */
+  window.addEventListener('pagehide', () => { guardarYaMismo(); });
+
+  /* Mientras se lee, un latido tranquilo: si alguien lee dos horas seguidas sin
+   * salir de la app, su avance ya está en la nube por si cambia de dispositivo.
+   * Un minuto es suficiente y no molesta a la batería ni a la cuota. */
+  const LATIDO_SYNC_MS = 60000;
+  setInterval(() => {
+    if (!hayDocumento()) return;
+    if (document.visibilityState !== 'visible') return;
+    guardarYaMismo().then(() => sincronizarAhora({ silencioso: true }));
+  }, LATIDO_SYNC_MS);
 
   /* ── Sincronización entre dispositivos ───────────────────────────── */
   /*
@@ -2960,26 +3783,51 @@ export function inicializarLectorPdf(deps = {}) {
     }
   }
 
-  async function sincronizarAhora({ silencioso = false } = {}) {
+  /**
+   * Sincroniza con la nube.
+   *
+   * `desdeCabecera` importa más de lo que parece: el aviso de esta función
+   * vive dentro de la sección plegable de la nube, al final de la página. Al
+   * pulsar el botón «Actualizar» de la cabecera —que está arriba— no se veía
+   * absolutamente nada: ni que estuviera trabajando, ni el resultado, ni el
+   * error. Parecía un botón muerto aunque estuviera sincronizando.
+   */
+  async function sincronizarAhora({ silencioso = false, desdeCabecera = false } = {}) {
     if (!nube || !nube.estaVinculada()) return;
+    /* El botón desde el que se pulsó es el que se bloquea y anuncia: así no
+     * hay dobles envíos por pulsar dos veces mientras trabaja. */
+    const boton = desdeCabecera ? el.actualizarBiblio : el.nubeSync;
+    const etiqueta = desdeCabecera ? el.actualizarBiblioLabel : el.nubeSyncLabel;
+    const contar = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     try {
-      const resultado = await conBotonOcupado(el.nubeSync, el.nubeSyncLabel, 'Actualizando…',
+      const resultado = await conBotonOcupado(boton, etiqueta, 'Actualizando…',
         () => nube.sincronizar({
-          alProgresar: (mensaje) => { if (!silencioso) avisoNube(mensaje); },
+          alProgresar: (mensaje) => {
+            if (silencioso) return;
+            avisoNube(mensaje);
+            if (desdeCabecera) avisar(mensaje, 'info');
+          },
         }));
       await refrescarInicio();
       await pintarNube();
-      const nada = !resultado.subidos && !resultado.bajados;
-      avisoNube(
-        nada
-          ? 'Todo al día.'
-          : `Listo: ${resultado.bajados ? `llegaron ${resultado.bajados} libro(s)` : 'sin novedades'}` +
-            `${resultado.subidos ? ` · se enviaron ${resultado.subidos}` : ''}.`,
-        'ok'
-      );
+      const nada = !resultado.subidos && !resultado.bajados && !resultado.caratulas;
+      const partes = [];
+      if (resultado.bajados) partes.push(`llegaron ${contar(resultado.bajados, 'libro', 'libros')}`);
+      if (resultado.caratulas) partes.push(`${contar(resultado.caratulas, 'carátula nueva', 'carátulas nuevas')}`);
+      if (resultado.subidos) partes.push(`se enviaron ${contar(resultado.subidos, 'libro', 'libros')}`);
+      const mensaje = nada ? 'Todo al día.' : `Listo: ${partes.join(' · ')}.`;
+      avisoNube(mensaje, 'ok');
+      /* Arriba también, para quien pulsó arriba. */
+      if (desdeCabecera && !silencioso) avisar(mensaje, 'ok', { efimero: true });
+      return resultado;
     } catch (error) {
-      if (!silencioso) avisoNube(error?.message || 'No se pudo sincronizar.', 'error');
+      const fallo = error?.message || 'No se pudo sincronizar.';
+      if (!silencioso) {
+        avisoNube(fallo, 'error');
+        if (desdeCabecera) avisar(fallo, 'err');
+      }
       el.nubePunto.dataset.estado = 'error';
+      return null;
     }
   }
 

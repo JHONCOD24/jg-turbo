@@ -1,5 +1,26 @@
 # JG Turbo — reglas para agentes
 
+## ⚠️ Antes de tocar el código: `TRAMPAS.md`
+
+**`TRAMPAS.md`** recoge los errores que ya se cometieron en este proyecto, con la causa medida y la
+regla para no repetirlos. Varios se cometieron **dos veces** por no estar escritos. Léelo entero la
+primera vez; después, al menos la sección que toque tu tarea:
+
+| Vas a tocar… | Lee al menos |
+|---|---|
+| Alturas, scroll, responsive | §3 (la cadena de scroll) y §4 (el estilo computado manda) |
+| `nube.js`, `sincronizacion.js`, `biblioteca.js` | §5 (cinco formas de perder datos) |
+| Texto, pulido, voz | §6 (el guardián que solo mira una dimensión) |
+| Interfaz, botones, avisos | §8 (si no da señal, está roto) |
+| Cualquier cosa | §1 (pruebas que pasan sin probar nada) y §9 (trabajar en este repo) |
+
+Lo más caro del proyecto ha sido **dar por verificado lo que no lo estaba**: verificaciones en verde
+con la funcionalidad rota, y verificaciones que se cortaban a la mitad sin que nadie contara las
+comprobaciones. Empieza por §1.
+
+**Si cometes un error nuevo, añádelo a `TRAMPAS.md`** con el mismo formato (síntoma · causa · regla).
+Es parte de cerrar la tarea, no un extra.
+
 ## Coordinación multi-agente
 
 Si hay agentes de **diseño/UX** en paralelo: **no editar** `index.html` ni copiar un frontend viejo a `vercel_deploy/`. Ver `../COORDINACION_AGENTES.md` e inventario en `../auditoria-ux-2026-07-29/INVENTARIO_TECNICO.md`.
@@ -11,8 +32,8 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 - Claves, glosario y preferencias viven en el **navegador** (`jg_*`).
 - Un **deploy no las borra**. No renombrar claves sin migración. No sobrescribir con vacío.
 - Bundle: `jg_config_bundle`. UI: Exportar / Importar config.
-- Deploy: sincronizar a `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\` → `npx vercel --prod --yes`
-- Git: repo en `Spech to text App/` → `JHONCOD24/jg-turbo` (author `JHONCOD24 <juanloras35@gmail.com>`)
+- Deploy: desde la raíz del repo (`C:\Users\juanl\Documents\Proyectos\jg-turbo\`) → `npx vercel --prod --yes --scope jhoncod24s-projects`
+- Git: repo en la raíz (`jg-turbo/`, la app vive en la raíz desde la reestructuración del 2026-09-03) → `JHONCOD24/jg-turbo` (author `JHONCOD24 <juanloras35@gmail.com>`)
 - Prod: https://jg-turbo.vercel.app
 
 
@@ -20,15 +41,20 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 
 **Siempre desplegar en Vercel** cuando se termine una mejora o feature de esta app. No dejar solo cambios locales.
 
-**Regla persistente para futuros agentes:** una mejora no se considera cerrada hasta que esté documentada en el MD del feature, sincronizada en `../vercel_deploy/`, desplegada al proyecto `jg-turbo` y verificada contra `https://jg-turbo.vercel.app`. Recordar esta regla en cada sesión.
+**Regla persistente para futuros agentes:** una mejora no se considera cerrada hasta que esté documentada en el MD del feature, desplegada al proyecto `jg-turbo` y verificada contra `https://jg-turbo.vercel.app`. Recordar esta regla en cada sesión.
 
-1. Editar en `Spech to text App/`
+> Reestructuración 2026-09-03: la app vive en la raíz del repo (`jg-turbo/`).
+> Ya NO existe `Spech to text App/` ni `vercel_deploy/` como carpetas de
+> trabajo/despliegue. `sincronizar_deploy.mjs` (raíz) es un resto del flujo
+> antiguo y apunta a carpetas que ya no existen: **no usarlo**. El despliegue
+> sale de la raíz.
+
+1. Editar en la raíz del repo (`jg-turbo/`: `index.html`, `js/`, `api/`, `sw.js`)
 2. **Documentar todo** en el MD del feature (TTS → `CAMBIOS_TTS.md`: versión, dpl_, cambios, pruebas, proceso)
 3. Alinear satélites si aplica (`DOCUMENTACION_DESPLIEGUE.md`, `FICHA_TECNICA.md`, `CONFIG_PERSISTENTE.md`, este `Agents.md`)
-4. Sync a `../vercel_deploy/` (`index.html`, `api/*`, docs tocados, `vercel.json`)
-5. Desplegar **solo** `vercel_deploy` al proyecto **`jg-turbo`** (**nunca** la raíz del monorepo):
+4. Desplegar desde la raíz al proyecto **`jg-turbo`**:
    ```bash
-   cd ../vercel_deploy
+   cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
    npx vercel --prod --yes --scope jhoncod24s-projects
    ```
    ⚠️ **No usar `--cwd`**: con Vercel CLI 59.x devuelve `Not authorized` aunque la sesión sea válida
@@ -41,6 +67,42 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 
 Detalle TTS completo: **`CAMBIOS_TTS.md`**. Persistencia: `CONFIG_PERSISTENTE.md`. Deploy: `DOCUMENTACION_DESPLIEGUE.md`.
 
+
+## Verificación (qué correr antes de dar algo por terminado)
+
+Todas viven en `tests/` y se ejecutan desde la raíz del repo. **No basta con que no haya `FALLO:`:
+cuenta las comprobaciones.** Si salen menos que la última vez, la prueba se cortó (ver `TRAMPAS.md`
+§1.2).
+
+**Unitarias** (rápidas, sin navegador — córrelas siempre):
+
+```bash
+node tests/test_pdf_ancla.mjs            node tests/test_pdf_progreso.mjs
+node tests/test_pdf_limpieza.mjs         node tests/test_pdf_sincronizacion.mjs
+node tests/test_pdf_pulido_mecanico.mjs  node tests/test_pdf_pulido_troceo.mjs
+node tests/test_pdf_exportar.mjs         node tests/test_pdf_busqueda.mjs
+node tests/test_pdf_traduccion.mjs       node tests/test_pdf_auditoria_p0.mjs
+node tests/test_pdf_voz.mjs              node tests/test_tts_narracion.mjs
+```
+
+Referencia al 2026-09-03: **451 comprobaciones, 0 fallos**.
+
+**Con navegador** (Playwright; se busca en el repo, en `../node_modules` y en `JG Turbo_OLD/`):
+
+| Comando | Qué cubre | Referencia |
+|---|---|---|
+| `node tests/verificar_pdf_geometria.mjs` | Desbordes, toques ≥44px y solapes en móvil/tablet/escritorio | 42, sin avisos |
+| `node tests/verificar_pdf_scroll.mjs` | Que la biblioteca **se pueda desplazar** con nueve libros, y que las otras pestañas y el lector conserven su modelo de scroll | 39 |
+| `node tests/verificar_pdf_navegador.mjs` | Recorrido funcional completo del lector | 103 |
+
+**Backend:** `python -m pytest backend/tests -q`.
+⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
+existen. Es anterior a septiembre de 2026 (comprobado con `git stash`). Si tocas backend, corre los
+archivos concretos que te afecten.
+
+**Cuando toques CSS de alturas o scroll**, `verificar_pdf_scroll.mjs` es obligatoria: es la única
+que trabaja con volumen suficiente para que el scroll exista. Las otras dos dieron 42/42 y 103/103
+con el scroll completamente roto.
 
 ## Stack
 
@@ -204,7 +266,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v44`** (rediseño panel PDF v2.1). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v75`** (continuidad de palabras y párrafos en el motor PDF, v2.37). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 
@@ -254,14 +316,17 @@ Reglas para el siguiente agente:
 
 El 404 `NOT_FOUND` ocurrió porque un deploy se lanzó desde la **raíz del monorepo** (`JG Turbo/`), donde **no hay** `index.html`. Vercel subió miles de archivos y la producción quedó sin frontend.
 
-**Siempre** ejecutar el deploy desde `vercel_deploy/`:
+**Siempre** ejecutar el deploy desde la raíz del repo aplanado (`jg-turbo/`,
+donde SÍ hay `index.html`):
 
 ```bash
-cd vercel_deploy
-npx vercel --prod --yes
+cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
+npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
-Nunca desde la raíz del workspace. Tras el fix: ~17 archivos, alias https://jg-turbo.vercel.app OK con TTS.
+Nunca desde la raíz del workspace (`Proyectos/`). Nota histórica: antes se
+desplegaba desde `vercel_deploy/`; esa carpeta ya no existe tras la
+reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias https://jg-turbo.vercel.app OK con TTS.
 
 ## TTS (lectura en voz alta)
 
@@ -325,5 +390,9 @@ Config `jg_tts_bilingual`: `regional` (defecto) | `unified` | `off`. El valor an
   introduce separaciones dobles. Prueba obligatoria:
   `tests/test_espaciado_texto_pegado.js`.
 - **Micrófono largo:** WAV de 4+ min se parte en ~90 s (límite body Vercel ~4,5 MB). Ver `PRECISION_AUDIO.md`.
-- **Documentar siempre** cada entrega en el MD del feature (versión, deploy, pruebas) y sincronizar a `vercel_deploy/`.
-- **Nunca** `npx vercel --prod` desde la raíz del monorepo (causa 404).
+- **Documentar siempre** cada entrega en el MD del feature (versión, deploy, pruebas). Ya no hay que sincronizar a `vercel_deploy/` (no existe desde la reestructuración del 2026-09-03).
+- **Nunca** `npx vercel --prod` desde la raíz del workspace (`Proyectos/`, causa 404): siempre desde la raíz del repo (`jg-turbo/`).
+- **Nunca desde `JG Turbo_OLD/` ni desde `JG Turbo_OLD/vercel_deploy/`.** Es el respaldo de agosto y
+  tenía dos enlaces al MISMO proyecto de producción: desplegar desde ahí sobrescribía
+  jg-turbo.vercel.app con la versión vieja. El 2026-09-04 se renombraron a
+  `.vercel.NO-DESPLEGAR-CARPETA-ANTIGUA`; no los restaures. Detalle en `TRAMPAS.md` §9.3.

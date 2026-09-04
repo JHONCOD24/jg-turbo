@@ -31,6 +31,37 @@
 
 ---
 
+## Nuevo en v2.31.0 · 9 voces Fish nuevas (2026-09-03)
+
+**Pedido:** agregar a la biblioteca: Julio Ciencia, Sheyla, Farick, Sabio expandido, Enrique Hoffman, Voz locutor, Brian Tracy, Morgan Freeman y Mario Alonso Puig (todas en español; Sheyla femenina, el resto masculinas).
+
+**Cambios (rama `feat-voces-nuevas-fish`):**
+1. Servidor (`api/index.py: FISH_CATALOGO_BASE`): 9 tuplas `(slug, género, nombre, reference_id, "", "es")` al final (sin mover las existentes para no alterar fallbacks). El resolvedor y `/api/tts-voices` las sirven sin más cambios: el slug viaja en `fish_voice` y el `reference_id` va a Fish Audio.
+2. Cliente (`index.html: TTS_FISH_CATALOGO_LOCAL`): los 9 con el mismo slug/género/nombre/idioma. Aparecen agrupadas en «Fish Audio · español · femeninas/masculinas» y se eligen igual que las demás.
+3. Sin migración: lo guardado con otras voces sigue intacto.
+
+**Pruebas:** nuevo `backend/tests/test_tts_voces_fish.py` ✔ 5/5 (cada slug resuelve su `reference_id`, con y sin prefijo `fish:`, todas en español, en el catálogo público, y lo desconocido sigue cayendo a una válida). Cliente `test_tts_voces_biblioteca.mjs` ampliado ✔ (las 9 aparecen y resuelven). Regresión ✔: `test_tts_narracion`.
+
+**Deploy:** marcador `v2.31.0` · `JG_JS_V=v69` · `sw.js` → `jg-turbo-shell-v69` · verificado en https://jg-turbo.vercel.app.
+
+---
+
+## Retiro v2.29.0 · Salen las voces regionales y 10 de Fish (vienen reemplazos) (2026-09-03)
+
+**Pedido:** eliminar de la biblioteca: neural-recomendado, Colombia (Salomé/Gonzalo), México (Dalia/Jorge), Argentina (Elena/Tomás), Chile (Catalina/Lorenzo), Perú (Camila/Alex), Latino EEUU (Paloma/Alonso), Fish Robin/Chica/Nagi/Locutor K/Narrador/Loquendo y las 4 inglesas de Fish (Sarah, Paula, Adrian, Ethan). Quedan: Fish en español (Narradora, Colombiana, Latina, Voz A, Valentino, Sabio, Terror, Leonardo), neural multilingüe (Ava/Andrew) y navegador. **Sin desplegar** (pedido expreso: hay trabajo ajeno sin commitear en el árbol).
+
+**Cambios (`index.html`, rama `feat-quitar-voces`):**
+1. `TTS_NEURAL_ACCENTS = []`: ningún acento regional en ningún listado. Las tablas (`TTS_ACCENT_LABELS`, `TTS_NOMBRES_NEURAL`) se conservan para que las preferencias ya guardadas (`neural:es-CO:female`, etc.) sigan sonando hasta que lleguen las voces nuevas.
+2. `TTS_FISH_CATALOGO_LOCAL` sin las 10 retiradas + `TTS_FISH_RETIRADAS`/`TTS_FISH_EQUIVALENTES`: `ttsFishLista()` las filtra aunque el servidor las mande; `ttsFishPorId()` redirige (`nico-robin`→narradora, `locutor-k`/`narrador`/`loquendo`→valentino, `female`→narradora, `male`→valentino, inglesas→null). Fallbacks (`ttsNombreFish`, `ttsParseVoz`, `ttsClaveVoz`, guardados) apuntan a Narradora/Valentino.
+3. Selector de acento de Configuración sin opciones y escondido (`settingsTtsAccentBox` + condición en `ttsSincronizarConfigVoz`); «Quién lee» muestra Femenina/Masculina genérico sin acentos.
+4. Detección de género del navegador (`TTS_FEMALE_RE/MALE_RE`) y resolución del servidor intactas: lo guardado sigue funcionando.
+
+**Pruebas:** nuevo `tests/test_tts_voces_biblioteca.mjs` ✔ 29/29 (extrae las funciones reales del HTML: ausencias, conservadas, filtro con lista de servidor simulada, redirecciones). Regresión ✔: `test_tts_narracion`, `test_pdf_voz`, `test_pdf_{ancla,progreso,limpieza,sincronizacion,auditoria_p0,pulido_troceo,traduccion}`.
+
+**Pendiente:** agregar las voces de reemplazo y (entonces) migrar `jg_tts_voice`/`jg_tts_locale` guardados.
+
+---
+
 ## Nuevo en v2.25.0 · Optimización TTS para Lector PDF y Móviles/Tablets (2026-09-01)
 
 **Pedido:** Resolver pausas excesivas, prosodia robótica e incoherencias de puntuación al escuchar audiolibros o documentos PDF en móviles y tablets.

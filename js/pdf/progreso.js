@@ -19,7 +19,18 @@ const acotar = (valor, minimo, maximo) => Math.max(minimo, Math.min(maximo, valo
 
 /** Progreso de un documento recién abierto. */
 export function progresoInicial() {
-  return { parte: 0, desplazamiento: 0, maxParte: 0, actualizado: 0 };
+  return {
+    parte: 0,
+    desplazamiento: 0,
+    /* Posición exacta dentro del capítulo, portable entre dispositivos.
+     * `desplazamiento` se conserva porque los documentos guardados antes de
+     * esta versión solo tienen eso. */
+    caracter: 0,
+    cita: '',
+    antes: '',
+    maxParte: 0,
+    actualizado: 0,
+  };
 }
 
 /** Tamaño de cada capítulo, para que el porcentaje sea honesto. */
@@ -88,15 +99,61 @@ export function etiquetaProgreso(progreso, partes) {
 }
 
 /**
+ * «Seguías en CAPÍTULO II, hace 20 minutos».
+ *
+ * Es la frase que le dice a la persona que la app se acordó de ella. Sin
+ * esto, reanudar bien es invisible: parece que el libro se abrió donde le
+ * dio la gana.
+ *
+ * @param {{parte:number, actualizado:number}|null} progreso
+ * @param {{titulo?:string, texto:string}[]} partes
+ * @param {number} [ahora] – inyectable para poder probarlo
+ * @returns {string} vacío si no hay nada que reanudar
+ */
+export function etiquetaReanudar(progreso, partes, ahora = Date.now()) {
+  if (!progreso || !progreso.actualizado) return '';
+  if (calcularPorcentaje(progreso, partes) <= 0) return '';
+
+  const lista = Array.isArray(partes) ? partes : [];
+  const indice = acotar(Math.floor(progreso.parte ?? 0), 0, Math.max(0, lista.length - 1));
+  const titulo = lista[indice]?.titulo;
+
+  const transcurrido = Math.max(0, ahora - Number(progreso.actualizado));
+  const minutos = Math.floor(transcurrido / 60000);
+  const horas = Math.floor(minutos / 60);
+  const dias = Math.floor(horas / 24);
+
+  let cuando;
+  if (minutos < 1) cuando = 'hace un momento';
+  else if (minutos < 60) cuando = `hace ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`;
+  else if (horas < 24) cuando = `hace ${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+  else cuando = `hace ${dias} ${dias === 1 ? 'día' : 'días'}`;
+
+  if (lista.length > 1 && titulo) return `Seguías en ${titulo}, ${cuando}`;
+  return `Seguías leyendo ${cuando}`;
+}
+
+/**
  * Nueva posición de lectura. Conserva el capítulo más lejano alcanzado, para
  * que volver atrás a releer no borre lo que ya llevabas.
+ *
+ * `caracter`, `cita` y `antes` describen el punto exacto (ver anclaTexto.js).
+ * Si quien llama no los pasa, se conservan los anteriores en vez de borrarlos:
+ * un guardado por scroll no debe perder el punto exacto que dejó la voz.
  */
-export function avanzarProgreso(progreso, { parte, desplazamiento }) {
+export function avanzarProgreso(progreso, { parte, desplazamiento, caracter, cita, antes } = {}) {
   const anterior = progreso || progresoInicial();
   const parteLimpia = Math.max(0, Math.floor(Number(parte) || 0));
+  const cambioDeParte = parteLimpia !== (anterior.parte ?? 0);
   return {
     parte: parteLimpia,
     desplazamiento: acotar(Number(desplazamiento) || 0, 0, 1),
+    /* Al cambiar de capítulo el ancla del anterior ya no sirve. */
+    caracter: caracter != null
+      ? Math.max(0, Math.floor(Number(caracter) || 0))
+      : (cambioDeParte ? 0 : (anterior.caracter ?? 0)),
+    cita: cita != null ? String(cita) : (cambioDeParte ? '' : (anterior.cita ?? '')),
+    antes: antes != null ? String(antes) : (cambioDeParte ? '' : (anterior.antes ?? '')),
     maxParte: Math.max(anterior.maxParte ?? 0, parteLimpia),
     actualizado: Date.now(),
   };

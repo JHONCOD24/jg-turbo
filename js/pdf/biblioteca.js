@@ -14,9 +14,19 @@
  *   traducciones → el español de cada capítulo, para no pagarlo dos veces.
  */
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
+import { esSincronizable } from './sincronizacion.js';
 
 const BASE = 'jg-turbo-pdf';
-const VERSION = 4;
+/* Versión 5: compatibilidad hacia adelante. Encontramos dispositivos cuya base
+ * ya está en 5 (un despliegue anterior la subió) mientras el código pedía 4:
+ * IndexedDB se niega a abrir una base más nueva («requested version (4) is
+ * less than the existing version (5)») y la biblioteca aparece vacía aunque
+ * los libros están intactos. Subir a 5 la vuelve a abrir.
+ *
+ * La migración es aditiva a propósito: `onupgradeneeded` solo CREA los
+ * almacenes que falten, jamás borra ni reescribe datos. Pasar de 4 a 5 no
+ * cambia ni un registro; abrir una base que ya es 5 no migra nada. */
+const VERSION = 5;
 const DOCUMENTOS = 'documentos';
 const CONTENIDO = 'contenido';
 const ARCHIVOS = 'archivos';
@@ -101,7 +111,16 @@ function abrir() {
     };
 
     peticion.onsuccess = () => resolver(peticion.result);
-    peticion.onerror = () => rechazar(peticion.error || new Error('No se pudo abrir la biblioteca.'));
+    peticion.onerror = () => {
+      const original = peticion.error;
+      /* Si algún día la base vuelve a ser más nueva que el código, decirlo en
+       * palabras en vez del inglés críptico de IndexedDB. */
+      if (original && original.name === 'VersionError') {
+        rechazar(new Error('Tu biblioteca es más nueva que esta versión de la app. Recarga la página para actualizarla y vuelve a intentarlo.'));
+        return;
+      }
+      rechazar(original || new Error('No se pudo abrir la biblioteca.'));
+    };
     peticion.onblocked = () => rechazar(new Error('Cierra las otras pestañas de JG Turbo para actualizar la biblioteca.'));
   }).catch((error) => {
     conexion = null;
@@ -169,7 +188,7 @@ export async function espacioUsado() {
  * Guarda un documento completo. `partes`, `pdf` y `portada` son opcionales:
  * si no vienen, se conserva lo que ya hubiera guardado.
  */
-export async function guardarDocumento({ meta, partes, pdf, portada }) {
+export async function guardarDocumento({ meta, partes, pdf, portada, reconstruccion }) {
   if (!meta || !meta.id) throw new Error('Falta el identificador del documento.');
   const ahora = Date.now();
 
@@ -193,13 +212,23 @@ export async function guardarDocumento({ meta, partes, pdf, portada }) {
         estado: meta.estado || previo.estado || 'sin-empezar',
         creado: previo.creado || meta.creado || ahora,
         actualizado: meta.actualizado || ahora,
+        /* Momento en que cambió el TEXTO (no la lectura). Guardar un documento
+         * siempre implica contenido nuevo o editado. */
+        contenidoActualizado: meta.contenidoActualizado || meta.actualizado || ahora,
         sincronizado: meta.sincronizado !== undefined ? meta.sincronizado : (previo.sincronizado || 0),
       };
       await esperar(docs.put(registro));
 
       let i = 0;
       if (partes) {
-        await esperar(resto[i].put({ id: meta.id, partes }));
+        await esperar(resto[i].put({
+          id: meta.id,
+          partes,
+          manifiesto: reconstruccion?.manifiesto || meta.manifiesto || null,
+          textoCanonico: reconstruccion?.textoCanonico || null,
+          bloquesLectura: reconstruccion?.bloques || null,
+          versionReconstruccion: reconstruccion?.versionReconstruccion || meta.versionReconstruccion || null,
+        }));
         i += 1;
       }
       if (pdf || portada) {
@@ -243,6 +272,22 @@ export async function cargarDocumento(id) {
     return (await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.get(id)))) || null;
   } catch (_) {
     return null;
+  }
+}
+
+/** Añade la huella sin tocar progreso ni fechas de contenido. */
+export async function guardarHuella(id, huella) {
+  if (!id || !/^[a-f0-9]{64}$/i.test(String(huella || ''))) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return false;
+      doc.huella = String(huella).toLowerCase();
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
   }
 }
 
@@ -291,6 +336,9 @@ export async function guardarProgreso(id, progreso, partes) {
        * abrir cada libro para saber si está terminado. */
       if (partes) doc.estado = estadoDeLectura(calcularPorcentaje(progreso, partes));
       doc.actualizado = Date.now();
+      /* `contenidoActualizado` NO se toca: leer no cambia el libro. Gracias a
+       * esto la sincronización manda solo el registro ligero (unos bytes) en
+       * vez de los capítulos enteros. */
       await esperar(docs.put(doc));
       return true;
     });
@@ -326,13 +374,43 @@ export async function ultimoEnCurso() {
 
 const claveTraduccion = (id, idioma, indice) => `${id}|${idioma}|${indice}`;
 
-export async function guardarTraduccion(id, idioma, indice, texto) {
+/**
+ * Marca que el TEXTO del documento cambió (traducción o pulido nuevo, edición
+ * manual). Sin esto, la sincronización creería que solo avanzó la lectura y
+ * mandaría únicamente el registro ligero: lo traducido no llegaría jamás al
+ * otro dispositivo.
+ *
+ * Se marca `actualizado` además de `contenidoActualizado` para que el
+ * documento sea elegido al sincronizar; si solo se marcara el contenido, nada
+ * lo seleccionaría y la marca no serviría.
+ */
+export async function tocarContenido(id) {
+  if (!id) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return false;
+      const ahora = Date.now();
+      doc.actualizado = ahora;
+      doc.contenidoActualizado = ahora;
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+export async function guardarTraduccion(id, idioma, indice, texto, { marcar = true } = {}) {
   try {
     await conAlmacenes([TRADUCCIONES], 'readwrite', (t) => esperar(t.put({
       clave: claveTraduccion(id, idioma, indice),
       id, idioma, indice, texto,
       actualizado: Date.now(),
     })));
+    /* Lo importado desde la nube (marcar:false) no se marca: ya viene de allá
+     * y marcarlo provocaría que los dos aparatos se reenviaran lo mismo sin fin. */
+    if (marcar) await tocarContenido(id);
     return true;
   } catch (_) {
     return false;
@@ -365,7 +443,7 @@ export async function traduccionesDe(id, idioma) {
 
 const clavePulido = (id, indice) => `${id}|${indice}`;
 
-export async function guardarPulido(id, indice, texto) {
+export async function guardarPulido(id, indice, texto, { marcar = true } = {}) {
   try {
     await conAlmacenes([PULIDOS], 'readwrite', (t) => esperar(t.put({
       clave: clavePulido(id, indice),
@@ -375,13 +453,14 @@ export async function guardarPulido(id, indice, texto) {
       huellaOrigen: '',
       estado: 'legado',
     })));
+    if (marcar) await tocarContenido(id);
     return true;
   } catch (_) {
     return false;
   }
 }
 
-export async function guardarPulidoEstructurado(id, indice, registro) {
+export async function guardarPulidoEstructurado(id, indice, registro, { marcar = true } = {}) {
   // registro: { version, huellaOrigen, estado, progreso, textoSeguro, propuestas, decisiones, textoAprobado, advertencias, actualizado }
   try {
     await conAlmacenes([PULIDOS], 'readwrite', (t) => esperar(t.put({
@@ -391,6 +470,7 @@ export async function guardarPulidoEstructurado(id, indice, registro) {
       texto: registro.textoAprobado || registro.textoSeguro || '',
       actualizado: registro.actualizado || Date.now(),
     })));
+    if (marcar) await tocarContenido(id);
     return true;
   } catch (_) { return false; }
 }
@@ -512,6 +592,9 @@ export async function borrarDocumento(id) {
           borrado: ahora,
           actualizado: ahora,
           sincronizado: previo?.sincronizado || 0,
+          /* Un libro local sigue siendo local incluso después de borrarlo: si
+           * esta marca perdiera el campo, intentaría viajar en el próximo sync. */
+          sincronizar: previo?.sincronizar !== false,
         }));
         await esperar(contenido.delete(id));
         await esperar(contenido.delete(`bloques|${id}`));
@@ -552,15 +635,232 @@ export async function vaciarBiblioteca() {
 
 /* ── Puente con la sincronización ──────────────────────────────────── */
 
+/* Tope para una carátula viajera: una primera página en JPEG de 380 px pesa
+ * decenas de KB; por encima de esto algo anda mal y no se envía. */
+const MAX_BYTES_PORTADA = 1_500_000;
+
+/**
+ * Imagen ↔ texto para que la carátula pueda viajar por la sincronización
+ * (que solo mueve JSON). Funciona en el navegador y en Node (pruebas).
+ */
+export async function blobADataURL(blob) {
+  if (!blob) return null;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (!bytes.length || bytes.length > MAX_BYTES_PORTADA) return null;
+  let bin = '';
+  const PASO = 8192;
+  for (let i = 0; i < bytes.length; i += PASO) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + PASO));
+  }
+  return `data:${blob.type || 'image/jpeg'};base64,${btoa(bin)}`;
+}
+
+/** Inversa de `blobADataURL`. Devuelve null si no es una imagen válida. */
+export async function dataURLABlob(dataURL) {
+  const texto = String(dataURL || '');
+  const cabe = texto.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+  if (!cabe) return null;
+  try {
+    const bin = atob(texto.slice(cabe[0].length));
+    if (!bin.length || bin.length > MAX_BYTES_PORTADA) return null;
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: cabe[1] });
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * ¿Tiene este libro carátula local que la nube aún no recibió?
+ *
+ * Los libros sincronizados antes de que las carátulas viajaran quedaron con
+ * la imagen en el aparato y sin ella en la nube, y como ya figuran como
+ * sincronizados nunca la reenviarían. Esta marca (`portadaSincronizada`,
+ * solo contabilidad: no toca `actualizado`) les da un único viaje más.
+ */
+export async function faltaSubirPortada(id) {
+  try {
+    const doc = await cargarDocumento(id);
+    if (!doc || doc.borrado || doc.portadaSincronizada) return false;
+    const archivos = await conAlmacenes([ARCHIVOS], 'readonly', (a) => esperar(a.get(id)));
+    return Boolean(archivos?.portada);
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Guarda SOLO la carátula que llegó de otro aparato.
+ *
+ * No pasa por `guardarDocumento()` a propósito: aquí no se toca el progreso de
+ * lectura, ni el título, ni las marcas de tiempo. Una carátula que llega no
+ * puede hacer que este aparato «retroceda» en un libro que iba leyendo.
+ *
+ * @param {string} id
+ * @param {string} dataURL – imagen en texto, tal como viaja
+ * @returns {Promise<boolean>}
+ */
+export async function guardarPortadaRecibida(id, dataURL) {
+  if (!id) return false;
+  try {
+    const portada = await dataURLABlob(dataURL);
+    if (!portada) return false;
+    await conAlmacenes([ARCHIVOS], 'readwrite', async (archivos) => {
+      const antes = (await esperar(archivos.get(id))) || { id };
+      await esperar(archivos.put({ id, pdf: antes.pdf || null, portada }));
+    });
+    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return;
+      doc.tienePortada = true;
+      /* Si la carátula llegó de la nube, la nube ya la tiene: no hay que
+       * devolvérsela. Y `actualizado` no se toca: esto no es un cambio del
+       * usuario, así que no debe competir con lo que hagan los otros aparatos. */
+      doc.portadaSincronizada = Date.now();
+      await esperar(docs.put(doc));
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Guarda una carátula que no venía del PDF: la real encontrada en el catálogo
+ * o la dibujada en el aparato.
+ *
+ * Cuenta como contenido nuevo del libro (`contenidoActualizado`), y por eso
+ * `portadaSincronizada` se pone a 0: hay que enviarla a los demás aparatos,
+ * al revés que una carátula recibida, que ya está en la nube.
+ *
+ * @param {string} id
+ * @param {Blob} portada
+ * @param {'real'|'dibujada'} origen – solo para saber de dónde salió
+ * @returns {Promise<boolean>}
+ */
+export async function guardarPortadaGenerada(id, portada, origen = 'dibujada') {
+  if (!id || !portada || !portada.size) return false;
+  try {
+    await conAlmacenes([ARCHIVOS], 'readwrite', async (archivos) => {
+      const antes = (await esperar(archivos.get(id))) || { id };
+      await esperar(archivos.put({ id, pdf: antes.pdf || null, portada }));
+    });
+    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return;
+      doc.tienePortada = true;
+      doc.origenPortada = origen;
+      doc.contenidoActualizado = Date.now();
+      doc.actualizado = Date.now();
+      doc.portadaSincronizada = 0;      /* la nube todavía no la tiene */
+      await esperar(docs.put(doc));
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Anota con qué versión del troceo está guardado este libro y, si se rehizo,
+ * guarda las unidades nuevas.
+ *
+ * `contenidoActualizado` sí se toca cuando cambian las partes: el texto por
+ * capítulos es distinto y los otros aparatos tienen que recibirlo. Pero
+ * `progreso` no se toca: por dónde iba la persona lo resuelve el ancla de
+ * texto al abrir, buscando su contenido en las partes nuevas.
+ *
+ * @param {string} id
+ * @param {number} version
+ * @param {{partes?:object[],capitulos?:object[],progreso?:object,bloques?:object[]}|null} cambios
+ * @returns {Promise<boolean>}
+ */
+export async function marcarTroceo(id, version, cambios = null) {
+  if (!id) return false;
+  try {
+    const partes = Array.isArray(cambios?.partes) ? cambios.partes : null;
+    const bloques = Array.isArray(cambios?.bloques) ? cambios.bloques : null;
+    await conAlmacenes([DOCUMENTOS, CONTENIDO], 'readwrite', async (docs, contenido) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return;
+      if (partes?.length) {
+        const previoCont = (await esperar(contenido.get(id))) || { id };
+        await esperar(contenido.put({
+          ...previoCont,
+          id,
+          partes,
+          manifiesto: cambios?.reconstruccion?.manifiesto || previoCont.manifiesto || null,
+          textoCanonico: cambios?.reconstruccion?.textoCanonico || previoCont.textoCanonico || null,
+        }));
+      }
+      if (bloques?.length) {
+        await esperar(contenido.put({
+          id: `bloques|${id}`,
+          bloques: bloques.map((b) => ({
+            id: b.id, texto: b.texto, tipo: b.tipo, capitulo: b.capitulo,
+          })),
+        }));
+      }
+      doc.versionTroceo = version;
+      if (cambios?.versionReconstruccion != null) doc.versionReconstruccion = cambios.versionReconstruccion;
+      if (cambios?.pendientesLimites != null) doc.pendientesLimites = cambios.pendientesLimites;
+      if (cambios?.needsSource) doc.needsSource = true;
+      if (cambios?.reconstruccion) {
+        doc.listoParaLectura = cambios.reconstruccion.listoParaLectura;
+        doc.pendientesLimites = cambios.reconstruccion.pendientes;
+      }
+      if (partes?.length) {
+        doc.titulosPartes = partes.map((p) => p.titulo);
+        doc.caracteres = partes.reduce((suma, p) => suma + String(p.texto || '').length, 0);
+        doc.capitulos = Array.isArray(cambios?.capitulos) ? cambios.capitulos : (doc.capitulos || []);
+        if (cambios?.progreso) doc.progreso = cambios.progreso;
+        doc.contenidoActualizado = Date.now();
+        doc.actualizado = Date.now();
+      }
+      await esperar(docs.put(doc));
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Anota que la carátula de este libro ya está en la nube. */
+export async function marcarPortadaSincronizada(id, marca = Date.now()) {
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return false;
+      doc.portadaSincronizada = marca;
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 /**
  * Metadatos de todo lo que hay aquí (incluidas las marcas de borrado), sin
  * el texto: sirve para decidir qué mover, no para moverlo.
  */
-export async function exportarParaSincronizar() {
+export async function exportarParaSincronizar({ incluirLocales = false } = {}) {
   try {
     const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
-    return (todos || []).map(({ id, actualizado, sincronizado, borrado, titulo }) => ({
-      id, actualizado: actualizado || 0, sincronizado: sincronizado || 0, borrado, titulo,
+    return (todos || [])
+      .filter((doc) => incluirLocales || esSincronizable(doc))
+      .map(({
+      id, actualizado, contenidoActualizado, sincronizado, borrado, titulo,
+      portadaSincronizada, tienePortada, sincronizar,
+    }) => ({
+      id, actualizado: actualizado || 0, contenidoActualizado: contenidoActualizado || 0,
+      sincronizado: sincronizado || 0, borrado, titulo, sincronizar,
+      /* Van aquí para que las decisiones sobre carátulas se tomen sin volver a
+       * leer la base: a cuáles les falta enviarla, y a cuáles les falta
+       * recibirla. */
+      portadaSincronizada: portadaSincronizada || 0,
+      tienePortada: Boolean(tienePortada),
     }));
   } catch (_) {
     return [];
@@ -572,17 +872,30 @@ export async function exportarParaSincronizar() {
  * texto**. El texto viaja aparte, capítulo a capítulo, y por eso no hay
  * límite de tamaño de libro.
  */
-export async function paqueteParaSubir(id) {
+export async function paqueteParaSubir(id, { conPortada = false } = {}) {
   const doc = await cargarDocumento(id);
   if (!doc) return null;
+  if (!esSincronizable(doc)) return null;
   if (doc.borrado) return { id, actualizado: doc.actualizado, borrado: true, datos: null };
   const { ...meta } = doc;
-  return {
+  const paquete = {
     id,
     actualizado: doc.actualizado || Date.now(),
     borrado: false,
     datos: { meta },
   };
+  /* La carátula solo viaja cuando viaja el contenido (libro nuevo o texto
+   * cambiado): pesa decenas de KB y no tiene sentido reenviarla cada minuto
+   * con el registro ligero de progreso. Quien la llama decide con
+   * `necesitaSubirContenido()`. */
+  if (conPortada) {
+    try {
+      const archivos = await conAlmacenes([ARCHIVOS], 'readonly', (a) => esperar(a.get(id)));
+      const mini = await blobADataURL(archivos?.portada || null);
+      if (mini) paquete.datos.portadaMini = mini;
+    } catch (_) { /* sin carátula se vive: queda la inicial */ }
+  }
+  return paquete;
 }
 
 /** Los capítulos de un documento, cada uno con su traducción si la tiene. */
@@ -608,6 +921,12 @@ export async function partesParaSubir(id) {
     traduccion: espanol.get(indice) || null,
     pulido: pulidosMap.get(indice) || null,
     pagina: parte.pagina || null,
+    atomStart: parte.atomStart || null,
+    atomEnd: parte.atomEnd || null,
+    boundaryIds: Array.isArray(parte.boundaryIds) ? parte.boundaryIds : [],
+    continuation: Boolean(parte.continuation),
+    anclaInicio: parte.anclaInicio || null,
+    anclaFin: parte.anclaFin || null,
   }));
 }
 
@@ -626,7 +945,19 @@ export async function importarDeSincronizacion(documento) {
   }
 
   const meta = datos?.meta || {};
-  await guardarDocumento({ meta: { ...meta, id, actualizado, sincronizado: actualizado } });
+  /* La carátula viaja como texto dentro de `datos` porque la sincronización
+   * solo mueve JSON. Al llegar se vuelve imagen y se guarda con el libro:
+   * así la biblioteca se ve igual en el celular, la tablet y el escritorio. */
+  let portada = null;
+  try {
+    portada = await dataURLABlob(datos?.portadaMini || null);
+  } catch (_) { portada = null; }
+  await guardarDocumento({
+    meta: { ...meta, id, actualizado, sincronizado: actualizado },
+    ...(portada ? { portada } : {}),
+  });
+  /* Lo que llegó con carátula no necesita reenviarla: ya la tienen los dos. */
+  if (portada) await marcarPortadaSincronizada(id, actualizado);
   return true;
 }
 
@@ -646,12 +977,20 @@ export async function importarPartes(id, partes) {
       titulo: p.titulo || 'Parte',
       texto: p.texto || '',
       pagina: p.pagina || 1,
+      atomStart: p.atomStart || null,
+      atomEnd: p.atomEnd || null,
+      boundaryIds: Array.isArray(p.boundaryIds) ? p.boundaryIds : [],
+      continuation: Boolean(p.continuation),
+      anclaInicio: p.anclaInicio || null,
+      anclaFin: p.anclaFin || null,
     })),
   });
-  /* Lo que ya venga traducido no hay que volver a traducirlo (ni pagarlo). */
+  /* Lo que ya venga traducido no hay que volver a traducirlo (ni pagarlo).
+   * Se importa sin marcar: ya viene de la nube y marcarlo haría que los dos
+   * aparatos se reenviaran los mismos capítulos sin fin. */
   for (const parte of ordenadas) {
-    if (parte.traduccion) await guardarTraduccion(id, 'es', parte.indice, parte.traduccion);
-    if (parte.pulido) await guardarPulido(id, parte.indice, parte.pulido);
+    if (parte.traduccion) await guardarTraduccion(id, 'es', parte.indice, parte.traduccion, { marcar: false });
+    if (parte.pulido) await guardarPulido(id, parte.indice, parte.pulido, { marcar: false });
   }
   return true;
 }

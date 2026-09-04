@@ -7,7 +7,11 @@
  *
  * Este archivo hace ese trabajo sucio con funciones puras (entra texto y
  * posiciones, sale texto limpio), por eso se puede probar sin abrir un PDF.
+ *
+ * Desde v2.37 la composición canónica vive en reconstruccion.js: aquí quedan
+ * las ayudas de títulos, relleno y anclas, y un envoltorio de componerTexto.
  */
+import { reconstruirDocumento } from './reconstruccion.js';
 
 /* Cuántas páginas hacen falta para fiarnos de que algo repetido es relleno. */
 const MIN_PAGINAS_PARA_DETECTAR_RELLENO = 3;
@@ -171,14 +175,49 @@ function detectarRelleno(paginas) {
 
 /* ── Títulos de capítulo ───────────────────────────────────────────── */
 
-function pareceTitulo(linea, alturaModal) {
-  const texto = linea.texto.trim();
+/* Un título numerado: «II», «3.», «IV. El regreso». */
+const PATRON_TITULO_NUMERADO = /^(?:\d{1,3}|[IVXLCDM]{1,7})\s*[.\-–—:]?\s*(?:[A-ZÁÉÍÓÚÜÑ].{0,60})?$/;
+
+/**
+ * ¿Esta línea es un título de capítulo o de sección?
+ *
+ * Único criterio del archivo: `clasificarBloque()` lo reutiliza, para que un
+ * texto no pueda ser título para una función y párrafo para la otra. Antes
+ * había dos reglas distintas y los bloques salían mal tipados.
+ *
+ * Se reconoce un título por cualquiera de estas señales:
+ *   1. Empieza por una palabra de capítulo («Capítulo», «Prólogo», «Anexo»…).
+ *   2. Está impreso más grande que el cuerpo.
+ *   3. Va TODO EN MAYÚSCULAS y es corto (los libros lo usan constantemente,
+ *      y era el caso que más se escapaba).
+ *   4. Es una numeración de capítulo («II», «3. El regreso»).
+ *
+ * Y se descarta si acaba en un signo que solo aparece a mitad de frase, si es
+ * demasiado largo, o si es un número de página.
+ */
+export function pareceTitulo(linea, alturaModal) {
+  const texto = String(linea?.texto || '').trim();
   if (!texto || texto.length > MAX_LARGO_TITULO) return false;
+  /* Un título no termina en coma, punto y coma, dos puntos ni punto final. */
   if (/[,;:]$/.test(texto)) return false;
+  /* «II», «IV»: los capítulos se numeran con romanos en mayúsculas y las
+   * páginas preliminares con minúsculas («xiv»). Un romano suelto en
+   * mayúsculas es capítulo aunque también podría ser página. */
+  if (/^[IVXLCDM]{1,7}$/.test(texto)) return true;
   if (esNumeroDePagina(texto)) return false;
+
   if (PATRON_TITULO.test(texto)) return true;
-  /* Un título también se reconoce porque está impreso más grande. */
-  if (alturaModal > 0 && linea.altura >= alturaModal * 1.25) return true;
+  if (alturaModal > 0 && (linea.altura || 0) >= alturaModal * 1.25) return true;
+
+  /* Todo en mayúsculas y corto: el caso más común en libros impresos. Se
+   * exige al menos dos letras para no confundirlo con una inicial suelta. */
+  const letras = texto.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+  if (letras.length >= 2 && texto === texto.toUpperCase() && texto.length <= 60 && !/[.!?]$/.test(texto)) {
+    return true;
+  }
+
+  if (PATRON_TITULO_NUMERADO.test(texto) && !/[.!?]$/.test(texto)) return true;
+
   return false;
 }
 
@@ -292,178 +331,189 @@ export function clasificarBloque(texto, linea) {
   const t = String(texto || '').trim();
   if (!t) return 'nota';
   if (/^(tabla|cuadro|figura)\s*\d*/i.test(t)) return 'tabla';
-  if (/^[-•●]\s+/.test(t) || /^\d+\.\s+/.test(t)) return 'lista';
-  if (t.length < 90 && /^[A-ZÁÉÍÓÚÑ][^.!?]*$/.test(t) && (linea.altura || 0) > 0) return 'titulo';
+  if (/^[-•●]\s+/.test(t) || /^\d+\.\s+\S/.test(t) && t.length > 90) return 'lista';
+  /* Mismo criterio que el resto del archivo: una sola definición de título. */
+  if (pareceTitulo({ texto: t, altura: linea?.altura || 0 }, linea?.alturaModal || 0)) return 'titulo';
   return 'parrafo';
 }
 
-export function componerTexto(paginas, opciones = {}) {
-  const listaPaginas = Array.isArray(paginas) ? paginas : [];
-  const vacio = { texto: '', capitulos: [], descartadas: 0, paginasConTexto: 0, paginasTotales: listaPaginas.length, bloques: [], omisiones: [] };
-  if (!listaPaginas.length) return vacio;
+/* Un capítulo con menos de esto no es un capítulo: es una página de cortesía,
+ * una dedicatoria o el nombre del autor suelto. El índice de un PDF suele
+ * traer una entrada por cada una de esas páginas, y sin este mínimo el lector
+ * acaba con «capítulos» que solo dicen «Joe Dispenza». */
+const MIN_CAPITULO = 400;
 
-  const relleno = detectarRelleno(listaPaginas);
-  let descartadas = 0;
-  const omisiones = [];
-
-  /* 1) Filtrar lo que no es contenido — con registro de omisiones */
-  const paginasUtiles = listaPaginas.map((pag) => {
-    const lineas = (pag.lineas || [])
-      .map((l) => ({ ...l, texto: String(l.texto || '').trim() }))
-      .filter((l) => {
-        if (!l.texto) { descartadas += 1; omisiones.push({ pagina: pag.numero, texto: l.texto, motivo: 'vacio', confianza: 1 }); return false; }
-        if (esNumeroDePagina(l.texto)) { descartadas += 1; omisiones.push({ pagina: pag.numero, texto: l.texto, motivo: 'numero_pagina', confianza: 0.95 }); return false; }
-        if (relleno.has(normalizarClave(l.texto))) { descartadas += 1; omisiones.push({ pagina: pag.numero, texto: l.texto, motivo: 'cabecera_pie_repetido', confianza: 0.85 }); return false; }
-        return true;
-      });
-    return { ...pag, lineas };
-  });
-
-  const todasLasLineas = paginasUtiles.flatMap((p) => p.lineas);
-  if (!todasLasLineas.length) return { ...vacio, descartadas, omisiones };
-
-  /* 2) Medidas del documento para decidir dónde corta un párrafo. */
-  const alturaModal = mediana(todasLasLineas.map((l) => l.altura));
-  const xModal = mediana(todasLasLineas.map((l) => l.x));
-  const anchoMaximo = Math.max(...todasLasLineas.map((l) => l.ancho || 0), 0);
-
-  const usarIndice = Array.isArray(opciones.indice) && opciones.indice.length > 0;
-  const titulosDetectados = new Set();
-  if (!usarIndice) {
-    for (const linea of todasLasLineas) {
-      if (pareceTitulo(linea, alturaModal)) titulosDetectados.add(linea);
-    }
+/** Solo letras y números, sin tildes ni mayúsculas, guardando de dónde salió cada uno. */
+function compactarConMapa(texto) {
+  const t = String(texto || '');
+  let salida = '';
+  const mapa = [];
+  for (let i = 0; i < t.length; i += 1) {
+    const c = sinTildes(t[i]).toLowerCase();
+    if (c >= 'a' && c <= 'z') { salida += c; mapa.push(i); }
+    else if (c >= '0' && c <= '9') { salida += c; mapa.push(i); }
   }
-  // Detectar si alguna página es de dos columnas: si ≥40% páginas son dobles, tratamos documento como 2 columnas con títulos a ancho completo primero.
-  const columnasPorPagina = paginasUtiles.map(detectarEstructuraColumnas);
-  const paginasDobles = columnasPorPagina.filter((c) => c.columnas === 2).length;
-  const esDobleColumna = paginasDobles >= paginasUtiles.length * 0.4 && paginasUtiles.length >= 2;
-
-  /* 3) Recorrer las líneas decidiendo: ¿pego, uno palabra, o abro párrafo? 
-   * Si hay dos columnas, primero se emite el título ancho completo y luego cada columna arriba-abajo.
-   */
-  const partes = [];
-  const inicioDePagina = new Map();
-  const capitulosDetectados = [];
-  const bloques = [];
-  let largo = 0;
-  let anterior = null;
-  let paginaAnterior = null;
-  let paginasConTexto = 0;
-  let idBloque = 0;
-
-  const escribir = (fragmento) => { partes.push(fragmento); largo += fragmento.length; };
-
-  function procesarSecuencia(lineas, numeroPagina) {
-    for (const linea of lineas) {
-      const esTitulo = titulosDetectados.has(linea);
-      const mismaPagina = paginaAnterior === numeroPagina;
-      if (anterior == null) {
-        escribir(linea.texto);
-      } else if (GUIONES_DE_CORTE.test(anterior.texto) && !esTitulo) {
-        const siguienteEnMayuscula = /^[A-ZÁÉÍÓÚÜÑ]/.test(linea.texto);
-        if (siguienteEnMayuscula) escribir(linea.texto);
-        else { partes[partes.length - 1] = partes[partes.length - 1].replace(GUIONES_DE_CORTE, ''); largo -= 1; escribir(linea.texto); }
-      } else {
-        const sangria = linea.x - xModal > Math.max(4, alturaModal * 0.4);
-        const huecoVertical = mismaPagina && alturaModal > 0 ? (anterior.y - linea.y) > Math.max(alturaModal * 1.8, 6) : false;
-        const anteriorEsCorta = anchoMaximo > 0 && (anterior.ancho || 0) < anchoMaximo * 0.72 && /[.!?»”"')\]]$/.test(anterior.texto);
-        const nuevoParrafo = esTitulo || titulosDetectados.has(anterior) || sangria || huecoVertical || anteriorEsCorta;
-        escribir((nuevoParrafo ? '\n\n' : ' ') + linea.texto);
-      }
-      const tipo = clasificarBloque(linea.texto, linea);
-      if (tipo === 'titulo' || (partes.length && partes[partes.length - 1].startsWith('\n\n'))) {
-        const textoBloque = linea.texto;
-        bloques.push({ id: `b${idBloque++}`, pagina: numeroPagina, texto: textoBloque, tipo, x: linea.x, y: linea.y, ancho: linea.ancho, altura: linea.altura });
-      } else if (bloques.length) {
-        // anexar al último bloque si no es título
-        const ultimo = bloques[bloques.length - 1];
-        if (ultimo.tipo !== 'titulo' && ultimo.pagina === numeroPagina) {
-          // se acumula en partes, bloques se reconstruye después desde texto final
-        }
-      }
-      if (esTitulo) capitulosDetectados.push({ titulo: linea.texto, posicion: Math.max(0, largo - linea.texto.length), pagina: numeroPagina });
-      anterior = linea;
-      paginaAnterior = numeroPagina;
-    }
-  }
-
-  for (let idxPag = 0; idxPag < paginasUtiles.length; idxPag += 1) {
-    const pag = paginasUtiles[idxPag];
-    if (!pag.lineas.length) continue;
-    paginasConTexto += 1;
-    inicioDePagina.set(pag.numero, largo);
-
-    if (esDobleColumna) {
-      const infoCol = columnasPorPagina[idxPag];
-      if (infoCol.columnas === 2) {
-        const titulosAnchoCompleto = pag.lineas.filter((l) => titulosDetectados.has(l) || (l.ancho || 0) > (pag.ancho || 0) * 0.85);
-        const resto = pag.lineas.filter((l) => !titulosAnchoCompleto.includes(l));
-        const colIzq = resto.filter((l) => l.x < infoCol.divisionX).sort((a, b) => b.y - a.y);
-        const colDer = resto.filter((l) => l.x >= infoCol.divisionX).sort((a, b) => b.y - a.y);
-        if (titulosAnchoCompleto.length) procesarSecuencia(titulosAnchoCompleto, pag.numero);
-        // orden correcto: izquierda-1, izquierda-2, ... luego derecha-1, derecha-2
-        procesarSecuencia(colIzq, pag.numero);
-        procesarSecuencia(colDer, pag.numero);
-        continue;
-      }
-    }
-    // una columna o sin división clara
-    procesarSecuencia(pag.lineas, pag.numero);
-  }
-
-  const texto = pulirParaLectura(partes.join(''));
-
-  // Reconstruir bloques semánticos finales a partir del texto (capas original)
-  const bloquesFinales = [];
-  const parrafosTexto = texto.split(/\n\n+/).filter(Boolean);
-  let posAcum = 0;
-  for (const par of parrafosTexto) {
-    const tipo = clasificarBloque(par, { altura: alturaModal });
-    bloquesFinales.push({ id: `b${bloquesFinales.length}`, pagina: 1, texto: par, tipo, posicion: posAcum });
-    posAcum += par.length + 2;
-  }
-  const bloquesSalida = bloques.length ? bloques : bloquesFinales;
-
-  /* 4) Capítulos: construir desde bloques, no mediante posiciones calculadas antes de modificar texto.
-     Si hay índice externo, se respeta; si no, se derivan de bloques tipo titulo. */
-  let capitulos;
-  if (usarIndice) {
-    capitulos = opciones.indice
-      .map((entrada) => ({
-        titulo: String(entrada.titulo || '').trim() || `Página ${entrada.pagina}`,
-        pagina: entrada.pagina,
-        posicion: Math.min(inicioDePagina.get(entrada.pagina) ?? 0, Math.max(0, texto.length - 1)),
-      }))
-      .filter((c) => Number.isFinite(c.pagina))
-      .sort((a, b) => a.posicion - b.posicion);
-  } else {
-    // buscar títulos en texto final para capítulos (posiciones reales post-pulido)
-    const titulosEnTexto = [];
-    for (const b of bloquesSalida) {
-      if (b.tipo === 'titulo') {
-        const idx = texto.indexOf(b.texto);
-        const pos = idx >= 0 ? idx : texto.indexOf(b.texto.slice(0, 20));
-        if (pos >= 0) titulosEnTexto.push({ titulo: b.texto.slice(0, 80), posicion: pos, pagina: b.pagina });
-      }
-    }
-    if (titulosEnTexto.length) capitulos = titulosEnTexto;
-    else capitulos = capitulosDetectados.map((c) => ({
-      ...c,
-      posicion: Math.min(c.posicion, Math.max(0, texto.length - 1)),
-    }));
-    // si aún no hay capítulos, usar detectados
-    if (!capitulos.length && capitulosDetectados.length) capitulos = capitulosDetectados.map(c=> ({...c, posicion: Math.min(c.posicion, Math.max(0,texto.length-1))}));
-  }
-
-  return {
-    texto,
-    capitulos,
-    descartadas,
-    paginasConTexto,
-    paginasTotales: listaPaginas.length,
-    bloques: bloquesSalida,
-    omisiones,
-    esDobleColumna,
-  };
+  return { texto: salida, mapa };
 }
+
+/**
+ * Dónde empieza cada página DENTRO DEL TEXTO YA PULIDO.
+ *
+ * Las posiciones se calculan mientras se juntan las líneas, sobre el texto en
+ * bruto; después `pulirParaLectura()` lo cambia de tamaño y esas posiciones
+ * dejan de valer. En vez de arrastrarlas a ciegas, cada página se vuelve a
+ * localizar por su contenido: se toma el arranque de la página y se busca en
+ * el texto final, siempre hacia delante. Es la misma técnica que usa la guía
+ * de lectura para casar la voz con el texto.
+ *
+ * @param {string} texto – el texto final
+ * @param {{numero:number, muestra:string}[]} marcas
+ * @returns {{numero:number, posicion:number}[]}
+ */
+function situarPaginas(texto, marcas) {
+  const compacto = compactarConMapa(texto);
+  const salida = [];
+  let desde = 0;
+  for (const marca of marcas) {
+    const aguja = compactarConMapa(marca.muestra).texto.slice(0, 40);
+    if (aguja.length < 6) continue;
+    let donde = compacto.texto.indexOf(aguja, desde);
+    /* Con menos letras se aguanta mejor un retoque de puntuación en medio. */
+    if (donde === -1 && aguja.length > 14) donde = compacto.texto.indexOf(aguja.slice(0, 14), desde);
+    if (donde === -1) continue;          /* esa página no se pudo situar: se omite */
+    salida.push({ numero: marca.numero, posicion: compacto.mapa[donde] ?? 0 });
+    desde = donde + Math.max(1, Math.floor(aguja.length / 2));
+  }
+  return salida;
+}
+
+/**
+ * Mueve una posición hasta el límite de palabra más cercano hacia atrás.
+ *
+ * Reportado en «El placebo eres tú»: una unidad terminaba en «es» y la
+ * siguiente empezaba en «ta conclusión». La palabra «esta» quedaba partida en
+ * dos, y la voz la leía en dos trozos. Pasa cuando la posición de un capítulo
+ * cae dentro de una palabra, que es fácil: viene de casar contenido, no de
+ * contar letras.
+ *
+ * @param {string} texto
+ * @param {number} posicion
+ * @returns {number}
+ */
+export function ajustarAPalabra(texto, posicion) {
+  const t = String(texto || '');
+  if (!t.length) return 0;
+  let p = Math.max(0, Math.min(Math.floor(Number(posicion) || 0), t.length));
+  if (p === 0 || p === t.length) return p;
+
+  /* Ya está en un límite: el carácter anterior es un espacio o un salto. */
+  if (/\s/.test(t[p - 1])) return p;
+
+  /* Se retrocede hasta el hueco anterior, sin irse muy lejos: si la palabra
+   * fuera larguísima (una URL pegada, por ejemplo) es mejor quedarse donde
+   * estaba que saltar a mitad del párrafo anterior. */
+  const MAX_RETROCESO = 80;
+  for (let i = p - 1; i >= 0 && p - i <= MAX_RETROCESO; i -= 1) {
+    if (/\s/.test(t[i])) return i + 1;
+  }
+  return p;
+}
+
+/**
+ * Lleva un corte al inicio del párrafo que lo contiene.
+ *
+ * Las posiciones del índice se obtienen localizando el comienzo de una página
+ * física. Esa página puede comenzar en medio de una palabra o de un párrafo.
+ * En el lector no se usa ese punto crudo: el párrafo completo viaja unido a
+ * una sola unidad de lectura.
+ */
+export function ajustarAParrafo(texto, posicion) {
+  const t = String(texto || '');
+  if (!t.length) return 0;
+  let p = Math.max(0, Math.min(Math.floor(Number(posicion) || 0), t.length));
+  if (p === 0 || p === t.length) return p;
+
+  /* Si cayó dentro del separador, pertenece al párrafo siguiente. */
+  while (p < t.length && /\s/.test(t[p])) p += 1;
+  if (p >= t.length) return t.length;
+  const separador = t.lastIndexOf('\n\n', Math.max(0, p - 1));
+  if (separador === -1) {
+    /* En un folleto corto puede no haber separadores aunque el índice sí
+     * tenga dos secciones legítimas. No se colapsan por falta de evidencia. */
+    return p < MIN_CAPITULO ? ajustarAPalabra(t, p) : 0;
+  }
+  let inicio = separador + 2;
+  while (inicio < t.length && /[\n\r\t ]/.test(t[inicio])) inicio += 1;
+  return inicio;
+}
+
+/**
+ * Quita del índice de un libro lo que no es un capítulo.
+ *
+ * El índice de un PDF trae una entrada por cada página de cortesía: el nombre
+ * del autor, el de la editorial, la dedicatoria, los créditos. Como unidades
+ * de lectura no valen nada —salen capítulos vacíos, y varios con el mismo
+ * número de página— y estorban al navegar.
+ *
+ * Lo que decide es **cuánto contenido tiene cada entrada por delante**, no lo
+ * lejos que esté de la anterior; por eso se recorre de atrás hacia adelante.
+ * Mirando hacia atrás se perdía el prólogo de los libros con muchas páginas
+ * de cortesía: quedaba pegado a la portada y se descartaba, aunque detrás
+ * tuviera un capítulo entero.
+ *
+ * Está aparte de `componerTexto` para poder aplicarla también a los libros que
+ * ya estaban guardados, sin volver a leer su PDF.
+ *
+ * @param {{titulo:string, pagina:number, posicion:number}[]} capitulos
+ * @param {number} largoTexto
+ * @returns {{titulo:string, pagina:number, posicion:number}[]}
+ */
+export function depurarCapitulos(capitulos, largoTexto) {
+  const lista = (Array.isArray(capitulos) ? capitulos : [])
+    .filter((c) => c && Number.isFinite(Number(c.posicion)))
+    .map((c) => ({ ...c, posicion: Math.max(0, Math.floor(Number(c.posicion))) }))
+    .sort((a, b) => a.posicion - b.posicion);
+  if (lista.length <= 1) return lista;
+
+  const largo = Math.max(1, Number(largoTexto) || 0);
+  const minimo = Math.min(MIN_CAPITULO, Math.floor(largo / Math.max(4, lista.length * 2)));
+
+  const aceptados = [];
+  let siguiente = largo;
+  for (let i = lista.length - 1; i >= 0; i -= 1) {
+    const cap = lista[i];
+    if (siguiente - cap.posicion >= minimo) {
+      aceptados.unshift(cap);
+      siguiente = cap.posicion;
+    }
+  }
+  /* El libro tiene que empezar en algún sitio, aunque las páginas de cortesía
+   * no den para un capítulo. */
+  if (!aceptados.length || aceptados[0].posicion > lista[0].posicion) {
+    aceptados.unshift(lista[0]);
+  }
+  return aceptados;
+}
+
+/** Capítulos listos para el lector: sin migas y siempre entre párrafos. */
+export function prepararCapitulosLectura(texto, capitulos) {
+  const t = String(texto || '');
+  if (!t.length) return [];
+  const depurados = depurarCapitulos(capitulos, t.length)
+    .map((c) => ({ ...c, posicion: ajustarAParrafo(t, ajustarAPalabra(t, c.posicion)) }));
+
+  /* Al moverlos al inicio de párrafo, dos entradas pueden caer en el mismo
+   * punto. Se conserva una sola para que no reaparezcan páginas vacías. */
+  const unicos = [];
+  for (const cap of depurados) {
+    const anterior = unicos[unicos.length - 1];
+    if (anterior && anterior.posicion === cap.posicion) continue;
+    unicos.push(cap);
+  }
+  return depurarCapitulos(unicos, t.length);
+}
+
+export function componerTexto(paginas, opciones = {}) {
+  return reconstruirDocumento(paginas, opciones);
+}
+

@@ -75,6 +75,17 @@ En **Configuración** hay:
 
 Útil al cambiar de PC o tras limpiar datos del sitio.
 
+## Biblioteca PDF (IndexedDB, no localStorage)
+
+Los libros viven en `jg-turbo-pdf` (versión de base **5**, sin subirla en v2.37). Desde
+`VERSION_RECONSTRUCCION = 6` cada documento puede guardar en los almacenes **ya existentes**:
+
+- `versionReconstruccion`, `versionTroceo`, `pendientesLimites`, `needsSource`, `listoParaLectura`
+- manifiesto compacto de límites y anclas de cada parte
+
+No se renombran almacenes ni índices. Un deploy no borra la biblioteca. Un libro v5 con PDF se
+reextrae al abrirlo; uno sin PDF ni manifiesto se marca `needsSource` y no se finge corregido.
+
 ## Qué NO es persistente (normal)
 
 - Texto de la última transcripción (no se guarda en el servidor).
@@ -87,7 +98,7 @@ En **Configuración** hay:
 **Siempre desplegar en Vercel** al cerrar mejoras de código de la app (no dejar solo local). Tras editar:
 
 1. Sync a `vercel_deploy/`
-2. `npx vercel --prod --yes` desde `vercel_deploy/`
+2. `npx vercel --prod --yes --scope jhoncod24s-projects` **desde** `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\` (nunca desde la raíz del monorepo ni con `--cwd`)
 3. Comprobar https://jg-turbo.vercel.app
 
 Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md`. En **v2.9.0** no se renombra ninguna clave `jg_tts_*`: `jg_tts_bilingual` acepta `regional | unified | off`; el valor histórico `auto` se interpreta como `regional` para que la voz nativa seleccionada se aplique realmente.

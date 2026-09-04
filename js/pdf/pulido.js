@@ -97,7 +97,108 @@ export function mismasPalabras(original, pulido) {
       return { igual: false, parecido: parec, motivo: `${motivo}_en_${i}` };
     }
   }
+  /* Las palabras coinciden, pero un texto no es solo sus palabras: perder los
+   * saltos de párrafo pega el título al cuerpo y arruina la lectura en voz
+   * alta. Se exige que la cantidad de saltos no disminuya. Que aumente sí se
+   * permite: separar mejor un párrafo es una mejora, no una pérdida. */
+  const saltosOrig = (String(original).match(/\n/g) || []).length;
+  const saltosPul = (String(pulido).match(/\n/g) || []).length;
+  if (saltosPul < saltosOrig) {
+    return { igual: false, parecido: 0.99, motivo: 'estructura_perdida' };
+  }
+
   return { igual: true, parecido: 1, motivo: 'exacto' };
+}
+
+const PALABRAS_NO_UNIR = new Set([
+  'a', 'al', 'ante', 'bajo', 'con', 'contra', 'de', 'del', 'desde', 'durante',
+  'e', 'el', 'ella', 'ellas', 'ellos', 'en', 'entre', 'era', 'es', 'esa', 'ese',
+  'esta', 'este', 'ha', 'hasta', 'la', 'las', 'le', 'les', 'lo', 'los', 'mas',
+  'me', 'mi', 'muy', 'ni', 'no', 'o', 'para', 'pero', 'por', 'porque', 'que',
+  'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'un', 'una', 'uno', 'y', 'ya',
+]);
+const PARES_NO_UNIR = new Set([
+  'a\0traves', 'al\0menos', 'de\0acuerdo', 'en\0cambio', 'es\0decir',
+  'para\0que', 'por\0ejemplo', 'por\0eso', 'por\0tanto', 'sin\0embargo', 'ya\0que',
+]);
+
+function normalizarLexema(valor) {
+  return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function candidatoUnionSeguro(candidato) {
+  const izquierda = String(candidato?.izquierda || '');
+  const derecha = String(candidato?.derecha || '');
+  if (!izquierda || !derecha) return false;
+  const izq = normalizarLexema(izquierda);
+  const der = normalizarLexema(derecha);
+  if (PARES_NO_UNIR.has(`${izq}\0${der}`)) return false;
+  const sigla = /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(izquierda)
+    && /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(derecha)
+    && izq.length + der.length <= 7;
+  if (sigla) return true;
+  if (PALABRAS_NO_UNIR.has(izq) && PALABRAS_NO_UNIR.has(der)) return false;
+  if (izq.length < 1 || der.length < 1 || izq.length + der.length < 4 || izq.length + der.length > 30) return false;
+  return !/^[A-ZÁÉÍÓÚÜÑ]/.test(derecha);
+}
+
+/**
+ * Guardián específico del modo lectura.
+ *
+ * Conserva el contrato estricto y agrega una sola excepción: dos tokens
+ * adyacentes pueden convertirse en uno cuando el extractor marcó exactamente
+ * ese límite físico como posible palabra partida. Las letras y cifras deben
+ * ser idénticas y permanecer en el mismo orden.
+ */
+export function mismasPalabrasLectura(original, pulido, candidatosUnion = []) {
+  const estricto = mismasPalabras(original, pulido);
+  if (estricto.igual) return estricto;
+  if (!Array.isArray(candidatosUnion) || !candidatosUnion.length) return estricto;
+  if (/^protegido_/.test(estricto.motivo || '')) return estricto;
+
+  const permitidos = new Map();
+  for (const candidato of candidatosUnion) {
+    if (!candidatoUnionSeguro(candidato)) continue;
+    const clave = `${normalizarLexema(candidato.izquierda)}\u0000${normalizarLexema(candidato.derecha)}`;
+    permitidos.set(clave, (permitidos.get(clave) || 0) + 1);
+  }
+  if (!permitidos.size) return estricto;
+
+  const originales = extraerTokensLexicos(original);
+  const pulidos = extraerTokensLexicos(pulido);
+  let i = 0;
+  let j = 0;
+  let uniones = 0;
+  while (i < originales.length && j < pulidos.length) {
+    if (originales[i] === pulidos[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    const siguiente = originales[i + 1];
+    const clave = siguiente ? `${originales[i]}\u0000${siguiente}` : '';
+    const disponibles = clave ? (permitidos.get(clave) || 0) : 0;
+    if (disponibles > 0 && originales[i] + siguiente === pulidos[j]) {
+      permitidos.set(clave, disponibles - 1);
+      i += 2;
+      j += 1;
+      uniones += 1;
+      continue;
+    }
+    return { igual: false, parecido: j / Math.max(1, pulidos.length), motivo: `cambio_no_autorizado_en_${j}` };
+  }
+  if (i !== originales.length || j !== pulidos.length || uniones === 0) {
+    return { igual: false, parecido: 0, motivo: 'longitud_distinta' };
+  }
+
+  /* Unir fragmentos no autoriza a aplastar títulos ni párrafos. Los cortes
+   * físicos candidatos ya llegan como espacios desde la capa local. */
+  const saltosOrig = (String(original).match(/\n/g) || []).length;
+  const saltosPul = (String(pulido).match(/\n/g) || []).length;
+  if (saltosPul < saltosOrig) {
+    return { igual: false, parecido: 0.99, motivo: 'estructura_perdida' };
+  }
+  return { igual: true, parecido: 1, motivo: `uniones_de_corte:${uniones}` };
 }
 
 export function validarIntegridadEstructura(respuesta) {
@@ -162,10 +263,18 @@ const SIGNOS_VALIDOS = new Set([',', '.', ';', ':', '…', '—', '–', '-', '"
  * el bloque se queda en su capa local, jamás con texto inventado).
  * Cada signo viene como { pos, tipo, texto }: pos es el índice del token;
  * «apertura» se antepone al token (¿ ¡), el resto va pegado detrás.
+ *
+ * IMPORTANTE — la forma del texto se conserva. La versión anterior rearmaba
+ * el bloque con `tokens.join(' ')`, lo que borraba todos los saltos de línea:
+ * un título quedaba pegado a su párrafo y la voz los leía de corrido. Ahora se
+ * recorre el texto ORIGINAL y solo se insertan los signos en su sitio, así que
+ * los espacios, los saltos y la sangría siguen siendo los del autor.
  */
 export function aplicarSignos(textoBase, tokens, signos) {
-  const toks = Array.isArray(tokens) && tokens.length ? [...tokens] : tokenizarExacto(textoBase);
+  const base = String(textoBase || '');
+  const toks = Array.isArray(tokens) && tokens.length ? [...tokens] : tokenizarExacto(base);
   if (!Array.isArray(signos)) return null;
+
   const antesDe = new Map();
   const despuesDe = new Map();
   for (const s of signos) {
@@ -177,12 +286,26 @@ export function aplicarSignos(textoBase, tokens, signos) {
     const mapa = (s?.tipo === 'apertura' || pos === -1) ? antesDe : despuesDe;
     mapa.set(pos, (mapa.get(pos) || '') + sig);
   }
+
+  /* Localizar cada token dentro del texto original, avanzando siempre hacia
+   * delante. Los tokens vienen sin signos pegados (los quita `tokenizarExacto`),
+   * así que se busca el núcleo de la palabra. */
   let salida = '';
-  toks.forEach((tok, i) => {
-    const sep = i ? ' ' : '';
-    salida += sep + (antesDe.get(i) || '') + tok + (despuesDe.get(i) || '');
-  });
-  const chequeo = mismasPalabras(textoBase, salida);
+  let cursor = 0;
+  for (let i = 0; i < toks.length; i += 1) {
+    const tok = toks[i];
+    const donde = base.indexOf(tok, cursor);
+    if (donde === -1) return null;          /* los tokens no son de este texto */
+    /* Todo lo que hay entre el token anterior y este (espacios, saltos,
+     * signos que ya estaban) se copia tal cual. */
+    salida += base.slice(cursor, donde);
+    salida += (antesDe.get(i) || '') + tok + (despuesDe.get(i) || '');
+    cursor = donde + tok.length;
+  }
+  /* Y la cola: lo que venga después del último token. */
+  salida += base.slice(cursor);
+
+  const chequeo = mismasPalabras(base, salida);
   return chequeo.igual ? salida : null;
 }
 
@@ -301,6 +424,7 @@ export function crearPulidor({ pulir, guardar, cargar }) {
   const listas = new Map();
   const enCurso = new Map();
   const conocidos = new Set();
+  const resultados = new Map();
 
   return {
     async obtener(indice, parte, { alProgresar } = {}) {
@@ -314,19 +438,29 @@ export function crearPulidor({ pulir, guardar, cargar }) {
             if (guardado) {
               listas.set(indice, guardado);
               conocidos.add(indice);
+              resultados.set(indice, { ok: true, cache: true, cambio: guardado !== parte.texto });
               return guardado;
             }
           }
           if (!pulir) return parte.texto;
-          const textoPulido = await pulir(parte.texto, { alProgresar, mode: 'lectura' });
-          if (!textoPulido || !textoPulido.trim()) return parte.texto;
+          const textoPulido = await pulir(parte.texto, { indice, alProgresar, mode: 'lectura' });
+          if (!textoPulido || !textoPulido.trim()) {
+            resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: 'respuesta_vacia' });
+            return parte.texto;
+          }
           const chequeo = mismasPalabras(parte.texto, textoPulido);
           const aceptado = chequeo.igual ? textoPulido : parte.texto;
+          if (!chequeo.igual) {
+            resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: chequeo.motivo });
+            return parte.texto;
+          }
           listas.set(indice, aceptado);
           conocidos.add(indice);
           if (guardar) await guardar(indice, aceptado);
+          resultados.set(indice, { ok: true, cache: false, cambio: aceptado !== parte.texto, motivo: chequeo.motivo });
           return aceptado;
         } catch (error) {
+          resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: error?.message || 'error' });
           return parte.texto;
         } finally {
           enCurso.delete(indice);
@@ -340,7 +474,8 @@ export function crearPulidor({ pulir, guardar, cargar }) {
       this.obtener(indice, parte).catch(() => {});
     },
     estaPulido(indice) { return listas.has(indice) || conocidos.has(indice); },
+    resultado(indice) { return resultados.get(indice) || null; },
     sembrar(indices) { if (!Array.isArray(indices)) return; for (const i of indices) conocidos.add(Number(i)); },
-    limpiarMemoria() { listas.clear(); enCurso.clear(); conocidos.clear(); }
+    limpiarMemoria() { listas.clear(); enCurso.clear(); conocidos.clear(); resultados.clear(); }
   };
 }

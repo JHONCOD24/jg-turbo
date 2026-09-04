@@ -10,7 +10,10 @@
  * proyecto respeta como configuración persistente). Nunca se envía a nadie
  * más que a la propia API.
  */
-import { decidir, marcarBorrado } from './sincronizacion.js';
+import {
+  decidir, marcarBorrado, necesitaSubirContenido, debeSubir, puedeFaltarPortada,
+  portadasARescatar, esSincronizable,
+} from './sincronizacion.js';
 
 const CLAVE_LLAVE = 'jg_sync_llave';
 const CLAVE_CURSOR = 'jg_sync_cursor';
@@ -112,14 +115,21 @@ export function crearNube({ pedir, biblioteca }) {
         datos: d.datos,
       }));
 
-      const locales = await biblioteca.exportarParaSincronizar();
+      /* Los locales privados se necesitan solo para impedir que una copia
+       * remota con el mismo id los pise. Nunca entran en enviar ni en rescatar
+       * carátulas. */
+      const todosLocales = await biblioteca.exportarParaSincronizar({ incluirLocales: true });
+      const locales = todosLocales.filter(esSincronizable);
 
       /* Quién gana lo decide siempre el mismo sitio: sincronizacion.js, que
        * es el módulo con pruebas. Aquí no se vuelve a razonar la regla. */
-      const aqui = new Map(locales.map((d) => [d.id, d]));
+      const aqui = new Map(todosLocales.map((d) => [d.id, d]));
       const alla = new Map(llegados.map((d) => [d.id, d]));
-      const aplicar = llegados.filter((remotoDoc) =>
-        decidir(aqui.get(remotoDoc.id) || null, remotoDoc) === 'bajar');
+      const aplicar = llegados.filter((remotoDoc) => {
+        const local = aqui.get(remotoDoc.id) || null;
+        if (local && !esSincronizable(local)) return false;
+        return decidir(local, remotoDoc) === 'bajar';
+      });
 
       /* ── Traer ─────────────────────────────────────────────────────── */
       let bajados = 0;
@@ -138,14 +148,53 @@ export function crearNube({ pedir, biblioteca }) {
         bajados += 1;
       }
 
-      /* ── Enviar ────────────────────────────────────────────────────── */
-      const paraSubir = locales.filter((local) => (cursor
-        ? (local.actualizado || 0) > (local.sincronizado || 0)
-        : decidir(local, alla.get(local.id) || null) === 'subir'));
+      /* ── Rescatar carátulas ─────────────────────────────────────────
+       *
+       * Un documento cuya única novedad es la carátula NO gana la comparación
+       * de arriba: mandar la tapa de un libro no cambia su `actualizado`, así
+       * que `decidir()` dice «nada que hacer» y lo descarta con la imagen
+       * dentro. La carátula llegaba hasta aquí y se tiraba.
+       *
+       * Una carátula no compite con nada —no pisa progreso ni texto—, así que
+       * se guarda al margen de quién gane el documento. */
+      let caratulas = 0;
+      /* Los que acaban de bajarse ya guardaron su carátula por el camino
+       * normal: no hace falta volver a escribirla. */
+      const yaAplicados = new Set(aplicar.map((d) => d.id));
+      const pendientes = llegados.filter((d) => !yaAplicados.has(d.id));
+      for (const { id, portadaMini } of portadasARescatar(pendientes, locales)) {
+        if (await biblioteca.guardarPortadaRecibida(id, portadaMini)) caratulas += 1;
+      }
+      if (caratulas) avisar(`Llegaron ${caratulas} carátula(s)…`);
+
+      /* ── Enviar ─────────────────────────────────────────────────────
+       *
+       * Ojo con el orden: la carátula pendiente se comprueba ANTES de armar la
+       * lista, no dentro del bucle. Estaba dentro, y por eso las carátulas no
+       * llegaban nunca: un libro sincronizado hace meses está «al día», así que
+       * no entraba en la lista y su comprobación no se ejecutaba jamás.
+       *
+       * Solo se consulta la base para los libros que pueden tenerla pendiente
+       * (`puedeFaltarPortada`), que son cada vez menos: en cuanto una carátula
+       * viaja queda marcada y ya no se vuelve a mirar. */
+      const paraSubir = [];
+      const portadasPendientes = new Set();
+      for (const local of locales) {
+        const faltaPortada = puedeFaltarPortada(local)
+          && await biblioteca.faltaSubirPortada(local.id);
+        if (faltaPortada) portadasPendientes.add(local.id);
+        if (debeSubir(local, { cursor, remoto: alla.get(local.id) || null, faltaPortada })) {
+          paraSubir.push(local);
+        }
+      }
 
       let subidos = 0;
       for (const resumen of paraSubir) {
-        const paquete = await biblioteca.paqueteParaSubir(resumen.id);
+        /* La carátula acompaña al contenido, nunca al registro ligero: viaja
+         * cuando el texto viaja, y una sola vez más si la nube aún no la tiene.
+         * Así llega sin reenviarse cada minuto. */
+        const conPortada = necesitaSubirContenido(resumen) || portadasPendientes.has(resumen.id);
+        const paquete = await biblioteca.paqueteParaSubir(resumen.id, { conPortada });
         if (!paquete) continue;
         avisar(`Enviando ${subidos + 1} de ${paraSubir.length}…`);
 
@@ -155,7 +204,10 @@ export function crearNube({ pedir, biblioteca }) {
           body: JSON.stringify({ documentos: [paquete] }),
         });
 
-        if (!paquete.borrado) {
+        /* Los capítulos solo viajan si el texto cambió. Si lo único nuevo es
+         * por dónde va la lectura, con el registro ligero de arriba basta:
+         * así se puede sincronizar el avance cada minuto sin coste. */
+        if (!paquete.borrado && necesitaSubirContenido(resumen)) {
           const partes = await biblioteca.partesParaSubir(resumen.id);
            for (let i = 0; i < partes.length; i += 1) {
              if (partes.length > 3) {
@@ -169,6 +221,12 @@ export function crearNube({ pedir, biblioteca }) {
                traduccion: partes[i].traduccion,
                pulido: partes[i].pulido || null,
                pagina: partes[i].pagina,
+               atomStart: partes[i].atomStart || null,
+               atomEnd: partes[i].atomEnd || null,
+               boundaryIds: partes[i].boundaryIds || [],
+               continuation: Boolean(partes[i].continuation),
+               anclaInicio: partes[i].anclaInicio || null,
+               anclaFin: partes[i].anclaFin || null,
                actualizado: paquete.actualizado,
              };
              try {
@@ -188,6 +246,11 @@ export function crearNube({ pedir, biblioteca }) {
         }
 
         await biblioteca.marcarSincronizado(paquete.id, paquete.actualizado);
+        /* Si la carátula viajó en este paquete, queda anotado: no se vuelve a
+         * enviar salvo que el libro cambie de verdad. */
+        if (paquete.datos && paquete.datos.portadaMini) {
+          await biblioteca.marcarPortadaSincronizada(paquete.id, paquete.actualizado);
+        }
         subidos += 1;
       }
 
@@ -200,7 +263,14 @@ export function crearNube({ pedir, biblioteca }) {
        * comparan las cuentas y se completa lo que falte, en los dos sentidos.
        */
       const reparados = await completarCapitulos(avisar);
-      return { subidos, bajados: bajados + reparados.bajados, reparados: reparados.total };
+      return {
+        subidos,
+        bajados: bajados + reparados.bajados,
+        reparados: reparados.total,
+        /* Se informa aparte: si solo llegaron carátulas, decir «Todo al día»
+         * sería mentir justo cuando el usuario está esperando verlas. */
+        caratulas,
+      };
     },
 
     marcarBorrado,
@@ -235,6 +305,12 @@ export function crearNube({ pedir, biblioteca }) {
               traduccion: partes[i].traduccion,
               pulido: partes[i].pulido || null,
               pagina: partes[i].pagina,
+              atomStart: partes[i].atomStart || null,
+              atomEnd: partes[i].atomEnd || null,
+              boundaryIds: partes[i].boundaryIds || [],
+              continuation: Boolean(partes[i].continuation),
+              anclaInicio: partes[i].anclaInicio || null,
+              anclaFin: partes[i].anclaFin || null,
               actualizado: documento.actualizado || Date.now(),
             };
             try {
