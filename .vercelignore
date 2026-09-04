@@ -20,3 +20,6 @@ temp.js
 install_torch_log.txt
 install_torch_verbose.txt
 tests/
+
+.worktrees/
+
