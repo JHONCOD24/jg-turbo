@@ -52,7 +52,18 @@ El corpus sintético exige literalmente `Boston`, `ARN`, `aluvión`, `esta concl
 
 - `index.html`: `v2.37.0` y módulos `v75`.
 - `sw.js`: `jg-turbo-shell-v75`.
-- Producción: pendiente de anotar `dpl_…` tras el deploy a `https://jg-turbo.vercel.app`.
+- Producción desplegada el 2026-09-04: `dpl_9jtJNRT5H7U6oUfVuYcS9cKpeN7E`, alias
+  `https://jg-turbo.vercel.app`.
+- `vercel inspect` confirmó `target: production`, estado `Ready`, el alias público y
+  `api/index` construida. Verificado contra el dominio real (dos lecturas):
+  marcador `v2.37.0`, `JG_JS_V v75`, `sw.js` `jg-turbo-shell-v75`,
+  `/api/health` `{status: ok, youtube_auto: true}`, `VERSION_RECONSTRUCCION = 6` en
+  el JS servido.
+- La carpeta oficial `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\` **no está
+  montada** en esta máquina (`sincronizar_deploy.mjs` salió 2). El deploy se hizo
+  desde una copia limpia enlazada a `jg-turbo` (`projectName: jg-turbo`,
+  `prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`), no desde un monorepo raíz. La raíz local
+  tiene `.pytest_cache` con EPERM y Vercel CLI 59 no puede escanearla.
 
 ---
 
