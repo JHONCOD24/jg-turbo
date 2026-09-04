@@ -252,6 +252,16 @@ intactos.
 `onupgradeneeded` crea lo que falte y no borra nada. Y traduce el error de versión a algo que una
 persona entienda.
 
+### 7.3 bis La caché del CDN también miente en la primera comprobación
+
+**Ocurrió** (2026-09-03, v2.31.0): la verificación devolvió el marcador de la entrega **anterior** y
+cero coincidencias al buscar el código nuevo en los módulos. Parecía un despliegue fallido. No lo
+era: era la caché del CDN. Repitiendo con `?nocache=<algo distinto>` salió todo correcto.
+
+**Regla:** añade siempre un parámetro distinto a la URL al verificar
+(`curl -s "https://jg-turbo.vercel.app/?nocache=$RANDOM"`), y lo mismo para los módulos. Sin eso
+puedes redesplegar tres veces persiguiendo un fallo que no existe.
+
 ### 7.3 El alias tarda en propagar: no des por fallido un despliegue a la primera
 
 **Ocurrió** (v2.29.1): la verificación inmediata seguía sirviendo la versión anterior. El deploy

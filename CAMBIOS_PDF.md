@@ -109,9 +109,23 @@ Al poner el mínimo de capítulo, falló «usa el índice interno del PDF cuando
 documento de 60 caracteres, donde exigir 400 no tiene sentido. La prueba tenía razón y el arreglo
 fue hacer que el mínimo escale con el tamaño del documento, no cambiar la prueba.
 
-### Deploy
+### Deploy v69
 - `sw.js` → `jg-turbo-shell-v69` · `JG_JS_V` → `v69`
 - `index.html` → `<!-- v2.31.0 · Paginas coherentes y guia sin titileo -->`
+- Producción: `jg-turbo-digysyun4` → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app**: marcador `v2.31.0`, `sw.js v69`, `/api/health` ok,
+  y en los módulos servidos `situarPaginas` en `limpiezaTexto.js` y `mejorCorte` + `guia.saltar` en
+  `pdfController.js`.
+
+> **Ojo al verificar:** la primera comprobación devolvió el marcador de la entrega ANTERIOR y cero
+> coincidencias en los módulos. No era un despliegue fallido: era la caché del CDN. Repitiendo con
+> un parámetro distinto (`?nocache=…`) salió todo correcto. Conviene añadir siempre ese parámetro
+> antes de dar por malo un despliegue.
+
+### Falta comprobar con el libro delante
+Abrir «El placebo eres tú» y mirar el índice: no debería haber capítulos repetidos ni entradas que
+solo digan el nombre del autor. Y escuchar el primer minuto: la marca debería avanzar sin volver
+atrás. Si algún libro concreto sigue partiendo mal, mandar su índice para ajustar el mínimo.
 
 ---
 
