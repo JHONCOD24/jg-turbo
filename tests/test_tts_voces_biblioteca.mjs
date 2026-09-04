@@ -75,6 +75,9 @@ try {
   for (const queda of ['narradora', 'colombiana', 'latina', 'voz-a', 'valentino', 'sabio', 'terror', 'leonardo']) {
     comprobar(ids.includes(queda), `"${queda}" se conserva`);
   }
+  for (const nueva of ['julio-ciencia', 'sheyla', 'farick', 'sabio-expandido', 'enrique-hoffman', 'voz-locutor', 'brian-tracy', 'morgan-freeman', 'mario-alonso-puig']) {
+    comprobar(ids.includes(nueva), `"${nueva}" aparece en el catálogo`);
+  }
 }
 
 /* ── La lista ofrecida filtra aunque el servidor las mande ───────── */
@@ -102,6 +105,8 @@ try {
   comprobar(api.ttsFishPorId('narrador')?.id === 'valentino', 'narrador → valentino');
   comprobar(api.ttsFishPorId('sarah') === null, 'las inglesas no resuelven a nada');
   comprobar(api.ttsFishPorId('narradora')?.id === 'narradora', 'las que quedan resuelven igual');
+  comprobar(api.ttsFishPorId('sheyla')?.id === 'sheyla', 'las nuevas resuelven por su slug');
+  comprobar(api.ttsFishPorId('morgan-freeman')?.id === 'morgan-freeman', 'morgan-freeman resuelve');
   comprobar(api.ttsFishPorId('') === null && api.ttsFishPorId(null) === null, 'vacío no rompe');
 }
 

@@ -4027,6 +4027,17 @@ FISH_CATALOGO_BASE = (
     ("paula", "female", "Paula", "c2623f0c075b4492ac367989aee1576f", "", "en"),
     ("adrian", "male", "Adrian", "bf322df2096a46f18c579d0baa36f41d", "", "en"),
     ("ethan", "male", "Ethan", "536d3a5e000945adb7038665781a4aca", "", "en"),
+    # Voces nuevas pedidas por el usuario (2026-09): el slug es corto para la
+    # app y el reference_id es la ficha pública de fish.audio.
+    ("julio-ciencia", "male", "Julio Ciencia", "49143b926e1043c491cfe386758d09a0", "", "es"),
+    ("sheyla", "female", "Sheyla", "c42d566a928a4049a01262e4f63a1efb", "", "es"),
+    ("farick", "male", "Farick", "dfa5b230c8054f429e434f4a6e9bbdec", "", "es"),
+    ("sabio-expandido", "male", "Sabio expandido", "60a33602dacc4d899cb671b024e66d8c", "", "es"),
+    ("enrique-hoffman", "male", "Enrique Hoffman", "8926506428ad4ae898d35ede47524240", "", "es"),
+    ("voz-locutor", "male", "Voz locutor", "4110ff39a33e46b8bac2a9e7f8e00ced", "", "es"),
+    ("brian-tracy", "male", "Brian Tracy", "cd803cbf78a4454fa98b601abbf8966a", "", "es"),
+    ("morgan-freeman", "male", "Morgan Freeman", "7c76e349434d4f1e97078d924acea65f", "", "es"),
+    ("mario-alonso-puig", "male", "Mario Alonso Puig", "b9a077022c424e89b0705cb98085e36a", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {"clara": "nico-robin", "nestor": "locutor-k"}

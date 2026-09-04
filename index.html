@@ -1,4 +1,4 @@
-<!-- v2.30.0 · Caratula automatica: la real del catalogo o una dibujada con el titulo -->
+<!-- v2.31.0 · 9 voces Fish nuevas: Julio Ciencia, Sheyla, Farick, Sabio expandido, Enrique Hoffman, Voz locutor, Brian Tracy, Morgan Freeman, Mario Alonso Puig -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -11834,6 +11834,15 @@ const TTS_FISH_CATALOGO_LOCAL = [
   { id:'sabio', gender:'male', name:'Sabio', lang:'es' },
   { id:'terror', gender:'male', name:'Terror', lang:'es' },
   { id:'leonardo', gender:'male', name:'Leonardo', lang:'es' },
+  { id:'julio-ciencia', gender:'male', name:'Julio Ciencia', lang:'es' },
+  { id:'sheyla', gender:'female', name:'Sheyla', lang:'es' },
+  { id:'farick', gender:'male', name:'Farick', lang:'es' },
+  { id:'sabio-expandido', gender:'male', name:'Sabio expandido', lang:'es' },
+  { id:'enrique-hoffman', gender:'male', name:'Enrique Hoffman', lang:'es' },
+  { id:'voz-locutor', gender:'male', name:'Voz locutor', lang:'es' },
+  { id:'brian-tracy', gender:'male', name:'Brian Tracy', lang:'es' },
+  { id:'morgan-freeman', gender:'male', name:'Morgan Freeman', lang:'es' },
+  { id:'mario-alonso-puig', gender:'male', name:'Mario Alonso Puig', lang:'es' },
 ];
 
 /* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
@@ -15387,7 +15396,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v68';
+const JG_JS_V = 'v69';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

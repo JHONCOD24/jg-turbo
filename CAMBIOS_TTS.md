@@ -31,6 +31,21 @@
 
 ---
 
+## Nuevo en v2.31.0 · 9 voces Fish nuevas (2026-09-03)
+
+**Pedido:** agregar a la biblioteca: Julio Ciencia, Sheyla, Farick, Sabio expandido, Enrique Hoffman, Voz locutor, Brian Tracy, Morgan Freeman y Mario Alonso Puig (todas en español; Sheyla femenina, el resto masculinas).
+
+**Cambios (rama `feat-voces-nuevas-fish`):**
+1. Servidor (`api/index.py: FISH_CATALOGO_BASE`): 9 tuplas `(slug, género, nombre, reference_id, "", "es")` al final (sin mover las existentes para no alterar fallbacks). El resolvedor y `/api/tts-voices` las sirven sin más cambios: el slug viaja en `fish_voice` y el `reference_id` va a Fish Audio.
+2. Cliente (`index.html: TTS_FISH_CATALOGO_LOCAL`): los 9 con el mismo slug/género/nombre/idioma. Aparecen agrupadas en «Fish Audio · español · femeninas/masculinas» y se eligen igual que las demás.
+3. Sin migración: lo guardado con otras voces sigue intacto.
+
+**Pruebas:** nuevo `backend/tests/test_tts_voces_fish.py` ✔ 5/5 (cada slug resuelve su `reference_id`, con y sin prefijo `fish:`, todas en español, en el catálogo público, y lo desconocido sigue cayendo a una válida). Cliente `test_tts_voces_biblioteca.mjs` ampliado ✔ (las 9 aparecen y resuelven). Regresión ✔: `test_tts_narracion`.
+
+**Deploy:** marcador `v2.31.0` · `JG_JS_V=v69` · `sw.js` → `jg-turbo-shell-v69` · verificado en https://jg-turbo.vercel.app.
+
+---
+
 ## Retiro v2.29.0 · Salen las voces regionales y 10 de Fish (vienen reemplazos) (2026-09-03)
 
 **Pedido:** eliminar de la biblioteca: neural-recomendado, Colombia (Salomé/Gonzalo), México (Dalia/Jorge), Argentina (Elena/Tomás), Chile (Catalina/Lorenzo), Perú (Camila/Alex), Latino EEUU (Paloma/Alonso), Fish Robin/Chica/Nagi/Locutor K/Narrador/Loquendo y las 4 inglesas de Fish (Sarah, Paula, Adrian, Ethan). Quedan: Fish en español (Narradora, Colombiana, Latina, Voz A, Valentino, Sabio, Terror, Leonardo), neural multilingüe (Ava/Andrew) y navegador. **Sin desplegar** (pedido expreso: hay trabajo ajeno sin commitear en el árbol).
