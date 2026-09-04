@@ -52,6 +52,11 @@ pantallas («el contenido no supera la ventana», «la página no se desplaza»)
 ### Deploy v67
 - `sw.js` → `jg-turbo-shell-v67` · `JG_JS_V` sigue en `v66` (esta entrega no toca ningún módulo JS)
 - `index.html` → `<!-- v2.29.1 · Arreglado el scroll de la biblioteca (faltaba soltar .wrap) -->`
+- Producción: `jg-turbo-4kfs980or` → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app**: marcador `v2.29.1`, `sw.js v67`, `/api/health` ok,
+  y presentes en el HTML servido tanto la regla que libera `.wrap` como la del botón a 44 px.
+  (El alias tardó ~40 s en propagar: la primera comprobación seguía sirviendo la v2.29.0. Conviene
+  reintentar antes de dar por fallido un despliegue.)
 
 ---
 
