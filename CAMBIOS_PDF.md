@@ -51,13 +51,16 @@ Probado contra producción con los libros del usuario:
 
 - **Open Library**: `ConnectTimeout` incluso subiendo la espera de 8 s a 15 s. Desde Vercel no se
   alcanza ese catálogo.
-- **Google Books**: `429` con cuota 0. Ya **no hay acceso anónimo** (comprobado el 2026-09-03 desde
-  Vercel y desde un equipo cualquiera).
+- **Google Books**: `429`. Y aquí está el dato útil: el aviso dice `google_429`, **no**
+  `google_sin_clave`, así que **la clave existe** en el entorno de Vercel. Un 429 con clave válida
+  y cuota 0 significa una cosa concreta: **la «Books API» no está habilitada** en ese proyecto de
+  Google Cloud. (El error crudo lo confirma: `quota_limit_value: '0'` para el proyecto
+  `624717413613`.)
 
-**Cómo activarla** (gratis, 5 minutos): crear una clave en Google Cloud, activar «Books API» en ese
-proyecto y añadirla en Vercel como `GOOGLE_BOOKS_API_KEY` (también sirve `GOOGLE_API_KEY`). Son
-1000 consultas al día, de sobra para una biblioteca personal. El código ya la usa si existe: no hay
-que tocar nada más.
+**Cómo activarla** (gratis, ~2 minutos): en Google Cloud Console → «APIs y servicios» → habilitar
+**Books API** en el proyecto de esa clave. Nada más: el código ya la usa
+(`GOOGLE_BOOKS_API_KEY` o `GOOGLE_API_KEY`). Son 1000 consultas al día, de sobra para una
+biblioteca personal.
 
 Mientras tanto **la carátula dibujada cubre todos los libros**, que es lo que se ve por defecto.
 
@@ -78,6 +81,15 @@ buscan **por su texto**, como haría una persona.
 ### Deploy v68
 - `sw.js` → `jg-turbo-shell-v68` · `JG_JS_V` → `v68`
 - `index.html` → `<!-- v2.30.0 · Caratula automatica: la real del catalogo o una dibujada con el titulo -->`
+- Producción: `jg-turbo-j1ronzt7l` → alias **https://jg-turbo.vercel.app**
+- Verificado en **https://jg-turbo.vercel.app**: marcador `v2.30.0`, `sw.js v68`, el módulo
+  `/js/pdf/caratula.js?v=v68` servido con `limpiarNombreLibro` y `dibujarPortada`, y
+  `/api/portada` respondiendo (con el aviso de la clave, no con un error).
+
+### Falta comprobar con los aparatos delante
+Recargar dos veces y abrir la pestaña PDF: los libros sin tapa deben aparecer con su carátula
+dibujada en un segundo. «Buscar carátula» en el menú de un libro dirá que no está en el catálogo
+hasta que se habilite la Books API.
 
 ---
 
