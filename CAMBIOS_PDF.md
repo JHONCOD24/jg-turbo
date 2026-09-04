@@ -36,6 +36,9 @@ reanuda hasta cero pendientes.
 - `sw.js`: `jg-turbo-shell-v77`
 - `VERSION_PULIDO_LECTURA = 7` (invalida pulidos v6 guardados como «seguros» tras un fallo)
 - IndexedDB sigue en versión 5: la cola usa el almacén `pulidos` existente.
+- Producción: `dpl_3ZDriCBoDCdp8wWLGkqHcPdXvCem` · alias `https://jg-turbo.vercel.app`
+  (dos lecturas: `v2.38.0`, `JG_JS_V=v77`, shell `v77`, `VERSION_PULIDO_LECTURA = 7`,
+  `crearColaDesdePartes`, `/api/health` 200).
 
 ---
 
