@@ -1,5 +1,44 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-04 · v2.38.0 · Corrección de cortes y puntuación reanudable
+
+«Corregir cortes y puntuación del libro» recorre **todas** las partes, no solo los límites
+`pending`. La cola vive en IndexedDB (`pulidos`, clave `__cola__`), sobrevive a una recarga y no
+marca el libro como listo mientras quede una parte pendiente o fallida.
+
+### Qué hace
+
+- Cola persistente de todas las partes (`js/pdf/colaCorreccion.js`).
+- Reintentos automáticos y reducción de bloque 3000 → 1500 → 800 → 400 si la petición falla.
+- Un fallo de red, tiempo límite o proveedor **no se guarda** como resultado ni detiene el resto.
+- Cada respuesta pasa por `validarResultadoCorreccion`: mismas palabras; solo uniones autorizadas,
+  puntuación, mayúsculas, tildes y límites de párrafo. Si no pasa, se conserva el original y se
+  prueba en bloques más chicos.
+- La UI muestra el progreso real, la causa y los reintentos, y ofrece **Reanudar corrección**.
+  «Libro corregido» solo aparece con cero pendientes y cero fallos.
+- Al terminar reconstruye el libro en orden, actualiza partes, capítulos, búsqueda, traducción
+  (se invalidan las viejas) y sincronización. El lector usa exclusivamente esa versión.
+
+### Pruebas
+
+```
+node tests/test_pdf_cola_correccion.mjs
+node tests/test_pdf_auditoria_p0.mjs
+node tests/test_pdf_pulido_troceo.mjs
+```
+
+La integral simula libros de 40, 50, 100 y 120 partes, inyecta fallos, serializa (recarga) y
+reanuda hasta cero pendientes.
+
+### Versión
+
+- `index.html`: `v2.38.0` · `JG_JS_V=v77`
+- `sw.js`: `jg-turbo-shell-v77`
+- `VERSION_PULIDO_LECTURA = 7` (invalida pulidos v6 guardados como «seguros» tras un fallo)
+- IndexedDB sigue en versión 5: la cola usa el almacén `pulidos` existente.
+
+---
+
 ## Entrega 2026-09-04 · v2.37.1 · Encadenado TTS sin pausa de párrafo
 
 Cierre del plan v2.37: si una parte nace de un mismo `ReadingBlock` (`continuation: true`),
@@ -105,7 +144,7 @@ El corpus sintético exige literalmente `Boston`, `ARN`, `aluvión`, `esta concl
 - Aceptar, rechazar, cerrar con X y cerrar con Escape tienen eventos permanentes. Cerrar una hoja
   ya autorizada no cambia el permiso; cerrar la primera solicitud equivale a continuar en local.
 - El indicador ahora cuenta las partes reales del lector: `Corrigiendo lectura 2 de 40`,
-  `Lectura corregida` o `N partes sin corregir`. La parte abierta se atiende primero y las demás
+  `Libro corregido` o `N partes pendientes`. La parte abierta se atiende primero y las demás
   continúan secuencialmente en segundo plano.
 - Se dejó de iniciar automáticamente la antigua cola editorial por renglones. Las sugerencias ya
   guardadas se conservan, pero no compiten con la corrección de lectura ni ocupan su indicador.

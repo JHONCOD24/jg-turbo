@@ -111,8 +111,8 @@ export function estadoCorreccionLecturaTexto(total, completados, fallos, consent
   if (!total) return 'Solo local';
   const revisadas = Math.min(total, Math.max(0, completados) + Math.max(0, fallos));
   if (revisadas < total) return `Corrigiendo lectura ${revisadas} de ${total}`;
-  if (fallos > 0) return fallos === 1 ? '1 parte sin corregir' : `${fallos} partes sin corregir`;
-  return 'Lectura corregida';
+  if (fallos > 0) return fallos === 1 ? '1 parte pendiente' : `${fallos} partes pendientes`;
+  return 'Libro corregido';
 }
 
 export function esCompleta(numBloques, completados, fallos) {

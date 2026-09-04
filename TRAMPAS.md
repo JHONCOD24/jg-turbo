@@ -285,6 +285,18 @@ excepción del guardián debe estar acotada por evidencia local, conservar letra
 tener regresiones negativas. Ningún resultado dependiente de consentimiento se calcula ni se
 guarda antes de que la persona responda; una corrección persistida lleva la huella de su fuente.
 
+### 6.6 Un fallo de red no es un capítulo corregido, ni el fin del libro
+
+**Ocurrió** (v2.37): `iniciarCorreccionLibro` solo recorría límites `pending`. Si no había, marcaba
+el libro como corregido sin tocar la puntuación. Un `catch` de red incrementaba `fallos` y seguía,
+pero no reintentaba ni encogía el bloque; y `jgPulirTextoDetallado` en modo lectura devolvía el
+original con `ia_used: false`, que acababa guardado como `lectura_segura`.
+
+**Regla:** la corrección recorre **todas** las partes con cola persistente. Un fallo de red, tiempo
+límite o proveedor no se guarda ni detiene el resto. Se reintenta, se encoge el bloque y lo que
+falle queda pendiente para *Reanudar corrección*. «Libro corregido» solo si pendientes=0 y fallos=0.
+Una prueba de 40/50/100/120 partes con recarga debe terminar en cero pendientes.
+
 ### 6.5b Aplanar TextItem es perder la palabra
 
 **Ocurrió** (v2.31–v2.36): `agruparLineas()` juntaba fragmentos por Y, insertaba espacios por

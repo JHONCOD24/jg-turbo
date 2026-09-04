@@ -188,10 +188,20 @@ console.log('--- 8) corrección del libro: contador útil y bloques acotados ---
     'ningún bloque semántico supera el límite de 3.000 caracteres');
   comprobar(estadoCorreccionLecturaTexto(40, 2, 0, true) === 'Corrigiendo lectura 2 de 40',
     'el contador explica que mide partes de lectura');
-  comprobar(estadoCorreccionLecturaTexto(40, 39, 1, true) === '1 parte sin corregir',
+  comprobar(estadoCorreccionLecturaTexto(40, 39, 1, true) === '1 parte pendiente',
     'los fallos se muestran como partes pendientes, no como una revisión terminada');
-  comprobar(estadoCorreccionLecturaTexto(40, 40, 0, true) === 'Lectura corregida',
+  comprobar(estadoCorreccionLecturaTexto(40, 40, 0, true) === 'Libro corregido',
     'el final exitoso queda explícito');
+  const indexHtml = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const controller = fs.readFileSync(path.join(__dirname, '../js/pdf/pdfController.js'), 'utf8');
+  comprobar(controller.includes('crearColaDesdePartes') && controller.includes('prepararReanudacion'),
+    'la corrección usa cola persistente y se puede reanudar');
+  comprobar(controller.includes('finalizarCorreccionLibro') && controller.includes('borrarTraduccionesDe'),
+    'al terminar reconstruye el libro y actualiza traducción');
+  comprobar(indexHtml.includes('Reanudar corrección') && indexHtml.includes('btnPdfReanudarCorreccion'),
+    'la interfaz ofrece Reanudar corrección');
+  comprobar(indexHtml.includes('jgCorregirBloqueLectura') && !/mode === 'lectura'\) return \{ text: txtLimpio/.test(indexHtml),
+    'un fallo de red en lectura ya no se devuelve como texto original');
 }
 
 if (fallos > 0) {

@@ -1,4 +1,4 @@
-<!-- v2.37.1 · Continuidad TTS entre partes y cierre del plan v2.37 -->
+<!-- v2.38.0 · Corrección de cortes y puntuación reanudable -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -2397,6 +2397,8 @@
   .pdf-pulido-estado[data-estado="ok"]::before{background:#8FE9C8;box-shadow:none;animation:none}
   .pdf-pulido-estado[data-estado="mecanico"]{color:var(--muted);border-color:var(--line);background:var(--surface)}
   .pdf-pulido-estado[data-estado="mecanico"]::before{background:var(--muted);animation:none;opacity:.7}
+  .pdf-pulido-estado[data-estado="pendiente"]{color:#F3C16B;border-color:rgba(243,193,107,.4);background:rgba(243,193,107,.1)}
+  .pdf-pulido-estado[data-estado="pendiente"]::before{background:#F3C16B;box-shadow:none;animation:none}
   @keyframes pdfPulso{0%,100%{opacity:1}50%{opacity:.35}}
   @keyframes pdfPulidoIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
   .pdf-doc-acciones{display:flex;align-items:center;gap:7px;flex:none;flex-wrap:nowrap}
@@ -5412,6 +5414,10 @@
               <span class="pdf-reanudar-txt" id="pdfReanudarTxt"></span>
               <button type="button" class="mini-btn" id="btnPdfReanudarInicio">Empezar de cero</button>
             </div>
+            <div class="pdf-reanudar" id="pdfReanudarCorreccion" hidden role="status" aria-live="polite">
+              <span class="pdf-reanudar-txt" id="pdfReanudarCorreccionTxt"></span>
+              <button type="button" class="mini-btn" id="btnPdfReanudarCorreccion">Reanudar corrección</button>
+            </div>
 
             <div class="pdf-barra pdf-barra--doc" id="pdfProgresoDoc" role="progressbar" aria-label="Progreso de lectura" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <div class="pdf-barra-relleno" id="pdfProgresoRelleno"></div>
@@ -5458,12 +5464,12 @@
 
               <p><strong>Qué significa el contador.</strong> «Corrigiendo lectura 2 de 40» indica
               cuántas partes reales del lector ya fueron revisadas. No cuenta páginas ni renglones.
-              Cada parte cambia en pantalla apenas termina; no necesitas esperar a que acabe todo el
-              libro para comprobar el capítulo abierto.</p>
+              Cada parte cambia en pantalla apenas termina. «Libro corregido» solo aparece cuando
+              no queda ninguna parte pendiente ni fallida.</p>
 
-              <p><strong>Cuánto tarda.</strong> Depende del tamaño del libro. Empieza por la parte que
-              estás leyendo y continúa en segundo plano. «Partes sin corregir» significa que hubo un
-              fallo de conexión o del proveedor y esas partes se intentarán de nuevo al abrir el libro.</p>
+              <p><strong>Si algo falla.</strong> Un corte de red o del proveedor no se guarda como
+              resultado ni detiene el resto del libro. Verás la causa, los reintentos y el botón
+              <em>Reanudar corrección</em> para seguir desde el punto exacto, sin repetir lo ya hecho.</p>
 
               <p class="pdf-aud-nota">Si prefieres no enviar nada, el modo local sigue funcionando: junta
               las líneas, arregla los guiones de corte y quita cabeceras repetidas, todo en tu
@@ -8074,10 +8080,12 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
         candidatos_union: jgCandidatosUnionDelTrozo(trozos[0], opts.candidatosUnion),
       }, timeoutMs);
       const out = (data.text || '').trim();
+      if(opts.mode === 'lectura' && (!out || data.ia_used === false)){
+        throw new Error('el proveedor no confirmó la corrección');
+      }
       if(!out) return { ...data, text: txtLimpio, ia_used: false };
       return { ...data, text: out };
     }catch(e){
-      if(opts.mode === 'lectura') return { text: txtLimpio, validation: null, ia_used: false };
       throw e;
     }
   }
@@ -8098,8 +8106,12 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
       hechos += 1;
       avisar();
       const out = (data.text || '').trim();
+      if(opts.mode === 'lectura' && (!out || data.ia_used === false)){
+        throw new Error('el proveedor no confirmó la corrección');
+      }
       return out ? data : { text: trozo, ia_used: false, validation: null };
     }catch(err){
+      if(opts.mode === 'lectura') throw err;
       hechos += 1;
       avisar();
       return { text: trozo, ia_used: false, validation: null };
@@ -8119,6 +8131,29 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
 }
 
 window.jgPulirTextoDetallado = jgPulirTextoDetallado;
+
+/** Una petición de corrección de lectura. Si falla, lanza: nunca devuelve
+ *  el original como si la IA hubiera trabajado. */
+async function jgCorregirBloqueLectura(texto, idioma = 'es', opts = {}){
+  const txt = String(texto || '');
+  if(!txt.trim()) return { text: txt, ia_used: false };
+  const creds = jgCredencialesIA();
+  const data = await jgPedirPulido({
+    language: normalizarLangApi(idioma) || 'es',
+    provider: creds.provider,
+    api_key: creds.api_key,
+    openrouter_model: creds.openrouter_model,
+    text: txt,
+    mode: 'lectura',
+    preserve_segments: true,
+    candidatos_union: jgCandidatosUnionDelTrozo(txt, opts.candidatosUnion),
+  }, 90000);
+  const out = (data && data.text ? String(data.text) : '').trim();
+  if(!out) throw new Error('El proveedor devolvió el bloque vacío');
+  if(data.ia_used === false) throw new Error('el proveedor no confirmó la corrección');
+  return { ...data, text: out, ia_used: true };
+}
+window.jgCorregirBloqueLectura = jgCorregirBloqueLectura;
 
 async function jgPedirDecisionesLimites(limites, idioma = 'es'){
   const lista = Array.isArray(limites) ? limites : [];
@@ -15494,7 +15529,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v76';
+const JG_JS_V = 'v77';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

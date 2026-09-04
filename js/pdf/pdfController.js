@@ -14,13 +14,18 @@
 import { procesarPdf, ErrorPdf } from './extractorPdf.js';
 import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
 import { partirTextoCanonico, mejorCorte as mejorCorteCanonico, LIMITE_PARTE as LIMITE_PARTE_CANONICO } from './particion.js';
+import {
+  crearColaDesdePartes, hidratarCola, serializarCola, correrCola,
+  etiquetaColaCorreccion, resumenCola, prepararReanudacion,
+  textoCorregidoDeParte, libroCorregidoEnOrden, componerLibroDesdePartes,
+  parteCompleta, validarResultadoCorreccion,
+} from './colaCorreccion.js';
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR } from './reconstruccion.js';
-import { reconstruirDesdeAtomos } from './reconstruccion.js';
-import { aceptarDecisionesIA, contarPendientes } from './limites.js';
+import { contarPendientes } from './limites.js';
 import { planMigracionV6, serializarReconstruccion, marcarNeedsSource } from './manifiesto.js';
 import { prepararParaVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
-import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto, esCompleta } from './auditoria.js';
+import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto } from './auditoria.js';
 import { construirIndice, buscarRelevantes } from './busqueda.js';
 import { construirDocx, construirHtmlImpresion, construirMarkdown } from './exportar.js';
 import { crearTraductor, necesitaTraduccion } from './traduccion.js';
@@ -44,7 +49,7 @@ const MINIMO_PARA_CAPITULOS = 8000;
  * que ya estaba en la biblioteca. */
 const VERSION_TROCEO = VERSION_TROCEO_MOTOR;
 /* Invalida el pulido v5 que reescribía capítulos para unir palabras. */
-const VERSION_PULIDO_LECTURA = 6;
+const VERSION_PULIDO_LECTURA = 7;
 /* Cuánto texto se le manda a la IA como contexto de una pregunta. */
 const LIMITE_CONTEXTO_IA = 12000;
 const TAM_BLOQUE_BUSQUEDA = 2000;
@@ -127,6 +132,9 @@ export function inicializarLectorPdf(deps = {}) {
     auditoriaCerrar: $('btnPdfAuditoriaCerrar'),
     reanudar: $('pdfReanudar'), reanudarTxt: $('pdfReanudarTxt'),
     reanudarInicio: $('btnPdfReanudarInicio'),
+    reanudarCorreccion: $('pdfReanudarCorreccion'),
+    reanudarCorreccionTxt: $('pdfReanudarCorreccionTxt'),
+    btnReanudarCorreccion: $('btnPdfReanudarCorreccion'),
 
     nube: $('pdfNube'), nubePunto: $('pdfNubePunto'), nubeEstado: $('pdfNubeEstado'),
     nubeMas: $('btnPdfNubeMas'), nubeOpciones: $('pdfNubeOpciones'),
@@ -179,6 +187,7 @@ export function inicializarLectorPdf(deps = {}) {
     auditoriaEstado: 'Solo local',
     auditoriaProgreso: { total: 0, completados: 0, fallos: 0 },
     correccionProgreso: { total: 0, completados: 0, fallos: 0, ejecutando: false, token: 0 },
+    colaCorreccion: null,
     capa: { original: '', local: '', revisadoSeguro: '', aprobado: '' },
     textoAprobadoPorBloque: new Map(),
     textoSeguroPorBloque: new Map(),
@@ -1043,6 +1052,8 @@ export function inicializarLectorPdf(deps = {}) {
     estado.auditoriaProgreso = { total: 0, completados: 0, fallos: 0 };
     estado.correccionProgreso.token += 1;
     estado.correccionProgreso = { total: 0, completados: 0, fallos: 0, ejecutando: false, token: estado.correccionProgreso.token };
+    estado.colaCorreccion = null;
+    if (el.reanudarCorreccion) el.reanudarCorreccion.hidden = true;
     estado.textoAprobadoPorBloque = new Map();
     estado.textoSeguroPorBloque = new Map();
     estado.propuestasPorBloque = new Map();
@@ -1412,8 +1423,22 @@ export function inicializarLectorPdf(deps = {}) {
 
   function actualizarEstadoCorreccion() {
     const p = estado.correccionProgreso;
-    const texto = estadoCorreccionLecturaTexto(p.total, p.completados, p.fallos, estado.consentido);
-    mostrarPulidoEstado(texto, !p.ejecutando && p.total > 0 && p.fallos === 0 ? 'ok' : '');
+    const cola = estado.colaCorreccion;
+    const r = cola ? resumenCola(cola) : null;
+    const texto = cola
+      ? etiquetaColaCorreccion(cola, { ejecutando: p.ejecutando, consentido: estado.consentido })
+      : estadoCorreccionLecturaTexto(p.total, p.completados, p.fallos, estado.consentido);
+    const incompletas = r ? (r.pendientes + r.fallos) : p.fallos;
+    const lista = r
+      ? (r.lista && !p.ejecutando)
+      : (!p.ejecutando && p.total > 0 && p.fallos === 0 && p.completados >= p.total);
+    if (incompletas > 0) mostrarPulidoEstado(texto, p.ejecutando ? '' : 'pendiente');
+    else mostrarPulidoEstado(texto, lista ? 'ok' : '');
+    const mostrarReanudar = !!(cola && !p.ejecutando && estado.consentido && r && !r.lista && incompletas > 0);
+    if (el.reanudarCorreccion) {
+      el.reanudarCorreccion.hidden = !mostrarReanudar;
+      if (el.reanudarCorreccionTxt) el.reanudarCorreccionTxt.textContent = texto;
+    }
   }
 
   /**
@@ -1424,6 +1449,7 @@ export function inicializarLectorPdf(deps = {}) {
    * hoja de la propia app, con el mismo aspecto que el resto.
    */
   let resolverConsentimientoAuditoria = null;
+  let colaLista = Promise.resolve();
 
   function cerrarHojaAuditoria(decision = null) {
     if (!el.auditoriaHoja) return;
@@ -1472,6 +1498,11 @@ export function inicializarLectorPdf(deps = {}) {
   if (el.auditoriaAceptar) el.auditoriaAceptar.addEventListener('click', () => cerrarHojaAuditoria(true));
   if (el.auditoriaRechazar) el.auditoriaRechazar.addEventListener('click', () => cerrarHojaAuditoria(false));
   if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', () => cerrarHojaAuditoria(null));
+  if (el.btnReanudarCorreccion) {
+    el.btnReanudarCorreccion.addEventListener('click', () => {
+      iniciarCorreccionLibro({ reanudar: true }).catch(() => {});
+    });
+  }
   if (el.auditoriaHoja) el.auditoriaHoja.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); cerrarHojaAuditoria(null); }
   });
@@ -1508,6 +1539,7 @@ export function inicializarLectorPdf(deps = {}) {
       ejecutando: false,
       token: estado.correccionProgreso.token,
     };
+    estado.colaCorreccion = null;
     // consentimiento previo por documento
     try {
       const v = localStorage.getItem(`jg_pdf_consent_${estado.id}`);
@@ -1663,6 +1695,21 @@ export function inicializarLectorPdf(deps = {}) {
      * y podía mostrar 4.950 renglones pendientes. Se conserva únicamente para
      * leer sugerencias ya guardadas. La corrección automática nueva recorre
      * las partes reales del lector mediante `iniciarCorreccionLibro`. */
+    const docIdCola = estado.id;
+    colaLista = (async () => {
+      try {
+        const serial = await almacen.cargarColaCorreccion(docIdCola);
+        if (estado.id !== docIdCola) return;
+        if (!serial) return;
+        estado.colaCorreccion = hidratarCola(serial, estado.partes, { cortar: mejorCorteCanonico });
+        aplicarPartesYaCorregidas();
+        const r = resumenCola(estado.colaCorreccion);
+        estado.correccionProgreso.total = r.total;
+        estado.correccionProgreso.completados = r.completados;
+        estado.correccionProgreso.fallos = r.fallos;
+        actualizarEstadoCorreccion();
+      } catch (_) { /* sin cola guardada se crea al arrancar */ }
+    })();
     actualizarEstadoAuditoria();
   }
 
@@ -1672,85 +1719,189 @@ export function inicializarLectorPdf(deps = {}) {
     return estado.bloques.filter((b) => set.has(b.capitulo)).map((b) => b.id);
   }
 
-  /** Revisa todas las unidades reales del lector, empezando por la abierta. */
-  async function iniciarCorreccionLibro() {
+  function candidatosDeItem(item) {
+    const parte = estado.partes[item.parte];
+    const ids = new Set(parte?.boundaryIds || []);
+    const lista = [];
+    for (const lim of estado.limites || []) {
+      if (ids.size && !ids.has(lim.id)) continue;
+      if (!lim.leftFragment || !lim.rightFragment) continue;
+      lista.push({ izquierda: lim.leftFragment, derecha: lim.rightFragment });
+    }
+    return lista;
+  }
+
+  async function pedirCorreccionBloque(item) {
+    if (typeof window.jgCorregirBloqueLectura !== 'function') {
+      const err = new Error('el proveedor no está disponible');
+      err.causa = 'proveedor';
+      throw err;
+    }
+    const resp = await window.jgCorregirBloqueLectura(item.texto, estado.idioma || 'es', {
+      candidatosUnion: candidatosDeItem(item),
+    });
+    return { texto: resp?.text || resp?.texto || '', ia_used: resp?.ia_used };
+  }
+
+  function aplicarPartesYaCorregidas() {
+    if (!estado.colaCorreccion) return;
+    for (let i = 0; i < estado.partes.length; i += 1) {
+      if (!parteCompleta(estado.colaCorreccion, i)) continue;
+      const t = textoCorregidoDeParte(estado.colaCorreccion, i, '');
+      if (t) estado.pulido.set(i, t);
+    }
+  }
+
+  async function persistirCola(cola) {
+    estado.colaCorreccion = cola;
+    const r = resumenCola(cola);
+    estado.correccionProgreso.total = r.total;
+    estado.correccionProgreso.completados = r.completados;
+    estado.correccionProgreso.fallos = r.fallos;
+    actualizarEstadoCorreccion();
+    if (parteCompleta(cola, estado.parteActual)) {
+      const t = textoCorregidoDeParte(cola, estado.parteActual, '');
+      if (t) {
+        estado.pulido.set(estado.parteActual, t);
+        if (el.pulidoCambio) el.pulidoCambio.hidden = false;
+        if (estado.pulidoActivo && estado.vista === 'original' && el.salida) {
+          el.salida.value = t;
+          el.salida.dispatchEvent(new Event('input', { bubbles: true }));
+          actualizarContador();
+        }
+      }
+    }
+    if (estado.id) await almacen.guardarColaCorreccion(estado.id, serializarCola(cola));
+  }
+
+  async function finalizarCorreccionLibro(cola) {
+    const textos = libroCorregidoEnOrden(cola, estado.partes);
+    const nuevas = estado.partes.map((p, i) => ({ ...p, texto: textos[i] }));
+    let off = 0;
+    for (const p of nuevas) {
+      p.desde = off;
+      off += String(p.texto || '').length;
+      p.hasta = off;
+    }
+    const libro = componerLibroDesdePartes(nuevas);
+    estado.partes = nuevas;
+    estado.localTexto = libro;
+    estado.originalTexto = libro;
+    estado.pulido = new Map(nuevas.map((p, i) => [i, p.texto]));
+
+    const caps = prepararCapitulosLectura(
+      libro,
+      nuevas.filter((p) => !p.continuation).map((p) => ({ titulo: p.titulo, posicion: p.desde || 0 })),
+    );
+    estado.bloques = construirBloquesAuditoria(libro, estado.bloquesEstructurales, caps);
+
+    for (let i = 0; i < nuevas.length; i += 1) {
+      await almacen.guardarPulidoEstructurado(estado.id, i, {
+        version: VERSION_PULIDO_LECTURA,
+        huellaOrigen: construirHuella(nuevas[i].texto),
+        estado: 'lectura_segura',
+        textoSeguro: nuevas[i].texto,
+        propuestas: [],
+        decisiones: {},
+        advertencias: [],
+        actualizado: Date.now(),
+      });
+    }
+
+    await almacen.marcarTroceo(estado.id, VERSION_TROCEO, {
+      partes: nuevas,
+      capitulos: caps,
+      progreso: estado.progreso,
+      bloques: estado.bloques,
+      versionReconstruccion: VERSION_RECONSTRUCCION,
+      pendientesLimites: contarPendientes(estado.limites),
+    });
+    await almacen.guardarBloquesDocumento(estado.id, estado.bloques);
+    const colaFinal = crearColaDesdePartes(nuevas, { cortar: mejorCorteCanonico });
+    for (const it of colaFinal.items) aplicarExito(colaFinal, it, it.texto);
+    estado.colaCorreccion = colaFinal;
+    await almacen.guardarColaCorreccion(estado.id, serializarCola(colaFinal));
+    await almacen.borrarTraduccionesDe(estado.id);
+    estado.traducido.clear();
+    prepararTraduccion();
+    if (estado.vista === 'es') {
+      asegurarTraduccion(estado.parteActual, { mostrar: true }).catch(() => {});
+    }
+
+    if (el.salida && estado.vista === 'original') {
+      el.salida.value = textoDeParte(estado.parteActual);
+      el.salida.dispatchEvent(new Event('input', { bubbles: true }));
+      actualizarContador();
+    }
+    pintarIndice();
+    sincronizarAhora({ silencioso: true });
+  }
+
+  /** Recorre todas las partes con cola persistente, reintentos y bloques más chicos. */
+  async function iniciarCorreccionLibro({ reanudar = false } = {}) {
     if (!estado.consentido || !estado.partes.length) return;
     if (estado.correccionProgreso.ejecutando) return;
-    const pendientes = (estado.limites || []).filter((l) => l.decision === 'pending');
-    if (!pendientes.length) {
+    await colaLista;
+    if (!estado.consentido || !estado.partes.length) return;
+    if (estado.correccionProgreso.ejecutando) return;
+
+    if (reanudar && estado.colaCorreccion) prepararReanudacion(estado.colaCorreccion);
+    if (!estado.colaCorreccion) {
+      estado.colaCorreccion = crearColaDesdePartes(estado.partes, { cortar: mejorCorteCanonico });
+    }
+
+    const previo = resumenCola(estado.colaCorreccion);
+    if (previo.lista && !reanudar) {
       estado.correccionProgreso = {
-        total: 1, completados: 1, fallos: 0, ejecutando: false,
+        total: previo.total,
+        completados: previo.completados,
+        fallos: 0,
+        ejecutando: false,
         token: estado.correccionProgreso.token + 1,
       };
       actualizarEstadoCorreccion();
       return;
     }
-    if (typeof window.jgPedirDecisionesLimites !== 'function') return;
 
     const docId = estado.id;
     const token = estado.correccionProgreso.token + 1;
-    const TAM = 80;
-    const lotes = [];
-    for (let i = 0; i < pendientes.length; i += TAM) lotes.push(pendientes.slice(i, i + TAM));
     estado.correccionProgreso = {
-      total: lotes.length, completados: 0, fallos: 0, ejecutando: true, token,
+      total: previo.total || estado.partes.length,
+      completados: previo.completados,
+      fallos: previo.fallos,
+      ejecutando: true,
+      token,
     };
     actualizarEstadoCorreccion();
 
-    for (const lote of lotes) {
-      if (estado.id !== docId || estado.correccionProgreso.token !== token || !estado.consentido) return;
-      try {
-        const payload = lote.map((lim) => ({
-          boundaryId: lim.id,
-          leftFragment: lim.leftFragment,
-          rightFragment: lim.rightFragment,
-          kind: lim.kind,
-          language: estado.idioma || 'es',
-          evidence: {
-            gap: lim.evidence?.gap,
-            pageChange: lim.evidence?.pageChange,
-            leftHasEOL: lim.evidence?.leftHasEOL,
-          },
-        }));
-        const resp = await window.jgPedirDecisionesLimites(payload, estado.idioma);
-        aceptarDecisionesIA(estado.limites, resp?.decisions || resp || []);
-        estado.correccionProgreso.completados += 1;
-      } catch (_) {
-        estado.correccionProgreso.fallos += 1;
-      }
-      actualizarEstadoCorreccion();
-    }
+    const abortado = () => (
+      estado.id !== docId
+      || estado.correccionProgreso.token !== token
+      || !estado.consentido
+    );
 
-    estado.pendientesLimites = contarPendientes(estado.limites);
-    if (estado.atomos?.length) {
-      const recon = reconstruirDesdeAtomos(estado.atomos, {
-        decisionesIA: estado.limites
-          .filter((l) => l.source === 'ai' || l.source === 'user')
-          .map((l) => ({ boundaryId: l.id, action: l.decision })),
-        lang: estado.idioma,
-      });
-      estado.limites = recon.limites;
-      estado.pendientesLimites = recon.pendientes;
-      estado.originalTexto = recon.texto;
-      estado.localTexto = recon.texto;
-      const caps = prepararCapitulosLectura(recon.texto, recon.capitulos);
-      const nuevas = partirTexto(recon.texto, caps, recon.paginas, [], {
-        bloques: recon.bloquesLectura, limites: recon.limites,
-        atomos: recon.atomos, offsetDeAtomo: recon.offsetDeAtomo,
-      });
-      if (nuevas.length) {
-        const progreso = reubicarProgreso(estado.progreso, estado.partes, nuevas);
-        estado.partes = nuevas;
-        await almacen.marcarTroceo(estado.id, VERSION_TROCEO, {
-          partes: nuevas, capitulos: caps, progreso,
-          versionReconstruccion: VERSION_RECONSTRUCCION,
-          pendientesLimites: recon.pendientes,
-          reconstruccion: serializarReconstruccion(recon),
-        });
-        el.salida.value = textoDeParte(estado.parteActual);
-      }
-    }
+    const resultado = await correrCola(estado.colaCorreccion, {
+      pedir: pedirCorreccionBloque,
+      persistir: persistirCola,
+      validar: validarResultadoCorreccion,
+      candidatosDe: candidatosDeItem,
+      cortar: mejorCorteCanonico,
+      abortado,
+      onAvance: (cola) => {
+        const r = resumenCola(cola);
+        estado.correccionProgreso.completados = r.completados;
+        estado.correccionProgreso.fallos = r.fallos;
+        estado.correccionProgreso.total = r.total;
+        actualizarEstadoCorreccion();
+      },
+    });
+
+    if (abortado()) return;
     estado.correccionProgreso.ejecutando = false;
+    if (resultado.completa) {
+      try { await finalizarCorreccionLibro(estado.colaCorreccion); }
+      catch (error) { console.warn('[jg-pdf] no se pudo guardar el libro corregido', error); }
+    }
     actualizarEstadoCorreccion();
   }
 

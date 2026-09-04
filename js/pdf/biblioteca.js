@@ -427,6 +427,22 @@ export async function cargarTraduccion(id, idioma, indice) {
   }
 }
 
+/** El texto fuente cambió: las traducciones viejas ya no corresponden. */
+export async function borrarTraduccionesDe(id) {
+  if (!id) return false;
+  try {
+    await conAlmacenes([TRADUCCIONES], 'readwrite', async (t) => {
+      const todas = await esperar(t.getAll());
+      for (const fila of todas || []) {
+        if (fila.id === id) t.delete(fila.clave);
+      }
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /** Qué capítulos de este documento ya están traducidos (para el índice). */
 export async function traduccionesDe(id, idioma) {
   try {
@@ -497,7 +513,7 @@ export async function pulidosDe(id) {
   try {
     const todas = await conAlmacenes([PULIDOS], 'readonly', (t) => esperar(t.getAll()));
     return new Set((todas || [])
-      .filter((f) => f.id === id)
+      .filter((f) => f.id === id && f.indice !== '__cola__')
       .map((f) => f.indice));
   } catch (_) {
     return new Set();
@@ -541,6 +557,23 @@ export async function cargarProgresoAuditoria(docId) {
     return (todas || []).filter((f) => f.docId === docId);
   } catch (_) { return []; }
 }
+export async function guardarColaCorreccion(id, cola) {
+  if (!id || !cola) return false;
+  return guardarPulidoEstructurado(id, '__cola__', {
+    version: 1,
+    estado: 'cola_correccion',
+    cola,
+    textoSeguro: '',
+    actualizado: Date.now(),
+  }, { marcar: false });
+}
+
+export async function cargarColaCorreccion(id) {
+  if (!id) return null;
+  const reg = await cargarPulidoRegistro(id, '__cola__');
+  return reg?.cola || null;
+}
+
 export async function revalidarPulidosAntiguos(docId, fuenteHuella) {
   try {
     const todas = await conAlmacenes([PULIDOS], 'readonly', (t) => esperar(t.getAll()));
