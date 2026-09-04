@@ -5,9 +5,12 @@
  * Omite si no hay ruta. Nunca imprime el texto completo del libro.
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { reconstruirDocumento } from '../js/pdf/reconstruccion.js';
 import { extraerAtomosDeTextContent } from '../js/pdf/atomos.js';
 
+const AQUI = dirname(fileURLToPath(import.meta.url));
 const ruta = process.env.JG_PDF_REAL;
 if (!ruta) {
   console.log('omitido: define JG_PDF_REAL para probar un PDF privado');
@@ -19,7 +22,9 @@ if (!existsSync(ruta)) {
 }
 
 const pdfjs = await import('../js/vendor/pdfjs/pdf.min.mjs');
-pdfjs.GlobalWorkerOptions.workerSrc = '../js/vendor/pdfjs/pdf.worker.min.mjs';
+pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
+  resolve(AQUI, '../js/vendor/pdfjs/pdf.worker.min.mjs')
+).href;
 
 const datos = new Uint8Array(readFileSync(ruta));
 const doc = await pdfjs.getDocument({ data: datos, useSystemFonts: true, isEvalSupported: false }).promise;

@@ -309,6 +309,16 @@ function mulberry32(a) {
     'la capa de voz recibe Boston, ARN, aluvión y esta');
 }
 
+/* ── Continuación de partes para TTS ──────────────────────────────── */
+{
+  const largo = `${'Palabra completa. '.repeat(40)}${'https://ejemplo.test/'}${'a'.repeat(120)} y sigue el párrafo.`;
+  const partes = partirTextoCanonico(largo, { limiteParte: 80 });
+  comprobar(partes.length >= 2, 'un texto largo se parte en varias unidades');
+  comprobar(partes.slice(1).every((p) => p.continuation === true) || partes.some((p) => p.continuation),
+    'las partes que continúan el mismo bloque marcan continuation');
+  comprobar(reconstruirCanonicoDesdePartes(partes) === largo, 'concatenar partes continuadas reconstruye el canónico');
+}
+
 /* ── Serialización ────────────────────────────────────────────────── */
 {
   const r = reconstruir([{ str: 'Hola mundo.', x: 70, y: 700, width: 80, height: 11 }]);

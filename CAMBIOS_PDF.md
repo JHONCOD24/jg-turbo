@@ -1,5 +1,19 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-04 · v2.37.1 · Encadenado TTS sin pausa de párrafo
+
+Cierre del plan v2.37: si una parte nace de un mismo `ReadingBlock` (`continuation: true`),
+el audiolibro **encola** el texto en la cola actual en vez de arrancar una lectura nueva.
+Así no se inserta una pausa de párrafo a mitad de frase.
+
+Verificación en navegador (Playwright, PDF sintético de cortes sin guion, motor pdf.js real):
+el recuadro mostró `Boston`, `ARN`, `aluvión`, `esta` y `le damos` en una sola pasada, sin IA.
+
+- `index.html`: `v2.37.1` · `JG_JS_V=v76`
+- `sw.js`: `jg-turbo-shell-v76`
+
+---
+
 ## Entrega 2026-09-04 · v2.37.0 · Continuidad de palabras y párrafos en el motor
 
 ### Causa

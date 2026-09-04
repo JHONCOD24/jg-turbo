@@ -1,4 +1,4 @@
-<!-- v2.37.0 · Continuidad de palabras y párrafos en el motor PDF -->
+<!-- v2.37.1 · Continuidad TTS entre partes y cierre del plan v2.37 -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -13669,6 +13669,19 @@ function ttsFinLectura(){
     try{ proximo = jgAudiolibro.siguiente(); }
     catch(err){ console.warn('[jg-audiolibro]', err); }
     if(proximo && proximo.texto){
+      /* Una parte marcada continuation es el mismo párrafo: se encola en la
+       * cola actual para no insertar una pausa de párrafo entre bloques. */
+      if (proximo.continuation && ttsState.queue && ttsState.queue.length) {
+        const token = ttsState._speakToken;
+        const desde = ttsState.queue.length;
+        const maxChunk = ttsState.engineUsed === 'browser' ? TTS_BROWSER_MAX : TTS_NEURAL_MAX;
+        const extras = ttsCrearCola(proximo.texto, proximo.lang || ttsState.langHint, maxChunk, ttsState.modo);
+        if (extras.length) {
+          ttsState.queue.push(...extras);
+          ttsReproducirDesde(desde, 0, token);
+          return;
+        }
+      }
       ttsPararElementos();
       ttsHablar(proximo.texto, {
         sourceId: jgAudiolibro.sourceId,
@@ -15481,7 +15494,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v75';
+const JG_JS_V = 'v76';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

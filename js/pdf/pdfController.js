@@ -2564,7 +2564,11 @@ export function inicializarLectorPdf(deps = {}) {
         mostrarParte(idx);
         pintarBotonAudiolibro(true);
         const proximoLang = estado.vista === 'es' ? 'es' : idiomaActual();
-        return { texto: prepararParaVoz(capaSig, proximoLang, { neural: true }), lang: proximoLang };
+        return {
+          texto: prepararParaVoz(capaSig, proximoLang, { neural: true }),
+          lang: proximoLang,
+          continuation: Boolean(estado.partes[idx]?.continuation),
+        };
       },
       alTerminar: () => {
         detenerAudiolibro();
