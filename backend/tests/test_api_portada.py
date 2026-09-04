@@ -132,7 +132,11 @@ def test_catalogo_con_error_http_no_rompe(monkeypatch):
     _con_cliente(monkeypatch, respuesta=Respuesta())
     resultado = correr(buscar_portada(titulo="Sapiens"))
     assert resultado["resultados"] == []
-    assert resultado.get("aviso") == "catalogo_503"
+    # El aviso nombra las dos fuentes: si solo dijera «503» no se sabría cuál
+    # falló, y son dos catálogos distintos que fallan por motivos distintos.
+    aviso = resultado.get("aviso", "")
+    assert "503" in aviso
+    assert "openlibrary" in aviso and "google" in aviso
 
 
 def test_respuesta_sin_docs_no_rompe(monkeypatch):

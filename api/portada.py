@@ -25,13 +25,17 @@ router = APIRouter()
 
 BUSQUEDA = "https://openlibrary.org/search.json"
 PORTADA = "https://covers.openlibrary.org/b/id/{id}-L.jpg"
+GOOGLE = "https://www.googleapis.com/books/v1/volumes"
 
 # Open Library pide identificarse con un contacto. Es su norma de uso.
 CABECERAS = {"User-Agent": "JG-Turbo/1.0 (https://jg-turbo.vercel.app)"}
 
 # Suficiente para elegir; pedir más solo alarga la espera.
 MAX_RESULTADOS = 5
-ESPERA_SEG = 8.0
+# Open Library tarda: con 8 s se agotaba el tiempo desde Vercel antes de
+# recibir nada. 15 s sigue siendo una espera aceptable para el usuario, que
+# mientras tanto ya está viendo la carátula dibujada.
+ESPERA_SEG = 15.0
 
 
 def _limpiar_consulta(texto: str) -> str:
@@ -59,24 +63,40 @@ async def buscar_portada(
     consulta = _limpiar_consulta(titulo)
     if not consulta:
         return {"resultados": []}
+    autor_limpio = _limpiar_consulta(autor or "")
 
+    # Se prueban dos catálogos porque ninguno los tiene todos y ambos fallan a
+    # ratos: Open Library tiene mejor cobertura de ediciones en español, y
+    # Google Books responde más rápido. El primero que devuelva algo, gana.
+    avisos: list[str] = []
+    for fuente in (_openlibrary, _google_books):
+        try:
+            resultados, aviso = await fuente(consulta, autor_limpio)
+        except Exception as error:  # noqa: BLE001 - sin portada se vive
+            avisos.append(f"{fuente.__name__}:{type(error).__name__}")
+            continue
+        if resultados:
+            return {"resultados": resultados}
+        if aviso:
+            avisos.append(f"{fuente.__name__}:{aviso}")
+
+    return {"resultados": [], "aviso": " | ".join(avisos) or "sin_resultados"}
+
+
+async def _openlibrary(consulta: str, autor: str) -> tuple[list[dict[str, Any]], str]:
     parametros: dict[str, Any] = {
         "title": consulta,
         "limit": MAX_RESULTADOS,
         "fields": "title,author_name,cover_i,first_publish_year",
     }
-    autor_limpio = _limpiar_consulta(autor or "")
-    if autor_limpio:
-        parametros["author"] = autor_limpio
+    if autor:
+        parametros["author"] = autor
 
-    try:
-        async with httpx.AsyncClient(timeout=ESPERA_SEG, headers=CABECERAS) as cliente:
-            respuesta = await cliente.get(BUSQUEDA, params=parametros)
-            if respuesta.status_code != 200:
-                return {"resultados": [], "aviso": f"catalogo_{respuesta.status_code}"}
-            datos = respuesta.json()
-    except Exception as error:  # noqa: BLE001 - sin portada se vive
-        return {"resultados": [], "aviso": type(error).__name__}
+    async with httpx.AsyncClient(timeout=ESPERA_SEG, headers=CABECERAS) as cliente:
+        respuesta = await cliente.get(BUSQUEDA, params=parametros)
+        if respuesta.status_code != 200:
+            return [], f"catalogo_{respuesta.status_code}"
+        datos = respuesta.json()
 
     resultados = []
     for documento in (datos.get("docs") or [])[:MAX_RESULTADOS]:
@@ -92,5 +112,40 @@ async def buscar_portada(
                 "anio": documento.get("first_publish_year"),
             }
         )
+    return resultados, ""
 
-    return {"resultados": resultados}
+
+async def _google_books(consulta: str, autor: str) -> tuple[list[dict[str, Any]], str]:
+    """Segunda fuente. Sin clave: hay cuota por IP, y si se agota se devuelve
+    vacío como cualquier otro fallo."""
+    busqueda = f'intitle:"{consulta}"'
+    if autor:
+        busqueda += f' inauthor:"{autor}"'
+
+    async with httpx.AsyncClient(timeout=ESPERA_SEG, headers=CABECERAS) as cliente:
+        respuesta = await cliente.get(
+            GOOGLE, params={"q": busqueda, "maxResults": MAX_RESULTADOS, "printType": "books"}
+        )
+        if respuesta.status_code != 200:
+            return [], f"google_{respuesta.status_code}"
+        datos = respuesta.json()
+
+    resultados = []
+    for volumen in (datos.get("items") or [])[:MAX_RESULTADOS]:
+        info = volumen.get("volumeInfo") or {}
+        imagenes = info.get("imageLinks") or {}
+        enlace = imagenes.get("thumbnail") or imagenes.get("smallThumbnail")
+        if not enlace:
+            continue
+        autores = info.get("authors") or []
+        resultados.append(
+            {
+                "titulo": info.get("title") or "",
+                "autor": autores[0] if autores else "",
+                # Sin `zoom=1` llega una miniatura diminuta; y en https, que si
+                # no el navegador bloquea la imagen por contenido mixto.
+                "portada": enlace.replace("http://", "https://") + "&zoom=1",
+                "anio": (info.get("publishedDate") or "")[:4] or None,
+            }
+        )
+    return resultados, ""
