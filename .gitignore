@@ -58,3 +58,7 @@ desktop-check.png
 mobile-options.png
 .vercel
 .env*
+
+# Worktrees aislados de agentes
+.worktrees/
+
