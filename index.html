@@ -1,4 +1,4 @@
-<!-- v2.36.0 · Corrección completa de lectura y cierre del panel PDF -->
+<!-- v2.37.0 · Continuidad de palabras y párrafos en el motor PDF -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -8120,6 +8120,27 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
 
 window.jgPulirTextoDetallado = jgPulirTextoDetallado;
 
+async function jgPedirDecisionesLimites(limites, idioma = 'es'){
+  const lista = Array.isArray(limites) ? limites : [];
+  if(!lista.length) return { decisions: [], ia_used: false };
+  const creds = jgCredencialesIA();
+  const data = await jgPedirPulido({
+    text: 'limites',
+    language: normalizarLangApi(idioma) || 'es',
+    provider: creds.provider,
+    api_key: creds.api_key,
+    openrouter_model: creds.openrouter_model,
+    mode: 'pdf_boundary_decisions',
+    limites: lista,
+  }, 90000);
+  return {
+    decisions: Array.isArray(data && data.decisions) ? data.decisions : [],
+    ia_used: !!(data && data.ia_used),
+    provider: data && data.provider,
+  };
+}
+window.jgPedirDecisionesLimites = jgPedirDecisionesLimites;
+
 function mostrarValidacionTraduccion(validacion, destinoEl = null){
   const el = destinoEl || document.getElementById('transValidation');
   if(!el) return;
@@ -15460,7 +15481,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v74';
+const JG_JS_V = 'v75';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

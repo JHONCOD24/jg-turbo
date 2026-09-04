@@ -1,5 +1,61 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-04 · v2.37.0 · Continuidad de palabras y párrafos en el motor
+
+### Causa
+
+v2.31–v2.36 actuaba **después** de perder información. `agruparLineas()` aplanaba los `TextItem`
+y descartaba `hasEOL`, índice, dirección, fuente y geometría. Los candidatos de unión se
+creaban solo entre líneas reconstruidas, se identificaban por pares repetibles (`es`+`ta`) y
+dependían de que una IA reescribiera el capítulo. Sin red, sin consentimiento o con fallo del
+proveedor, el texto canónico conservaba `bos ton`, `alu vión` y `es ta`. `mejorCorte()` todavía
+podía devolver un índice bruto a mitad de palabra.
+
+### Decisión
+
+La reparación de palabras es parte del motor de extracción, **antes** de capítulos, páginas
+lógicas, traducción o audio. Cada fragmento es un `TextAtom` inmutable; cada posible separador
+es un `TextBoundary` con identificador estable. La IA, si hace falta, solo decide
+`join|space|paragraph|pending` sobre esos IDs (`/api/improve` modo `pdf_boundary_decisions`).
+No reescribe letras. Un documento con pendientes no se marca como corregido.
+
+### Qué cambió
+
+- Nuevos módulos: `js/pdf/unicodeTexto.js`, `atomos.js`, `limites.js`, `lexico.js`,
+  `reconstruccion.js`, `particion.js`, `manifiesto.js`.
+- `getTextContent({ includeMarkedContent: true })` conserva `str`, `hasEOL`, `dir`, `transform`,
+  `width`, `height`, `fontName` y MCID.
+- `VERSION_RECONSTRUCCION = 6`, `VERSION_TROCEO = 6`. Pulido de lectura v5 invalidado.
+- `mejorCorte()` nunca corta grafema ni token; un URL o fórmula largos se conservan enteros.
+- Migración: con PDF local se reextrae; con manifiesto suficiente se reconstruye; sin fuente se
+  marca `needsSource` y se pide reimportar. Una edición aprobada no se pisa: la reconstrucción
+  es capa nueva.
+- Sincronización: las partes llevan anclas, `boundaryIds`, `continuation` y versión. Los
+  clientes viejos ignoran esos campos.
+- `sincronizar_deploy.mjs` apunta al destino oficial
+  `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\` y comprueba que el enlace sea `jg-turbo`.
+
+### Pruebas
+
+```
+node tests/test_pdf_limpieza.mjs
+node tests/test_pdf_continuidad.mjs
+node tests/test_pdf_pulido_troceo.mjs
+JG_PDF_REAL=tests/private/libro.pdf node tests/test_pdf_reales.mjs
+pytest backend/tests/test_pdf_improve_lectura.py
+```
+
+El corpus sintético exige literalmente `Boston`, `ARN`, `aluvión`, `esta conclusión` y
+`significado que le damos`, con cero pendientes.
+
+### Versión y producción
+
+- `index.html`: `v2.37.0` y módulos `v75`.
+- `sw.js`: `jg-turbo-shell-v75`.
+- Producción: pendiente de anotar `dpl_…` tras el deploy a `https://jg-turbo.vercel.app`.
+
+---
+
 ## Entrega 2026-09-04 · v2.36.0 · Corrección completa y panel que sí cierra
 
 ### Fallos comprobados

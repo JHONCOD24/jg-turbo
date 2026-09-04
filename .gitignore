@@ -48,6 +48,9 @@ backend/corpus/manifest.jsonl
 backend/corpus/audio/
 benchmark-report*.json
 
+# PDF reales de aceptación (no se publican)
+tests/private/
+
 # Capturas y artefactos de pruebas en navegador (no son parte de la app)
 .playwright-cli/
 .playwright-mcp/

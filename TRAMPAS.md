@@ -285,6 +285,18 @@ excepción del guardián debe estar acotada por evidencia local, conservar letra
 tener regresiones negativas. Ningún resultado dependiente de consentimiento se calcula ni se
 guarda antes de que la persona responda; una corrección persistida lleva la huella de su fuente.
 
+### 6.5b Aplanar TextItem es perder la palabra
+
+**Ocurrió** (v2.31–v2.36): `agruparLineas()` juntaba fragmentos por Y, insertaba espacios por
+un umbral de hueco y tiraba `hasEOL`, índice, fuente y geometría. Los cortes **dentro de una
+misma línea** nunca eran candidatos. Los que sí lo eran se buscaban después por el par de
+palabras (`es`+`ta`), así que una repetición podía corregir el sitio equivocado. Y la «reparación»
+era que una IA reescribiera el capítulo: sin red, el usuario se quedaba con `bos ton`.
+
+**Regla:** el átomo se crea **antes** de normalizar o agrupar. Cada posible separador tiene un
+`boundaryId` ligado a los fragmentos originales. Una unión solo cambia ese separador. La IA no
+reescribe letras. El texto canónico, el de la pantalla y el que oye TTS son el mismo.
+
 ### 6.5 Un fallback sin cambios no es una revisión terminada
 
 **Ocurrió** (2026-09-04, v2.35): si `/improve` fallaba, el navegador recibía el texto original con

@@ -1,11 +1,9 @@
 /**
- * Compara «Spech to text App/» (donde se trabaja) con «vercel_deploy/» (lo que
- * se publica) y, si se le pide, iguala la segunda a la primera.
+ * Compara la carpeta de trabajo con el destino oficial de despliegue y, si se
+ * le pide, iguala la segunda a la primera.
  *
- * Por qué existe: las dos carpetas son COPIAS, no enlaces. Estuvieron meses
- * divergiendo y eso costó caro — una tenía arreglos que la otra no, y modos
- * enteros de la app que nunca llegaron a producción. Revisarlo a ojo no
- * funciona: son 600 KB de HTML.
+ * Destino oficial: G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\
+ * Si esa carpeta no existe, el script FALLA: no se inventa otro destino.
  *
  *   node sincronizar_deploy.mjs             → solo informa (sale 1 si difieren)
  *   node sincronizar_deploy.mjs --aplicar   → copia los cambios al deploy
@@ -18,22 +16,42 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ORIGEN = path.dirname(fileURLToPath(import.meta.url));
-const DESTINO = path.resolve(ORIGEN, '..', 'vercel_deploy');
+const DESTINO_OFICIAL = 'G:\\Mi unidad\\PROYECTS\\JG Turbo\\vercel_deploy\\';
+const DESTINO = path.resolve(DESTINO_OFICIAL);
 const APLICAR = process.argv.includes('--aplicar');
 
-// Lo que forma la aplicación. Fuera queda lo propio de cada entorno
-// (.vercel, .env, node_modules) y lo que no se publica.
+if (!fs.existsSync(DESTINO) || !fs.statSync(DESTINO).isDirectory()) {
+  console.error(`No está el destino oficial de despliegue:\n  ${DESTINO}`);
+  console.error('Sin esa carpeta no se sincroniza ni se despliega.');
+  process.exit(2);
+}
+
+const enlaceVercel = path.join(DESTINO, '.vercel', 'project.json');
+if (!fs.existsSync(enlaceVercel)) {
+  console.error(`El destino no tiene enlace de Vercel:\n  ${enlaceVercel}`);
+  process.exit(2);
+}
+let proyecto;
+try {
+  proyecto = JSON.parse(fs.readFileSync(enlaceVercel, 'utf8'));
+} catch (error) {
+  console.error('No se pudo leer el enlace de Vercel:', error.message);
+  process.exit(2);
+}
+if (String(proyecto.projectName || '') !== 'jg-turbo') {
+  console.error(`El enlace de Vercel no es jg-turbo (es «${proyecto.projectName || '?'}»).`);
+  console.error('Abortado: un deploy desde aquí no actualizaría producción.');
+  process.exit(2);
+}
+
 const SUELTOS = ['index.html', 'sw.js', 'manifest.webmanifest'];
 const CARPETAS = ['js', 'api', 'tests'];
 const EXTENSIONES = new Set([
   '.html', '.js', '.mjs', '.css', '.py', '.json', '.txt', '.webmanifest',
-  /* Motores que viven dentro del proyecto: pdf.js y Tesseract (OCR). */
   '.wasm', '.traineddata',
 ]);
-/* Las licencias de esos motores no tienen extensión, y Apache-2.0 obliga a
- * distribuirlas junto al código. */
 const SIN_EXTENSION_INCLUIDOS = /^LICENSE/i;
-const IGNORAR = new Set(['__pycache__', 'node_modules', '.pytest_cache', '.impeccable', '.playwright-cli']);
+const IGNORAR = new Set(['__pycache__', 'node_modules', '.pytest_cache', '.impeccable', '.playwright-cli', 'private']);
 
 const huella = (ruta) => crypto.createHash('md5').update(fs.readFileSync(ruta)).digest('hex');
 
@@ -75,6 +93,10 @@ const contar = (lista, titulo) => {
   console.log(`\n${titulo} (${lista.length}):`);
   lista.forEach((r) => console.log(`  ${r}`));
 };
+
+console.log(`origen:  ${ORIGEN}`);
+console.log(`destino: ${DESTINO}`);
+console.log(`proyecto Vercel: ${proyecto.projectName}`);
 
 contar(nuevos, 'Solo en la carpeta de trabajo (faltan en el deploy)');
 contar(distintos, 'Con contenido distinto');
