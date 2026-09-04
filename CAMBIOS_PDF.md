@@ -11,6 +11,8 @@ el recuadro mostró `Boston`, `ARN`, `aluvión`, `esta` y `le damos` en una sola
 
 - `index.html`: `v2.37.1` · `JG_JS_V=v76`
 - `sw.js`: `jg-turbo-shell-v76`
+- Producción: `dpl_8Vh2P8yf7mprxeurodqqiBbvBroc` · alias `https://jg-turbo.vercel.app`
+  (dos lecturas: `v2.37.1`, shell `v76`, `VERSION_RECONSTRUCCION = 6`, `/api/health` 200).
 
 ---
 
