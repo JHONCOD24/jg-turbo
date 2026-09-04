@@ -265,6 +265,8 @@ class ImproveRequest(BaseModel):
     contexto_anterior: Optional[str] = None
     contexto_posterior: Optional[str] = None
     tokens_estables: Optional[list] = None
+    # Lectura PDF: únicos límites físicos en los que se permite unir 2 tokens.
+    candidatos_union: Optional[list] = None
 
 
 class TranslateRequest(BaseModel):
@@ -2576,14 +2578,25 @@ async def improve(req: ImproveRequest):
                     f"BLOQUE ACTUAL:\n<<<\n{bloque}\n>>>"
                 )
             if getattr(req, "mode", "transcripcion") == "lectura":
+                uniones = []
+                for candidato in (req.candidatos_union or [])[:300]:
+                    if not isinstance(candidato, dict):
+                        continue
+                    izquierda = str(candidato.get("izquierda") or "").strip()
+                    derecha = str(candidato.get("derecha") or "").strip()
+                    if (re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20}", izquierda)
+                            and re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20}", derecha)):
+                        uniones.append(f"- {izquierda} + {derecha}")
+                lista_uniones = "\n".join(uniones) if uniones else "- NINGUNA"
                 return (
                     f"Eres corrector de puntuación para lectura en voz alta, en «{lang_base}».\n\n"
                     "Este texto salió de un PDF. Al extraerlo se perdieron puntos, comas y signos "
                     "de apertura, y hay frases que quedaron pegadas o partidas. Alguien va a "
                     "ESCUCHARLO con una voz sintética: si falta un punto, la voz no respira; si "
                     "falta una coma, atropella.\n\n"
-                    "TU ÚNICO TRABAJO es devolver EXACTAMENTE LAS MISMAS PALABRAS, EN EL MISMO "
-                    "ORDEN, con la puntuación correcta.\n\n"
+                    "TU ÚNICO TRABAJO es devolver la MISMA SECUENCIA DE LETRAS Y CIFRAS, EN EL "
+                    "MISMO ORDEN, con la puntuación correcta. Solo puedes quitar un espacio "
+                    "entre dos fragmentos si ese par aparece en UNIONES PERMITIDAS.\n\n"
                     "SÍ debes:\n"
                     "1) Poner los puntos que faltan al final de cada oración.\n"
                     "2) Poner las comas que pide la sintaxis: incisos, enumeraciones, vocativos, "
@@ -2592,7 +2605,8 @@ async def improve(req: ImproveRequest):
                     "4) Poner las tildes que falten y corregir las que estén mal.\n"
                     "5) Mayúscula después de punto y en nombres propios.\n"
                     "6) Separar en párrafos donde claramente cambia el tema, con una línea en blanco.\n"
-                    "7) Unir una palabra que quedó partida («compren dido» → «comprendido»).\n\n"
+                    "7) Unir una palabra partida únicamente cuando sus dos fragmentos estén en "
+                    "UNIONES PERMITIDAS y formen claramente una sola palabra.\n\n"
                     "NUNCA debes:\n"
                     "- Cambiar una palabra por otra, ni siquiera por un sinónimo mejor.\n"
                     "- Añadir una sola palabra que no esté en el original.\n"
@@ -2600,10 +2614,13 @@ async def improve(req: ImproveRequest):
                     "- Reordenar, resumir, ampliar, explicar ni embellecer.\n"
                     "- Traducir nada.\n"
                     "- Cambiar cifras, nombres propios, marcas, siglas, URLs ni unidades.\n"
+                    "- Unir dos palabras que no aparezcan como par exacto en UNIONES PERMITIDAS.\n"
                     "- Escribir comentarios, títulos, markdown ni comillas envolventes.\n\n"
                     "Si una frase te parece rara, DÉJALA IGUAL. No es tu trabajo arreglarla. "
-                    "Se va a comparar tu salida palabra por palabra con el original: si cambias "
-                    "una sola palabra, tu trabajo se descarta entero.\n\n"
+                    "Se va a comparar tu salida letra por letra con el original: si agregas, "
+                    "quitas, sustituyes o reordenas una letra o cifra, se descarta entera.\n\n"
+                    "UNIONES PERMITIDAS (límite izquierdo + límite derecho):\n"
+                    f"{lista_uniones}\n\n"
                     "SALIDA: solo el texto, en texto plano.\n\n"
                     f"TEXTO:\n<<<\n{bloque}\n>>>"
                 )

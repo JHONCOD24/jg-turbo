@@ -110,6 +110,93 @@ export function mismasPalabras(original, pulido) {
   return { igual: true, parecido: 1, motivo: 'exacto' };
 }
 
+const PALABRAS_NO_UNIR = new Set([
+  'a', 'al', 'ante', 'bajo', 'con', 'contra', 'de', 'del', 'desde', 'durante',
+  'e', 'el', 'ella', 'ellas', 'ellos', 'en', 'entre', 'era', 'es', 'esa', 'ese',
+  'esta', 'este', 'ha', 'hasta', 'la', 'las', 'le', 'les', 'lo', 'los', 'mas',
+  'me', 'mi', 'muy', 'ni', 'no', 'o', 'para', 'pero', 'por', 'porque', 'que',
+  'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'un', 'una', 'uno', 'y', 'ya',
+]);
+
+function normalizarLexema(valor) {
+  return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function candidatoUnionSeguro(candidato) {
+  const izquierda = String(candidato?.izquierda || '');
+  const derecha = String(candidato?.derecha || '');
+  if (!izquierda || !derecha) return false;
+  const izq = normalizarLexema(izquierda);
+  const der = normalizarLexema(derecha);
+  const sigla = /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(izquierda)
+    && /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(derecha)
+    && izq.length + der.length <= 7;
+  if (sigla) return true;
+  if (PALABRAS_NO_UNIR.has(izq) || PALABRAS_NO_UNIR.has(der)) return false;
+  if (izq.length < 2 || der.length < 2 || izq.length + der.length < 5 || izq.length + der.length > 20) return false;
+  if (izq.length > 4 && der.length > 4) return false;
+  return !/^[A-ZÁÉÍÓÚÜÑ]/.test(derecha);
+}
+
+/**
+ * Guardián específico del modo lectura.
+ *
+ * Conserva el contrato estricto y agrega una sola excepción: dos tokens
+ * adyacentes pueden convertirse en uno cuando el extractor marcó exactamente
+ * ese límite físico como posible palabra partida. Las letras y cifras deben
+ * ser idénticas y permanecer en el mismo orden.
+ */
+export function mismasPalabrasLectura(original, pulido, candidatosUnion = []) {
+  const estricto = mismasPalabras(original, pulido);
+  if (estricto.igual) return estricto;
+  if (!Array.isArray(candidatosUnion) || !candidatosUnion.length) return estricto;
+  if (/^protegido_/.test(estricto.motivo || '')) return estricto;
+
+  const permitidos = new Map();
+  for (const candidato of candidatosUnion) {
+    if (!candidatoUnionSeguro(candidato)) continue;
+    const clave = `${normalizarLexema(candidato.izquierda)}\u0000${normalizarLexema(candidato.derecha)}`;
+    permitidos.set(clave, (permitidos.get(clave) || 0) + 1);
+  }
+  if (!permitidos.size) return estricto;
+
+  const originales = extraerTokensLexicos(original);
+  const pulidos = extraerTokensLexicos(pulido);
+  let i = 0;
+  let j = 0;
+  let uniones = 0;
+  while (i < originales.length && j < pulidos.length) {
+    if (originales[i] === pulidos[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    const siguiente = originales[i + 1];
+    const clave = siguiente ? `${originales[i]}\u0000${siguiente}` : '';
+    const disponibles = clave ? (permitidos.get(clave) || 0) : 0;
+    if (disponibles > 0 && originales[i] + siguiente === pulidos[j]) {
+      permitidos.set(clave, disponibles - 1);
+      i += 2;
+      j += 1;
+      uniones += 1;
+      continue;
+    }
+    return { igual: false, parecido: j / Math.max(1, pulidos.length), motivo: `cambio_no_autorizado_en_${j}` };
+  }
+  if (i !== originales.length || j !== pulidos.length || uniones === 0) {
+    return { igual: false, parecido: 0, motivo: 'longitud_distinta' };
+  }
+
+  /* Unir fragmentos no autoriza a aplastar títulos ni párrafos. Los cortes
+   * físicos candidatos ya llegan como espacios desde la capa local. */
+  const saltosOrig = (String(original).match(/\n/g) || []).length;
+  const saltosPul = (String(pulido).match(/\n/g) || []).length;
+  if (saltosPul < saltosOrig) {
+    return { igual: false, parecido: 0.99, motivo: 'estructura_perdida' };
+  }
+  return { igual: true, parecido: 1, motivo: `uniones_de_corte:${uniones}` };
+}
+
 export function validarIntegridadEstructura(respuesta) {
   if (!respuesta || typeof respuesta !== 'object') return { valida: false, motivo: 'respuesta_no_objeto' };
   if (Array.isArray(respuesta.signos) === false && Array.isArray(respuesta.propuestas) === false) {
@@ -350,9 +437,10 @@ export function crearPulidor({ pulir, guardar, cargar }) {
             }
           }
           if (!pulir) return parte.texto;
-          const textoPulido = await pulir(parte.texto, { alProgresar, mode: 'lectura' });
+          const candidatosUnion = Array.isArray(parte.candidatosUnion) ? parte.candidatosUnion : [];
+          const textoPulido = await pulir(parte.texto, { alProgresar, mode: 'lectura', candidatosUnion });
           if (!textoPulido || !textoPulido.trim()) return parte.texto;
-          const chequeo = mismasPalabras(parte.texto, textoPulido);
+          const chequeo = mismasPalabrasLectura(parte.texto, textoPulido, candidatosUnion);
           const aceptado = chequeo.igual ? textoPulido : parte.texto;
           listas.set(indice, aceptado);
           conocidos.add(indice);

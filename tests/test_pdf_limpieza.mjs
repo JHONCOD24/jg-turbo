@@ -167,6 +167,49 @@ function pagina(numero, lineas) {
   );
 }
 
+{
+  /* Regresión real reportada en «El placebo eres tú». La primera línea de
+   * una página puede venir desplazada horizontalmente y eso no significa que
+   * empiece un párrafo: la página anterior puede haber terminado a mitad de
+   * frase o incluso a mitad de palabra. */
+  const paginas = [
+    pagina(1, [
+      linea('Un frío y despejado día viajaron durante dos horas al norte de bos', { y: 100, ancho: 410 }),
+    ]),
+    pagina(2, [
+      linea('ton, hasta llegar a un monasterio de peterborough, en new Hampshire. El A', { x: 92, y: 800, ancho: 430 }),
+      linea('RN fabrica una nueva proteína de los componentes.Como ya has ido aprendiendo,', { y: 786, ancho: 430 }),
+      linea('el significado que le', { y: 772, ancho: 180 }),
+    ]),
+    pagina(3, [
+      linea('damos a esas experiencias produce un alu', { x: 92, y: 800, ancho: 260 }),
+    ]),
+    pagina(4, [
+      linea('vión de respuestas físicas,', { x: 92, y: 800, ancho: 180 }),
+    ]),
+  ];
+  const resultado = componerTexto(paginas);
+  comprobar(
+    resultado.texto.includes('norte de bos ton, hasta llegar'),
+    'un cambio de página con sangría no inventa punto ni párrafo entre «bos» y «ton»'
+  );
+  comprobar(
+    resultado.texto.includes('significado que le damos a esas experiencias'),
+    'conserva completa la frase «le damos» al cruzar de página'
+  );
+  comprobar(
+    resultado.texto.includes('componentes. Como ya has ido aprendiendo'),
+    'separa dos oraciones pegadas después del punto'
+  );
+  comprobar(
+    Array.isArray(resultado.candidatosUnion)
+      && resultado.candidatosUnion.some((c) => c.izquierda === 'bos' && c.derecha === 'ton')
+      && resultado.candidatosUnion.some((c) => c.izquierda === 'A' && c.derecha === 'RN')
+      && resultado.candidatosUnion.some((c) => c.izquierda === 'alu' && c.derecha === 'vión'),
+    'marca únicamente los fragmentos físicos que la IA puede proponer unir'
+  );
+}
+
 /* ── 6) Capítulos ──────────────────────────────────────────────────── */
 {
   const paginas = [

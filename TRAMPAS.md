@@ -272,6 +272,19 @@ descarta.
 **Regla:** para que suene mejor, toca la capa de voz, nunca el texto guardado ni el exportado. Si
 una prueba de exportación falla tras cambiar la voz, es que se coló: corrígelo antes de seguir.
 
+### 6.4 El prompt puede pedir una corrección que el guardián descarta
+
+**Ocurrió** (2026-09-04, v2.34): el prompt de lectura pedía unir palabras partidas como
+`compren dido`, pero `mismasPalabras()` exigía el mismo número de tokens. La IA podía responder
+bien y la aplicación reemplazaba silenciosamente esa salida por `compren dido`. Además, una
+precarga ejecutada antes del consentimiento guardaba el texto local en caché; aceptar después ya
+no lanzaba la corrección del capítulo.
+
+**Regla:** prueba el texto que finalmente se muestra y se oye, no solo la respuesta de la IA. Una
+excepción del guardián debe estar acotada por evidencia local, conservar letras, cifras y orden, y
+tener regresiones negativas. Ningún resultado dependiente de consentimiento se calcula ni se
+guarda antes de que la persona responda; una corrección persistida lleva la huella de su fuente.
+
 ---
 
 ## 7. Caché y despliegue

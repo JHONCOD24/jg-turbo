@@ -161,6 +161,25 @@ export function crearLibroConPalabraEntrePaginas(ruta) {
   return armarPdf([flujoDeTexto(paginaUno), flujoDeTexto(paginaDos)], ruta);
 }
 
+/** Casos reales sin guion: la IA decide la unión, pero solo en cortes marcados. */
+export function crearLibroConCortesSinGuion(ruta) {
+  const paginaUno = [
+    ['Un frio y despejado dia viajaron durante dos horas al norte de bos', 70, 100, 11],
+  ];
+  const paginaDos = [
+    ['ton, hasta llegar a un monasterio. El A', 92, 800, 11],
+    ['RN fabrica una nueva proteina de los componentes.Como ya has ido aprendiendo,', 70, 784, 11],
+    ['el significado que le', 70, 768, 11],
+  ];
+  const paginaTres = [
+    ['damos a esas experiencias produce un alu', 92, 800, 11],
+  ];
+  const paginaCuatro = [
+    ['vion de respuestas fisicas.', 92, 800, 11],
+  ];
+  return armarPdf([paginaUno, paginaDos, paginaTres, paginaCuatro].map(flujoDeTexto), ruta);
+}
+
 /** PDF sin capa de texto: solo un rectángulo, como una página escaneada. */
 export function crearEscaneado(ruta, paginas = 6) {
   const flujo = Buffer.from('0.5 0.5 0.5 rg\n50 50 495 742 re f\n', 'latin1');

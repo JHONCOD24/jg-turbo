@@ -511,7 +511,7 @@ export function prepararCapitulosLectura(texto, capitulos) {
 
 export function componerTexto(paginas, opciones = {}) {
   const listaPaginas = Array.isArray(paginas) ? paginas : [];
-  const vacio = { texto: '', capitulos: [], paginas: [], descartadas: 0, paginasConTexto: 0, paginasTotales: listaPaginas.length, bloques: [], omisiones: [] };
+  const vacio = { texto: '', capitulos: [], paginas: [], descartadas: 0, paginasConTexto: 0, paginasTotales: listaPaginas.length, bloques: [], omisiones: [], candidatosUnion: [] };
   if (!listaPaginas.length) return vacio;
 
   const relleno = detectarRelleno(listaPaginas);
@@ -559,6 +559,7 @@ export function componerTexto(paginas, opciones = {}) {
   const marcasDePagina = [];
   const capitulosDetectados = [];
   const bloques = [];
+  const candidatosUnion = [];
   let largo = 0;
   let anterior = null;
   let paginaAnterior = null;
@@ -566,6 +567,43 @@ export function componerTexto(paginas, opciones = {}) {
   let idBloque = 0;
 
   const escribir = (fragmento) => { partes.push(fragmento); largo += fragmento.length; };
+
+  const NO_UNIR = new Set([
+    'a', 'al', 'ante', 'bajo', 'con', 'contra', 'de', 'del', 'desde', 'durante',
+    'e', 'el', 'ella', 'ellas', 'ellos', 'en', 'entre', 'era', 'es', 'esa', 'ese',
+    'esta', 'este', 'ha', 'hasta', 'la', 'las', 'le', 'les', 'lo', 'los', 'mas',
+    'me', 'mi', 'muy', 'ni', 'no', 'o', 'para', 'pero', 'por', 'porque', 'que',
+    'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'un', 'una', 'uno', 'y', 'ya',
+  ]);
+  const normalizarFragmento = (valor) => String(valor || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const ultimoToken = (valor) => String(valor || '').match(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)$/)?.[1] || '';
+  const primerToken = (valor) => String(valor || '').match(/^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)/)?.[1] || '';
+
+  function candidatoDeCorte(lineaAnterior, lineaActual, paginaActual) {
+    if (!lineaAnterior || !lineaActual || /[.!?…,:;»”"')\]]$/.test(lineaAnterior.texto || '')) return null;
+    const izquierda = ultimoToken(lineaAnterior.texto);
+    const derecha = primerToken(lineaActual.texto);
+    if (!izquierda || !derecha) return null;
+    const izq = normalizarFragmento(izquierda);
+    const der = normalizarFragmento(derecha);
+    const sigla = /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(izquierda)
+      && /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(derecha)
+      && izq.length + der.length <= 7;
+    if (!sigla) {
+      if (NO_UNIR.has(izq) || NO_UNIR.has(der)) return null;
+      if (izq.length < 2 || der.length < 2 || izq.length + der.length < 5 || izq.length + der.length > 20) return null;
+      if (izq.length > 4 && der.length > 4) return null;
+      if (/^[A-ZÁÉÍÓÚÜÑ]/.test(derecha)) return null;
+    }
+    return {
+      izquierda,
+      derecha,
+      paginaAnterior,
+      paginaActual,
+      entrePaginas: paginaAnterior !== paginaActual,
+    };
+  }
 
   function procesarSecuencia(lineas, numeroPagina) {
     for (const linea of lineas) {
@@ -578,10 +616,17 @@ export function componerTexto(paginas, opciones = {}) {
         if (siguienteEnMayuscula) escribir(linea.texto);
         else { partes[partes.length - 1] = partes[partes.length - 1].replace(GUIONES_DE_CORTE, ''); largo -= 1; escribir(linea.texto); }
       } else {
-        const sangria = linea.x - xModal > Math.max(4, alturaModal * 0.4);
+        /* La coordenada X solo permite inferir sangría dentro de la misma
+         * página. Al cambiar de hoja, márgenes alternos o una digitalización
+         * desplazada no deben inventar un párrafo ni un punto. */
+        const sangria = mismaPagina && linea.x - xModal > Math.max(4, alturaModal * 0.4);
         const huecoVertical = mismaPagina && alturaModal > 0 ? (anterior.y - linea.y) > Math.max(alturaModal * 1.8, 6) : false;
         const anteriorEsCorta = anchoMaximo > 0 && (anterior.ancho || 0) < anchoMaximo * 0.72 && /[.!?»”"')\]]$/.test(anterior.texto);
         const nuevoParrafo = esTitulo || titulosDetectados.has(anterior) || sangria || huecoVertical || anteriorEsCorta;
+        if (!nuevoParrafo && !esTitulo) {
+          const candidato = candidatoDeCorte(anterior, linea, numeroPagina);
+          if (candidato) candidatosUnion.push(candidato);
+        }
         escribir((nuevoParrafo ? '\n\n' : ' ') + linea.texto);
       }
       const tipo = clasificarBloque(linea.texto, linea);
@@ -712,5 +757,6 @@ export function componerTexto(paginas, opciones = {}) {
     bloques: bloquesSalida,
     omisiones,
     esDobleColumna,
+    candidatosUnion,
   };
 }

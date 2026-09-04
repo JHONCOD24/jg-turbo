@@ -154,7 +154,7 @@ const despues = await pagina.evaluate(async () => {
   };
 });
 
-comprobar(despues.version === 3, `queda anotada la versión del troceo (${despues.version})`);
+comprobar(despues.version === 4, `queda anotada la versión del troceo (${despues.version})`);
 comprobar(despues.partes.length < antes.length,
   `se retiran las unidades vacías (${antes.length} → ${despues.partes.length})`);
 comprobar(despues.partes.every((p) => p.largo > 0), 'ninguna unidad queda vacía');

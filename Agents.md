@@ -257,7 +257,7 @@ Reglas para el siguiente agente:
   botón real, nunca un enlace `javascript:` a la vista.
 - `YOUTUBE_PROXY_URL` sigue conectada como plan C; ya no hace falta.
 - **Panel rediseñado (v2.1, 2026-09-01):** el orden del inicio es lead →
-seguir leyendo → biblioteca → Kindle → subir → avisos → **nube plegada al final**
+seguir leyendo → biblioteca → subir → avisos → **nube plegada al final**
 (`<details>`; se despliega sola al llegar por `?unir=` o al pedir el pase).
 `has-results` también esconde la nube. El lector lleva toolbar sticky
 (`.pdf-doc-top`). El ritmo visual sale de tokens en `.pdf-area`
@@ -266,7 +266,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v72`** (párrafos completos y migración PDF v2.34). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v73`** (cortes físicos PDF y retirada de Kindle, v2.35). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

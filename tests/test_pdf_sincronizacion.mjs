@@ -232,16 +232,16 @@ const doc = (id, actualizado, extra = {}) => ({
   comprobar(puedeFaltarPortada(null) === false, 'un documento nulo no se revisa');
 }
 
-/* ── Libros que la persona eligió mantener solo en este dispositivo ── */
+/* ── Documentos que la persona eligió mantener solo en este dispositivo ── */
 {
-  const privado = { id: 'kindle-local', actualizado: 9000, sincronizado: 0, sincronizar: false };
-  comprobar(esSincronizable(privado) === false, 'un Kindle local queda fuera de la sincronización');
+  const privado = { id: 'documento-local', actualizado: 9000, sincronizado: 0, sincronizar: false };
+  comprobar(esSincronizable(privado) === false, 'un documento local queda fuera de la sincronización');
   comprobar(debeSubir(privado, { cursor: '', remoto: null }) === false,
-    'un Kindle local no sube ni durante la primera sincronización');
+    'un documento local no sube ni durante la primera sincronización');
   comprobar(debeSubir(privado, { cursor: 'c1', faltaPortada: true }) === false,
-    'ni una carátula pendiente puede hacer subir un Kindle local');
+    'ni una carátula pendiente puede hacer subir un documento local');
   comprobar(puedeFaltarPortada(privado) === false,
-    'la sincronización no consulta la carátula de un Kindle local');
+    'la sincronización no consulta la carátula de un documento local');
   comprobar(esSincronizable({ id: 'viejo' }) === true,
     'los documentos anteriores, sin campo nuevo, conservan la sincronización');
 }

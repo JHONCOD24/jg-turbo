@@ -4,7 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { mismasPalabras, crearPulidor } from '../js/pdf/pulido.js';
+import { mismasPalabras, mismasPalabrasLectura, crearPulidor } from '../js/pdf/pulido.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,6 +63,34 @@ console.log('\n--- 2) Guardián de integridad (mismasPalabras) ---');
 console.log('\n--- 3) Gestor de pulido (crearPulidor) con caché y degradación ---');
 
 {
+  const original = 'al norte de bos ton. El A RN fabrica una proteína y produce un alu vión.';
+  const corregido = 'al norte de Boston. El ARN fabrica una proteína y produce un aluvión.';
+  const candidatosUnion = [
+    { izquierda: 'bos', derecha: 'ton' },
+    { izquierda: 'A', derecha: 'RN' },
+    { izquierda: 'alu', derecha: 'vión' },
+  ];
+  comprobar(
+    mismasPalabras(original, corregido).igual === false,
+    'el guardián editorial estricto sigue rechazando uniones de tokens'
+  );
+  comprobar(
+    mismasPalabrasLectura(original, corregido, candidatosUnion).igual === true,
+    'el guardián de lectura acepta solo las uniones físicas autorizadas'
+  );
+  comprobar(
+    mismasPalabrasLectura(original, corregido.replace('Boston', 'Bostom'), candidatosUnion).igual === false,
+    'rechaza una unión si la IA cambia aunque sea una letra'
+  );
+  comprobar(
+    mismasPalabrasLectura('Caminó sin embargo hasta casa.', 'Caminó sinembargo hasta casa.', [
+      { izquierda: 'sin', derecha: 'embargo' },
+    ]).igual === false,
+    'no permite unir locuciones normales aunque lleguen marcadas por error'
+  );
+}
+
+{
   let llamadasApi = 0;
   const dbPulidos = new Map();
 
@@ -99,6 +127,26 @@ console.log('\n--- 3) Gestor de pulido (crearPulidor) con caché y degradación 
   await new Promise((r) => setTimeout(r, 50));
   comprobar(pulidor.estaPulido(1), 'Precarga el siguiente capítulo en segundo plano');
   comprobar(llamadasApi === 2, 'Llama a la API para el capítulo precargado');
+}
+
+{
+  let opcionesRecibidas = null;
+  const original = 'Viajaron al norte de bos ton y produjo un alu vión.';
+  const candidatosUnion = [
+    { izquierda: 'bos', derecha: 'ton' },
+    { izquierda: 'alu', derecha: 'vión' },
+  ];
+  const pulidor = crearPulidor({
+    pulir: async (_texto, opciones) => {
+      opcionesRecibidas = opciones;
+      return 'Viajaron al norte de Boston y produjo un aluvión.';
+    },
+  });
+  const salida = await pulidor.obtener(0, { texto: original, candidatosUnion });
+  comprobar(salida.includes('Boston') && salida.includes('aluvión'),
+    'crearPulidor conserva las uniones válidas en el texto que verá y oirá el usuario');
+  comprobar(opcionesRecibidas?.candidatosUnion?.length === 2,
+    'crearPulidor entrega a la IA únicamente los candidatos del capítulo');
 }
 
 if (fallos > 0) {

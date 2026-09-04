@@ -10,7 +10,7 @@
  *   5. OCR sobre un escaneado con letras de verdad.
  *   6. La biblioteca: guardar, cerrar la app, volver y seguir donde iba.
  *   7. Traducción: detectar el idioma y ofrecer leerlo en español.
- *   8. Kindle: lote local, formatos bloqueados, duplicados y cancelación.
+ *   8. Retirada del asistente Kindle.
  *
  * Requiere Playwright instalado en la raíz del repo (node_modules/playwright).
  */
@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { crearLibro, crearLibroIngles, crearEscaneado, crearRoto } from './generarPdfPrueba.mjs';
+import { crearLibro, crearLibroIngles, crearLibroConCortesSinGuion, crearEscaneado, crearRoto } from './generarPdfPrueba.mjs';
 import { pintarPaginaComoImagen, pdfDeImagenes, PAGINAS_ESCANEADAS } from './generarPdfEscaneado.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -80,19 +80,14 @@ const INGLES = join(temporal, 'english_book.pdf');
 const ESCANEADO = join(temporal, 'escaneado.pdf');
 const ROTO = join(temporal, 'roto.pdf');
 const NO_PDF = join(temporal, 'notas.txt');
-const KFX = join(temporal, 'libro_protegido.kfx');
-const PROTEGIDO = join(temporal, 'pdf_con_clave.pdf');
+const CORTES = join(temporal, 'libro_cortes_sin_guion.pdf');
 crearLibro(LIBRO, 4);
 crearLibro(GRANDE, 300);
 crearLibroIngles(INGLES, 6);
 crearEscaneado(ESCANEADO);
 crearRoto(ROTO);
+crearLibroConCortesSinGuion(CORTES);
 writeFileSync(NO_PDF, 'esto es un texto suelto, no un pdf');
-writeFileSync(KFX, 'archivo de prueba que JG Turbo no debe intentar convertir');
-writeFileSync(PROTEGIDO, Buffer.from(
-  'JVBERi0xLjMKJeLjz9MKMSAwIG9iago8PAovUHJvZHVjZXIgPGI5ZDliOWY3ZTg+Cj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovQ291bnQgMQovS2lkcyBbIDQgMCBSIF0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9SZXNvdXJjZXMgPDwKPj4KL01lZGlhQm94IFsgMC4wIDAuMCA2MTIgNzkyIF0KL1BhcmVudCAyIDAgUgo+PgplbmRvYmoKNSAwIG9iago8PAovViAyCi9SIDMKL0xlbmd0aCAxMjgKL1AgNDI5NDk2NzI5MgovRmlsdGVyIC9TdGFuZGFyZAovTyA8YWVkZGFjNDliZmUwNmI0NDcyYTRmZTYyMjdjNGZjMGY3YWUzOTZlYTNiZmVhMmJjMmM1OGE4NTIwYTQ2YmY0YT4KL1UgPDQxNGVlNGYzMGNhNzM3ZWEzMTNlZDcwNjRhZGJmM2MzMjhiZjRlNWU0ZTc1OGE0MTY0MDA0ZTU2ZmZmYTAxMDg+Cj4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDA1OSAwMDAwMCBuIAowMDAwMDAwMTE4IDAwMDAwIG4gCjAwMDAwMDAxNjcgMDAwMDAgbiAKMDAwMDAwMDI2MSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMyAwIFIKL0luZm8gMSAwIFIKL0lEIFsgPDM1NjEzMTMyNjIzNzY0MzczODM1NjEzNjY0MzUzNTM3MzUzNjM5NjI2MjM3MzA2NDMyMzQzMjMyNjEzNzMwMzk+IDwzNTYxMzEzMjYyMzc2NDM3MzgzNTYxMzY2NDM1MzUzNzM1MzYzOTYyNjIzNzMwNjQzMjM0MzIzMjYxMzczMDM5PiBdCi9FbmNyeXB0IDUgMCBSCj4+CnN0YXJ0eHJlZgo0NzYKJSVFT0YK',
-  'base64'
-));
 
 const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
@@ -103,7 +98,7 @@ async function abrirPestana(pagina) {
   await pagina.waitForTimeout(400);
 }
 
-async function nuevaPagina(opciones) {
+async function nuevaPagina(opciones, { rechazarIa = true } = {}) {
   const contexto = await navegador.newContext(opciones);
   /* En modo visible, la vista «PDF limpio» abre el diálogo nativo de
    * impresión. Ese diálogo no pertenece al DOM y bloquea Playwright. Se
@@ -119,20 +114,22 @@ async function nuevaPagina(opciones) {
    * la pantalla y el siguiente clic falla con un timeout que no explica nada.
    * Se responde «solo local» en cuanto asoma, que además es lo que debe hacer
    * una prueba: no mandar ni una petición a la IA. */
-  await pagina.addInitScript(() => {
-    const cerrar = () => {
-      const hoja = document.getElementById('pdfAuditoriaHoja');
-      if (!hoja || hoja.hidden) return;
-      const no = document.getElementById('btnPdfAuditoriaRechazar');
-      if (no) no.click(); else hoja.hidden = true;
-    };
-    document.addEventListener('DOMContentLoaded', () => {
-      cerrar();
-      new MutationObserver(cerrar).observe(document.body, {
-        subtree: true, attributes: true, attributeFilter: ['hidden'], childList: true,
+  if (rechazarIa) {
+    await pagina.addInitScript(() => {
+      const cerrar = () => {
+        const hoja = document.getElementById('pdfAuditoriaHoja');
+        if (!hoja || hoja.hidden) return;
+        const no = document.getElementById('btnPdfAuditoriaRechazar');
+        if (no) no.click(); else hoja.hidden = true;
+      };
+      document.addEventListener('DOMContentLoaded', () => {
+        cerrar();
+        new MutationObserver(cerrar).observe(document.body, {
+          subtree: true, attributes: true, attributeFilter: ['hidden'], childList: true,
+        });
       });
     });
-  });
+  }
   const errores = [];
   pagina.on('pageerror', (e) => errores.push(String(e)));
   pagina.on('console', (m) => { if (m.type() === 'error') errores.push(m.text()); });
@@ -237,6 +234,75 @@ for (const [nombre, opciones] of [
   comprobar(await pagina.locator('#pdfResultArea').isHidden(), 'volver cierra el documento');
   comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 1, 'el documento queda en la biblioteca');
 
+  comprobar(sinRuido(errores).length === 0, `sin errores de JavaScript (${sinRuido(errores).length})`);
+  sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
+  await contexto.close();
+}
+
+/* ── 1a) Cortes sin guion corregidos por IA con guardián local ─────── */
+console.log('\n── Cortes físicos sin guion · IA protegida ───');
+{
+  const { pagina, errores, contexto } = await nuevaPagina(
+    { viewport: { width: 1280, height: 900 } },
+    { rechazarIa: false }
+  );
+  const lecturas = [];
+  await pagina.route('**/improve', async (ruta) => {
+    const cuerpo = ruta.request().postDataJSON();
+    if (cuerpo.mode === 'auditoria_pdf') {
+      await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ signos: [], propuestas: [] }) });
+      return;
+    }
+    lecturas.push(cuerpo);
+    const corregido = String(cuerpo.text || '')
+      .replace(/\bbos\s+ton\b/gi, 'Boston')
+      .replace(/\bA\s+RN\b/g, 'ARN')
+      .replace(/\balu\s+vion\b/gi, 'aluvión')
+      .replace(/componentes\.Como/g, 'componentes. Como');
+    await ruta.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ text: corregido, ia_used: true, provider: 'prueba' }),
+    });
+  });
+
+  await pagina.locator('#pdfInput').setInputFiles(CORTES);
+  await pagina.locator('#btnPdfRead').click();
+  await pagina.locator('#pdfAuditoriaHoja').waitFor({ state: 'visible', timeout: 60000 });
+  const local = await pagina.locator('#pdfOutput').inputValue();
+  comprobar(local.includes('norte de bos ton, hasta llegar'),
+    'la capa local no inventa un punto al cambiar de página');
+  comprobar(local.includes('significado que le damos a esas experiencias'),
+    'la capa local conserva «le damos» como una frase continua');
+
+  await pagina.locator('#btnPdfAuditoriaAceptar').click();
+  await pagina.waitForFunction(
+    () => document.getElementById('pdfOutput')?.value?.includes('Boston')
+      && document.getElementById('pdfOutput')?.value?.includes('ARN')
+      && document.getElementById('pdfOutput')?.value?.includes('aluvión'),
+    null, { timeout: 60000 }
+  );
+  const corregido = await pagina.locator('#pdfOutput').inputValue();
+  comprobar(corregido.includes('Boston') && corregido.includes('ARN') && corregido.includes('aluvión'),
+    'la salida visible une bos+ton, A+RN y alu+vión');
+  comprobar(corregido.includes('componentes. Como'),
+    'la salida visible separa las oraciones pegadas');
+  comprobar(lecturas.length === 1, 'el capítulo corto usa una sola petición de lectura');
+  const pares = (lecturas[0]?.candidatos_union || []).map((c) => `${c.izquierda}+${c.derecha}`);
+  comprobar(['bos+ton', 'A+RN', 'alu+vion'].every((par) => pares.includes(par)),
+    'la IA recibe solamente los límites físicos candidatos del capítulo');
+
+  await pagina.locator('#btnPdfBack').click();
+  await abrirPestana(pagina);
+  await pagina.locator('#pdfRejilla .pdf-libro-abrir').first().click();
+  await pagina.waitForFunction(
+    () => document.getElementById('pdfOutput')?.value?.includes('Boston'),
+    null, { timeout: 20000 }
+  );
+  comprobar((await pagina.locator('#pdfOutput').inputValue()).includes('aluvión'),
+    'la corrección segura persiste después de cerrar y reabrir el libro');
+  comprobar(lecturas.length === 1,
+    'reabrir una corrección con la misma huella no vuelve a gastar IA');
   comprobar(sinRuido(errores).length === 0, `sin errores de JavaScript (${sinRuido(errores).length})`);
   sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
   await contexto.close();
@@ -646,66 +712,14 @@ console.log('\n── Documento en inglés ────────────�
   await contexto.close();
 }
 
-/* ── 8) Importación Kindle oficial y solo local ────────────────────── */
-console.log('\n── Importación Kindle segura ──────────────────');
+/* ── 8) Retirada de la función Kindle ──────────────────────────────── */
+console.log('\n── Retirada del asistente Kindle ───────────────');
 {
   const { pagina, errores, contexto } = await nuevaPagina({ viewport: { width: 1280, height: 1000 } });
-  const peticionesDeSalida = [];
-  pagina.on('request', (peticion) => {
-    if (['POST', 'PUT', 'PATCH'].includes(peticion.method())) peticionesDeSalida.push(peticion.url());
-  });
-
-  comprobar(await pagina.locator('#pdfKindle').isVisible(), 'muestra el asistente «Traer desde Kindle»');
-  await pagina.locator('#pdfKindle').evaluate((detalle) => { detalle.open = true; });
-  comprobar(
-    (await pagina.locator('#pdfKindle a[href="https://www.amazon.com/mycd"]').getAttribute('target')) === '_blank',
-    'la gestión de Amazon se abre fuera de JG Turbo'
-  );
-  comprobar(await pagina.locator('#pdfKindleLocal').isChecked(), 'el destino inicial es solo este dispositivo');
-  comprobar(await pagina.locator('#pdfKindleNube').isDisabled(), 'no ofrece sincronizar si la nube no está conectada');
-
-  await pagina.locator('#pdfKindleInput').setInputFiles([LIBRO, INGLES, KFX, PROTEGIDO]);
-  await pagina.waitForFunction(
-    () => document.getElementById('pdfKindleEstado')?.textContent?.startsWith('Importación terminada:'),
-    null, { timeout: 120000 }
-  );
-  comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 2, 'guarda secuencialmente los dos PDF válidos');
-  comprobar(/KFX|DRM/i.test(await pagina.locator('#pdfKindleResultados').textContent() || ''), 'rechaza KFX y explica el límite de DRM');
-  comprobar(/pdf_con_clave\.pdf.*protegido.*no quita contraseñas ni DRM/i.test(await pagina.locator('#pdfKindleResultados').textContent() || ''), 'rechaza un PDF cifrado sin intentar quitar la protección');
-
-  const documentos = await pagina.evaluate(() => new Promise((resolver, rechazar) => {
-    const peticion = indexedDB.open('jg-turbo-pdf', 5);
-    peticion.onerror = () => rechazar(peticion.error);
-    peticion.onsuccess = () => {
-      const lectura = peticion.result.transaction('documentos', 'readonly').objectStore('documentos').getAll();
-      lectura.onerror = () => rechazar(lectura.error);
-      lectura.onsuccess = () => resolver(lectura.result);
-    };
-  }));
-  comprobar(documentos.every((doc) => doc.origen === 'kindle-descarga-oficial'), 'registra el origen oficial en los metadatos');
-  comprobar(documentos.every((doc) => /^[a-f0-9]{64}$/.test(doc.huella || '')), 'guarda una huella SHA-256 por PDF');
-  comprobar(documentos.every((doc) => doc.sincronizar === false), 'marca ambos libros para que no entren en la nube');
-
-  await pagina.locator('#pdfKindleEstado').evaluate((nodo) => { nodo.textContent = ''; });
-  await pagina.locator('#pdfKindleInput').setInputFiles([LIBRO, INGLES]);
-  await pagina.waitForFunction(
-    () => document.getElementById('pdfKindleEstado')?.textContent?.startsWith('Importación terminada:'),
-    null, { timeout: 120000 }
-  );
-  comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 2, 'un lote repetido no crea copias');
-  comprobar(/2 duplicados omitidos/i.test(await pagina.locator('#pdfKindleEstado').textContent() || ''), 'informa los duplicados exactos omitidos');
-
-  await pagina.locator('#pdfKindleEstado').evaluate((nodo) => { nodo.textContent = ''; });
-  await pagina.locator('#pdfKindleInput').setInputFiles(GRANDE);
-  await pagina.locator('#btnPdfKindleCancelar').waitFor({ state: 'visible', timeout: 10000 });
-  await pagina.locator('#btnPdfKindleCancelar').click();
-  await pagina.waitForFunction(
-    () => document.getElementById('pdfKindleEstado')?.textContent?.startsWith('Importación cancelada:'),
-    null, { timeout: 120000 }
-  );
-  comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 2, 'cancelar no borra lo ya terminado ni deja un registro incompleto');
-  comprobar(peticionesDeSalida.length === 0, 'la importación local no envía archivos a Amazon ni al backend');
-
+  comprobar((await pagina.locator('#pdfKindle').count()) === 0,
+    'el asistente Kindle ya no ocupa espacio en la biblioteca');
+  comprobar((await pagina.locator('[id*="Kindle"], [class*="kindle"]').count()) === 0,
+    'no quedan controles ni estilos funcionales de Kindle en la interfaz');
   comprobar(sinRuido(errores).length === 0, `sin errores de JavaScript (${sinRuido(errores).length})`);
   sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
   await contexto.close();

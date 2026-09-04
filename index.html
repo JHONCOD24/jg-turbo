@@ -1,4 +1,4 @@
-<!-- v2.34.0 · Lectura PDF por parrafos completos y migracion verificable -->
+<!-- v2.35.0 · PDF sin cortes de palabra y retirada de Kindle -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1497,7 +1497,6 @@
   .pdf-area.has-results #pdfSubir,
   .pdf-area.has-results #pdfContinuar,
   .pdf-area.has-results #pdfBiblioteca,
-  .pdf-area.has-results #pdfKindle,
   .pdf-area.has-results #pdfNube{
     display:none !important;
   }
@@ -1988,59 +1987,6 @@
     color:var(--text);font-size:12px;font-weight:600;
   }
   #pdfDrop:hover .drop-action{border-color:rgba(39,225,193,.4);color:var(--cyan)}
-
-  /* ── Asistente Kindle: descarga oficial, nunca acceso a la cuenta ── */
-  .pdf-kindle{
-    border:1px solid var(--line);border-radius:var(--pdf-r);
-    background:var(--bg-2);overflow:hidden;
-  }
-  .pdf-kindle-cab{
-    display:flex;align-items:center;gap:12px;min-height:54px;padding:10px var(--pdf-pad);
-    cursor:pointer;list-style:none;user-select:none;
-  }
-  .pdf-kindle-cab::-webkit-details-marker{display:none}
-  .pdf-kindle-cab:focus-visible{outline:none;box-shadow:inset var(--focus);border-radius:var(--pdf-r)}
-  .pdf-kindle-icono{
-    width:34px;height:34px;display:grid;place-items:center;flex:none;border-radius:11px;
-    color:var(--cyan);background:rgba(39,225,193,.1);
-  }
-  .pdf-kindle-icono svg{width:18px;height:18px}
-  .pdf-kindle-ident{display:flex;flex:1;min-width:0;flex-direction:column;gap:1px}
-  .pdf-kindle-titulo{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13.5px;color:var(--text)}
-  .pdf-kindle-meta{font-size:var(--fs-xs);color:var(--muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .pdf-kindle-chevron{width:16px;height:16px;flex:none;color:var(--muted-2);transition:transform .18s ease}
-  .pdf-kindle[open] .pdf-kindle-chevron{transform:rotate(180deg)}
-  .pdf-kindle[open] .pdf-kindle-cab{border-bottom:1px solid var(--line)}
-  .pdf-kindle-cuerpo{padding:var(--pdf-pad);display:flex;flex-direction:column;gap:14px}
-  .pdf-kindle-cuerpo p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
-  .pdf-kindle-cuerpo strong{color:var(--text)}
-  .pdf-kindle-pasos{margin:0;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.55}
-  .pdf-kindle-pasos li+li{margin-top:5px}
-  .pdf-kindle-amazon{align-self:flex-start;min-height:44px}
-  .pdf-kindle-destinos{border:0;padding:0;margin:0;display:grid;gap:8px}
-  .pdf-kindle-destinos legend{padding:0 0 7px;color:var(--text);font-size:12px;font-weight:700}
-  .pdf-kindle-opcion{
-    display:flex;align-items:flex-start;gap:10px;min-height:48px;padding:10px 12px;
-    border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;
-  }
-  .pdf-kindle-opcion input{margin-top:3px;accent-color:var(--cyan)}
-  .pdf-kindle-opcion span{display:flex;flex-direction:column;gap:2px;color:var(--text);font-size:13px;font-weight:600}
-  .pdf-kindle-opcion small{color:var(--muted-2);font-size:11.5px;font-weight:400;line-height:1.35}
-  .pdf-kindle-opcion.is-disabled{opacity:.55;cursor:not-allowed}
-  .pdf-kindle-acciones{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .pdf-kindle-acciones .btn{min-height:44px}
-  .pdf-kindle-elegir{cursor:pointer}
-  .pdf-kindle-progreso{display:flex;flex-direction:column;gap:7px}
-  .pdf-kindle-progreso[hidden],.pdf-kindle-resultados[hidden]{display:none}
-  .pdf-kindle-barra{height:5px;border-radius:999px;background:var(--surface-2);overflow:hidden}
-  .pdf-kindle-barra-relleno{height:100%;width:0;background:var(--cyan);transition:width .15s ease}
-  .pdf-kindle-estado{color:var(--muted);font-size:12px;line-height:1.45}
-  .pdf-kindle-resultados{margin:0;padding-left:20px;color:var(--muted);font-size:12px;line-height:1.5}
-  .pdf-kindle-resultados li+li{margin-top:4px}
-  @media (min-width:700px){
-    .pdf-kindle-destinos{grid-template-columns:1fr 1fr}
-    .pdf-kindle-destinos legend{grid-column:1 / -1}
-  }
 
   /* Con biblioteca, subir otro documento — ultra compacto para ahorrar 200px */
   .pdf-subir--secundaria{
@@ -5078,51 +5024,6 @@
           <p class="pdf-biblioteca-espacio" id="pdfEspacio"></p>
         </section>
 
-        <details class="pdf-kindle" id="pdfKindle">
-          <summary class="pdf-kindle-cab">
-            <span class="pdf-kindle-icono" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/><path d="M8 7h8M8 11h6"/></svg>
-            </span>
-            <span class="pdf-kindle-ident">
-              <span class="pdf-kindle-titulo">Traer desde Kindle</span>
-              <span class="pdf-kindle-meta">Solo PDF descargados oficialmente</span>
-            </span>
-            <svg class="pdf-kindle-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-          </summary>
-          <div class="pdf-kindle-cuerpo">
-            <p><strong>JG Turbo no entra a tu cuenta de Amazon.</strong> Amazon permite descargar PDF o EPUB únicamente en compras confirmadas sin DRM. Los préstamos y los formatos protegidos deben seguir leyéndose en Kindle.</p>
-            <a class="btn pdf-kindle-amazon" id="btnPdfKindleAmazon" href="https://www.amazon.com/mycd" target="_blank" rel="noopener noreferrer">
-              Abrir mis libros en Amazon
-            </a>
-            <ol class="pdf-kindle-pasos">
-              <li>En Amazon, abre el menú del libro y busca la descarga en PDF o EPUB.</li>
-              <li>Si aparece, descarga el PDF. La disponibilidad depende de cada título.</li>
-              <li>Regresa aquí y elige todos los PDF que quieras guardar.</li>
-            </ol>
-            <fieldset class="pdf-kindle-destinos">
-              <legend>Dónde guardar estos libros</legend>
-              <label class="pdf-kindle-opcion" id="pdfKindleOpcionLocal">
-                <input type="radio" name="pdfKindleDestino" id="pdfKindleLocal" value="local" checked>
-                <span>Solo este dispositivo<small>El PDF y su texto no entran en la sincronización.</small></span>
-              </label>
-              <label class="pdf-kindle-opcion is-disabled" id="pdfKindleOpcionNube">
-                <input type="radio" name="pdfKindleDestino" id="pdfKindleNube" value="nube" disabled>
-                <span>Mis dispositivos<small id="pdfKindleNubeHint">Conecta primero la nube de JG Turbo.</small></span>
-              </label>
-            </fieldset>
-            <div class="pdf-kindle-acciones">
-              <label class="btn primary pdf-kindle-elegir" for="pdfKindleInput" id="btnPdfKindleElegir">Elegir PDF</label>
-              <input type="file" class="sr-only" id="pdfKindleInput" name="libros_kindle" multiple accept="application/pdf,.pdf,.azw,.azw3,.kfx,.mobi" aria-label="Elegir uno o varios PDF descargados oficialmente de Amazon">
-              <button type="button" class="btn" id="btnPdfKindleCancelar" hidden>Cancelar importación</button>
-            </div>
-            <div class="pdf-kindle-progreso" id="pdfKindleProgreso" role="status" aria-live="polite" hidden>
-              <div class="pdf-kindle-barra" aria-hidden="true"><div class="pdf-kindle-barra-relleno" id="pdfKindleProgresoRelleno"></div></div>
-              <span class="pdf-kindle-estado" id="pdfKindleEstado"></span>
-            </div>
-            <ul class="pdf-kindle-resultados" id="pdfKindleResultados" aria-label="Resultado de la importación" hidden></ul>
-          </div>
-        </details>
-
         <div class="pdf-subir" id="pdfSubir">
         <div class="drop" id="pdfDrop" role="button" tabindex="0" aria-label="Elegir un archivo PDF">
           <div class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></div>
@@ -5531,23 +5432,25 @@
             <button type="button" class="btn primary" id="btnPdfRevisionAceptarTodo">Aceptar todos los cambios de este capítulo</button>
           </div>
 
-          <!-- Hoja de consentimiento de la revisión de puntuación: qué hace,
+          <!-- Hoja de consentimiento de la corrección de lectura: qué hace,
                qué NO hace y qué se envía, antes de mandar nada a la IA. -->
           <div class="pdf-revision-panel" id="pdfAuditoriaHoja" hidden role="dialog" aria-modal="true" aria-labelledby="pdfAuditoriaTitulo">
             <div class="pdf-hoja-cab">
-              <h4 class="pdf-hoja-titulo" id="pdfAuditoriaTitulo">Revisar la puntuación de este libro</h4>
+              <h4 class="pdf-hoja-titulo" id="pdfAuditoriaTitulo">Corregir cortes y puntuación del libro</h4>
               <button type="button" class="pdf-hoja-cerrar" id="btnPdfAuditoriaCerrar" aria-label="Cerrar">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <div class="pdf-aud-cuerpo">
-              <p><strong>Qué hace.</strong> Un PDF no guarda puntos ni comas: guarda letras con
-              coordenadas. Al extraer el texto, muchas frases quedan sin puntuación y la voz las lee de
-              corrido. Esta revisión propone dónde faltan signos para que el libro se escuche bien.</p>
+              <p><strong>Qué hace.</strong> Un PDF guarda letras con coordenadas, no párrafos reales.
+              Al extraerlo puede separar fragmentos de palabras, como «bos ton», o pegar dos oraciones.
+              La revisión corrige esos cortes, espacios y signos para que la lectura sea continua.</p>
 
-              <p><strong>Qué NO hace.</strong> No cambia, quita ni añade ni una sola palabra del libro.
-              Solo propone signos de puntuación, y cada propuesta la apruebas tú. Si el resultado no
-              conserva exactamente tus palabras, se descarta solo.</p>
+              <p><strong>Protección del texto.</strong> Solo se permite unir dos fragmentos que el
+              extractor haya encontrado en un límite físico de renglón o página. La secuencia de letras,
+              cifras y su orden debe quedar intacta; si la IA cambia una sola, el resultado se descarta.
+              Las correcciones editoriales que sí cambian una palabra quedan como sugerencias para que
+              tú decidas si las aceptas.</p>
 
               <p><strong>Qué se envía.</strong> El <em>texto</em> extraído del PDF, por trozos, al
               proveedor de IA que tengas configurado (<span id="pdfAuditoriaProveedor">—</span>).
@@ -5562,7 +5465,7 @@
               dispositivo.</p>
             </div>
             <div class="pdf-aud-pie">
-              <button type="button" class="btn primary" id="btnPdfAuditoriaAceptar">Sí, revisar la puntuación</button>
+              <button type="button" class="btn primary" id="btnPdfAuditoriaAceptar">Sí, corregir la lectura</button>
               <button type="button" class="btn ghost" id="btnPdfAuditoriaRechazar">No, solo modo local</button>
             </div>
           </div>
@@ -8070,9 +7973,9 @@ function resumenValidacionTraduccion(validacion){
 }
 
 /* ── Pulido de textos con IA ───────────────────────────────────────────────
- * Puerta ÚNICA a /api/improve. Trocea en bloques de ≤ 6000 caracteres para
- * garantizar que ninguna petición supere los límites de tiempo en servidor. */
-const PULIR_MAX_CHARS_POR_PETICION = 6000;
+ * Puerta ÚNICA a /api/improve. Trocea en bloques menores que el límite interno
+ * del servidor para que un posible corte de palabra no vuelva a dividirse. */
+const PULIR_MAX_CHARS_POR_PETICION = 3000;
 const PULIR_PETICIONES_EN_PARALELO = 2;
 
 /** Una petición de pulido, con un reintento ante fallo pasajero. */
@@ -8097,12 +8000,56 @@ async function jgPedirPulido(cuerpo, timeoutMs){
   throw ultimoError || new Error('No se pudo pulir el texto');
 }
 
+function jgCandidatosUnionDelTrozo(texto, candidatos){
+  if(!Array.isArray(candidatos) || !candidatos.length) return [];
+  const tokens = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const disponibles = new Map();
+  for(let i = 0; i + 1 < tokens.length; i++){
+    const clave = `${tokens[i]}\u0000${tokens[i + 1]}`;
+    disponibles.set(clave, (disponibles.get(clave) || 0) + 1);
+  }
+  return candidatos.slice(0, 300).filter((candidato) => {
+    const izq = String(candidato?.izquierda || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const der = String(candidato?.derecha || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const clave = `${izq}\u0000${der}`;
+    const quedan = disponibles.get(clave) || 0;
+    if(!quedan) return false;
+    disponibles.set(clave, quedan - 1);
+    return true;
+  }).map((candidato) => ({
+    izquierda: String(candidato.izquierda || '').slice(0, 20),
+    derecha: String(candidato.derecha || '').slice(0, 20),
+  }));
+}
+
+function jgProtegerCandidatosEntreTrozos(trozos, candidatos){
+  if(!Array.isArray(trozos) || trozos.length < 2 || !Array.isArray(candidatos)) return trozos;
+  const clave = (valor) => String(valor || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const permitidos = new Set(candidatos.map((c) => `${clave(c?.izquierda)}\u0000${clave(c?.derecha)}`));
+  const salida = [...trozos];
+  for(let i = 0; i + 1 < salida.length; i++){
+    const final = salida[i].match(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20})\s*$/);
+    const inicio = salida[i + 1].match(/^\s*([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{1,20})/);
+    if(!final || !inicio || !permitidos.has(`${clave(final[1])}\u0000${clave(inicio[1])}`)) continue;
+    /* Los dos fragmentos deben llegar juntos a una petición. Se mueve solo
+       el fragmento izquierdo, sin alterar ninguna letra ni su orden. */
+    salida[i] = salida[i].slice(0, final.index).trimEnd();
+    salida[i + 1] = `${final[1]} ${salida[i + 1].trimStart()}`;
+  }
+  return salida.filter((trozo) => trozo.trim());
+}
+
 async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
   if(!texto || !texto.trim()) return { text: texto, validation: null, ia_used: false };
   const txtLimpio = String(texto).trim();
   const lang = normalizarLangApi(idioma) || 'es';
   const creds = jgCredencialesIA();
-  const trozos = jgTrocearParaTraducir(txtLimpio, PULIR_MAX_CHARS_POR_PETICION);
+  const trozos = jgProtegerCandidatosEntreTrozos(
+    jgTrocearParaTraducir(txtLimpio, PULIR_MAX_CHARS_POR_PETICION),
+    opts.candidatosUnion
+  );
   const cuerpoBase = {
     language: lang,
     provider: creds.provider,
@@ -8116,7 +8063,11 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
 
   if(trozos.length === 1){
     try{
-      const data = await jgPedirPulido({ ...cuerpoBase, text: trozos[0] }, timeoutMs);
+      const data = await jgPedirPulido({
+        ...cuerpoBase,
+        text: trozos[0],
+        candidatos_union: jgCandidatosUnionDelTrozo(trozos[0], opts.candidatosUnion),
+      }, timeoutMs);
       const out = (data.text || '').trim();
       if(!out) return { ...data, text: txtLimpio, ia_used: false };
       return { ...data, text: out };
@@ -8134,7 +8085,11 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
 
   const partes = await jgMapaConLimite(trozos, PULIR_PETICIONES_EN_PARALELO, async (trozo) => {
     try{
-      const data = await jgPedirPulido({ ...cuerpoBase, text: trozo }, timeoutMs);
+      const data = await jgPedirPulido({
+        ...cuerpoBase,
+        text: trozo,
+        candidatos_union: jgCandidatosUnionDelTrozo(trozo, opts.candidatosUnion),
+      }, timeoutMs);
       hechos += 1;
       avisar();
       const out = (data.text || '').trim();
@@ -15499,7 +15454,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v72';
+const JG_JS_V = 'v73';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

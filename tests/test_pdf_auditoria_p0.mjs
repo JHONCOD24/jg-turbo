@@ -104,6 +104,16 @@ console.log('\n--- 4) UI de revisión y backend presentes ---');
   comprobar(controller.includes("fila.huella === construirHuella(actual.texto)"),
     'Una auditoría vieja solo se aplica si la huella todavía coincide con el texto');
   comprobar(backend.includes('@app.post("/api/improve"'), 'Backend local expone el alias /api/improve');
+  comprobar(!indexHtml.includes('id="pdfKindle"') && !controller.includes('kindleImport.js'),
+    'la interfaz y el controlador ya no incluyen la función Kindle retirada');
+  comprobar(indexHtml.includes('Corregir cortes y puntuación del libro')
+      && indexHtml.includes('fragmentos de palabras'),
+    'el consentimiento explica la corrección de palabras partidas');
+  comprobar((controller.match(/pulidor\.obtener\(/g) || []).length === 1,
+    'no precarga una copia sin corregir antes de que el usuario acepte la IA');
+  comprobar(controller.includes("estado: 'lectura_segura'")
+      && controller.includes('reg.huellaOrigen !== huellaFuente'),
+    'el texto corregido se guarda y solo se reutiliza si la fuente coincide');
 }
 
 console.log('--- 6) aplicarSignos conserva la forma del texto ---');

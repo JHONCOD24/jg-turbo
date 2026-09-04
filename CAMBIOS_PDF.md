@@ -1,5 +1,74 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-04 · v2.35.0 · Palabras completas y retirada de Kindle
+
+### Problemas comprobados
+
+- En una prueba real, la descarga oficial de Amazon solo estaba disponible para 2 de unos 90
+  libros. Por decisión del usuario se retiró `Traer desde Kindle`: ya no quedan el panel, sus
+  estilos, eventos, módulo auxiliar ni pruebas de una función que no resultó útil.
+- `componerTexto()` interpretaba la coordenada X de la primera línea de una página nueva como una
+  sangría. Esto introducía un párrafo y `pulirParaLectura()` añadía un punto artificial. El caso
+  `significado que le` + `damos` terminaba como `significado que le. / Damos`.
+- El prompt de lectura ya pedía unir palabras partidas, pero `mismasPalabras()` exigía igual número
+  de tokens. Por eso una respuesta correcta como `bos ton` a `Boston` se descartaba sin aviso.
+- Al importar un libro se precargaba el pulido antes de responder el consentimiento. Esa carrera
+  podía dejar el texto local en caché e impedir la llamada de lectura después de aceptar.
+
+### Corrección aplicada
+
+- La sangría solo abre un párrafo cuando ambas líneas pertenecen a la misma página física. Un
+  cambio de hoja sin puntuación terminal conserva la frase continua.
+- El extractor registra pares candidatos únicamente en límites reales de renglón o página. Filtra
+  palabras funcionales y limita longitud, mayúsculas y siglas para no presentar uniones arbitrarias.
+- El modo `lectura` envía a la IA solo los candidatos que aparecen dentro de cada capítulo y trozo.
+  El prompt de Vercel y el backend local permiten quitar un espacio solo en esos pares exactos.
+- `mismasPalabrasLectura()` acepta una unión únicamente si concatena dos tokens candidatos sin
+  cambiar ninguna letra, cifra ni orden. Mantiene las protecciones de URLs, correos, símbolos,
+  cifras y párrafos. `sin embargo` no puede convertirse en `sinembargo`.
+- Los bloques del navegador bajan a 3.000 caracteres y, si un candidato cae justo en un límite,
+  sus dos fragmentos viajan juntos. Así el segundo troceo del servidor no vuelve a separarlos.
+- Se eliminó la precarga anterior al consentimiento. El texto corregido se guarda como
+  `lectura_segura` con la huella de la fuente; al reabrir se reutiliza solo si la huella coincide.
+- `VERSION_TROCEO` sube a **4**. Los libros ya guardados que conservan su PDF original se extraen
+  nuevamente al abrirlos, mantienen su progreso y reciben los candidatos de unión nuevos. Si un
+  documento sincronizado ya no conserva el PDF, se preserva su texto disponible sin adivinar letras.
+- La hoja de consentimiento ahora explica los cortes de palabra, qué texto se envía y la validación
+  local que descarta cualquier alteración de letras o cifras.
+
+### Regresiones exactas
+
+Las pruebas usan los ejemplos reportados en `El placebo eres tú`:
+
+- `bos` + `ton` se propone como `Boston`;
+- `A` + `RN` se propone como `ARN`;
+- `componentes.Como` queda `componentes. Como`;
+- `significado que le` + `damos` conserva `significado que le damos` sin punto inventado;
+- `alu` + `vión` se propone como `aluvión`.
+
+También se comprueba que `Bostom` se rechaza por cambiar una letra, que una locución normal no se
+une, que el texto corregido aparece realmente en pantalla y que persiste después de reabrir sin una
+segunda petición de IA.
+
+### Verificación
+
+- 14 archivos unitarios PDF: **510 comprobaciones OK, 0 fallos**.
+- Backend PDF: **16/16** entre `test_pdf_ask.py` y `test_pdf_improve_lectura.py`.
+- `verificar_pdf_retroceo.mjs`: **13/13** en Chromium visible.
+- `verificar_pdf_geometria.mjs`: **42/42** en móvil, tableta y escritorio.
+- `verificar_pdf_scroll.mjs`: **39/39**.
+- `verificar_pdf_navegador.mjs`: **115/115** en Chromium visible. Incluye el texto final corregido,
+  persistencia por huella, retirada de Kindle, libro de 300 páginas, OCR, biblioteca, exportaciones,
+  audiolibro, traducción y casos dañados.
+
+### Versión y producción
+
+- `index.html`: `v2.35.0` y módulos `v73`.
+- `sw.js`: `jg-turbo-shell-v73`.
+- Producción: pendiente de desplegar y verificar.
+
+---
+
 ## Entrega 2026-09-04 · v2.34.0 · Párrafos completos y reparación real de libros guardados
 
 ### Corrección de la entrega anterior
