@@ -185,7 +185,10 @@ function pagina(numero, lineas) {
       linea('damos a esas experiencias produce un alu', { x: 92, y: 800, ancho: 260 }),
     ]),
     pagina(4, [
-      linea('vión de respuestas físicas,', { x: 92, y: 800, ancho: 180 }),
+      linea('vión de respuestas físicas. Y es', { x: 92, y: 800, ancho: 230 }),
+    ]),
+    pagina(5, [
+      linea('ta conclusión resume el argumento.', { x: 92, y: 800, ancho: 210 }),
     ]),
   ];
   const resultado = componerTexto(paginas);
@@ -205,8 +208,9 @@ function pagina(numero, lineas) {
     Array.isArray(resultado.candidatosUnion)
       && resultado.candidatosUnion.some((c) => c.izquierda === 'bos' && c.derecha === 'ton')
       && resultado.candidatosUnion.some((c) => c.izquierda === 'A' && c.derecha === 'RN')
-      && resultado.candidatosUnion.some((c) => c.izquierda === 'alu' && c.derecha === 'vión'),
-    'marca únicamente los fragmentos físicos que la IA puede proponer unir'
+      && resultado.candidatosUnion.some((c) => c.izquierda === 'alu' && c.derecha === 'vión')
+      && resultado.candidatosUnion.some((c) => c.izquierda === 'es' && c.derecha === 'ta'),
+    'marca también el corte corto «es» + «ta» para que la IA pueda proponer unirlo'
   );
 }
 

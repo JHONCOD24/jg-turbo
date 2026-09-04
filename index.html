@@ -1,4 +1,4 @@
-<!-- v2.35.0 · PDF sin cortes de palabra y retirada de Kindle -->
+<!-- v2.36.0 · Corrección completa de lectura y cierre del panel PDF -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -5456,9 +5456,14 @@
               proveedor de IA que tengas configurado (<span id="pdfAuditoriaProveedor">—</span>).
               <strong>El archivo PDF nunca sale de tu dispositivo.</strong></p>
 
-              <p><strong>Cuánto tarda.</strong> Depende del tamaño del libro. Empieza por el capítulo que
-              estás leyendo, así que puedes seguir leyendo mientras trabaja. Puedes pausarla cuando
-              quieras y continuar después: lo ya revisado no se vuelve a pedir.</p>
+              <p><strong>Qué significa el contador.</strong> «Corrigiendo lectura 2 de 40» indica
+              cuántas partes reales del lector ya fueron revisadas. No cuenta páginas ni renglones.
+              Cada parte cambia en pantalla apenas termina; no necesitas esperar a que acabe todo el
+              libro para comprobar el capítulo abierto.</p>
+
+              <p><strong>Cuánto tarda.</strong> Depende del tamaño del libro. Empieza por la parte que
+              estás leyendo y continúa en segundo plano. «Partes sin corregir» significa que hubo un
+              fallo de conexión o del proveedor y esas partes se intentarán de nuevo al abrir el libro.</p>
 
               <p class="pdf-aud-nota">Si prefieres no enviar nada, el modo local sigue funcionando: junta
               las líneas, arregla los guiones de corte y quita cabeceras repetidas, todo en tu
@@ -8009,7 +8014,7 @@ function jgCandidatosUnionDelTrozo(texto, candidatos){
     const clave = `${tokens[i]}\u0000${tokens[i + 1]}`;
     disponibles.set(clave, (disponibles.get(clave) || 0) + 1);
   }
-  return candidatos.slice(0, 300).filter((candidato) => {
+  return candidatos.filter((candidato) => {
     const izq = String(candidato?.izquierda || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const der = String(candidato?.derecha || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const clave = `${izq}\u0000${der}`;
@@ -8017,7 +8022,7 @@ function jgCandidatosUnionDelTrozo(texto, candidatos){
     if(!quedan) return false;
     disponibles.set(clave, quedan - 1);
     return true;
-  }).map((candidato) => ({
+  }).slice(0, 300).map((candidato) => ({
     izquierda: String(candidato.izquierda || '').slice(0, 20),
     derecha: String(candidato.derecha || '').slice(0, 20),
   }));
@@ -8109,6 +8114,7 @@ async function jgPulirTextoDetallado(texto, idioma = 'es', opts = {}){
     provider: (partes.find((p) => p && p.provider) || {}).provider || null,
     model: (partes.find((p) => p && p.model) || {}).model || null,
     bloques: trozos.length,
+    bloques_fallidos: partes.filter((p) => !p || !p.ia_used).length,
   };
 }
 
@@ -15454,7 +15460,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v73';
+const JG_JS_V = 'v74';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

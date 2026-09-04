@@ -1,5 +1,59 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-04 · v2.36.0 · Corrección completa y panel que sí cierra
+
+### Fallos comprobados
+
+- Al volver a abrir la explicación desde el indicador, el botón X no hacía nada. Sus eventos se
+  instalaban únicamente dentro de la promesa del primer consentimiento y se retiraban después de
+  responder.
+- `Parcial 25 de 4.950` no representaba páginas corregidas. Era el avance de una auditoría
+  editorial separada que podía convertir cada renglón estructural del PDF en una petición. Esa
+  cola no era la responsable de unir las palabras partidas que veía el usuario.
+- Los filtros rechazaban cualquier candidato que incluyera una palabra funcional. Por eso el caso
+  real `es` + `ta conclusión` no podía convertirse en `esta conclusión`.
+- `jgCandidatosUnionDelTrozo()` limitaba los primeros 300 candidatos antes de filtrar los que
+  pertenecían al trozo actual. Los cortes posteriores del capítulo nunca llegaban al proveedor.
+- Cuando la IA o la red fallaban, el fallback devolvía el texto original y se guardaba como
+  `lectura_segura`. Las siguientes aperturas lo reutilizaban y ya no intentaban corregirlo.
+
+### Corrección aplicada
+
+- Aceptar, rechazar, cerrar con X y cerrar con Escape tienen eventos permanentes. Cerrar una hoja
+  ya autorizada no cambia el permiso; cerrar la primera solicitud equivale a continuar en local.
+- El indicador ahora cuenta las partes reales del lector: `Corrigiendo lectura 2 de 40`,
+  `Lectura corregida` o `N partes sin corregir`. La parte abierta se atiende primero y las demás
+  continúan secuencialmente en segundo plano.
+- Se dejó de iniciar automáticamente la antigua cola editorial por renglones. Las sugerencias ya
+  guardadas se conservan, pero no compiten con la corrección de lectura ni ocupan su indicador.
+- La detección admite fragmentos cortos como `es` + `ta` y cortes de sílabas más largos, siempre
+  limitados a una frontera física detectada. Se mantienen bloqueadas locuciones normales como
+  `sin embargo`, `es decir`, `por ejemplo` y parejas de dos palabras funcionales.
+- Cada trozo filtra primero sus candidatos y aplica después el máximo de 300. La validación sigue
+  exigiendo las mismas letras y cifras en el mismo orden.
+- Los fallos ya no entran en la caché. Solo una respuesta confirmada por la IA y aprobada por el
+  guardián se guarda; lo demás queda disponible para reintento.
+- `VERSION_TROCEO` y la versión del pulido suben a **5**. Los libros guardados vuelven a extraerse
+  desde su PDF original y los resultados v4 se invalidan para que esta corrección sí se ejecute.
+
+### Verificación disponible antes del despliegue
+
+- 14 suites unitarias PDF aprobadas.
+- Backend PDF: **16/16**.
+- Regresiones nuevas: `es` + `ta`, expresiones que no deben unirse, fallos no cacheados, candidatos
+  posteriores al número 300 y condensación de 4.950 renglones estructurales en 8 bloques.
+- La prueba de navegador incorpora la salida visible `esta conclusion` y el cierre del panel tras
+  autorizar. No se ejecutó en esta entrega porque la configuración del usuario prohíbe abrir un
+  navegador sin solicitud explícita.
+
+### Versión y producción
+
+- `index.html`: `v2.36.0` y módulos `v74`.
+- `sw.js`: `jg-turbo-shell-v74`.
+- Producción: pendiente de desplegar y verificar.
+
+---
+
 ## Entrega 2026-09-04 · v2.35.0 · Palabras completas y retirada de Kindle
 
 ### Problemas comprobados

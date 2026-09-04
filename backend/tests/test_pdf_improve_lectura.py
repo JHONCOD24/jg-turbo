@@ -34,7 +34,7 @@ def api_vercel():
 
 def cuerpo_lectura():
     return {
-        "text": "al norte de bos ton. El A RN fabrica y produce un alu vión.",
+        "text": "al norte de bos ton. El A RN fabrica, produce un alu vión y es ta conclusión.",
         "language": "es",
         "provider": "gemini",
         "api_key": "clave-prueba",
@@ -43,6 +43,7 @@ def cuerpo_lectura():
             {"izquierda": "bos", "derecha": "ton"},
             {"izquierda": "A", "derecha": "RN"},
             {"izquierda": "alu", "derecha": "vión"},
+            {"izquierda": "es", "derecha": "ta"},
         ],
     }
 
@@ -54,13 +55,13 @@ def test_vercel_limita_uniones_al_prompt(api_vercel, monkeypatch):
 
     def ia_falsa(_key, _provider, prompt, _model=None, _max_tokens=None):
         prompts.append(prompt)
-        return "al norte de Boston. El ARN fabrica y produce un aluvión.", "gemini"
+        return "al norte de Boston. El ARN fabrica, produce un aluvión y esta conclusión.", "gemini"
 
     monkeypatch.setattr(api_vercel, "_llamar_ia_con_respaldo", ia_falsa)
     respuesta = TestClient(api_vercel.app).post("/api/improve", json=cuerpo_lectura())
     assert respuesta.status_code == 200
     assert prompts
-    for par in ("bos + ton", "A + RN", "alu + vión"):
+    for par in ("bos + ton", "A + RN", "alu + vión", "es + ta"):
         assert par in prompts[0]
     assert "solo puedes quitar un espacio" in prompts[0].lower()
 

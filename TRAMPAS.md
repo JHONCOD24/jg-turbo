@@ -285,6 +285,19 @@ excepción del guardián debe estar acotada por evidencia local, conservar letra
 tener regresiones negativas. Ningún resultado dependiente de consentimiento se calcula ni se
 guarda antes de que la persona responda; una corrección persistida lleva la huella de su fuente.
 
+### 6.5 Un fallback sin cambios no es una revisión terminada
+
+**Ocurrió** (2026-09-04, v2.35): si `/improve` fallaba, el navegador recibía el texto original con
+`ia_used: false`. `crearPulidor()` comprobaba que ese texto preservaba las palabras, lo guardaba
+como `lectura_segura` y no volvía a pedirlo. Además, el indicador mostraba la cola editorial por
+renglones, no el proceso que unía los cortes, de modo que `Parcial 25 de 4.950` parecía progreso
+de una corrección que en realidad no estaba ocurriendo.
+
+**Regla:** una degradación segura puede mostrar el original, pero nunca marcarlo como trabajo
+confirmado ni meterlo en la caché. El contador visible debe medir exactamente la operación que
+promete su etiqueta. Filtra los elementos pertinentes antes de aplicar un límite global; limitar
+antes de filtrar elimina silenciosamente casos tardíos.
+
 ---
 
 ## 7. Caché y despliegue

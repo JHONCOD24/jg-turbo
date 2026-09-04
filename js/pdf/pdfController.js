@@ -15,7 +15,7 @@ import { procesarPdf, ErrorPdf } from './extractorPdf.js';
 import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
 import { prepararParaVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
-import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, esCompleta } from './auditoria.js';
+import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto, esCompleta } from './auditoria.js';
 import { construirIndice, buscarRelevantes } from './busqueda.js';
 import { construirDocx, construirHtmlImpresion, construirMarkdown } from './exportar.js';
 import { crearTraductor, necesitaTraduccion } from './traduccion.js';
@@ -37,7 +37,10 @@ const MINIMO_PARA_CAPITULOS = 8000;
  * libros guardados con una versión anterior se rehacen solos al abrirlos: el
  * troceo se guarda con el documento, así que arreglar el código no arregla lo
  * que ya estaba en la biblioteca. */
-const VERSION_TROCEO = 4;
+const VERSION_TROCEO = 5;
+/* Invalida resultados que pudieron guardar el texto original como si la IA
+ * lo hubiera revisado o que no conocían cortes cortos como «es» + «ta». */
+const VERSION_PULIDO_LECTURA = 5;
 /* Cuánto texto se le manda a la IA como contexto de una pregunta. */
 const LIMITE_CONTEXTO_IA = 12000;
 const TAM_BLOQUE_BUSQUEDA = 2000;
@@ -171,6 +174,7 @@ export function inicializarLectorPdf(deps = {}) {
     consentido: false,
     auditoriaEstado: 'Solo local',
     auditoriaProgreso: { total: 0, completados: 0, fallos: 0 },
+    correccionProgreso: { total: 0, completados: 0, fallos: 0, ejecutando: false, token: 0 },
     capa: { original: '', local: '', revisadoSeguro: '', aprobado: '' },
     textoAprobadoPorBloque: new Map(),
     textoSeguroPorBloque: new Map(),
@@ -684,7 +688,7 @@ export function inicializarLectorPdf(deps = {}) {
       estado.textoAprobadoPorBloque.set(bloqueId, nuevo);
       estado.textoAprobadoPorBloque.set(`cap_${estado.parteActual}`, nuevo);
       almacen.guardarPulidoEstructurado(estado.id, estado.parteActual, {
-        version: 4,
+        version: VERSION_PULIDO_LECTURA,
         huellaOrigen: construirHuella(nuevo),
         estado: 'edicion_manual',
         progreso: { total: 1, aceptadas: 1 },
@@ -1090,6 +1094,7 @@ export function inicializarLectorPdf(deps = {}) {
      * de capas retira las dos de un salto para no dejar entradas huérfanas
      * en el historial. */
     cerrarHojas({ desdeHistorial: true });
+    cerrarHojaAuditoria(null);
     if (!desdeHistorial) capas.cerrar('lector');
     document.body.classList.remove('jg-leyendo');
     document.body.classList.remove('jg-pantalla');
@@ -1118,6 +1123,8 @@ export function inicializarLectorPdf(deps = {}) {
     estado.consentido = false;
     estado.auditoriaEstado = 'Solo local';
     estado.auditoriaProgreso = { total: 0, completados: 0, fallos: 0 };
+    estado.correccionProgreso.token += 1;
+    estado.correccionProgreso = { total: 0, completados: 0, fallos: 0, ejecutando: false, token: estado.correccionProgreso.token };
     estado.textoAprobadoPorBloque = new Map();
     estado.textoSeguroPorBloque = new Map();
     estado.propuestasPorBloque = new Map();
@@ -1200,8 +1207,8 @@ export function inicializarLectorPdf(deps = {}) {
         }, 9000);
       }
     }
-    if (estado.pulidoActivo && estado.vista === 'original') {
-      asegurarPulido(estado.progreso.parte || 0, { mostrar: true }).catch(() => {});
+    if (estado.pulidoActivo && estado.vista === 'original' && estado.consentido) {
+      iniciarCorreccionLibro().catch(() => {});
     }
   }
 
@@ -1439,11 +1446,16 @@ export function inicializarLectorPdf(deps = {}) {
     estado.auditoriaEstado = est;
     if (estado.consentido === false && total > 0) estado.auditoriaEstado = 'Esperando permiso';
     else if (!estado.bloques.length) estado.auditoriaEstado = 'Solo local';
-    mostrarPulidoEstado(estado.auditoriaEstado, comp === total && fallos === 0 && total ? 'ok' : '');
-    /* Se oculta solo cuando no queda nada por hacer. Si hay sugerencias
-     * esperando, el aviso se queda: es una tarea pendiente del usuario. */
-    if (estado.auditoriaEstado === 'Revisada, sin cambios') ocultarPulidoEstado(4000);
+    /* Esta auditoría produce signos seguros y sugerencias editoriales. Ya no
+     * ocupa el indicador principal: ese indicador pertenece a la corrección
+     * de lectura que realmente une palabras partidas. */
     actualizarBotonRevision();
+  }
+
+  function actualizarEstadoCorreccion() {
+    const p = estado.correccionProgreso;
+    const texto = estadoCorreccionLecturaTexto(p.total, p.completados, p.fallos, estado.consentido);
+    mostrarPulidoEstado(texto, !p.ejecutando && p.total > 0 && p.fallos === 0 ? 'ok' : '');
   }
 
   /**
@@ -1453,6 +1465,35 @@ export function inicializarLectorPdf(deps = {}) {
    * celular, y sin espacio para explicar qué se envía y qué no. Ahora es una
    * hoja de la propia app, con el mismo aspecto que el resto.
    */
+  let resolverConsentimientoAuditoria = null;
+
+  function cerrarHojaAuditoria(decision = null) {
+    if (!el.auditoriaHoja) return;
+    const estabaEsperando = typeof resolverConsentimientoAuditoria === 'function';
+    /* Cerrar la primera solicitud equivale a no autorizar. Al cerrar una hoja
+     * reabierta solo se oculta la explicación y se conserva la decisión. */
+    if (decision == null && estabaEsperando) decision = false;
+    el.auditoriaHoja.hidden = true;
+
+    if (decision != null) {
+      estado.consentido = !!decision;
+      try { localStorage.setItem(`jg_pdf_consent_${estado.id}`, decision ? '1' : '0'); } catch (_) {}
+      if (!decision) {
+        estado.correccionProgreso.token += 1;
+        estado.correccionProgreso.ejecutando = false;
+        if (estado.auditor) estado.auditor.pausar();
+        mostrarPulidoEstado('Solo local', 'mecanico');
+      } else {
+        mostrarPulidoEstado('Preparando corrección de lectura…', '');
+      }
+    }
+
+    const resolver = resolverConsentimientoAuditoria;
+    resolverConsentimientoAuditoria = null;
+    if (resolver) resolver(decision === true);
+    if (decision === true) setTimeout(() => iniciarCorreccionLibro(), 0);
+  }
+
   function pedirConsentimientoAuditoria() {
     if (estado.consentido) return Promise.resolve(true);
     if (!el.auditoriaHoja) {
@@ -1464,26 +1505,18 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.auditoriaProveedor) el.auditoriaProveedor.textContent = prov;
 
     return new Promise((resolver) => {
-      const cerrar = (ok) => {
-        el.auditoriaHoja.hidden = true;
-        el.auditoriaAceptar.removeEventListener('click', alAceptar);
-        el.auditoriaRechazar.removeEventListener('click', alRechazar);
-        if (el.auditoriaCerrar) el.auditoriaCerrar.removeEventListener('click', alRechazar);
-        estado.consentido = ok;
-        try { localStorage.setItem(`jg_pdf_consent_${estado.id}`, ok ? '1' : '0'); } catch (_) {}
-        if (ok) mostrarPulidoEstado('Corrigiendo cortes y puntuación…', '');
-        else { mostrarPulidoEstado('Solo local', 'mecanico'); ocultarPulidoEstado(2600); }
-        resolver(ok);
-      };
-      const alAceptar = () => cerrar(true);
-      const alRechazar = () => cerrar(false);
-      el.auditoriaAceptar.addEventListener('click', alAceptar);
-      el.auditoriaRechazar.addEventListener('click', alRechazar);
-      if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', alRechazar);
+      resolverConsentimientoAuditoria = resolver;
       el.auditoriaHoja.hidden = false;
       el.auditoriaAceptar.focus();
     });
   }
+
+  if (el.auditoriaAceptar) el.auditoriaAceptar.addEventListener('click', () => cerrarHojaAuditoria(true));
+  if (el.auditoriaRechazar) el.auditoriaRechazar.addEventListener('click', () => cerrarHojaAuditoria(false));
+  if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', () => cerrarHojaAuditoria(null));
+  if (el.auditoriaHoja) el.auditoriaHoja.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); cerrarHojaAuditoria(null); }
+  });
 
   /* El chip del estado explica qué hace la revisión: pulsarlo reabre la hoja. */
   if (el.pulidoEstado) {
@@ -1509,6 +1542,14 @@ export function inicializarLectorPdf(deps = {}) {
     estado.decisionesPorBloque = new Map();
     estado.textoAprobadoPorBloque = new Map();
     estado.auditoriaProgreso = { total: 0, completados: 0, fallos: 0 };
+    estado.correccionProgreso.token += 1;
+    estado.correccionProgreso = {
+      total: estado.partes.length,
+      completados: 0,
+      fallos: 0,
+      ejecutando: false,
+      token: estado.correccionProgreso.token,
+    };
     // consentimiento previo por documento
     try {
       const v = localStorage.getItem(`jg_pdf_consent_${estado.id}`);
@@ -1524,6 +1565,11 @@ export function inicializarLectorPdf(deps = {}) {
         if (!estado.consentido) return texto;
         if (typeof window.jgPulirTextoDetallado === 'function') {
           const res = await window.jgPulirTextoDetallado(texto, estado.idioma, opciones);
+          /* Antes, un error de red devolvía el original y se guardaba como si
+           * hubiese sido revisado. Debe quedar pendiente para poder reintentar. */
+          if (opciones?.mode === 'lectura' && (!res?.ia_used || Number(res?.bloques_fallidos) > 0)) {
+            throw new Error('La IA no confirmó la revisión');
+          }
           return res.text;
         }
         if (deps.pulirTexto) return await deps.pulirTexto(texto, opciones);
@@ -1532,7 +1578,7 @@ export function inicializarLectorPdf(deps = {}) {
       guardar: (indice, texto) => {
         const fuente = estado.partes[indice]?.texto || '';
         return almacen.guardarPulidoEstructurado(estado.id, indice, {
-          version: 4,
+          version: VERSION_PULIDO_LECTURA,
           huellaOrigen: construirHuella(fuente),
           estado: 'lectura_segura',
           textoSeguro: texto,
@@ -1551,6 +1597,7 @@ export function inicializarLectorPdf(deps = {}) {
         const parte = estado.partes[indice];
         const huellaFuente = parte ? construirHuella(parte.texto) : '';
         if (reg.huellaOrigen && reg.huellaOrigen !== huellaFuente) return null;
+        if (reg.estado === 'lectura_segura' && Number(reg.version) !== VERSION_PULIDO_LECTURA) return null;
         if (reg.estado === 'legado') {
           if (!reg.huellaOrigen) return null;
         }
@@ -1654,30 +1701,47 @@ export function inicializarLectorPdf(deps = {}) {
       }
     }).catch(() => {});
 
-    // Si hay bloques y consentimiento, encolar auditoría priorizando el
-    // capítulo abierto (y el que le sigue), no los dos primeros del libro.
-    if (estado.bloques.length && estado.consentido) {
-      const prio = idsBloquesDeCapitulos([estado.parteActual, estado.parteActual + 1]);
-      estado.auditor.encolar(estado.bloques, { prioridad: prio });
-      estado.auditor.iniciar((ev) => {
-        if (ev.estado === 'ok') estado.auditoriaProgreso.completados += 1;
-        else if (ev.estado === 'fallo' || ev.estado === 'error') estado.auditoriaProgreso.fallos += 1;
-        actualizarEstadoAuditoria();
-        // si el bloque auditado es del capítulo abierto, refrescar la vista
-        const bloq = estado.bloques.find((b) => b.id === ev.id);
-        if (bloq && bloq.capitulo === estado.parteActual && estado.pulidoActivo && estado.vista === 'original') {
-          volcarPulido(estado.parteActual);
-        }
-      });
-    } else {
-      actualizarEstadoAuditoria();
-    }
+    /* La cola editorial anterior enviaba una petición por bloque estructural
+     * y podía mostrar 4.950 renglones pendientes. Se conserva únicamente para
+     * leer sugerencias ya guardadas. La corrección automática nueva recorre
+     * las partes reales del lector mediante `iniciarCorreccionLibro`. */
+    actualizarEstadoAuditoria();
   }
 
   /** Ids de los bloques de auditoría que pertenecen a los capítulos dados. */
   function idsBloquesDeCapitulos(indices) {
     const set = new Set(indices);
     return estado.bloques.filter((b) => set.has(b.capitulo)).map((b) => b.id);
+  }
+
+  /** Revisa todas las unidades reales del lector, empezando por la abierta. */
+  async function iniciarCorreccionLibro() {
+    if (!estado.consentido || !estado.pulidor || !estado.partes.length) return;
+    if (estado.correccionProgreso.ejecutando) return;
+
+    const docId = estado.id;
+    const token = estado.correccionProgreso.token + 1;
+    estado.correccionProgreso = {
+      total: estado.partes.length,
+      completados: 0,
+      fallos: 0,
+      ejecutando: true,
+      token,
+    };
+    actualizarEstadoCorreccion();
+
+    const actual = estado.parteActual;
+    const orden = [actual, ...estado.partes.map((_, i) => i).filter((i) => i !== actual)];
+    for (const indice of orden) {
+      if (estado.id !== docId || estado.correccionProgreso.token !== token || !estado.consentido) return;
+      const ok = await asegurarPulido(indice, { mostrar: indice === estado.parteActual });
+      if (estado.id !== docId || estado.correccionProgreso.token !== token) return;
+      if (ok) estado.correccionProgreso.completados += 1;
+      else estado.correccionProgreso.fallos += 1;
+      actualizarEstadoCorreccion();
+    }
+    estado.correccionProgreso.ejecutando = false;
+    actualizarEstadoCorreccion();
   }
 
   async function asegurarPulido(indice, { mostrar = false } = {}) {
@@ -1691,26 +1755,27 @@ export function inicializarLectorPdf(deps = {}) {
     const esActual = indice === estado.parteActual;
     if (esActual) mostrarPulidoEstado('Puliendo para voz…', '');
     try {
-      // Si no hay consentimiento y hay bloques, pedirlo una vez
-      if (!estado.consentido && estado.bloques.length) {
+      // Sin consentimiento nunca se llama ni se guarda una falsa revisión.
+      if (!estado.consentido) {
         const ok = await pedirConsentimientoAuditoria();
         if (!ok) { if (esActual) { mostrarPulidoEstado('Solo local', 'mecanico'); ocultarPulidoEstado(2000); } return false; }
-        // relanzar cola auditoría (prioridad: capítulo abierto)
-        estado.auditor.encolar(estado.bloques, { prioridad: idsBloquesDeCapitulos([estado.parteActual, estado.parteActual + 1]) });
-        estado.auditor.iniciar(()=>actualizarEstadoAuditoria());
       }
       const texto = await estado.pulidor.obtener(indice, parte);
-      if (!texto) { if (esActual) ocultarPulidoEstado(1200); return false; }
+      const resultado = estado.pulidor.resultado?.(indice);
+      if (!texto || !resultado?.ok) {
+        if (esActual && !estado.correccionProgreso.ejecutando) {
+          mostrarPulidoEstado('No se pudo corregir esta parte', 'mecanico');
+        }
+        return false;
+      }
       estado.pulido.set(indice, texto);
       if (el.pulidoCambio) el.pulidoCambio.hidden = false;
       if (mostrar && estado.pulidoActivo && estado.vista === 'original') volcarPulido(indice);
-      if (esActual) {
+      if (esActual && !estado.correccionProgreso.ejecutando) {
         const cambio = texto !== parte.texto;
         mostrarPulidoEstado(cambio ? '✓ Pulido para voz' : '✓ Listo para escuchar', cambio ? 'ok' : 'mecanico');
         ocultarPulidoEstado(2600);
       }
-      const siguiente = estado.partes[indice + 1];
-      if (siguiente) estado.pulidor.precargar(indice + 1, siguiente);
       return true;
     } catch (error) {
       if (esActual) { mostrarPulidoEstado('Pulido mecánico activo', 'mecanico'); ocultarPulidoEstado(2200); }

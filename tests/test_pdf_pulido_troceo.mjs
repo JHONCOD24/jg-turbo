@@ -63,12 +63,13 @@ console.log('\n--- 2) Guardián de integridad (mismasPalabras) ---');
 console.log('\n--- 3) Gestor de pulido (crearPulidor) con caché y degradación ---');
 
 {
-  const original = 'al norte de bos ton. El A RN fabrica una proteína y produce un alu vión.';
-  const corregido = 'al norte de Boston. El ARN fabrica una proteína y produce un aluvión.';
+  const original = 'al norte de bos ton. El A RN fabrica una proteína, produce un alu vión y es ta conclusión.';
+  const corregido = 'al norte de Boston. El ARN fabrica una proteína, produce un aluvión y esta conclusión.';
   const candidatosUnion = [
     { izquierda: 'bos', derecha: 'ton' },
     { izquierda: 'A', derecha: 'RN' },
     { izquierda: 'alu', derecha: 'vión' },
+    { izquierda: 'es', derecha: 'ta' },
   ];
   comprobar(
     mismasPalabras(original, corregido).igual === false,
@@ -77,6 +78,12 @@ console.log('\n--- 3) Gestor de pulido (crearPulidor) con caché y degradación 
   comprobar(
     mismasPalabrasLectura(original, corregido, candidatosUnion).igual === true,
     'el guardián de lectura acepta solo las uniones físicas autorizadas'
+  );
+  comprobar(
+    mismasPalabrasLectura('La respuesta es la correcta.', 'La respuesta esla correcta.', [
+      { izquierda: 'es', derecha: 'la' },
+    ]).igual === false,
+    'dos palabras funcionales normales no se pueden pegar aunque compartan un límite físico'
   );
   comprobar(
     mismasPalabrasLectura(original, corregido.replace('Boston', 'Bostom'), candidatosUnion).igual === false,
@@ -147,6 +154,23 @@ console.log('\n--- 3) Gestor de pulido (crearPulidor) con caché y degradación 
     'crearPulidor conserva las uniones válidas en el texto que verá y oirá el usuario');
   comprobar(opcionesRecibidas?.candidatosUnion?.length === 2,
     'crearPulidor entrega a la IA únicamente los candidatos del capítulo');
+  comprobar(pulidor.resultado(0)?.ok === true,
+    'crearPulidor informa que la revisión terminó y pasó el guardián');
+}
+
+{
+  const pulidor = crearPulidor({
+    pulir: async () => { throw new Error('proveedor no disponible'); },
+  });
+  const original = 'Y es ta conclusión sigue completa.';
+  const salida = await pulidor.obtener(0, {
+    texto: original,
+    candidatosUnion: [{ izquierda: 'es', derecha: 'ta' }],
+  });
+  comprobar(salida === original && pulidor.resultado(0)?.ok === false,
+    'un fallo devuelve el original pero no lo marca como revisión terminada');
+  comprobar(pulidor.estaPulido(0) === false,
+    'un fallo queda disponible para reintento en vez de entrar a la caché');
 }
 
 if (fallos > 0) {

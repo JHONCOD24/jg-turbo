@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { aplicarSignos, mismasPalabras, crearAuditorPdf, tokenizarExacto } from '../js/pdf/pulido.js';
-import { construirHuella, dividirEnBloquesSemanticos, estadoAuditoriaTexto } from '../js/pdf/auditoria.js';
+import { construirHuella, dividirEnBloquesSemanticos, estadoAuditoriaTexto, estadoCorreccionLecturaTexto } from '../js/pdf/auditoria.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,10 +81,10 @@ console.log('\n--- 3) Reanudación: bloques persistentes reconstruyen capítulos
 {
   const texto = 'Parrafo uno de la historia inicial.\n\nParrafo dos sigue aqui.\n\nTercero y ultimo parrafo final.';
   const bloques = dividirEnBloquesSemanticos(texto, [], 3000);
-  bloques.forEach((b, i) => { b.id = `bloq_${i}`; b.capitulo = i === 2 ? 1 : 0; });
+  bloques.forEach((b, i) => { b.id = `bloq_${i}`; b.capitulo = i === bloques.length - 1 ? 1 : 0; });
   // simular guardar/cargar (solo los campos ligeros que se persisten)
   const guardados = JSON.parse(JSON.stringify(bloques.map((b) => ({ id: b.id, texto: b.texto, tipo: b.tipo, capitulo: b.capitulo }))));
-  comprobar(guardados.length === bloques.length && guardados[2].capitulo === 1,
+  comprobar(guardados.length === bloques.length && guardados.at(-1).capitulo === 1,
     'Los bloques persisten id/texto/tipo/capítulo para reanudar tras recargar');
   comprobar(construirHuella(guardados[0].texto) === construirHuella(bloques[0].texto),
     'La huella del bloque persistido coincide: no se re-audita lo ya hecho');
@@ -114,6 +114,14 @@ console.log('\n--- 4) UI de revisión y backend presentes ---');
   comprobar(controller.includes("estado: 'lectura_segura'")
       && controller.includes('reg.huellaOrigen !== huellaFuente'),
     'el texto corregido se guarda y solo se reutiliza si la fuente coincide');
+  comprobar(controller.includes("auditoriaCerrar.addEventListener('click', () => cerrarHojaAuditoria(null))"),
+    'cerrar la explicación tiene un evento permanente, incluso después de autorizar');
+  comprobar(controller.includes('iniciarCorreccionLibro') && controller.includes('estado.partes.length'),
+    'la corrección completa cuenta unidades reales del lector y no renglones del PDF');
+  const filtrarCandidatos = indexHtml.indexOf('return candidatos.filter((candidato) =>');
+  const limitarCandidatos = indexHtml.indexOf('}).slice(0, 300).map((candidato) =>', filtrarCandidatos);
+  comprobar(filtrarCandidatos >= 0 && limitarCandidatos > filtrarCandidatos,
+    'cada trozo filtra sus candidatos antes del límite de 300; los cortes tardíos no se pierden');
 }
 
 console.log('--- 6) aplicarSignos conserva la forma del texto ---');
@@ -165,6 +173,25 @@ console.log('--- 7) estados de auditoria honestos ---');
     'con propuestas dice cuantas');
   comprobar(estadoAuditoriaTexto(10, 10, 0, 0, true, 1) === '1 sugerencia por revisar',
     'una sola sugerencia va en singular');
+}
+
+console.log('--- 8) corrección del libro: contador útil y bloques acotados ---');
+{
+  const parrafos = Array.from({ length: 240 }, (_, i) =>
+    `Parrafo ${i} con una idea completa que debe viajar junto y conservar todas sus palabras.`);
+  const texto = parrafos.join('\n\n');
+  const renglonesEstructurales = Array.from({ length: 4950 }, (_, i) => ({ texto: `renglon ${i}` }));
+  const bloques = dividirEnBloquesSemanticos(texto, renglonesEstructurales, 3000);
+  comprobar(bloques.length < 20,
+    `4.950 renglones estructurales se agrupan en bloques semánticos (${bloques.length})`);
+  comprobar(bloques.every((b) => b.texto.length <= 3000),
+    'ningún bloque semántico supera el límite de 3.000 caracteres');
+  comprobar(estadoCorreccionLecturaTexto(40, 2, 0, true) === 'Corrigiendo lectura 2 de 40',
+    'el contador explica que mide partes de lectura');
+  comprobar(estadoCorreccionLecturaTexto(40, 39, 1, true) === '1 parte sin corregir',
+    'los fallos se muestran como partes pendientes, no como una revisión terminada');
+  comprobar(estadoCorreccionLecturaTexto(40, 40, 0, true) === 'Lectura corregida',
+    'el final exitoso queda explícito');
 }
 
 if (fallos > 0) {

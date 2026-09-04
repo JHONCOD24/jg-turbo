@@ -258,6 +258,7 @@ console.log('\n── Cortes físicos sin guion · IA protegida ───');
       .replace(/\bbos\s+ton\b/gi, 'Boston')
       .replace(/\bA\s+RN\b/g, 'ARN')
       .replace(/\balu\s+vion\b/gi, 'aluvión')
+      .replace(/\bes\s+ta\b/gi, 'esta')
       .replace(/componentes\.Como/g, 'componentes. Como');
     await ruta.fulfill({
       status: 200,
@@ -279,18 +280,26 @@ console.log('\n── Cortes físicos sin guion · IA protegida ───');
   await pagina.waitForFunction(
     () => document.getElementById('pdfOutput')?.value?.includes('Boston')
       && document.getElementById('pdfOutput')?.value?.includes('ARN')
-      && document.getElementById('pdfOutput')?.value?.includes('aluvión'),
+      && document.getElementById('pdfOutput')?.value?.includes('aluvión')
+      && document.getElementById('pdfOutput')?.value?.includes('esta conclusion'),
     null, { timeout: 60000 }
   );
   const corregido = await pagina.locator('#pdfOutput').inputValue();
-  comprobar(corregido.includes('Boston') && corregido.includes('ARN') && corregido.includes('aluvión'),
-    'la salida visible une bos+ton, A+RN y alu+vión');
+  comprobar(corregido.includes('Boston') && corregido.includes('ARN') && corregido.includes('aluvión')
+      && corregido.includes('esta conclusion'),
+    'la salida visible une bos+ton, A+RN, alu+vión y es+ta');
   comprobar(corregido.includes('componentes. Como'),
     'la salida visible separa las oraciones pegadas');
   comprobar(lecturas.length === 1, 'el capítulo corto usa una sola petición de lectura');
   const pares = (lecturas[0]?.candidatos_union || []).map((c) => `${c.izquierda}+${c.derecha}`);
-  comprobar(['bos+ton', 'A+RN', 'alu+vion'].every((par) => pares.includes(par)),
+  comprobar(['bos+ton', 'A+RN', 'alu+vion', 'es+ta'].every((par) => pares.includes(par)),
     'la IA recibe solamente los límites físicos candidatos del capítulo');
+
+  await pagina.locator('#pdfPulidoEstado').click();
+  await pagina.locator('#pdfAuditoriaHoja').waitFor({ state: 'visible' });
+  await pagina.locator('#btnPdfAuditoriaCerrar').click();
+  comprobar(await pagina.locator('#pdfAuditoriaHoja').isHidden(),
+    'el botón cerrar funciona al reabrir la explicación después de autorizar');
 
   await pagina.locator('#btnPdfBack').click();
   await abrirPestana(pagina);

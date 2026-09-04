@@ -117,6 +117,10 @@ const PALABRAS_NO_UNIR = new Set([
   'me', 'mi', 'muy', 'ni', 'no', 'o', 'para', 'pero', 'por', 'porque', 'que',
   'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'un', 'una', 'uno', 'y', 'ya',
 ]);
+const PARES_NO_UNIR = new Set([
+  'a\0traves', 'al\0menos', 'de\0acuerdo', 'en\0cambio', 'es\0decir',
+  'para\0que', 'por\0ejemplo', 'por\0eso', 'por\0tanto', 'sin\0embargo', 'ya\0que',
+]);
 
 function normalizarLexema(valor) {
   return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -128,13 +132,13 @@ function candidatoUnionSeguro(candidato) {
   if (!izquierda || !derecha) return false;
   const izq = normalizarLexema(izquierda);
   const der = normalizarLexema(derecha);
+  if (PARES_NO_UNIR.has(`${izq}\0${der}`)) return false;
   const sigla = /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(izquierda)
     && /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(derecha)
     && izq.length + der.length <= 7;
   if (sigla) return true;
-  if (PALABRAS_NO_UNIR.has(izq) || PALABRAS_NO_UNIR.has(der)) return false;
-  if (izq.length < 2 || der.length < 2 || izq.length + der.length < 5 || izq.length + der.length > 20) return false;
-  if (izq.length > 4 && der.length > 4) return false;
+  if (PALABRAS_NO_UNIR.has(izq) && PALABRAS_NO_UNIR.has(der)) return false;
+  if (izq.length < 1 || der.length < 1 || izq.length + der.length < 4 || izq.length + der.length > 30) return false;
   return !/^[A-ZÁÉÍÓÚÜÑ]/.test(derecha);
 }
 
@@ -420,6 +424,7 @@ export function crearPulidor({ pulir, guardar, cargar }) {
   const listas = new Map();
   const enCurso = new Map();
   const conocidos = new Set();
+  const resultados = new Map();
 
   return {
     async obtener(indice, parte, { alProgresar } = {}) {
@@ -433,20 +438,30 @@ export function crearPulidor({ pulir, guardar, cargar }) {
             if (guardado) {
               listas.set(indice, guardado);
               conocidos.add(indice);
+              resultados.set(indice, { ok: true, cache: true, cambio: guardado !== parte.texto });
               return guardado;
             }
           }
           if (!pulir) return parte.texto;
           const candidatosUnion = Array.isArray(parte.candidatosUnion) ? parte.candidatosUnion : [];
-          const textoPulido = await pulir(parte.texto, { alProgresar, mode: 'lectura', candidatosUnion });
-          if (!textoPulido || !textoPulido.trim()) return parte.texto;
+          const textoPulido = await pulir(parte.texto, { indice, alProgresar, mode: 'lectura', candidatosUnion });
+          if (!textoPulido || !textoPulido.trim()) {
+            resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: 'respuesta_vacia' });
+            return parte.texto;
+          }
           const chequeo = mismasPalabrasLectura(parte.texto, textoPulido, candidatosUnion);
           const aceptado = chequeo.igual ? textoPulido : parte.texto;
+          if (!chequeo.igual) {
+            resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: chequeo.motivo });
+            return parte.texto;
+          }
           listas.set(indice, aceptado);
           conocidos.add(indice);
           if (guardar) await guardar(indice, aceptado);
+          resultados.set(indice, { ok: true, cache: false, cambio: aceptado !== parte.texto, motivo: chequeo.motivo });
           return aceptado;
         } catch (error) {
+          resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: error?.message || 'error' });
           return parte.texto;
         } finally {
           enCurso.delete(indice);
@@ -460,7 +475,8 @@ export function crearPulidor({ pulir, guardar, cargar }) {
       this.obtener(indice, parte).catch(() => {});
     },
     estaPulido(indice) { return listas.has(indice) || conocidos.has(indice); },
+    resultado(indice) { return resultados.get(indice) || null; },
     sembrar(indices) { if (!Array.isArray(indices)) return; for (const i of indices) conocidos.add(Number(i)); },
-    limpiarMemoria() { listas.clear(); enCurso.clear(); conocidos.clear(); }
+    limpiarMemoria() { listas.clear(); enCurso.clear(); conocidos.clear(); resultados.clear(); }
   };
 }

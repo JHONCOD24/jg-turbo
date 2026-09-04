@@ -575,6 +575,10 @@ export function componerTexto(paginas, opciones = {}) {
     'me', 'mi', 'muy', 'ni', 'no', 'o', 'para', 'pero', 'por', 'porque', 'que',
     'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'un', 'una', 'uno', 'y', 'ya',
   ]);
+  const PARES_NO_UNIR = new Set([
+    'a\0traves', 'al\0menos', 'de\0acuerdo', 'en\0cambio', 'es\0decir',
+    'para\0que', 'por\0ejemplo', 'por\0eso', 'por\0tanto', 'sin\0embargo', 'ya\0que',
+  ]);
   const normalizarFragmento = (valor) => String(valor || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const ultimoToken = (valor) => String(valor || '').match(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)$/)?.[1] || '';
@@ -587,13 +591,22 @@ export function componerTexto(paginas, opciones = {}) {
     if (!izquierda || !derecha) return null;
     const izq = normalizarFragmento(izquierda);
     const der = normalizarFragmento(derecha);
+    if (PARES_NO_UNIR.has(`${izq}\0${der}`)) return null;
+    const entrePaginas = paginaAnterior !== paginaActual;
     const sigla = /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(izquierda)
       && /^[A-ZÁÉÍÓÚÜÑ]{1,4}$/.test(derecha)
       && izq.length + der.length <= 7;
     if (!sigla) {
-      if (NO_UNIR.has(izq) || NO_UNIR.has(der)) return null;
-      if (izq.length < 2 || der.length < 2 || izq.length + der.length < 5 || izq.length + der.length > 20) return null;
-      if (izq.length > 4 && der.length > 4) return null;
+      /* Un corte sin guion puede caer en cualquier sílaba. «esta», por
+       * ejemplo, llegó en el libro real como «es» + «ta». Rechazar todas las
+       * palabras funcionales hacía imposible corregir precisamente ese caso.
+       *
+       * La entrada sigue siendo solo un CANDIDATO: el modelo decide con el
+       * contexto y el guardián únicamente acepta juntar este límite físico,
+       * conservando todas las letras. Se descarta solo la pareja claramente
+       * formada por dos palabras funcionales independientes. */
+      if (NO_UNIR.has(izq) && NO_UNIR.has(der)) return null;
+      if (izq.length < 1 || der.length < 1 || izq.length + der.length < 4 || izq.length + der.length > 30) return null;
       if (/^[A-ZÁÉÍÓÚÜÑ]/.test(derecha)) return null;
     }
     return {
@@ -601,7 +614,7 @@ export function componerTexto(paginas, opciones = {}) {
       derecha,
       paginaAnterior,
       paginaActual,
-      entrePaginas: paginaAnterior !== paginaActual,
+      entrePaginas,
     };
   }
 
