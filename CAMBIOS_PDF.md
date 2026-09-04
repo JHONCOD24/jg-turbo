@@ -1,5 +1,45 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v2.33.0 · Importación segura desde Kindle
+
+### Alcance
+- Se añadió **Traer desde Kindle** dentro de la biblioteca. JG Turbo no pide usuario,
+  contraseña, cookies ni tokens de Amazon: el enlace abre `Gestionar contenido y dispositivos`
+  en otra pestaña y la descarga autorizada ocurre en Amazon.
+- La primera versión admite únicamente archivos con extensión `.pdf`. `.azw`, `.azw3`, `.kfx`
+  y `.mobi` se rechazan con una explicación expresa: JG Turbo no convierte esos formatos ni
+  elimina DRM. Un PDF cifrado también se rechaza sin pedir ni intentar retirar la clave.
+- La selección múltiple se procesa **en secuencia**, con avance por archivo y página. Cancelar
+  conserva los libros ya terminados y no crea el que estaba a medias.
+- Cada PDF recibe una huella SHA-256 calculada localmente. Una copia exacta se omite sin tocar el
+  libro existente, su texto ni su progreso. Dos archivos distintos con el mismo título no se
+  confunden.
+- Los metadatos guardan `origen: "kindle-descarga-oficial"`, `huella` y `sincronizar`. El destino
+  inicial es `sincronizar: false`; la opción de copiar a los otros dispositivos solo se habilita
+  cuando la nube privada de JG Turbo ya está conectada.
+- La exportación normal hacia la nube excluye cualquier documento marcado como local. Si se elige
+  voluntariamente la nube, el lote dispara una sola sincronización al terminar, no una por PDF.
+- No cambió la versión de IndexedDB: los campos son aditivos y no necesitan índices.
+
+### Verificación
+- Todas las pruebas unitarias PDF descubiertas y TTS: **563/563**, cero fallos. Incluyen 27 casos
+  Kindle y 77 de sincronización.
+- `backend/tests/test_pdf_ask.py`: **14/14**.
+- `verificar_pdf_geometria.mjs`: **42/42**.
+- `verificar_pdf_scroll.mjs`: **39/39** con nueve libros.
+- `verificar_pdf_navegador.mjs`: **118/118** en Chromium visible. Los casos Kindle comprueban dos
+  PDF en lote, KFX, PDF cifrado real, duplicados, SHA-256, origen, destino local, cancelación y cero
+  solicitudes POST/PUT/PATCH a Amazon o al backend durante la importación local.
+- La prueba visible neutraliza `window.print()` únicamente dentro de Playwright para que el diálogo
+  nativo no bloquee la automatización; la pestaña imprimible y su contenido siguen verificándose.
+
+### Versión
+- `index.html`: `v2.33.0` y módulos `v71`.
+- `sw.js`: `jg-turbo-shell-v71`.
+- Producción: pendiente de registrar en esta entrega.
+
+---
+
 ## Entrega 2026-09-03 · v2.32.0 · Los libros ya guardados también se arreglan
 
 ### Lo reportado, auditando «El placebo eres tú» tras la v2.31.0

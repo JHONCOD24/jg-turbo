@@ -81,6 +81,7 @@ const ESCANEADO = join(temporal, 'escaneado.pdf');
 const ROTO = join(temporal, 'roto.pdf');
 const NO_PDF = join(temporal, 'notas.txt');
 const KFX = join(temporal, 'libro_protegido.kfx');
+const PROTEGIDO = join(temporal, 'pdf_con_clave.pdf');
 crearLibro(LIBRO, 4);
 crearLibro(GRANDE, 300);
 crearLibroIngles(INGLES, 6);
@@ -88,6 +89,10 @@ crearEscaneado(ESCANEADO);
 crearRoto(ROTO);
 writeFileSync(NO_PDF, 'esto es un texto suelto, no un pdf');
 writeFileSync(KFX, 'archivo de prueba que JG Turbo no debe intentar convertir');
+writeFileSync(PROTEGIDO, Buffer.from(
+  'JVBERi0xLjMKJeLjz9MKMSAwIG9iago8PAovUHJvZHVjZXIgPGI5ZDliOWY3ZTg+Cj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovQ291bnQgMQovS2lkcyBbIDQgMCBSIF0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9SZXNvdXJjZXMgPDwKPj4KL01lZGlhQm94IFsgMC4wIDAuMCA2MTIgNzkyIF0KL1BhcmVudCAyIDAgUgo+PgplbmRvYmoKNSAwIG9iago8PAovViAyCi9SIDMKL0xlbmd0aCAxMjgKL1AgNDI5NDk2NzI5MgovRmlsdGVyIC9TdGFuZGFyZAovTyA8YWVkZGFjNDliZmUwNmI0NDcyYTRmZTYyMjdjNGZjMGY3YWUzOTZlYTNiZmVhMmJjMmM1OGE4NTIwYTQ2YmY0YT4KL1UgPDQxNGVlNGYzMGNhNzM3ZWEzMTNlZDcwNjRhZGJmM2MzMjhiZjRlNWU0ZTc1OGE0MTY0MDA0ZTU2ZmZmYTAxMDg+Cj4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDA1OSAwMDAwMCBuIAowMDAwMDAwMTE4IDAwMDAwIG4gCjAwMDAwMDAxNjcgMDAwMDAgbiAKMDAwMDAwMDI2MSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMyAwIFIKL0luZm8gMSAwIFIKL0lEIFsgPDM1NjEzMTMyNjIzNzY0MzczODM1NjEzNjY0MzUzNTM3MzUzNjM5NjI2MjM3MzA2NDMyMzQzMjMyNjEzNzMwMzk+IDwzNTYxMzEzMjYyMzc2NDM3MzgzNTYxMzY2NDM1MzUzNzM1MzYzOTYyNjIzNzMwNjQzMjM0MzIzMjYxMzczMDM5PiBdCi9FbmNyeXB0IDUgMCBSCj4+CnN0YXJ0eHJlZgo0NzYKJSVFT0YK',
+  'base64'
+));
 
 const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
@@ -100,6 +105,13 @@ async function abrirPestana(pagina) {
 
 async function nuevaPagina(opciones) {
   const contexto = await navegador.newContext(opciones);
+  /* En modo visible, la vista «PDF limpio» abre el diálogo nativo de
+   * impresión. Ese diálogo no pertenece al DOM y bloquea Playwright. Se
+   * neutraliza solo en la prueba; la página imprimible y su contenido se
+   * siguen verificando completos en la pestaña nueva. */
+  if (process.argv.includes('--headed')) {
+    await contexto.addInitScript(() => { window.print = () => {}; });
+  }
   const pagina = await contexto.newPage();
   /* La hoja de permiso para revisar la puntuación con IA puede aparecer en
    * cualquier momento (al elegir el archivo, al extraer, al cambiar de
@@ -652,13 +664,14 @@ console.log('\n── Importación Kindle segura ──────────�
   comprobar(await pagina.locator('#pdfKindleLocal').isChecked(), 'el destino inicial es solo este dispositivo');
   comprobar(await pagina.locator('#pdfKindleNube').isDisabled(), 'no ofrece sincronizar si la nube no está conectada');
 
-  await pagina.locator('#pdfKindleInput').setInputFiles([LIBRO, INGLES, KFX]);
+  await pagina.locator('#pdfKindleInput').setInputFiles([LIBRO, INGLES, KFX, PROTEGIDO]);
   await pagina.waitForFunction(
     () => document.getElementById('pdfKindleEstado')?.textContent?.startsWith('Importación terminada:'),
     null, { timeout: 120000 }
   );
   comprobar((await pagina.locator('#pdfRejilla .pdf-libro').count()) === 2, 'guarda secuencialmente los dos PDF válidos');
   comprobar(/KFX|DRM/i.test(await pagina.locator('#pdfKindleResultados').textContent() || ''), 'rechaza KFX y explica el límite de DRM');
+  comprobar(/pdf_con_clave\.pdf.*protegido.*no quita contraseñas ni DRM/i.test(await pagina.locator('#pdfKindleResultados').textContent() || ''), 'rechaza un PDF cifrado sin intentar quitar la protección');
 
   const documentos = await pagina.evaluate(() => new Promise((resolver, rechazar) => {
     const peticion = indexedDB.open('jg-turbo-pdf', 5);

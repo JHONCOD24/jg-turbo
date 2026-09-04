@@ -88,6 +88,17 @@ falta una de estas dos:
   primera vez que se abre, o
 - una acción explícita para el usuario.
 
+### 1.5 Un diálogo nativo puede bloquear una prueba visible sin lanzar error
+
+**Ocurrió** (2026-09-03, v2.33.0): `verificar_pdf_navegador` quedó vivo más de 15 minutos al
+ejecutarse con Chromium visible. Había completado audiolibro y Markdown, pero al comprobar «PDF
+limpio» la página nueva ejecutó `window.print()` y abrió el diálogo nativo del sistema. Ese diálogo
+no vive en el DOM, así que Playwright no podía cerrarlo ni llegar a su timeout normal.
+
+**Regla:** una prueba visible que compruebe una vista imprimible debe neutralizar `window.print`
+solo en el contexto automatizado y seguir verificando el HTML de la pestaña nueva. Registrar la
+salida incrementalmente ayuda a distinguir el punto exacto de una espera de un proceso colgado.
+
 Y **prueba el camino del dato ya guardado**, no solo el de los datos nuevos: es el que tiene la
 gente. `tests/verificar_pdf_retroceo.mjs` hace justo eso — siembra un libro con el defecto y
 comprueba que al abrirlo queda arreglado.
