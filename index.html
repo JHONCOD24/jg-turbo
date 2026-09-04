@@ -6012,16 +6012,9 @@
         <span class="cfg-voz__ayuda">Lo que elijas aquí es lo que usará el botón <b>Escuchar</b> en todas las pestañas. Puedes cambiarlo puntualmente desde el selector que hay junto a ese botón.</span>
 
         <div class="cfg-voz__grid">
-          <div class="cfg-campo" id="settingsTtsAccentBox">
+          <div class="cfg-campo" id="settingsTtsAccentBox" hidden>
             <label for="settingsTtsAccent">Acento del español</label>
-            <select id="settingsTtsAccent">
-              <option value="es-CO">Colombia · recomendado</option>
-              <option value="es-MX">México</option>
-              <option value="es-AR">Argentina</option>
-              <option value="es-CL">Chile</option>
-              <option value="es-PE">Perú</option>
-              <option value="es-US">Latino de EE. UU.</option>
-            </select>
+            <select id="settingsTtsAccent"></select>
           </div>
           <div class="cfg-campo">
             <label for="settingsTtsVoiceName">Quién lee</label>
@@ -11657,15 +11650,11 @@ const TTS_SAMPLES = {
 const TTS_FEMALE_RE = /female|femenin|woman|girl|sabina|helena|paulina|zira|susan|samantha|salom[eé]|dalia|elena|paloma|ava|jenny|marisol|luciana|google\s*espa[nñ]ol.*femenino|microsoft\s*(sabina|helena|dalia|salom|elena|paloma|ava)/i;
 const TTS_MALE_RE = /male|masculin|\bman\b|boy|alvaro|jorge|pablo|david|gonzalo|tomas|alonso|andrew|guy|christopher|carlos|google\s*espa[nñ]ol.*masculino|microsoft\s*(alvaro|pablo|jorge|gonzalo|tomas|alonso|andrew|guy|christopher)/i;
 const TTS_LATAM_LOCALES = ['es-MX','es-US','es-419','es-CO','es-AR','es-CL','es-PE','es-VE','es-EC','es-GT','es-CR','es-PA','es-UY','es-BO','es-PY','es-HN','es-SV','es-NI','es-DO','es-PR','es-CU'];
-const TTS_NEURAL_ACCENTS = [
-  { value:'auto', label:'Recomendado · Colombia · Salomé / Gonzalo' },
-  { value:'es-CO', label:'Colombia · Salomé / Gonzalo' },
-  { value:'es-MX', label:'México · Dalia / Jorge' },
-  { value:'es-AR', label:'Argentina · Elena / Tomás' },
-  { value:'es-CL', label:'Chile · Catalina / Lorenzo' },
-  { value:'es-PE', label:'Perú · Camila / Alex' },
-  { value:'es-US', label:'Latino de Estados Unidos · Paloma / Alonso' },
-];
+/* Acentos regionales retirados de la biblioteca (vienen reemplazos): la lista
+ * queda vacía a propósito. Las tablas de nombres se conservan para que las
+ * preferencias ya guardadas (`neural:es-CO:female`, etc.) sigan sonando hasta
+ * que lleguen las voces nuevas, pero ya no se ofrecen en ningún listado. */
+const TTS_NEURAL_ACCENTS = [];
 const TTS_ACCENT_LABELS = { auto:'Colombia', 'es-CO':'Colombia', 'es-MX':'México', 'es-AR':'Argentina', 'es-CL':'Chile', 'es-PE':'Perú', 'es-US':'Latino de EE. UU.' };
 const TTS_NOMBRES_NEURAL = {
   auto: { female:'Salomé', male:'Gonzalo' },
@@ -11834,40 +11823,48 @@ function ttsSupportedBrowser(){
 }
 
 /* Catálogo Fish: solo se ofrece en el listado si el servidor lo tiene activo.
-   La persona elige; no se aplica sola. Los slugs coinciden con el servidor
-   para que `fish:female` (histórico) y `fish:nico-robin` apunten a lo mismo. */
+   La persona elige; no se aplica sola. `ttsFishLista()` filtra las retiradas;
+   `ttsFishPorId()` redirige sus ids a las equivalentes que quedan. */
 const TTS_FISH_CATALOGO_LOCAL = [
-  { id:'nico-robin', gender:'female', name:'Nico Robin', lang:'es' },
   { id:'narradora', gender:'female', name:'Narradora', lang:'es' },
-  { id:'chica', gender:'female', name:'Chica', lang:'es' },
-  { id:'nagi', gender:'female', name:'Nagi', lang:'es' },
   { id:'colombiana', gender:'female', name:'Colombiana', lang:'es' },
   { id:'latina', gender:'female', name:'Latina', lang:'es' },
   { id:'voz-a', gender:'female', name:'Voz A', lang:'es' },
-  { id:'locutor-k', gender:'male', name:'Locutor K', lang:'es' },
-  { id:'narrador', gender:'male', name:'Narrador', lang:'es' },
-  { id:'loquendo', gender:'male', name:'Loquendo', lang:'es' },
   { id:'valentino', gender:'male', name:'Valentino', lang:'es' },
   { id:'sabio', gender:'male', name:'Sabio', lang:'es' },
   { id:'terror', gender:'male', name:'Terror', lang:'es' },
   { id:'leonardo', gender:'male', name:'Leonardo', lang:'es' },
-  { id:'sarah', gender:'female', name:'Sarah', lang:'en' },
-  { id:'paula', gender:'female', name:'Paula', lang:'en' },
-  { id:'adrian', gender:'male', name:'Adrian', lang:'en' },
-  { id:'ethan', gender:'male', name:'Ethan', lang:'en' },
 ];
+
+/* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
+ * Locutor K, Narrador, Loquendo y las cuatro inglesas (Sarah, Paula, Adrian,
+ * Ethan). No se ofrecen aunque el servidor las siga mandando en su catálogo:
+ * las guardadas con esos ids se redirigen a las equivalentes que quedan. */
+const TTS_FISH_RETIRADAS = new Set([
+  'nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo',
+  'sarah', 'paula', 'adrian', 'ethan',
+]);
+
+/* Ids retirados → equivalente que queda (mismo género e idioma). */
+const TTS_FISH_EQUIVALENTES = {
+  'female': 'narradora', 'clara': 'narradora',
+  'nico-robin': 'narradora', 'chica': 'narradora', 'nagi': 'narradora',
+  'male': 'valentino', 'nestor': 'valentino',
+  'locutor-k': 'valentino', 'narrador': 'valentino', 'loquendo': 'valentino',
+};
 
 let ttsFishInfo = {
   active: false,
   cargado: false,
-  voices: { female: 'Nico Robin', male: 'Locutor K' },
+  voices: { female: 'Narradora', male: 'Valentino' },
   list: TTS_FISH_CATALOGO_LOCAL.slice(),
 };
 
 function ttsFishLista(){
-  return (ttsFishInfo.list && ttsFishInfo.list.length)
+  const base = (ttsFishInfo.list && ttsFishInfo.list.length)
     ? ttsFishInfo.list
     : TTS_FISH_CATALOGO_LOCAL;
+  return base.filter(v => v && v.id && !TTS_FISH_RETIRADAS.has(String(v.id).toLowerCase()));
 }
 
 function ttsFishIdioma(item){
@@ -11898,9 +11895,8 @@ function ttsFishOrdenadas(){
 function ttsFishPorId(clave){
   const slug = String(clave || '').replace(/^fish:/, '').trim().toLowerCase();
   if(!slug) return null;
-  if(slug === 'female' || slug === 'clara') return ttsFishPorId('nico-robin');
-  if(slug === 'male' || slug === 'nestor') return ttsFishPorId('locutor-k');
-  return ttsFishLista().find(v => v.id === slug) || null;
+  const final = TTS_FISH_EQUIVALENTES[slug] || slug;
+  return ttsFishLista().find(v => v.id === final) || null;
 }
 
 function ttsNombreFish(genderOrId){
@@ -11910,7 +11906,7 @@ function ttsNombreFish(genderOrId){
   const porGenero = ttsFishLista().find(v => v.gender === clave);
   return (porGenero && porGenero.name)
     || ttsFishInfo.voices[clave]
-    || (clave === 'male' ? 'Locutor K' : 'Nico Robin');
+    || (clave === 'male' ? 'Valentino' : 'Narradora');
 }
 
 function ttsParseVoz(valor){
@@ -11922,7 +11918,7 @@ function ttsParseVoz(valor){
       provider:'fish',
       locale:'auto',
       gender: item ? item.gender : (slug === 'male' ? 'male' : 'female'),
-      fishId: item ? item.id : (slug === 'male' ? 'locutor-k' : (slug === 'female' ? 'nico-robin' : slug)),
+      fishId: item ? item.id : (slug === 'male' ? 'valentino' : (slug === 'female' ? 'narradora' : slug)),
     };
   }
   if(raw.indexOf('neural:') === 0){
@@ -11940,7 +11936,7 @@ function ttsClaveVoz(voz){
   if(!voz) return 'neural:auto:female';
   if(voz.provider === 'fish'){
     const item = ttsFishPorId(voz.fishId || voz.gender);
-    return 'fish:' + ((item && item.id) || (voz.gender === 'male' ? 'locutor-k' : 'nico-robin'));
+    return 'fish:' + ((item && item.id) || (voz.gender === 'male' ? 'valentino' : 'narradora'));
   }
   return 'neural:' + (voz.locale || 'auto') + ':' + (voz.gender === 'male' ? 'male' : 'female');
 }
@@ -12035,13 +12031,13 @@ function ttsSincronizarConfigVoz(){
       op.textContent = item.name;
       contenedor.appendChild(op);
     });
-    const elegido = voz.fishId || (voz.gender === 'male' ? 'locutor-k' : 'nico-robin');
+    const elegido = voz.fishId || (voz.gender === 'male' ? 'valentino' : 'narradora');
     if([...vozEl.options].some(o => o.value === elegido)) vozEl.value = elegido;
   } else {
     const nombres = motor === 'neural'
       ? ((modo === 'unified')
         ? { female:'Ava', male:'Andrew' }
-        : (TTS_NOMBRES_NEURAL[acentoEl.value] || TTS_NOMBRES_NEURAL.auto))
+        : (TTS_NEURAL_ACCENTS.length ? (TTS_NOMBRES_NEURAL[acentoEl.value] || TTS_NOMBRES_NEURAL.auto) : null))
       : null;
     const etiquetas = nombres
       ? { female: nombres.female + ' · femenina', male: nombres.male + ' · masculina' }
@@ -12056,8 +12052,9 @@ function ttsSincronizarConfigVoz(){
   }
 
   // El acento solo tiene efecto con voces neurales regionales o del navegador.
+  // Sin acentos en la biblioteca (retirados), la caja se esconde siempre.
   const acentoBox = document.getElementById('settingsTtsAccentBox');
-  if(acentoBox) acentoBox.style.display = (motor === 'fish' || (motor === 'neural' && modo === 'unified')) ? 'none' : 'flex';
+  if(acentoBox) acentoBox.style.display = (motor === 'fish' || (motor === 'neural' && modo === 'unified') || !TTS_NEURAL_ACCENTS.length) ? 'none' : 'flex';
 
   ttsActualizarHintVoz();
 }
@@ -12072,7 +12069,7 @@ function ttsGuardarConfigVoz(){
   try{ localStorage.setItem('jg_tts_engine', motor === 'browser' ? 'browser' : 'neural'); }catch(_){}
   if(motor === 'fish'){
     const item = ttsFishPorId(vozEl.value) || ttsFishLista()[0];
-    ttsGuardarVoz('fish:' + ((item && item.id) || 'nico-robin'));
+    ttsGuardarVoz('fish:' + ((item && item.id) || 'narradora'));
   } else {
     const gender = vozEl.value === 'male' ? 'male' : 'female';
     ttsGuardarVoz('neural:' + ((acentoEl && acentoEl.value) || 'es-CO') + ':' + gender);
@@ -12185,7 +12182,7 @@ function ttsPrefs(){
     gender: voz.gender,
     locale: voz.locale || 'auto',
     preferFish: voz.provider === 'fish',
-    fishId: voz.provider === 'fish' ? (voz.fishId || (voz.gender === 'male' ? 'locutor-k' : 'nico-robin')) : '',
+    fishId: voz.provider === 'fish' ? (voz.fishId || (voz.gender === 'male' ? 'valentino' : 'narradora')) : '',
     voiceKey: ttsClaveVoz(voz),
     tone: jgCfgGet('jg_tts_tone', 'neutral') || 'neutral',
     bilingualMode,

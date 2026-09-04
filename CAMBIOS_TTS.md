@@ -31,6 +31,22 @@
 
 ---
 
+## Retiro v2.29.0 · Salen las voces regionales y 10 de Fish (vienen reemplazos) (2026-09-03)
+
+**Pedido:** eliminar de la biblioteca: neural-recomendado, Colombia (Salomé/Gonzalo), México (Dalia/Jorge), Argentina (Elena/Tomás), Chile (Catalina/Lorenzo), Perú (Camila/Alex), Latino EEUU (Paloma/Alonso), Fish Robin/Chica/Nagi/Locutor K/Narrador/Loquendo y las 4 inglesas de Fish (Sarah, Paula, Adrian, Ethan). Quedan: Fish en español (Narradora, Colombiana, Latina, Voz A, Valentino, Sabio, Terror, Leonardo), neural multilingüe (Ava/Andrew) y navegador. **Sin desplegar** (pedido expreso: hay trabajo ajeno sin commitear en el árbol).
+
+**Cambios (`index.html`, rama `feat-quitar-voces`):**
+1. `TTS_NEURAL_ACCENTS = []`: ningún acento regional en ningún listado. Las tablas (`TTS_ACCENT_LABELS`, `TTS_NOMBRES_NEURAL`) se conservan para que las preferencias ya guardadas (`neural:es-CO:female`, etc.) sigan sonando hasta que lleguen las voces nuevas.
+2. `TTS_FISH_CATALOGO_LOCAL` sin las 10 retiradas + `TTS_FISH_RETIRADAS`/`TTS_FISH_EQUIVALENTES`: `ttsFishLista()` las filtra aunque el servidor las mande; `ttsFishPorId()` redirige (`nico-robin`→narradora, `locutor-k`/`narrador`/`loquendo`→valentino, `female`→narradora, `male`→valentino, inglesas→null). Fallbacks (`ttsNombreFish`, `ttsParseVoz`, `ttsClaveVoz`, guardados) apuntan a Narradora/Valentino.
+3. Selector de acento de Configuración sin opciones y escondido (`settingsTtsAccentBox` + condición en `ttsSincronizarConfigVoz`); «Quién lee» muestra Femenina/Masculina genérico sin acentos.
+4. Detección de género del navegador (`TTS_FEMALE_RE/MALE_RE`) y resolución del servidor intactas: lo guardado sigue funcionando.
+
+**Pruebas:** nuevo `tests/test_tts_voces_biblioteca.mjs` ✔ 29/29 (extrae las funciones reales del HTML: ausencias, conservadas, filtro con lista de servidor simulada, redirecciones). Regresión ✔: `test_tts_narracion`, `test_pdf_voz`, `test_pdf_{ancla,progreso,limpieza,sincronizacion,auditoria_p0,pulido_troceo,traduccion}`.
+
+**Pendiente:** agregar las voces de reemplazo y (entonces) migrar `jg_tts_voice`/`jg_tts_locale` guardados.
+
+---
+
 ## Nuevo en v2.25.0 · Optimización TTS para Lector PDF y Móviles/Tablets (2026-09-01)
 
 **Pedido:** Resolver pausas excesivas, prosodia robótica e incoherencias de puntuación al escuchar audiolibros o documentos PDF en móviles y tablets.
