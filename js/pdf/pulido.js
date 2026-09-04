@@ -443,13 +443,12 @@ export function crearPulidor({ pulir, guardar, cargar }) {
             }
           }
           if (!pulir) return parte.texto;
-          const candidatosUnion = Array.isArray(parte.candidatosUnion) ? parte.candidatosUnion : [];
-          const textoPulido = await pulir(parte.texto, { indice, alProgresar, mode: 'lectura', candidatosUnion });
+          const textoPulido = await pulir(parte.texto, { indice, alProgresar, mode: 'lectura' });
           if (!textoPulido || !textoPulido.trim()) {
             resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: 'respuesta_vacia' });
             return parte.texto;
           }
-          const chequeo = mismasPalabrasLectura(parte.texto, textoPulido, candidatosUnion);
+          const chequeo = mismasPalabras(parte.texto, textoPulido);
           const aceptado = chequeo.igual ? textoPulido : parte.texto;
           if (!chequeo.igual) {
             resultados.set(indice, { ok: false, cache: false, cambio: false, motivo: chequeo.motivo });

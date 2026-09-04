@@ -221,6 +221,12 @@ export function crearNube({ pedir, biblioteca }) {
                traduccion: partes[i].traduccion,
                pulido: partes[i].pulido || null,
                pagina: partes[i].pagina,
+               atomStart: partes[i].atomStart || null,
+               atomEnd: partes[i].atomEnd || null,
+               boundaryIds: partes[i].boundaryIds || [],
+               continuation: Boolean(partes[i].continuation),
+               anclaInicio: partes[i].anclaInicio || null,
+               anclaFin: partes[i].anclaFin || null,
                actualizado: paquete.actualizado,
              };
              try {
@@ -299,6 +305,12 @@ export function crearNube({ pedir, biblioteca }) {
               traduccion: partes[i].traduccion,
               pulido: partes[i].pulido || null,
               pagina: partes[i].pagina,
+              atomStart: partes[i].atomStart || null,
+              atomEnd: partes[i].atomEnd || null,
+              boundaryIds: partes[i].boundaryIds || [],
+              continuation: Boolean(partes[i].continuation),
+              anclaInicio: partes[i].anclaInicio || null,
+              anclaFin: partes[i].anclaFin || null,
               actualizado: documento.actualizado || Date.now(),
             };
             try {

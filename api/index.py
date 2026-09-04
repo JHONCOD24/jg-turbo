@@ -258,7 +258,7 @@ class ImproveRequest(BaseModel):
     context: str = ""
     # Protege los marcadores y límites temporales del doblaje de YouTube.
     preserve_segments: bool = False
-    mode: Optional[str] = "transcripcion"  # "transcripcion" | "lectura" | "auditoria_pdf"
+    mode: Optional[str] = "transcripcion"  # "transcripcion" | "lectura" | "auditoria_pdf" | "pdf_boundary_decisions"
     # Auditoría PDF: bloque estructurado con contexto y huella
     bloque_id: Optional[str] = None
     huella_origen: Optional[str] = None
@@ -267,6 +267,8 @@ class ImproveRequest(BaseModel):
     tokens_estables: Optional[list] = None
     # Lectura PDF: únicos límites físicos en los que se permite unir 2 tokens.
     candidatos_union: Optional[list] = None
+    # v2.37: decisiones de separador por boundaryId. No reescribe texto.
+    limites: Optional[list] = None
 
 
 class TranslateRequest(BaseModel):
@@ -2577,6 +2579,42 @@ async def improve(req: ImproveRequest):
                     "- Si no hay cambios, devuelve listas vacías.\n\n"
                     f"BLOQUE ACTUAL:\n<<<\n{bloque}\n>>>"
                 )
+            if (getattr(req, "mode", "transcripcion") or "") == "pdf_boundary_decisions":
+                items = []
+                for lim in (req.limites or []):
+                    if not isinstance(lim, dict):
+                        continue
+                    bid = str(lim.get("boundaryId") or "").strip()
+                    if not bid:
+                        continue
+                    items.append(
+                        {
+                            "boundaryId": bid[:120],
+                            "leftFragment": str(lim.get("leftFragment") or "")[:40],
+                            "rightFragment": str(lim.get("rightFragment") or "")[:40],
+                            "kind": str(lim.get("kind") or "")[:32],
+                            "language": str(lim.get("language") or lang_base)[:8],
+                            "evidence": lim.get("evidence") if isinstance(lim.get("evidence"), dict) else {},
+                            "leftContext": str(lim.get("leftContext") or "")[:80],
+                            "rightContext": str(lim.get("rightContext") or "")[:80],
+                        }
+                    )
+                lista = "\n".join(
+                    f"- {it['boundaryId']}: «{it['leftFragment']}» + «{it['rightFragment']}» "
+                    f"({it['kind']})"
+                    for it in items
+                ) or "- NINGUNO"
+                return (
+                    f"Eres un árbitro de SEPARADORES en texto extraído de un PDF, idioma «{lang_base}».\n"
+                    "NO reescribas el texto. NO cambies letras. NO inventes palabras.\n"
+                    "Para cada límite decide UNA acción: join, space, paragraph o pending.\n"
+                    "join = unir sin espacio; space = dejar un espacio; paragraph = párrafo nuevo; "
+                    "pending = no estás seguro.\n"
+                    "Responde SOLO un JSON array, sin markdown:\n"
+                    '[{"boundaryId":"...","action":"join|space|paragraph|pending","confidence":0.0,"reason":"..."}]\n\n'
+                    "LÍMITES:\n"
+                    f"{lista}\n"
+                )
             if getattr(req, "mode", "transcripcion") == "lectura":
                 uniones = []
                 for candidato in (req.candidatos_union or [])[:300]:
@@ -2663,6 +2701,46 @@ async def improve(req: ImproveRequest):
             )
 
         try:
+            if (getattr(req, "mode", "") or "") == "pdf_boundary_decisions":
+                prompt = construir_prompt(txt)
+                bruto, provider_name = _llamar_ia_con_respaldo(
+                    req.api_key or "", req.provider or "", prompt, req.openrouter_model, 2000
+                )
+                limpio = (bruto or "").strip()
+                import json as _js
+                m = re.search(r"\[[\s\S]*\]", limpio)
+                if m:
+                    limpio = m.group(0)
+                try:
+                    data = _js.loads(limpio)
+                except Exception:
+                    raise Exception("Respuesta no JSON de límites: " + limpio[:300])
+                if not isinstance(data, list):
+                    raise Exception("JSON de límites no es una lista")
+                decisiones = []
+                vistos = set()
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    bid = str(item.get("boundaryId") or "").strip()
+                    action = str(item.get("action") or "").strip()
+                    if not bid or bid in vistos or action not in ("join", "space", "paragraph", "pending"):
+                        continue
+                    if item.get("text"):
+                        continue
+                    vistos.add(bid)
+                    decisiones.append({
+                        "boundaryId": bid,
+                        "action": action,
+                        "confidence": item.get("confidence"),
+                        "reason": str(item.get("reason") or "")[:240],
+                    })
+                return {
+                    "decisions": decisiones,
+                    "ia_used": True,
+                    "provider": provider_name,
+                    "text": txt,
+                }
             if (getattr(req, "mode", "") or "") == "auditoria_pdf":
                 # Auditoría estructurada: devolver JSON validado
                 prompt = construir_prompt(txt)

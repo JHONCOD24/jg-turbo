@@ -188,7 +188,7 @@ export async function espacioUsado() {
  * Guarda un documento completo. `partes`, `pdf` y `portada` son opcionales:
  * si no vienen, se conserva lo que ya hubiera guardado.
  */
-export async function guardarDocumento({ meta, partes, pdf, portada }) {
+export async function guardarDocumento({ meta, partes, pdf, portada, reconstruccion }) {
   if (!meta || !meta.id) throw new Error('Falta el identificador del documento.');
   const ahora = Date.now();
 
@@ -221,7 +221,14 @@ export async function guardarDocumento({ meta, partes, pdf, portada }) {
 
       let i = 0;
       if (partes) {
-        await esperar(resto[i].put({ id: meta.id, partes }));
+        await esperar(resto[i].put({
+          id: meta.id,
+          partes,
+          manifiesto: reconstruccion?.manifiesto || meta.manifiesto || null,
+          textoCanonico: reconstruccion?.textoCanonico || null,
+          bloquesLectura: reconstruccion?.bloques || null,
+          versionReconstruccion: reconstruccion?.versionReconstruccion || meta.versionReconstruccion || null,
+        }));
         i += 1;
       }
       if (pdf || portada) {
@@ -777,7 +784,16 @@ export async function marcarTroceo(id, version, cambios = null) {
     await conAlmacenes([DOCUMENTOS, CONTENIDO], 'readwrite', async (docs, contenido) => {
       const doc = await esperar(docs.get(id));
       if (!doc) return;
-      if (partes?.length) await esperar(contenido.put({ id, partes }));
+      if (partes?.length) {
+        const previoCont = (await esperar(contenido.get(id))) || { id };
+        await esperar(contenido.put({
+          ...previoCont,
+          id,
+          partes,
+          manifiesto: cambios?.reconstruccion?.manifiesto || previoCont.manifiesto || null,
+          textoCanonico: cambios?.reconstruccion?.textoCanonico || previoCont.textoCanonico || null,
+        }));
+      }
       if (bloques?.length) {
         await esperar(contenido.put({
           id: `bloques|${id}`,
@@ -787,6 +803,13 @@ export async function marcarTroceo(id, version, cambios = null) {
         }));
       }
       doc.versionTroceo = version;
+      if (cambios?.versionReconstruccion != null) doc.versionReconstruccion = cambios.versionReconstruccion;
+      if (cambios?.pendientesLimites != null) doc.pendientesLimites = cambios.pendientesLimites;
+      if (cambios?.needsSource) doc.needsSource = true;
+      if (cambios?.reconstruccion) {
+        doc.listoParaLectura = cambios.reconstruccion.listoParaLectura;
+        doc.pendientesLimites = cambios.reconstruccion.pendientes;
+      }
       if (partes?.length) {
         doc.titulosPartes = partes.map((p) => p.titulo);
         doc.caracteres = partes.reduce((suma, p) => suma + String(p.texto || '').length, 0);
@@ -898,6 +921,12 @@ export async function partesParaSubir(id) {
     traduccion: espanol.get(indice) || null,
     pulido: pulidosMap.get(indice) || null,
     pagina: parte.pagina || null,
+    atomStart: parte.atomStart || null,
+    atomEnd: parte.atomEnd || null,
+    boundaryIds: Array.isArray(parte.boundaryIds) ? parte.boundaryIds : [],
+    continuation: Boolean(parte.continuation),
+    anclaInicio: parte.anclaInicio || null,
+    anclaFin: parte.anclaFin || null,
   }));
 }
 
@@ -948,6 +977,12 @@ export async function importarPartes(id, partes) {
       titulo: p.titulo || 'Parte',
       texto: p.texto || '',
       pagina: p.pagina || 1,
+      atomStart: p.atomStart || null,
+      atomEnd: p.atomEnd || null,
+      boundaryIds: Array.isArray(p.boundaryIds) ? p.boundaryIds : [],
+      continuation: Boolean(p.continuation),
+      anclaInicio: p.anclaInicio || null,
+      anclaFin: p.anclaFin || null,
     })),
   });
   /* Lo que ya venga traducido no hay que volver a traducirlo (ni pagarlo).

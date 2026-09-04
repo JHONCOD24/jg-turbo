@@ -13,6 +13,11 @@
  */
 import { procesarPdf, ErrorPdf } from './extractorPdf.js';
 import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
+import { partirTextoCanonico, mejorCorte as mejorCorteCanonico, LIMITE_PARTE as LIMITE_PARTE_CANONICO } from './particion.js';
+import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR } from './reconstruccion.js';
+import { reconstruirDesdeAtomos } from './reconstruccion.js';
+import { aceptarDecisionesIA, contarPendientes } from './limites.js';
+import { planMigracionV6, serializarReconstruccion, marcarNeedsSource } from './manifiesto.js';
 import { prepararParaVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
 import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto, esCompleta } from './auditoria.js';
@@ -29,7 +34,7 @@ import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 
 /* A partir de aquí el texto se parte para que el editor siga siendo ágil. */
-const LIMITE_PARTE = 90000;
+const LIMITE_PARTE = LIMITE_PARTE_CANONICO;
 /* Por debajo de esto no vale la pena partir por capítulos: un folleto de dos
  * páginas se lee entero de una vez, no en tres pedazos. */
 const MINIMO_PARA_CAPITULOS = 8000;
@@ -37,10 +42,9 @@ const MINIMO_PARA_CAPITULOS = 8000;
  * libros guardados con una versión anterior se rehacen solos al abrirlos: el
  * troceo se guarda con el documento, así que arreglar el código no arregla lo
  * que ya estaba en la biblioteca. */
-const VERSION_TROCEO = 5;
-/* Invalida resultados que pudieron guardar el texto original como si la IA
- * lo hubiera revisado o que no conocían cortes cortos como «es» + «ta». */
-const VERSION_PULIDO_LECTURA = 5;
+const VERSION_TROCEO = VERSION_TROCEO_MOTOR;
+/* Invalida el pulido v5 que reescribía capítulos para unir palabras. */
+const VERSION_PULIDO_LECTURA = 6;
 /* Cuánto texto se le manda a la IA como contexto de una pregunta. */
 const LIMITE_CONTEXTO_IA = 12000;
 const TAM_BLOQUE_BUSQUEDA = 2000;
@@ -180,6 +184,11 @@ export function inicializarLectorPdf(deps = {}) {
     textoSeguroPorBloque: new Map(),
     propuestasPorBloque: new Map(),
     decisionesPorBloque: new Map(),
+    limites: [],
+    atomos: [],
+    offsetDeAtomo: new Map(),
+    pendientesLimites: 0,
+    needsSource: false,
   };
 
   /* ── Ayudas ──────────────────────────────────────────────────────── */
@@ -276,111 +285,20 @@ export function inicializarLectorPdf(deps = {}) {
    * @param {number} limite – tope al que no se debe llegar
    */
   function mejorCorte(texto, desde, limite) {
-    const minimo = desde + Math.floor((limite - desde) * 0.5);
-
-    /* 1) Un párrafo entero. Una página física del PDF puede terminar a mitad
-     * de palabra; por eso nunca manda sobre el párrafo. */
-    const parrafo = texto.lastIndexOf('\n\n', limite);
-    if (parrafo > minimo) return parrafo;
-
-    /* 2) El final de una frase, solo para párrafos patológicamente largos. */
-    for (let i = limite; i > minimo; i -= 1) {
-      if ('.!?…'.includes(texto[i]) && /\s/.test(texto[i + 1] || ' ')) return i + 1;
-    }
-
-    /* 3) Y como último recurso, un espacio: nunca a mitad de palabra. */
-    const espacio = texto.lastIndexOf(' ', limite);
-    return espacio > minimo ? espacio : limite;
+    return mejorCorteCanonico(texto, desde, limite);
   }
 
-  function candidatosParaParte(textoParte, candidatosUnion) {
-    if (!Array.isArray(candidatosUnion) || !candidatosUnion.length) return [];
-    const tokens = String(textoParte || '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase().replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/).filter(Boolean);
-    const disponibles = new Map();
-    for (let i = 0; i + 1 < tokens.length; i += 1) {
-      const clave = `${tokens[i]}\u0000${tokens[i + 1]}`;
-      disponibles.set(clave, (disponibles.get(clave) || 0) + 1);
-    }
-    return candidatosUnion.filter((candidato) => {
-      const izq = String(candidato?.izquierda || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const der = String(candidato?.derecha || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const clave = `${izq}\u0000${der}`;
-      const quedan = disponibles.get(clave) || 0;
-      if (!quedan) return false;
-      disponibles.set(clave, quedan - 1);
-      return true;
-    });
-  }
-
-  function anexarCandidatosPartes(partes, candidatosUnion) {
-    return partes.map((parte) => ({
-      ...parte,
-      candidatosUnion: candidatosParaParte(parte.texto, candidatosUnion),
-    }));
-  }
-
-  function partirTexto(texto, capitulos, paginas = [], candidatosUnion = []) {
+  function partirTexto(texto, capitulos, paginas = [], _candidatosUnion = [], extra = {}) {
     if (!texto) return [];
-    /* Las páginas físicas solo sirven como referencia del índice. Los cortes
-     * visibles se llevan al inicio de un párrafo completo. */
     const capitulosLectura = prepararCapitulosLectura(texto, capitulos);
-    /* Si el documento trae capítulos, se respetan aunque el texto sea corto:
-     * el usuario quiere ver por qué capítulo va, no un bloque único. El corte
-     * por tamaño existe para que el editor no se congele, no para decidir la
-     * estructura del libro. */
-    const hayCapitulos = capitulosLectura.length > 1;
-    const vale = hayCapitulos && texto.length > MINIMO_PARA_CAPITULOS;
-    if (!vale && texto.length <= LIMITE_PARTE) {
-      return anexarCandidatosPartes([{ titulo: 'Documento completo', texto, pagina: 1 }], candidatosUnion);
-    }
-
-    const cortes = [];
-    if (hayCapitulos) {
-      capitulosLectura.forEach((cap, i) => {
-        const inicio = Math.max(0, Math.min(cap.posicion, texto.length));
-        const fin = i + 1 < capitulosLectura.length
-          ? Math.max(inicio, Math.min(capitulosLectura[i + 1].posicion, texto.length))
-          : texto.length;
-        if (i === 0 && inicio > 0) cortes.push({ titulo: 'Antes del primer capítulo', desde: 0, hasta: inicio, pagina: 1 });
-        if (fin > inicio) cortes.push({ titulo: cap.titulo, desde: inicio, hasta: fin, pagina: cap.pagina || 1 });
-      });
-    }
-
-    if (!cortes.length) {
-      let desde = 0;
-      let numero = 1;
-      while (desde < texto.length) {
-        let hasta = Math.min(desde + LIMITE_PARTE, texto.length);
-        if (hasta < texto.length) hasta = mejorCorte(texto, desde, hasta);
-        cortes.push({ titulo: `Parte ${numero}`, desde, hasta, pagina: 1 });
-        desde = hasta;
-        numero += 1;
-      }
-    }
-
-    const partes = [];
-    for (const corte of cortes) {
-      const trozo = texto.slice(corte.desde, corte.hasta).trim();
-      if (!trozo) continue;
-      if (trozo.length <= LIMITE_PARTE * 1.6) {
-        partes.push({ titulo: corte.titulo, texto: trozo, pagina: corte.pagina });
-        continue;
-      }
-      let desde = 0;
-      let sub = 1;
-      while (desde < trozo.length) {
-        let hasta = Math.min(desde + LIMITE_PARTE, trozo.length);
-        if (hasta < trozo.length) hasta = mejorCorte(trozo, desde, hasta);
-        partes.push({ titulo: `${corte.titulo} (${sub})`, texto: trozo.slice(desde, hasta).trim(), pagina: corte.pagina });
-        desde = hasta;
-        sub += 1;
-      }
-    }
-    const salida = partes.length ? partes : [{ titulo: 'Documento completo', texto, pagina: 1 }];
-    return anexarCandidatosPartes(salida, candidatosUnion);
+    return partirTextoCanonico(texto, {
+      capitulos: capitulosLectura,
+      bloques: extra.bloques || estado.bloquesLectura || [],
+      limites: extra.limites || estado.limites || [],
+      atomos: extra.atomos || estado.atomos || [],
+      offsetDeAtomo: extra.offsetDeAtomo || estado.offsetDeAtomo || new Map(),
+      limiteParte: LIMITE_PARTE,
+    });
   }
 
   /* ── Biblioteca ──────────────────────────────────────────────────── */
@@ -1304,23 +1222,36 @@ export function inicializarLectorPdf(deps = {}) {
 
   async function rehacerTroceo(doc, partes) {
     if (!Array.isArray(partes) || !partes.length) return null;
+    const plan = planMigracionV6({
+      versionTroceo: doc.versionTroceo,
+      versionReconstruccion: doc.versionReconstruccion,
+      tieneArchivo: doc.tieneArchivo,
+      manifiesto: doc.manifiesto,
+      tieneAprobado: Boolean(doc.tieneAprobado),
+    });
 
-    /* La única fuente capaz de recuperar exactamente «es» + «ta» como
-     * «esta» es el PDF original. Unir trozos ya recortados no contiene la
-     * información suficiente. */
     const archivo = await almacen.cargarArchivo(doc.id);
-    if (archivo) {
+    if (archivo && (plan.accion === 'reextraer' || plan.accion === 'capa_nueva')) {
       try {
         const resultado = await procesarPdf(archivo, { conPortada: false });
         if (!resultado.cancelado && !resultado.escaneado && resultado.texto?.trim()) {
           const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
-          const nuevas = partirTexto(resultado.texto, capitulos, resultado.paginas, resultado.candidatosUnion);
+          const nuevas = partirTexto(resultado.texto, capitulos, resultado.paginas, [], {
+            bloques: resultado.bloquesLectura || resultado.bloques,
+            limites: resultado.limites,
+            atomos: resultado.atomos,
+            offsetDeAtomo: resultado.offsetDeAtomo,
+          });
           if (nuevas.length) {
             return {
               partes: nuevas,
               capitulos,
               progreso: reubicarProgreso(doc.progreso, partes, nuevas),
               bloques: construirBloquesAuditoria(resultado.texto, resultado.bloques, capitulos),
+              reconstruccion: serializarReconstruccion(resultado),
+              pendientesLimites: resultado.pendientes || 0,
+              capaNueva: plan.accion === 'capa_nueva',
+              resultado,
             };
           }
         }
@@ -1329,9 +1260,18 @@ export function inicializarLectorPdf(deps = {}) {
       }
     }
 
-    /* Un documento recibido de otro aparato puede no traer el PDF. En ese
-     * caso se conserva todo el texto disponible y se eliminan los límites
-     * inseguros. No se inventan palabras. */
+    if (plan.accion === 'needs_source' || (!archivo && plan.accion !== 'reconstruir')) {
+      const reconstruido = reconstruirPartesGuardadas(partes);
+      if (!reconstruido.texto.trim()) return { needsSource: true, partes, capitulos: doc.capitulos || [] };
+      return {
+        partes,
+        capitulos: doc.capitulos || reconstruido.capitulos,
+        progreso: doc.progreso,
+        bloques: [],
+        needsSource: true,
+      };
+    }
+
     const reconstruido = reconstruirPartesGuardadas(partes);
     if (!reconstruido.texto.trim()) return null;
     const capitulos = prepararCapitulosLectura(reconstruido.texto, reconstruido.capitulos);
@@ -1359,22 +1299,40 @@ export function inicializarLectorPdf(deps = {}) {
     let capitulos = doc.capitulos || [];
     let progreso = doc.progreso;
     let bloquesRehechos = null;
-    if (doc.versionTroceo !== VERSION_TROCEO) {
-      avisar('Reorganizando el libro por párrafos completos…', 'info');
+    if (doc.versionTroceo !== VERSION_TROCEO || doc.versionReconstruccion !== VERSION_RECONSTRUCCION) {
+      avisar('Reconstruyendo el libro para unir palabras partidas…', 'info');
       const rehecho = await rehacerTroceo(doc, partes);
-      if (rehecho) {
-        partes = rehecho.partes;
-        capitulos = rehecho.capitulos;
-        progreso = rehecho.progreso;
-        bloquesRehechos = rehecho.bloques;
-        avisar('Se reorganizó el libro sin cortar palabras ni párrafos.', 'info', { efimero: true });
+      if (rehecho?.needsSource) {
+        estado.needsSource = true;
+        avisar('Necesita reimportar el PDF o una revisión manual de los límites pendientes.', 'warn');
+        await almacen.marcarTroceo(id, VERSION_TROCEO, {
+          partes: rehecho.partes || partes,
+          capitulos: rehecho.capitulos || capitulos,
+          progreso,
+          needsSource: true,
+        });
+      } else if (rehecho) {
+        if (rehecho.capaNueva) {
+          avisar('Se reconstruyó una capa nueva; el texto que ya habías aprobado se conserva.', 'info', { efimero: true });
+        } else {
+          partes = rehecho.partes;
+          capitulos = rehecho.capitulos;
+          progreso = rehecho.progreso;
+          bloquesRehechos = rehecho.bloques;
+          avisar('Se reorganizó el libro sin cortar palabras ni párrafos.', 'info', { efimero: true });
+        }
+        await almacen.marcarTroceo(id, VERSION_TROCEO, {
+          partes,
+          capitulos,
+          progreso,
+          bloques: rehecho.bloques,
+          versionReconstruccion: VERSION_RECONSTRUCCION,
+          pendientesLimites: rehecho.pendientesLimites || 0,
+          reconstruccion: rehecho.reconstruccion,
+        });
+      } else {
+        await almacen.marcarTroceo(id, VERSION_TROCEO, null);
       }
-      await almacen.marcarTroceo(id, VERSION_TROCEO, rehecho ? {
-        partes,
-        capitulos,
-        progreso,
-        bloques: rehecho.bloques,
-      } : null);
     }
 
     estado.archivo = null;
@@ -1716,29 +1674,81 @@ export function inicializarLectorPdf(deps = {}) {
 
   /** Revisa todas las unidades reales del lector, empezando por la abierta. */
   async function iniciarCorreccionLibro() {
-    if (!estado.consentido || !estado.pulidor || !estado.partes.length) return;
+    if (!estado.consentido || !estado.partes.length) return;
     if (estado.correccionProgreso.ejecutando) return;
+    const pendientes = (estado.limites || []).filter((l) => l.decision === 'pending');
+    if (!pendientes.length) {
+      estado.correccionProgreso = {
+        total: 1, completados: 1, fallos: 0, ejecutando: false,
+        token: estado.correccionProgreso.token + 1,
+      };
+      actualizarEstadoCorreccion();
+      return;
+    }
+    if (typeof window.jgPedirDecisionesLimites !== 'function') return;
 
     const docId = estado.id;
     const token = estado.correccionProgreso.token + 1;
+    const TAM = 80;
+    const lotes = [];
+    for (let i = 0; i < pendientes.length; i += TAM) lotes.push(pendientes.slice(i, i + TAM));
     estado.correccionProgreso = {
-      total: estado.partes.length,
-      completados: 0,
-      fallos: 0,
-      ejecutando: true,
-      token,
+      total: lotes.length, completados: 0, fallos: 0, ejecutando: true, token,
     };
     actualizarEstadoCorreccion();
 
-    const actual = estado.parteActual;
-    const orden = [actual, ...estado.partes.map((_, i) => i).filter((i) => i !== actual)];
-    for (const indice of orden) {
+    for (const lote of lotes) {
       if (estado.id !== docId || estado.correccionProgreso.token !== token || !estado.consentido) return;
-      const ok = await asegurarPulido(indice, { mostrar: indice === estado.parteActual });
-      if (estado.id !== docId || estado.correccionProgreso.token !== token) return;
-      if (ok) estado.correccionProgreso.completados += 1;
-      else estado.correccionProgreso.fallos += 1;
+      try {
+        const payload = lote.map((lim) => ({
+          boundaryId: lim.id,
+          leftFragment: lim.leftFragment,
+          rightFragment: lim.rightFragment,
+          kind: lim.kind,
+          language: estado.idioma || 'es',
+          evidence: {
+            gap: lim.evidence?.gap,
+            pageChange: lim.evidence?.pageChange,
+            leftHasEOL: lim.evidence?.leftHasEOL,
+          },
+        }));
+        const resp = await window.jgPedirDecisionesLimites(payload, estado.idioma);
+        aceptarDecisionesIA(estado.limites, resp?.decisions || resp || []);
+        estado.correccionProgreso.completados += 1;
+      } catch (_) {
+        estado.correccionProgreso.fallos += 1;
+      }
       actualizarEstadoCorreccion();
+    }
+
+    estado.pendientesLimites = contarPendientes(estado.limites);
+    if (estado.atomos?.length) {
+      const recon = reconstruirDesdeAtomos(estado.atomos, {
+        decisionesIA: estado.limites
+          .filter((l) => l.source === 'ai' || l.source === 'user')
+          .map((l) => ({ boundaryId: l.id, action: l.decision })),
+        lang: estado.idioma,
+      });
+      estado.limites = recon.limites;
+      estado.pendientesLimites = recon.pendientes;
+      estado.originalTexto = recon.texto;
+      estado.localTexto = recon.texto;
+      const caps = prepararCapitulosLectura(recon.texto, recon.capitulos);
+      const nuevas = partirTexto(recon.texto, caps, recon.paginas, [], {
+        bloques: recon.bloquesLectura, limites: recon.limites,
+        atomos: recon.atomos, offsetDeAtomo: recon.offsetDeAtomo,
+      });
+      if (nuevas.length) {
+        const progreso = reubicarProgreso(estado.progreso, estado.partes, nuevas);
+        estado.partes = nuevas;
+        await almacen.marcarTroceo(estado.id, VERSION_TROCEO, {
+          partes: nuevas, capitulos: caps, progreso,
+          versionReconstruccion: VERSION_RECONSTRUCCION,
+          pendientesLimites: recon.pendientes,
+          reconstruccion: serializarReconstruccion(recon),
+        });
+        el.salida.value = textoDeParte(estado.parteActual);
+      }
     }
     estado.correccionProgreso.ejecutando = false;
     actualizarEstadoCorreccion();
@@ -2170,9 +2180,14 @@ export function inicializarLectorPdf(deps = {}) {
   } = {}) {
     // Capas: original inmutable + local (orden/espacios/guiones ya aplicados en componerTexto)
     estado.originalTexto = resultado.texto;
-    estado.localTexto = resultado.texto; // local ya es texto con limpieza sin IA (pulirParaLectura puro)
+    estado.localTexto = resultado.texto;
     estado.bloquesEstructurales = resultado.bloques || [];
     estado.omisiones = resultado.omisiones || [];
+    estado.limites = resultado.limites || [];
+    estado.atomos = resultado.atomos || [];
+    estado.offsetDeAtomo = resultado.offsetDeAtomo || new Map();
+    estado.pendientesLimites = Number(resultado.pendientes) || 0;
+    estado.needsSource = false;
     const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
     // dividir en bloques semánticos de 3000 para auditoría, con contexto
     const bloques = construirBloquesAuditoria(resultado.texto, resultado.bloques, capitulos);
@@ -2180,7 +2195,12 @@ export function inicializarLectorPdf(deps = {}) {
     estado.auditoriaProgreso = { total: bloques.length, completados: 0, fallos: 0 };
     estado.capa = { original: resultado.texto, local: resultado.texto, revisadoSeguro: '', aprobado: '' };
 
-    const partes = partirTexto(resultado.texto, capitulos, resultado.paginas, resultado.candidatosUnion);
+    const partes = partirTexto(resultado.texto, capitulos, resultado.paginas, [], {
+      bloques: resultado.bloquesLectura || resultado.bloques,
+      limites: resultado.limites,
+      atomos: resultado.atomos,
+      offsetDeAtomo: resultado.offsetDeAtomo,
+    });
     const titulo = resultado.titulo
       || (archivo?.name || 'Documento').replace(/\.pdf$/i, '');
     const idioma = deps.detectarIdioma
@@ -2204,6 +2224,10 @@ export function inicializarLectorPdf(deps = {}) {
           paginasLeidas: resultado.paginasLeidas || 0,
           origen,
           versionTroceo: VERSION_TROCEO,
+          versionReconstruccion: VERSION_RECONSTRUCCION,
+          pendientesLimites: estado.pendientesLimites,
+          listoParaLectura: estado.pendientesLimites === 0,
+          needsSource: false,
           sincronizar: true,
           capitulos,
           bytes: archivo?.size || 0,
@@ -2213,6 +2237,7 @@ export function inicializarLectorPdf(deps = {}) {
         partes,
         pdf: archivo || null,
         portada,
+        reconstruccion: serializarReconstruccion(resultado),
       });
       /* Los bloques viajan aparte para poder reanudar la auditoría al
        * reabrir el libro sin recomputar nada ni repetir gastos de IA. */
