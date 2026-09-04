@@ -15,6 +15,7 @@ encuentra nada, se devuelve una lista vacía y el cliente dibuja la portada.
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Any, Optional
 
@@ -116,17 +117,37 @@ async def _openlibrary(consulta: str, autor: str) -> tuple[list[dict[str, Any]],
 
 
 async def _google_books(consulta: str, autor: str) -> tuple[list[dict[str, Any]], str]:
-    """Segunda fuente. Sin clave: hay cuota por IP, y si se agota se devuelve
-    vacío como cualquier otro fallo."""
+    """Segunda fuente.
+
+    **Necesita clave.** Sin ella Google responde 429 con cuota 0 (comprobado el
+    2026-09-03 desde Vercel y desde un equipo cualquiera): ya no hay acceso
+    anónimo. Con `GOOGLE_API_KEY` en el entorno y la «Books API» activada en
+    ese proyecto de Google Cloud funciona, y es gratis: 1000 consultas al día,
+    de sobra para una biblioteca personal.
+
+    Sin clave devuelve vacío como cualquier otro fallo y el libro se queda con
+    su carátula dibujada, que es la que se ve por defecto.
+    """
     busqueda = f'intitle:"{consulta}"'
     if autor:
         busqueda += f' inauthor:"{autor}"'
 
+    parametros: dict[str, Any] = {
+        "q": busqueda,
+        "maxResults": MAX_RESULTADOS,
+        "printType": "books",
+    }
+    clave = os.environ.get("GOOGLE_BOOKS_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if clave:
+        parametros["key"] = clave
+
     async with httpx.AsyncClient(timeout=ESPERA_SEG, headers=CABECERAS) as cliente:
-        respuesta = await cliente.get(
-            GOOGLE, params={"q": busqueda, "maxResults": MAX_RESULTADOS, "printType": "books"}
-        )
+        respuesta = await cliente.get(GOOGLE, params=parametros)
         if respuesta.status_code != 200:
+            # El 429 sin clave es el caso normal, no una avería: se distingue
+            # para que quien lea el aviso sepa que solo falta configurarla.
+            if respuesta.status_code == 429 and not clave:
+                return [], "google_sin_clave"
             return [], f"google_{respuesta.status_code}"
         datos = respuesta.json()
 

@@ -1,5 +1,86 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v2.30.0 · Carátula automática para los libros sin tapa
+
+### Lo pedido
+Que los PDF que son solo texto tengan carátula: buscarla con IA a partir del título, o buscar la
+real.
+
+### Qué se descartó, y por qué
+**Generar la imagen con Gemini.** El modelo `gemini-2.5-flash-image` cuesta **~US$0,039 por
+imagen** (US$30 por millón de tokens de salida, 1290 por imagen) y **el plan gratuito no lo
+incluye**: devuelve cuota 0. Además, los modelos de imagen escriben mal el texto, así que la
+portada saldría con el título con erratas — peor que una tipográfica limpia. Consultado con el
+usuario, que eligió la cascada gratuita.
+
+### Qué se hizo: real primero, dibujada siempre
+
+**`js/pdf/caratula.js`** (nuevo, con pruebas):
+- `limpiarNombreLibro()` — el título sale del nombre del archivo, y los nombres reales vienen con
+  la basura de las descargas: «( PDFDrive )», «(1)», guiones bajos, «-pdf» pegado sin punto. Sin
+  limpiarlo no se encuentra nada y la portada dibujada saldría con «pdf» escrito. Separa el autor
+  cuando el nombre lo deja ver («Sapiens - Yuval Noah Harari»), y solo entonces: sin guion rodeado
+  de espacios no se inventa nada.
+- `elegirMejorPortada()` — exige un parecido mínimo de 0,6 comparando palabras con significado, y
+  sube la nota si además acierta el autor. **Poner la portada de otro libro es peor que no poner
+  ninguna**: el usuario creería que ese es su libro.
+- `dibujarPortada()` — pinta la tapa en canvas: degradado propio del libro (color derivado del
+  título, siempre el mismo), título, autor tras una raya corta, iniciales muy tenues al pie y un
+  filete junto al lomo. Instantánea, sin conexión, sin coste y con el texto perfecto.
+
+**`api/portada.py`** (nuevo): busca en Open Library y en Google Books. Va en el servidor porque
+Open Library **no acepta consultas desde una web** (no envía cabeceras CORS); las imágenes de
+portada sí, y por eso las descarga el navegador: el servidor solo dice *cuál* es. Nunca lanza
+error — quedarse sin portada no es una avería.
+
+**Integración**: las tapas que faltan se dibujan solas al abrir la biblioteca (sin red, así que no
+gasta datos de nadie), y hay **«Buscar carátula»** en el menú de cada libro para ir a por la real.
+
+### Resultado medido, con los libros reales del usuario
+Los siete títulos se limpian bien y las siete portadas se dibujan (2,6-4,7 KB cada una):
+«How to write a good advertisement Victor O. Schwab», «Pre-suasión Un método revolucionario para
+influir y persuadir», «La Inteligencia Emocional», «El placebo eres tú», «Becoming Supernatural…»,
+«El aprendiz de brujo», «Sex code».
+
+### ⚠️ La portada REAL no funciona todavía, y no es un fallo del código
+Probado contra producción con los libros del usuario:
+
+```
+{"resultados":[],"aviso":"_openlibrary:ConnectTimeout | _google_books:google_sin_clave"}
+```
+
+- **Open Library**: `ConnectTimeout` incluso subiendo la espera de 8 s a 15 s. Desde Vercel no se
+  alcanza ese catálogo.
+- **Google Books**: `429` con cuota 0. Ya **no hay acceso anónimo** (comprobado el 2026-09-03 desde
+  Vercel y desde un equipo cualquiera).
+
+**Cómo activarla** (gratis, 5 minutos): crear una clave en Google Cloud, activar «Books API» en ese
+proyecto y añadirla en Vercel como `GOOGLE_BOOKS_API_KEY` (también sirve `GOOGLE_API_KEY`). Son
+1000 consultas al día, de sobra para una biblioteca personal. El código ya la usa si existe: no hay
+que tocar nada más.
+
+Mientras tanto **la carátula dibujada cubre todos los libros**, que es lo que se ve por defecto.
+
+### Pruebas
+- `tests/test_pdf_caratula.mjs` ✔ **37/37**: limpieza de nombres reales, el «pdf» suelto, la marca
+  de la web, autor separado y autor no inventado, elección de portada (incluido «si nada se parece,
+  ninguna»), color estable e iniciales; y los casos límite (vacío, nulo, solo signos, 500 letras).
+- `backend/tests/test_api_portada.py` ✔ **11/11**, sin añadir `pytest-asyncio`: `asyncio.run` basta.
+  Cubre lo importante, que es que **el endpoint nunca rompa la app**: sin red, con el catálogo
+  caído, con una respuesta inesperada.
+- Regresión ✔ **517 OK · 0 FALLOS** · geometría 42/42 sin avisos · scroll 39/39 · navegador 103/103.
+
+### Una prueba que arreglé de paso
+`verificar_pdf_navegador` elegía los botones del menú del libro por posición (`nth(1)`), así que
+añadir «Buscar carátula» la rompió y el fallo señalaba a «borrar», que no se había tocado. Ahora se
+buscan **por su texto**, como haría una persona.
+
+### Deploy v68
+- `sw.js` → `jg-turbo-shell-v68` · `JG_JS_V` → `v68`
+- `index.html` → `<!-- v2.30.0 · Caratula automatica: la real del catalogo o una dibujada con el titulo -->`
+
+---
+
 ## Entrega 2026-09-03 · Documentación · `TRAMPAS.md`
 
 ### Lo pedido
