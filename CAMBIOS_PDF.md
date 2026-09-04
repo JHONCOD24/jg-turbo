@@ -38,7 +38,7 @@
 
 ### Verificación disponible antes del despliegue
 
-- 14 suites unitarias PDF aprobadas.
+- 14 suites unitarias PDF: **522 comprobaciones aprobadas**.
 - Backend PDF: **16/16**.
 - Regresiones nuevas: `es` + `ta`, expresiones que no deben unirse, fallos no cacheados, candidatos
   posteriores al número 300 y condensación de 4.950 renglones estructurales en 8 bloques.
@@ -50,7 +50,11 @@
 
 - `index.html`: `v2.36.0` y módulos `v74`.
 - `sw.js`: `jg-turbo-shell-v74`.
-- Producción: pendiente de desplegar y verificar.
+- Producción desplegada el 2026-09-04: `dpl_3xZgfwum3o7gq3tpQuV18oSXNtpe`, disponible en
+  `https://jg-turbo.vercel.app`.
+- `vercel inspect` confirmó `target: production`, estado `Ready`, el alias público y la función
+  `api/index` construida. No se abrió el navegador ni se ejecutó la interacción visual porque la
+  configuración del usuario exige una solicitud explícita para hacerlo.
 
 ---
 
