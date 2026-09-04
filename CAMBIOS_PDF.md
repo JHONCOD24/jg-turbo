@@ -61,7 +61,13 @@ como versión 2. Al abrirlo se verifican **13/13** condiciones:
 
 - `index.html`: `v2.34.0` y módulos `v72`.
 - `sw.js`: `jg-turbo-shell-v72`.
-- Producción: pendiente de desplegar después de la revisión final.
+- Producción: `dpl_4YDzSssh2yj1cPy9aZLjC6LSiVeD` con alias
+  **https://jg-turbo.vercel.app**.
+- Verificación sin caché: HTML, `sw.js`, `pdfController.js`, `limpiezaTexto.js`,
+  `biblioteca.js` y `/api/health` respondieron 200. Se confirmaron el marcador v2.34, módulos v72,
+  `VERSION_TROCEO = 3`, reprocesamiento del PDF original, ajuste por párrafo y `status: ok`.
+- Verificación visible del alias: la pestaña PDF renderiza, el asistente Kindle está presente, el
+  selector conserva la selección múltiple y la consola registró 0 errores.
 
 ---
 
