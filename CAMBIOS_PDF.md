@@ -1,5 +1,120 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-03 · v2.31.0 · Páginas coherentes y guía que deja de titilar
+
+### Lo reportado
+Leyendo «El placebo eres tú»: las unidades de lectura cortaban páginas y párrafos por la mitad,
+había **tres «página 5»**, un capítulo que solo contenía «Joe Dispenza», el índice y el prólogo
+cortados, y hasta la página 17 no aparecía texto compacto. Y la guía de lectura **titilaba**
+buscando la frase durante el primer minuto, hasta que se calmaba sola.
+
+---
+
+### 1 · El troceo: reproducido antes de tocar nada
+
+Con un índice de libro típico, `componerTexto()` devolvía esto:
+
+```
+ 0  pág   1  pos     0  largo     0  «Portada»       ← vacío
+ 1  pág  99  pos     0  largo   122  «Capítulo 2»    ← ¡un capítulo del final, al principio!
+ 2  pág   5  pos   122  largo     0  «Joe Dispenza»
+ 3  pág   5  pos   122  largo     0  «Créditos»
+ 4  pág   5  pos   122  largo    14  «Dedicatoria»
+ 5  pág   6  pos   136  largo    44  «Índice»        ← el índice cortado
+=== página 5 aparece 3 veces ===
+```
+
+**Causa**, en `limpiezaTexto.js: componerTexto()`:
+
+```js
+posicion: Math.min(inicioDePagina.get(entrada.pagina) ?? 0, …)
+```
+
+Tres defectos en una línea. El índice de un PDF trae una entrada por cada página de cortesía, y:
+1. **`?? 0`** mandaba al principio del libro toda entrada cuya página no tuviera texto — por eso
+   un capítulo del final aparecía primero.
+2. **Varias entradas en la misma página** compartían posición → capítulos de largo 0.
+3. **Sin mínimo de contenido**, cualquier entrada era un capítulo, aunque solo contuviera un
+   nombre.
+
+Y `componerTexto` **no devolvía dónde empieza cada página**, así que era imposible cortar por
+páginas reales, que es lo que se pidió.
+
+**Corrección:**
+- `componerTexto()` devuelve `paginas: [{numero, posicion}]` con las posiciones **en el texto ya
+  pulido**. Las posiciones en bruto no valen porque el pulido cambia el largo, así que cada página
+  se vuelve a localizar por su contenido — la misma técnica que usa la guía para casar voz y texto.
+- Las entradas del índice se mapean a esas posiciones reales; **la que apunta a una página que no
+  existe se descarta** en vez de caer en la posición 0.
+- Una entrada es capítulo **según el contenido que tiene por delante**, no según lo lejos que esté
+  de la anterior. Se recorre de atrás hacia adelante. Mirando hacia atrás se perdía el prólogo de
+  los libros con muchas páginas de cortesía: quedaba pegado a la portada y se descartaba, aunque
+  detrás tuviera un capítulo entero.
+- El mínimo escala con el documento: 400 caracteres son una miga en un libro de 300 páginas y son
+  el documento entero en un folleto.
+- `pdfController.js: mejorCorte()` — al partir por tamaño se corta, por este orden: **final de
+  página real** → final de párrafo → final de frase → hueco entre palabras. Antes, si no había un
+  salto de párrafo cerca, cortaba en el carácter exacto: **a mitad de palabra**.
+
+**Resultado con el mismo libro:**
+
+```
+ pág   1  largo   154  «Portada»      (las páginas de cortesía, agrupadas)
+ pág   7  largo  2062  «Prólogo»
+ pág  10  largo  7919  «Capítulo 1»
+ páginas repetidas: ninguna
+```
+
+---
+
+### 2 · La guía que titilaba: medido, no supuesto
+
+**Causa**, en `pdfController.js`: las anclas que casan el audio con el texto se calculaban **una
+sola vez**, al arrancar la lectura. El audio se genera por tandas, así que en ese momento la cola
+tenía **uno o dos bloques**; cuando crecía a doce, las anclas seguían siendo dos.
+
+Y como la última ancla se extiende «hasta el final del texto» (`posicionDeVoz`), el efecto medido
+en un capítulo de 20 000 letras con 2 anclas fue:
+
+```
+bloque 0 →      0 → 900
+bloque 1 →    900 → 20000     ← barre el capítulo entero
+bloque 2 →    900 → 20000     ← y vuelve atrás
+bloque 3 →    900 → 20000     ← una y otra vez
+```
+
+Eso es exactamente lo que se veía titilar. Con las anclas al día, cada bloque cubre solo su tramo
+(1667 → 3333 → 5000…) y la marca avanza sin volver atrás.
+
+**Corrección:**
+- Las anclas se recalculan **también cuando crece la cola**, no solo al empezar una lectura nueva.
+- Red de seguridad: **la marca no retrocede sola**. Situar un bloque es aproximado y un cálculo
+  puede quedar unas frases por detrás. Solo retrocede cuando la persona lo pide: cambiar de
+  capítulo, tocar un párrafo, los botones de frase o mover la barra. La barra vive en `index.html`
+  y avisa con un evento `jg-tts-salto`.
+
+---
+
+### Pruebas
+- `tests/test_pdf_limpieza.mjs` ✔ **70/70** (era 50): posiciones de página en orden y dentro del
+  texto, ningún capítulo vacío, sin páginas repetidas, un capítulo de página inexistente que no
+  aterriza al principio, orden correcto, y los casos límite (documento sin páginas, índice entero
+  apuntando a páginas que no existen).
+- `tests/test_pdf_guia.mjs` ✔ **10/10** (nuevo): el barrido con anclas incompletas (el fallo), el
+  tramo correcto con anclas al día, cuándo hay que resituar y la regla de no retroceder.
+- Regresión ✔ **553 OK · 0 FALLOS** · geometría 42/42 · scroll 39/39 · navegador 103/103.
+
+### Una prueba antigua que tenía razón
+Al poner el mínimo de capítulo, falló «usa el índice interno del PDF cuando existe»: usa un
+documento de 60 caracteres, donde exigir 400 no tiene sentido. La prueba tenía razón y el arreglo
+fue hacer que el mínimo escale con el tamaño del documento, no cambiar la prueba.
+
+### Deploy
+- `sw.js` → `jg-turbo-shell-v69` · `JG_JS_V` → `v69`
+- `index.html` → `<!-- v2.31.0 · Paginas coherentes y guia sin titileo -->`
+
+---
+
 ## Entrega 2026-09-03 · v2.30.0 · Carátula automática para los libros sin tapa
 
 ### Lo pedido

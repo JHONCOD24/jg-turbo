@@ -333,9 +333,59 @@ export function clasificarBloque(texto, linea) {
   return 'parrafo';
 }
 
+/* Un capítulo con menos de esto no es un capítulo: es una página de cortesía,
+ * una dedicatoria o el nombre del autor suelto. El índice de un PDF suele
+ * traer una entrada por cada una de esas páginas, y sin este mínimo el lector
+ * acaba con «capítulos» que solo dicen «Joe Dispenza». */
+const MIN_CAPITULO = 400;
+
+/** Solo letras y números, sin tildes ni mayúsculas, guardando de dónde salió cada uno. */
+function compactarConMapa(texto) {
+  const t = String(texto || '');
+  let salida = '';
+  const mapa = [];
+  for (let i = 0; i < t.length; i += 1) {
+    const c = sinTildes(t[i]).toLowerCase();
+    if (c >= 'a' && c <= 'z') { salida += c; mapa.push(i); }
+    else if (c >= '0' && c <= '9') { salida += c; mapa.push(i); }
+  }
+  return { texto: salida, mapa };
+}
+
+/**
+ * Dónde empieza cada página DENTRO DEL TEXTO YA PULIDO.
+ *
+ * Las posiciones se calculan mientras se juntan las líneas, sobre el texto en
+ * bruto; después `pulirParaLectura()` lo cambia de tamaño y esas posiciones
+ * dejan de valer. En vez de arrastrarlas a ciegas, cada página se vuelve a
+ * localizar por su contenido: se toma el arranque de la página y se busca en
+ * el texto final, siempre hacia delante. Es la misma técnica que usa la guía
+ * de lectura para casar la voz con el texto.
+ *
+ * @param {string} texto – el texto final
+ * @param {{numero:number, muestra:string}[]} marcas
+ * @returns {{numero:number, posicion:number}[]}
+ */
+function situarPaginas(texto, marcas) {
+  const compacto = compactarConMapa(texto);
+  const salida = [];
+  let desde = 0;
+  for (const marca of marcas) {
+    const aguja = compactarConMapa(marca.muestra).texto.slice(0, 40);
+    if (aguja.length < 6) continue;
+    let donde = compacto.texto.indexOf(aguja, desde);
+    /* Con menos letras se aguanta mejor un retoque de puntuación en medio. */
+    if (donde === -1 && aguja.length > 14) donde = compacto.texto.indexOf(aguja.slice(0, 14), desde);
+    if (donde === -1) continue;          /* esa página no se pudo situar: se omite */
+    salida.push({ numero: marca.numero, posicion: compacto.mapa[donde] ?? 0 });
+    desde = donde + Math.max(1, Math.floor(aguja.length / 2));
+  }
+  return salida;
+}
+
 export function componerTexto(paginas, opciones = {}) {
   const listaPaginas = Array.isArray(paginas) ? paginas : [];
-  const vacio = { texto: '', capitulos: [], descartadas: 0, paginasConTexto: 0, paginasTotales: listaPaginas.length, bloques: [], omisiones: [] };
+  const vacio = { texto: '', capitulos: [], paginas: [], descartadas: 0, paginasConTexto: 0, paginasTotales: listaPaginas.length, bloques: [], omisiones: [] };
   if (!listaPaginas.length) return vacio;
 
   const relleno = detectarRelleno(listaPaginas);
@@ -380,6 +430,7 @@ export function componerTexto(paginas, opciones = {}) {
    */
   const partes = [];
   const inicioDePagina = new Map();
+  const marcasDePagina = [];
   const capitulosDetectados = [];
   const bloques = [];
   let largo = 0;
@@ -429,6 +480,12 @@ export function componerTexto(paginas, opciones = {}) {
     if (!pag.lineas.length) continue;
     paginasConTexto += 1;
     inicioDePagina.set(pag.numero, largo);
+    /* El arranque de la página, para volver a encontrarla en el texto pulido:
+     * las posiciones en bruto dejan de valer cuando el pulido cambia el largo. */
+    marcasDePagina.push({
+      numero: pag.numero,
+      muestra: pag.lineas.slice(0, 3).map((l) => l.texto).join(' ').slice(0, 90),
+    });
 
     if (esDobleColumna) {
       const infoCol = columnasPorPagina[idxPag];
@@ -463,16 +520,70 @@ export function componerTexto(paginas, opciones = {}) {
 
   /* 4) Capítulos: construir desde bloques, no mediante posiciones calculadas antes de modificar texto.
      Si hay índice externo, se respeta; si no, se derivan de bloques tipo titulo. */
+  /* Dónde empieza cada página en el texto FINAL. Es lo que permite que las
+   * unidades de lectura no partan una página por la mitad. */
+  const posicionesPagina = situarPaginas(texto, marcasDePagina);
+  const posicionDePagina = new Map(posicionesPagina.map((p) => [p.numero, p.posicion]));
+
   let capitulos;
   if (usarIndice) {
+    /* El índice de un PDF no sirve tal cual. En un libro real trae una entrada
+     * por cada página de cortesía (portada, créditos, dedicatoria), varias
+     * apuntando a la MISMA página, y alguna a páginas que no tienen texto.
+     * Antes, cada entrada era un «capítulo»: salían tres capítulos «página 5»,
+     * uno que solo contenía el nombre del autor, y los que apuntaban a una
+     * página inexistente caían en la posición 0 —al principio del libro—
+     * porque el `?? 0` los mandaba allí. */
     capitulos = opciones.indice
       .map((entrada) => ({
         titulo: String(entrada.titulo || '').trim() || `Página ${entrada.pagina}`,
         pagina: entrada.pagina,
-        posicion: Math.min(inicioDePagina.get(entrada.pagina) ?? 0, Math.max(0, texto.length - 1)),
+        posicion: posicionDePagina.has(entrada.pagina)
+          ? posicionDePagina.get(entrada.pagina)
+          : null,           /* la página no existe o no tiene texto */
       }))
-      .filter((c) => Number.isFinite(c.pagina))
+      .filter((c) => Number.isFinite(c.pagina) && c.posicion != null)
       .sort((a, b) => a.posicion - b.posicion);
+
+    /* Se juntan las entradas que caen en el mismo sitio o demasiado cerca: lo
+     * que queda entre dos de ellas no da ni para un párrafo, y como unidad de
+     * lectura no significa nada. La primera se queda con el contenido de las
+     * que absorbe.
+     *
+     * El mínimo escala con el documento: 400 caracteres son una miga en un
+     * libro de 300 páginas y son el documento entero en un folleto de dos. */
+    const minimo = Math.min(
+      MIN_CAPITULO,
+      Math.floor(texto.length / Math.max(4, capitulos.length * 2)),
+    );
+
+    /* Lo que decide si una entrada es un capítulo NO es lo lejos que esté de
+     * la anterior, sino **cuánto contenido tiene por delante**. Por eso se
+     * recorre de atrás hacia adelante: cada entrada mira hasta dónde llega su
+     * texto —hasta la siguiente que ya se aceptó— y se queda solo si eso da
+     * para leer algo.
+     *
+     * Mirando hacia atrás se perdía el prólogo de los libros que traen muchas
+     * páginas de cortesía: quedaba a pocos caracteres de la portada y se
+     * descartaba, aunque detrás tuviera un capítulo entero. */
+    const aceptados = [];
+    let siguiente = texto.length;
+    for (let i = capitulos.length - 1; i >= 0; i -= 1) {
+      const cap = capitulos[i];
+      if (siguiente - cap.posicion >= minimo) {
+        aceptados.unshift(cap);
+        siguiente = cap.posicion;
+      }
+    }
+    /* La primera entrada se conserva siempre: aunque las páginas de cortesía
+     * no den para un capítulo, el libro tiene que empezar en alguna parte. */
+    if (capitulos.length && (!aceptados.length || aceptados[0].posicion > 0)) {
+      const primera = capitulos[0];
+      if (!aceptados.length || primera.posicion < aceptados[0].posicion) {
+        aceptados.unshift(primera);
+      }
+    }
+    capitulos = aceptados;
   } else {
     // buscar títulos en texto final para capítulos (posiciones reales post-pulido)
     const titulosEnTexto = [];
@@ -495,6 +606,9 @@ export function componerTexto(paginas, opciones = {}) {
   return {
     texto,
     capitulos,
+    /* Dónde empieza cada página del PDF en este texto. El lector las usa para
+     * cortar las unidades de lectura sin partir una página por la mitad. */
+    paginas: posicionesPagina,
     descartadas,
     paginasConTexto,
     paginasTotales: listaPaginas.length,

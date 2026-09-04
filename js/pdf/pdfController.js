@@ -254,8 +254,52 @@ export function inicializarLectorPdf(deps = {}) {
 
   /* ── Partir el texto en capítulos manejables ─────────────────────── */
 
-  function partirTexto(texto, capitulos) {
+  /**
+   * Dónde conviene cortar antes de `limite`, de mejor a peor:
+   * final de página → final de párrafo → final de frase → hueco entre palabras.
+   *
+   * Nunca a mitad de palabra, que es lo que hacía antes cuando no encontraba
+   * un salto de párrafo: la unidad de lectura empezaba con media palabra y la
+   * voz la leía partida.
+   *
+   * @param {string} texto
+   * @param {number} desde  – dónde empieza este trozo
+   * @param {number} limite – tope al que no se debe llegar
+   * @param {number[]} cortesPagina – posiciones de inicio de página, en orden
+   */
+  function mejorCorte(texto, desde, limite, cortesPagina) {
+    const minimo = desde + Math.floor((limite - desde) * 0.5);
+
+    /* 1) Un límite de página real: lo que pidió el usuario, que una unidad de
+     *    lectura no parta una página por la mitad. */
+    let mejor = -1;
+    for (const pos of cortesPagina) {
+      if (pos > minimo && pos <= limite && pos > mejor) mejor = pos;
+      if (pos > limite) break;
+    }
+    if (mejor > desde) return mejor;
+
+    /* 2) Un párrafo entero. */
+    const parrafo = texto.lastIndexOf('\n\n', limite);
+    if (parrafo > minimo) return parrafo;
+
+    /* 3) El final de una frase. */
+    for (let i = limite; i > minimo; i -= 1) {
+      if ('.!?…'.includes(texto[i]) && /\s/.test(texto[i + 1] || ' ')) return i + 1;
+    }
+
+    /* 4) Y como último recurso, un espacio: nunca a mitad de palabra. */
+    const espacio = texto.lastIndexOf(' ', limite);
+    return espacio > minimo ? espacio : limite;
+  }
+
+  function partirTexto(texto, capitulos, paginas = []) {
     if (!texto) return [];
+    /* Posiciones de inicio de página, para cortar por donde el libro corta. */
+    const cortesPagina = (Array.isArray(paginas) ? paginas : [])
+      .map((p) => Number(p?.posicion))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .sort((a, b) => a - b);
     /* Si el documento trae capítulos, se respetan aunque el texto sea corto:
      * el usuario quiere ver por qué capítulo va, no un bloque único. El corte
      * por tamaño existe para que el editor no se congele, no para decidir la
@@ -283,10 +327,7 @@ export function inicializarLectorPdf(deps = {}) {
       let numero = 1;
       while (desde < texto.length) {
         let hasta = Math.min(desde + LIMITE_PARTE, texto.length);
-        if (hasta < texto.length) {
-          const corte = texto.lastIndexOf('\n\n', hasta);
-          if (corte > desde + LIMITE_PARTE * 0.5) hasta = corte;
-        }
+        if (hasta < texto.length) hasta = mejorCorte(texto, desde, hasta, cortesPagina);
         cortes.push({ titulo: `Parte ${numero}`, desde, hasta, pagina: 1 });
         desde = hasta;
         numero += 1;
@@ -301,14 +342,15 @@ export function inicializarLectorPdf(deps = {}) {
         partes.push({ titulo: corte.titulo, texto: trozo, pagina: corte.pagina });
         continue;
       }
+      /* Los cortes de página de este trozo, en coordenadas del trozo. */
+      const cortesDelTrozo = cortesPagina
+        .filter((p) => p > corte.desde && p < corte.hasta)
+        .map((p) => p - corte.desde);
       let desde = 0;
       let sub = 1;
       while (desde < trozo.length) {
         let hasta = Math.min(desde + LIMITE_PARTE, trozo.length);
-        if (hasta < trozo.length) {
-          const corteSuave = trozo.lastIndexOf('\n\n', hasta);
-          if (corteSuave > desde + LIMITE_PARTE * 0.5) hasta = corteSuave;
-        }
+        if (hasta < trozo.length) hasta = mejorCorte(trozo, desde, hasta, cortesDelTrozo);
         partes.push({ titulo: `${corte.titulo} (${sub})`, texto: trozo.slice(desde, hasta).trim(), pagina: corte.pagina });
         desde = hasta;
         sub += 1;
@@ -1868,7 +1910,7 @@ export function inicializarLectorPdf(deps = {}) {
     estado.auditoriaProgreso = { total: bloques.length, completados: 0, fallos: 0 };
     estado.capa = { original: resultado.texto, local: resultado.texto, revisadoSeguro: '', aprobado: '' };
 
-    const partes = partirTexto(resultado.texto, resultado.capitulos);
+    const partes = partirTexto(resultado.texto, resultado.capitulos, resultado.paginas);
     const titulo = resultado.titulo
       || (estado.archivo?.name || 'Documento').replace(/\.pdf$/i, '');
     const idioma = deps.detectarIdioma
@@ -2683,6 +2725,7 @@ export function inicializarLectorPdf(deps = {}) {
     /* Si ya hay voz sonando en este capítulo, se salta ahí al instante. */
     const destino = bloqueDeCaracter(desde);
     if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
+      guia.saltar = true;   /* salto pedido por la persona: puede ir hacia atrás */
       window.ttsIrABloque(destino.bloque, destino.dentro);
       avisar('Leyendo desde aquí.', 'info');
       return;
@@ -2724,7 +2767,15 @@ export function inicializarLectorPdf(deps = {}) {
    * ajusta al comienzo de la frase más cercana. Es una guía de lectura
    * fiable, no un karaoke palabra por palabra.
    */
-  const guia = { texto: null, frases: [], desde: -1, cola: null, anclas: [], compacto: '', mapa: null };
+  const guia = {
+    texto: null, frases: [], desde: -1, cola: null, anclas: [], compacto: '', mapa: null,
+    /* Cuántos bloques tenía la cola cuando se situaron las anclas: si crece,
+     * hay que volver a situarlas o la marca barre el capítulo entero. */
+    bloques: 0,
+    /* Lo levanta quien salta a propósito (capítulo, doble toque, botones,
+     * barra): es el único caso en que la marca puede ir hacia atrás. */
+    saltar: false,
+  };
 
   /**
    * Reduce un texto a sus caracteres con significado (letras y números, sin
@@ -2873,8 +2924,16 @@ export function inicializarLectorPdf(deps = {}) {
   function limpiarGuia() {
     guia.desde = -1;
     guia.cola = null;
+    guia.bloques = 0;
+    /* Se viene de un cambio de capítulo o de parar la lectura: la próxima
+     * posición es legítima venga de donde venga. */
+    guia.saltar = true;
     if (el.realce) el.realce.textContent = '';
   }
+
+  /* La barra de posición del reproductor avisa de sus saltos: son
+   * intencionados y la guía sí puede retroceder con ellos. */
+  document.addEventListener('jg-tts-salto', () => { guia.saltar = true; });
 
   function sincronizarRealce() {
     if (el.realce) el.realce.scrollTop = el.salida.scrollTop;
@@ -2896,11 +2955,22 @@ export function inicializarLectorPdf(deps = {}) {
     if (!guia.frases.length) return null;
 
     /* Situar los bloques cuesta un rato en un capítulo largo, así que solo se
-     * hace cuando empieza una lectura nueva, no en cada latido. */
-    if (guia.cola !== datos.cola) {
+     * hace cuando hace falta: al empezar una lectura nueva y **cada vez que la
+     * cola crece**.
+     *
+     * Lo segundo es lo que faltaba, y era la causa del parpadeo. El audio se
+     * genera por tandas: cuando arranca la lectura la cola tiene uno o dos
+     * bloques, y solo se calculaban esas dos anclas. Como la última ancla se
+     * extiende «hasta el final del texto» (ver `posicionDeVoz`), cada bloque
+     * que sonaba después hacía que la marca barriera el capítulo entero de
+     * principio a fin y volviera atrás en el siguiente. Medido: con 2 anclas
+     * en un capítulo de 20 000 letras, la marca iba de 900 a 20 000 y vuelta,
+     * una y otra vez. Eso es lo que se veía titilar. */
+    let textos = [];
+    try { textos = (window.ttsTextosDeCola && window.ttsTextosDeCola()) || []; } catch (_) { textos = []; }
+    if (guia.cola !== datos.cola || textos.length !== guia.bloques) {
       guia.cola = datos.cola;
-      let textos = [];
-      try { textos = (window.ttsTextosDeCola && window.ttsTextosDeCola()) || []; } catch (_) { textos = []; }
+      guia.bloques = textos.length;
       guia.anclas = textos.length ? situarBloques(textos) : [];
     }
 
@@ -2913,6 +2983,20 @@ export function inicializarLectorPdf(deps = {}) {
     const rango = fraseEn(guia.frases, punto);
     if (!rango) return null;
     if (rango[0] === guia.desde) return el.realce.querySelector('mark');
+
+    /* La guía no vuelve atrás sola.
+     *
+     * Aunque las anclas ya se recalculan, situar un bloque es aproximado: un
+     * cálculo puede quedar unas frases por detrás del anterior y la marca
+     * daría un salto hacia atrás. Leyendo, eso se ve como un parpadeo y
+     * desorienta más que ayudar. Mientras la lectura avanza, la marca solo
+     * avanza; solo retrocede cuando el usuario lo pide (cambiar de capítulo,
+     * tocar un párrafo, saltar de frase o mover la barra), y esos sitios
+     * levantan `guia.saltar`. */
+    if (!guia.saltar && guia.desde >= 0 && rango[0] < guia.desde) {
+      return el.realce.querySelector('mark');
+    }
+    guia.saltar = false;
     guia.desde = rango[0];
 
     /* Se construye con nodos de texto, nunca con innerHTML: el contenido sale
@@ -3002,6 +3086,7 @@ export function inicializarLectorPdf(deps = {}) {
     const caracter = frases[destinoIdx][0];
 
     anotarPosicion({ caracter });
+    guia.saltar = true;     /* salto pedido por la persona */
     const destino = bloqueDeCaracter(caracter);
     if (destino && typeof window.ttsIrABloque === 'function' && ttsSonandoAqui()) {
       window.ttsIrABloque(destino.bloque, destino.dentro);

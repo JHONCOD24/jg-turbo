@@ -270,5 +270,114 @@ function pagina(numero, lineas) {
     'clasificarBloque tambien reconoce mayusculas');
 }
 
+/* ── El índice del PDF y las unidades de lectura ────────────────────────
+ *
+ * Caso real, «El placebo eres tú»: el índice del libro tenía tres entradas
+ * apuntando a la página 5, una a una página que no existe, y varias a páginas
+ * de cortesía casi vacías. El resultado eran «tres páginas 5» en el índice,
+ * capítulos que solo contenían «Joe Dispenza», el índice y el prólogo cortados
+ * a mitad, y un capítulo del final colocado al principio del libro.
+ */
+function paginaDe(numero, lineas) {
+  return {
+    numero,
+    alto: 800,
+    ancho: 600,
+    lineas: lineas.map((texto, i) => ({
+      texto, x: 60, y: 700 - i * 20, altura: 11, ancho: Math.min(480, texto.length * 6),
+    })),
+  };
+}
+
+const LIBRO_CON_INDICE = {
+  paginas: [
+    paginaDe(1, ['EL PLACEBO ERES TÚ']),
+    paginaDe(2, ['Joe Dispenza']),
+    paginaDe(3, ['Título original: You Are the Placebo']),
+    paginaDe(4, ['Todos los derechos reservados.']),
+    paginaDe(5, ['Joe Dispenza']),
+    paginaDe(6, ['ÍNDICE', 'Prólogo .... 11', 'Capítulo 1 .... 25']),
+    paginaDe(7, ['PRÓLOGO', 'Este libro nace de una pregunta que me persigue desde hace muchos años y que nunca supe responder del todo.']),
+    ...Array.from({ length: 10 }, (_, k) => paginaDe(8 + k,
+      [`Contenido corrido y extenso de la página ${8 + k} del libro. `.repeat(18)])),
+  ],
+  indice: [
+    { titulo: 'Portada', pagina: 1 },
+    { titulo: 'Joe Dispenza', pagina: 5 },
+    { titulo: 'Créditos', pagina: 5 },
+    { titulo: 'Dedicatoria', pagina: 5 },
+    { titulo: 'Índice', pagina: 6 },
+    { titulo: 'Prólogo', pagina: 7 },
+    { titulo: 'Capítulo 1', pagina: 10 },
+    { titulo: 'Capítulo 2', pagina: 999 },   /* página que no existe */
+  ],
+};
+
+{
+  const r = componerTexto(LIBRO_CON_INDICE.paginas, { indice: LIBRO_CON_INDICE.indice });
+
+  /* 1) Las posiciones de página tienen que salir de componerTexto: sin ellas
+   *    no se puede cortar por páginas reales. */
+  comprobar(Array.isArray(r.paginas) && r.paginas.length > 0,
+    'componerTexto devuelve dónde empieza cada página en el texto final');
+  if (Array.isArray(r.paginas) && r.paginas.length) {
+    const ordenadas = r.paginas.every((p, i) => i === 0 || p.posicion >= r.paginas[i - 1].posicion);
+    comprobar(ordenadas, 'las páginas salen en orden y sin posiciones hacia atrás');
+    comprobar(r.paginas.every((p) => p.posicion >= 0 && p.posicion <= r.texto.length),
+      'ninguna posición de página se sale del texto');
+    comprobar(r.paginas.every((p) => Number.isFinite(p.numero)),
+      'cada página lleva su número real');
+  }
+
+  /* 2) Ningún capítulo puede quedar vacío ni ser una miga. */
+  const largos = r.capitulos.map((c, i) => {
+    const sig = r.capitulos[i + 1];
+    return (sig ? sig.posicion : r.texto.length) - c.posicion;
+  });
+  comprobar(largos.every((n) => n > 0),
+    `ningún capítulo queda vacío (mínimo obtenido: ${Math.min(...largos)})`);
+  /* El primero puede ser corto: son las páginas de cortesía, y el libro tiene
+   * que empezar en algún sitio. Los del cuerpo, no. */
+  comprobar(largos.slice(1).every((n) => n >= 200),
+    `en el cuerpo del libro no quedan migas (mínimo obtenido: ${Math.min(...largos.slice(1))})`);
+  comprobar(largos.filter((n) => n < 200).length <= 1,
+    'como mucho un capítulo corto, y es el de los preliminares');
+
+  /* 3) «Tres páginas 5» era el síntoma más visible. */
+  const porPagina = new Map();
+  for (const c of r.capitulos) porPagina.set(c.pagina, (porPagina.get(c.pagina) || 0) + 1);
+  const repetidas = [...porPagina.entries()].filter(([, n]) => n > 1);
+  comprobar(repetidas.length === 0,
+    `no hay dos capítulos con el mismo número de página${repetidas.length ? ' → ' + repetidas.map(([p, n]) => `pág ${p}×${n}`).join(', ') : ''}`);
+
+  /* 4) Un capítulo cuya página no existe no puede aterrizar al principio. */
+  const fantasma = r.capitulos.find((c) => c.titulo === 'Capítulo 2');
+  comprobar(!fantasma || fantasma.posicion > 0,
+    'un capítulo cuya página no existe no se coloca al principio del libro');
+
+  /* 5) Y el orden tiene que ser el del libro. */
+  const enOrden = r.capitulos.every((c, i) => i === 0 || c.posicion >= r.capitulos[i - 1].posicion);
+  comprobar(enOrden, 'los capítulos salen en el orden en que aparecen en el libro');
+  comprobar(r.capitulos.every((c) => c.titulo && c.titulo.trim()), 'todos los capítulos tienen título');
+}
+
+{
+  /* Un libro sin índice interno sigue funcionando como antes. */
+  const r = componerTexto(LIBRO_CON_INDICE.paginas, {});
+  comprobar(typeof r.texto === 'string' && r.texto.length > 0, 'sin índice el texto se compone igual');
+  comprobar(Array.isArray(r.paginas), 'sin índice también se informan las páginas');
+}
+{
+  /* Casos límite: nada de esto puede romper. */
+  const vacio = componerTexto([], { indice: [{ titulo: 'X', pagina: 1 }] });
+  comprobar(Array.isArray(vacio.capitulos) && Array.isArray(vacio.paginas),
+    'un documento sin páginas no rompe');
+  const soloIndiceMalo = componerTexto(LIBRO_CON_INDICE.paginas, {
+    indice: [{ titulo: 'A', pagina: 998 }, { titulo: 'B', pagina: 999 }],
+  });
+  comprobar(Array.isArray(soloIndiceMalo.capitulos),
+    'un índice entero apuntando a páginas inexistentes no rompe');
+}
+
 console.log(fallos === 0 ? '\nTodas las pruebas pasaron.' : `\n${fallos} prueba(s) fallaron.`);
 process.exit(fallos === 0 ? 0 : 1);

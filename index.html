@@ -1,4 +1,4 @@
-<!-- v2.31.0 · 9 voces Fish nuevas: Julio Ciencia, Sheyla, Farick, Sabio expandido, Enrique Hoffman, Voz locutor, Brian Tracy, Morgan Freeman, Mario Alonso Puig -->
+<!-- v2.31.0 · Paginas coherentes y guia sin titileo -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -13611,6 +13611,10 @@ function ttsFinLectura(){
 /* ── Avanzar y retroceder (como en un reproductor de video) ─────────────── */
 function ttsBuscar(segundos){
   if(!ttsState.queue.length) return;
+  /* Quien mueva la barra está pidiendo ir a otro sitio, quizá hacia atrás. La
+     guía de lectura no retrocede sola (para no parpadear), así que hay que
+     avisarla de que este salto sí es intencionado. */
+  document.dispatchEvent(new CustomEvent('jg-tts-salto'));
   if(ttsState.engineUsed === 'browser'){
     if(typeof _mostrarToastMejora === 'function'){
       _mostrarToastMejora('Con las voces del navegador no se puede avanzar el audio', false);
