@@ -73,7 +73,26 @@ una ruta única (`../node_modules`) que **dejó de existir**, así que ni siquie
 de archivos y de comprobaciones con el último informe. Herramientas externas: búscalas en varias
 ubicaciones y falla con un mensaje claro, nunca en silencio.
 
-### 1.4 Pruebas huérfanas que nadie mira
+### 1.4 Arreglar el código no arregla lo que ya está guardado
+
+**Ocurrió** (2026-09-03, v2.31.0 → v2.32.0): se corrigió cómo se trocea un libro en unidades de
+lectura. Las pruebas pasaban, los PDF nuevos salían perfectos… y el usuario seguía viendo
+exactamente el mismo fallo. Las unidades se cortan **al procesar el PDF** y se guardan en
+IndexedDB: los libros que ya estaban en la biblioteca conservaban los cortes viejos. Desde fuera
+parecía que el arreglo no había servido de nada.
+
+**Regla:** cuando cambies **cómo se genera** algo que se guarda —troceo, capítulos, índices,
+miniaturas, texto extraído—, pregunta siempre: *¿y lo que ya está guardado?* Casi siempre hace
+falta una de estas dos:
+- una versión en el registro (`versionTroceo`, `VERSION` de la base) que dispare el rehecho la
+  primera vez que se abre, o
+- una acción explícita para el usuario.
+
+Y **prueba el camino del dato ya guardado**, no solo el de los datos nuevos: es el que tiene la
+gente. `tests/verificar_pdf_retroceo.mjs` hace justo eso — siembra un libro con el defecto y
+comprueba que al abrirlo queda arreglado.
+
+### 1.5 Pruebas huérfanas que nadie mira
 
 **Estado actual:** `python -m pytest backend/tests` falla al recolectar 5 módulos
 (`test_ai_youtube`, `test_marcas_de_tiempo`, `test_pulido_subtitulos`, `test_transcribe`,

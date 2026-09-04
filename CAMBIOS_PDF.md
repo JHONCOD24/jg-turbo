@@ -60,9 +60,21 @@ libros que la gente ya tiene.
 - `tests/verificar_pdf_retroceo.mjs` ✔ **10/10** (nueva).
 - Regresión ✔ **602 OK · 0 FALLOS** · geometría 42/42 · scroll 39/39 · navegador 103/103.
 
-### Deploy
+### Deploy v70
 - `sw.js` → `jg-turbo-shell-v70` · `JG_JS_V` → `v70`
 - `index.html` → `<!-- v2.32.0 · Los libros ya guardados rehacen sus paginas al abrirlos -->`
+- Producción: `jg-turbo-dzzj3p060` → alias **https://jg-turbo.vercel.app**
+- Verificado con cache-busting: marcador `v2.32.0`, `sw.js v70`, `/api/health` ok, y en los módulos
+  servidos `depurarCapitulos` + `ajustarAPalabra` en `limpiezaTexto.js`, `rehacerTroceo` en
+  `pdfController.js` y `marcarTroceo` en `biblioteca.js`.
+
+### Cómo comprobarlo con el libro delante
+Recargar **dos veces** (la primera toma el `sw` nuevo) y abrir «El placebo eres tú». Al abrirlo
+debe salir un aviso breve: **«Se reorganizaron las páginas de este libro»**. Si no sale, el libro ya
+estaba bien o el `sw` viejo sigue activo — en ese caso, recargar otra vez.
+
+Después, en el índice: ninguna entrada repetida de la misma página, ninguna que solo diga «Urano» o
+el nombre del autor, y ninguna unidad que empiece o acabe a mitad de palabra.
 
 ---
 
