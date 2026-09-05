@@ -24,7 +24,10 @@ Documento para **humanos y agentes de IA**. Objetivo: que las actualizaciones de
 | Bundle de respaldo | `jg_config_bundle` (JSON) | **Sí** |
 | `GROQ_API_KEY` en servidor | Variables de entorno de Vercel | **Sí**, si se configura en el dashboard |
 
-**Importante (2026-07-26):** En Vercel hay `MISTRAL_API_KEY` (IA de pulido en servidor). **Sigue faltando** `GROQ_API_KEY` para Whisper en la nube: sin ella, el celular depende de la clave `gsk_…` en el navegador o del reconocimiento en vivo del navegador.
+**Estado verificado (2026-09-05):** `/api/health` en producción informa
+`groq_configured: true` e `ia_configured: true`. El teléfono puede usar la clave
+del servidor sin guardar otra en el navegador. La interfaz no debe confundir un
+timeout o una comprobación pendiente con una clave ausente.
 
 **Grok ≠ Groq:**
 - **Groq** (`gsk_…`, console.groq.com) → transcripción de audio (mic/archivo).

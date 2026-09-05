@@ -1,4 +1,4 @@
-<!-- v2.43.0 · Móvil: desplaza el documento, zona segura arriba, sin hueco abajo -->
+<!-- v2.44.0 · Móvil PDF: viewport visible, gestos únicos y estado Groq estable -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1915,12 +1915,12 @@
        cabecera fija, texto con todo lo que sobra, dock fijo. Antes el texto
        se quedaba en su mínimo (50 vh) y el resto era aire y separaciones. */
     body.jg-leyendo > .wrap{
-      padding:0;height:100dvh;min-height:100dvh;display:flex;flex-direction:column;
+      padding:0;height:var(--jg-viewport-alto,100dvh);min-height:0;display:flex;flex-direction:column;
     }
     body.jg-leyendo #panelPdf{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
     body.jg-leyendo #panelPdf > .card{flex:1;min-height:0;border-radius:0;border-inline:0;border-top:0}
     body.jg-leyendo .pdf-area{
-      padding:8px 12px calc(4px + env(safe-area-inset-bottom));gap:8px;
+      padding:max(8px,env(safe-area-inset-top,0px)) 12px calc(4px + env(safe-area-inset-bottom));gap:8px;
     }
     /* `position:sticky` crea SIEMPRE un contexto de apilamiento, y eso dejaba
        la hoja de «Opciones» atrapada dentro de la cabecera: por muy alto que
@@ -1936,6 +1936,13 @@
     body.jg-leyendo .pdf-area.has-results .pdf-texto-caja{min-height:160px}
     /* El contador de palabras cabe en Opciones, no en una cabecera de móvil. */
     body.jg-leyendo .pdf-doc-acciones .count{display:none}
+    /* En lectura, «Lectura» solo repetía el estado actual. Las tres acciones
+       útiles caben en una fila incluso a 320 px con rótulos cortos. */
+    body.jg-leyendo .pdf-modo-barra{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+    body.jg-leyendo .pdf-modo-barra::-webkit-scrollbar{display:none}
+    body.jg-leyendo #pdfVistaLectura{display:none}
+    body.jg-leyendo .pdf-accion-larga{display:none}
+    body.jg-leyendo .pdf-accion-corta{display:inline}
   }
 
   /* Navegación por partes y buscador */
@@ -2479,6 +2486,7 @@
     background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent);
   }
   #pdfUnirCuenta:empty{display:none}
+  .pdf-accion-corta{display:none}
 
   @media (max-width:640px){
     /* 1. Cabecera de una sola fila: volver · título · Opciones. */
@@ -2570,10 +2578,8 @@
        páginas eso obliga a repartirlas otra vez: al pasar de página el
        reparto cambiaba y volvías al principio del capítulo. Un lector que
        se remaqueta bajo el dedo está roto; ganar 15 % de alto no lo paga. */
-    body.jg-leyendo.jg-inmersivo .pdf-doc-top,
-    body.jg-leyendo.jg-inmersivo .pdf-modo-barra{opacity:0;pointer-events:none}
-    body.jg-leyendo.jg-inmersivo .pdf-barra-movil{opacity:0;transform:translateY(100%);pointer-events:none}
-    body.jg-leyendo.jg-inmersivo #pdfPaginacion{opacity:.55}
+    /* Los controles permanecen visibles: esconderlos dejaba su espacio vacío
+       o forzaba a repartir las páginas otra vez. */
 
     /* 4. El único superviviente del modo inmersivo: parar la voz. */
     .pdf-voz-mini{display:none}
@@ -4498,7 +4504,7 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
    con `scrollTo`), así que el navegador debe dejarnos el gesto horizontal:
    con `pan-y` el dedo sigue pudiendo bajar la página y el deslizamiento
    lateral llega a nuestro manejador en vez de perderse. */
-.pdf-lectura[data-paginado="si"]{touch-action:pan-y}
+.pdf-lectura[data-paginado="si"]{touch-action:pan-y pinch-zoom}
 #pdfVolverLectura{position:sticky;bottom:12px}
 /* ── Paso de páginas ──────────────────────────────────────────────────
    El texto fluye en columnas del ancho exacto del lector: cada columna es
@@ -4526,7 +4532,7 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 body.jg-leyendo > .wrap > header,
 body.jg-leyendo > .wrap > .tabs-row,
 body.jg-leyendo > .wrap > footer{display:none}
-body.jg-leyendo > .wrap{max-width:1440px;padding-block:0;height:100dvh}
+body.jg-leyendo > .wrap{max-width:1440px;padding-block:0;height:var(--jg-viewport-alto,100dvh)}
 body.jg-leyendo .pdf-area.has-results{max-width:none}
 body.jg-leyendo .pdf-doc-top{position:static}
 body.jg-leyendo .pdf-texto-col{gap:10px;max-width:var(--pdf-col-ancho,76ch)}
@@ -6006,11 +6012,12 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                      («sorprend» + «entes»). Trabaja solo al pasar de página;
                      el botón queda para pedirlo a mano en todo el capítulo. -->
                 <button type="button" class="mini-btn" id="btnPdfUnirPalabras"
+                        aria-label="Unir palabras partidas"
                         title="Unir las palabras que el PDF partió al cambiar de renglón">
-                  Unir palabras <span id="pdfUnirCuenta"></span>
+                  <span class="pdf-accion-larga">Unir palabras</span><span class="pdf-accion-corta">Unir</span> <span id="pdfUnirCuenta"></span>
                 </button>
                 <div class="pdf-cortes-barra">
-                  <button type="button" class="mini-btn" id="btnPdfCortes" hidden>Revisar cortes <span id="pdfCortesCuenta"></span></button>
+                  <button type="button" class="mini-btn" id="btnPdfCortes" aria-label="Revisar cortes" hidden><span class="pdf-accion-larga">Revisar cortes</span><span class="pdf-accion-corta">Cortes</span> <span id="pdfCortesCuenta"></span></button>
                   <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar corrección</button>
                 </div>
                 <span class="pdf-modo-estados" id="pdfModoEstados" role="status" aria-live="polite"></span>
@@ -6987,6 +6994,7 @@ let serverInfo = {
   model:'tiny',
   modelError:null,
   groqConfigured:false,
+  configKnown:false,
   iaConfigured:false,
   aiProviderServer:'none',
 };
@@ -7086,7 +7094,11 @@ let sessionIA = {
 function tieneClaveGroqDisponible(){
   const local = (localStorage.getItem('jg_groq_api_key') || '').trim();
   if(local && esClaveTipoGroq(local)) return true;
-  return !!serverInfo.groqConfigured;
+  if(serverInfo.groqConfigured) return true;
+  /* En Vercel, mientras aún no conocemos la configuración, se intenta la
+     transcripción. Bloquearla por una comprobación lenta producía el aviso
+     falso de «falta clave» aunque el servidor sí la tuviera. */
+  return !!(_isVercel && !serverInfo.configKnown);
 }
 
 /** Detecta claves de otro servicio pegadas por error en el campo Groq. */
@@ -7114,6 +7126,9 @@ function actualizarBannerClavesNube(){
   const el = document.getElementById('jgCloudKeyBanner');
   if(!el) return;
   if(!_isVercel){ el.style.display = 'none'; return; }
+  /* Mientras /health no haya respondido, no convertir «comprobando» en
+     «falta clave». En redes móviles esa falsa alarma aparecía en cada carga. */
+  if(!serverInfo.configKnown){ el.style.display = 'none'; return; }
   const groqOk = tieneClaveGroqDisponible();
   const iaOk = sessionIA.aiConfigured || serverInfo.iaConfigured;
   if(groqOk && iaOk){ el.style.display = 'none'; return; }
@@ -7193,6 +7208,10 @@ async function sincronizarSesionServidor(){
     if(data.ai_provider) sessionIA.provider = data.ai_provider;
     if(data.openrouter_model) sessionIA.openrouterModel = data.openrouter_model;
     sessionIA.aiConfigured = !!data.ai_configured;
+    if(typeof data.groq_configured === 'boolean'){
+      serverInfo.groqConfigured = data.groq_configured;
+      serverInfo.configKnown = true;
+    }
     if(data.limits){
       limitesServidor.maxAudioMb = data.limits.max_audio_mb || limitesServidor.maxAudioMb;
       limitesServidor.maxAudioMinutes = data.limits.max_audio_minutes || limitesServidor.maxAudioMinutes;
@@ -7293,7 +7312,7 @@ function pintarServerPill(){
   } else if(!serverInfo.modelReady){
     serverPill.className = 'server-pill warn';
     serverTxt.textContent = `Servidor · ${serverInfo.modelState}`;
-  } else if(_isVercel && !tieneClaveGroqDisponible()){
+  } else if(_isVercel && serverInfo.configKnown && !tieneClaveGroqDisponible()){
     serverPill.className = 'server-pill warn';
     serverTxt.textContent = 'OK · Falta clave Groq';
   } else {
@@ -7381,44 +7400,50 @@ async function cargarGlosarioDesdeServidor() {
   }
 }
 
+let comprobandoServidor = false;
 async function checkServer(){
-  serverPill.className = 'server-pill checking';
-  serverTxt.textContent = 'Verificando…';
+  if(comprobandoServidor) return;
+  comprobandoServidor = true;
+  if(!serverInfo.online){
+    serverPill.className = 'server-pill checking';
+    serverTxt.textContent = 'Verificando…';
+  }
   try{
     // 1) ¿el servidor responde?
-    const pingResp = await fetchTimeout(SERVER_URL + '/ping', {}, 3000);
-    if(!pingResp.ok) throw new Error('ping failed');
-    serverInfo.online = true;
-
-    if (!glossaryLoaded) {
-      cargarGlosarioDesdeServidor();
-    }
-
-    // 2) ¿el modelo Whisper está listo?
+    /* /health ya confirma conexión, modelo y claves. Antes se hacía /ping y
+       después /health, duplicando la espera de una función fría en móvil. */
     try{
-      const hResp = await fetchTimeout(SERVER_URL + '/health', {}, 3000);
+      const hResp = await fetchTimeout(SERVER_URL + '/health', { cache:'no-store' }, 7000);
       if(hResp.ok){
         const h = await hResp.json();
+        serverInfo.online = true;
         serverInfo.modelReady  = !!h.model_ready;
         serverInfo.modelState  = h.model_state || 'desconocido';
         serverInfo.model       = h.model || serverInfo.model;
         serverInfo.modelError  = h.model_error || null;
         serverInfo.groqConfigured = !!h.groq_configured;
+        serverInfo.configKnown = typeof h.groq_configured === 'boolean';
         serverInfo.iaConfigured = !!(h.ia_configured || (h.ai_configured && h.groq_configured === undefined));
         serverInfo.aiProviderServer = h.ai_provider_server || 'none';
         // Clave en el navegador también cuenta (Vercel no guarda la sesión)
         sessionIA.aiConfigured = !!h.ia_configured || !!h.ai_configured || !!(localStorage.getItem('jg_api_key') || '').trim()
           || (serverInfo.aiProviderServer && serverInfo.aiProviderServer !== 'none');
-      }
+      } else throw new Error('health failed');
     }catch(_){
-      // /health falló pero /ping respondió — el servidor está vivo
-      serverInfo.modelReady = false;
+      /* Si salud tarda, comprobar solo conectividad y conservar el último
+         estado válido de modelo/claves. Un timeout no significa «sin clave». */
+      const pingResp = await fetchTimeout(SERVER_URL + '/ping', { cache:'no-store' }, 5000);
+      if(!pingResp.ok) throw new Error('ping failed');
+      serverInfo.online = true;
     }
+    if (!glossaryLoaded) cargarGlosarioDesdeServidor();
     await sincronizarSesionServidor();
     sessionIA.aiConfigured = sessionIA.aiConfigured || !!(localStorage.getItem('jg_api_key') || '').trim();
   }catch(_){
     serverInfo.online = false;
     serverInfo.modelReady = false;
+  }finally{
+    comprobandoServidor = false;
   }
   pintarServerPill();
 }
@@ -7825,6 +7850,9 @@ function jgActivarPanel(tabActiva, enfocar = false){
    * no al abrir la app: son 553 KB que no le sirven a quien viene a dictar. */
   if(tabActiva.dataset.tab === 'pdf' && typeof window.jgAsegurarLectorPdf === 'function'){
     window.jgAsegurarLectorPdf();
+  }
+  if(tabActiva.dataset.tab === 'yt' && typeof window.jgAsegurarYoutube === 'function'){
+    window.jgAsegurarYoutube();
   }
   if(enfocar) tabActiva.focus();
   // FAB de grabación solo aplica al panel Mic (móvil).
@@ -10133,7 +10161,7 @@ async function transcribirGrabacionAutomatica(blob) {
     if (panel) panel.classList.add('live-panel--active');
     return;
   }
-  if (_isVercel && !tieneClaveGroqDisponible()) {
+  if (_isVercel && serverInfo.configKnown && !tieneClaveGroqDisponible()) {
     setEstado('⚠️ Falta clave Groq (gsk_…) para transcribir en la nube. Ábrela en Configuración o en console.groq.com/keys.', false);
     if (labelEl) labelEl.textContent = 'Falta clave Groq';
     interimEl.innerHTML = '<span style="color:var(--muted); font-style:italic;">Configura Groq (gsk_…, no es Grok de xAI) en Servidor e IA. Si ya hay texto en vivo, se conservó abajo.</span>';
@@ -16158,21 +16186,31 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v83';
-import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
-  inicializarYoutubeSincronizado({
-    fetchApi,
-    estaServidorOnline: () => Boolean(serverInfo.online),
-    traducirTexto: (texto) => traducirTranscripcionDetallada(texto, 'en', 'es', {
-      literal: true,
-      revisar: true,
-    }),
-    generarAudioEspanol: (texto) => {
-      const prefs = ttsPrefs();
-      return ttsFetchNeuralChunk({ text: texto, lang: 'es' }, prefs, 1, 'yt');
-    },
+const JG_JS_V = 'v84';
+let jgCargaYoutube = null;
+function asegurarYoutubeSincronizado(){
+  if(jgCargaYoutube) return jgCargaYoutube;
+  jgCargaYoutube = import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
+    inicializarYoutubeSincronizado({
+      fetchApi,
+      estaServidorOnline: () => Boolean(serverInfo.online),
+      traducirTexto: (texto) => traducirTranscripcionDetallada(texto, 'en', 'es', {
+        literal: true,
+        revisar: true,
+      }),
+      generarAudioEspanol: (texto) => {
+        const prefs = ttsPrefs();
+        return ttsFetchNeuralChunk({ text: texto, lang: 'es' }, prefs, 1, 'yt');
+      },
+    });
+  }).catch((error) => {
+    jgCargaYoutube = null;
+    console.error('[jg-youtube-sync]', error);
   });
-}).catch((error) => console.error('[jg-youtube-sync]', error));
+  return jgCargaYoutube;
+}
+if (typeof window !== 'undefined') window.jgAsegurarYoutube = asegurarYoutubeSincronizado;
+if (document.querySelector('#panelYt.active')) asegurarYoutubeSincronizado();
 
 /* ── Lector de PDF ───────────────────────────────────────────────────
  * El motor pesa ~1,7 MB, así que el módulo se carga aparte: quien no use

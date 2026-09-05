@@ -1,5 +1,36 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Un teléfono puede emitir Touch Events y Pointer Events por el mismo gesto
+
+**Síntoma (v2.43):** deslizar parecía bloqueado o saltaba de forma errática.
+**Causa:** el lector registraba `touchend` y `pointerup` para la misma acción;
+un dispositivo real puede ejecutar los dos. La prueba solo comprobaba que la
+página cambiara, así que dos saltos también pasaban. **Regla:** un solo modelo
+de eventos, alternativa con botones y comprobar el incremento exacto `+1/-1`.
+
+## Desconocido no significa que falta una clave
+
+**Síntoma (v2.43):** el teléfono pedía configurar Groq aunque Vercel ya tenía
+`GROQ_API_KEY`. **Causa:** `serverInfo` empezaba en `false` y la interfaz lo
+presentaba antes de que `/health` respondiera. **Regla:** modelar el estado
+«aún no comprobado», no bloquear por él y conservar la última respuesta válida
+ante un timeout móvil.
+
+## `100dvh` no siempre sigue la ventana visible de un WebView
+
+**Síntoma (v2.43):** borde superior cortado y franja inferior después de mover
+la barra del navegador. **Causa:** el lector fijo confiaba solo en `100dvh`.
+**Regla:** sincronizar el alto con `visualViewport.height`, reservar las zonas
+seguras y conservar un ancla de carácter antes de repartir de nuevo.
+
+## Una pantalla fija hereda el desplazamiento del documento
+
+**Síntoma (v2.43):** la cabecera medía correctamente, pero no aparecía en la
+captura: estaba por encima del viewport. **Causa:** al pulsar Leer, el navegador
+había desplazado el documento hasta el selector; añadir `jg-leyendo` lo hacía
+fijo sin devolver `scrollY` a cero. **Regla:** guardar el scroll de la biblioteca,
+entrar al lector en cero y restaurarlo al salir. Medir también `top`, no solo alto.
+
 ## Si desplaza un cajón interno, el teléfono pierde pantalla para siempre
 
 **Síntoma (auditado 2026-09-05):** «queda un hueco en la parte inferior» y «la

@@ -62,6 +62,7 @@ pagina.on('response', async (r) => {
 });
 const pdfPedidos = () => pedidos.filter((p) => /\/js\/pdf\//.test(p.url));
 const sumaPdf = () => pdfPedidos().reduce((a, p) => a + p.bytes, 0);
+const youtubePedidos = () => pedidos.filter((p) => /\/js\/youtube\//.test(p.url));
 
 try {
   console.log('\n── 1. Abrir la app sin tocar nada ──────────────────────────────');
@@ -76,6 +77,8 @@ try {
   if (listaArranque.length) console.log('   ' + listaArranque.slice(0, 6).join(' · '));
   comprobar('el lector de PDF no viaja con quien abre la app',
     alArrancar <= TECHO_PDF_AL_ARRANCAR, `llegaron ${(alArrancar / 1024).toFixed(0)} KB`);
+  comprobar('YouTube tampoco se descarga al abrir Micrófono', youtubePedidos().length === 0,
+    `${youtubePedidos().length} solicitudes`);
 
   const total = pedidos.reduce((a, p) => a + p.bytes, 0);
   console.log(`   total descargado al arrancar: ${(total / 1024).toFixed(0)} KB`);
@@ -83,7 +86,13 @@ try {
     `${(total / 1024).toFixed(0)} KB`);
   comprobar('sin errores de JavaScript al arrancar', errores.length === 0, errores.join(' | '));
 
-  console.log('\n── 2. Al entrar en PDF, el lector llega y funciona ─────────────');
+  console.log('\n── 2. YouTube llega solo cuando se abre ────────────────────────');
+  await pagina.locator('#tabYt').click();
+  await pagina.waitForTimeout(800);
+  comprobar('el módulo de YouTube llega al entrar en su pestaña', youtubePedidos().length > 0);
+  comprobar('YouTube se inicializa sin errores', errores.length === 0, errores.join(' | '));
+
+  console.log('\n── 3. Al entrar en PDF, el lector llega y funciona ─────────────');
   await pagina.locator('#tabPdf').click();
   await pagina.waitForFunction(() => !!window.jgPdfListo, null, { timeout: 20000 });
   comprobar('el lector se inicializa al abrir la pestaña', await pagina.evaluate(() => !!window.jgPdfListo));

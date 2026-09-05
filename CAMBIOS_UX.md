@@ -3,6 +3,23 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-05 · v2.44.0 · Gestos y viewport móvil estables
+
+- Se elimina el segundo manejador táctil del lector. Pointer Events atiende un
+  solo gesto y la regresión exige una página exacta por deslizamiento.
+- El alto sigue `visualViewport.height`; al variar la barra del navegador
+  conserva el punto de lectura y el dock termina en el borde visible.
+- Al entrar al libro se normaliza el desplazamiento del documento para que la
+  cabecera no quede sobre el borde superior; al salir se restaura la biblioteca.
+- Se reserva `safe-area-inset-top` dentro del lector y los controles inferiores
+  permanecen visibles. Ya no queda el hueco de una barra transparente.
+- En 320 px, las acciones quedan en una fila: Editar, Unir y Cortes.
+- El estado desconocido del servidor no se presenta como falta de clave Groq.
+  La consulta periódica tampoco reemplaza el estado por «Verificando».
+- YouTube se descarga al abrir su pestaña. El arranque baja de 962 KB a 901 KB.
+
+Módulos `v84`; shell `jg-turbo-shell-v84`.
+
 ## 2026-09-05 · v2.43.0 · El teléfono desplaza como un teléfono
 
 Reportado auditando en el móvil: «sigue quedando un hueco en la parte

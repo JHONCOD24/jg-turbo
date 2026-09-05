@@ -117,6 +117,7 @@ export function initLibroVista({ el, estado, api }) {
     if (el.btnCortes) el.btnCortes.hidden = pend === 0;
     /* Capítulo nuevo: se reparte desde su primera página. */
     pag.actual = 0;
+    if (!conservar) pag.ancla = 0;
     requestAnimationFrame(() => {
       medirPaginas({ conservar: false });
       if (ancla) irACaracter(ancla);
@@ -229,11 +230,13 @@ export function initLibroVista({ el, estado, api }) {
     /* `caracterVisible()` se apoya en `pag.actual`, que aquí ya es la página
      * destino, y su cálculo no depende de dónde vaya la animación: por eso
      * puede anotarse el sitio sin esperar a que el desplazamiento termine. */
-    pag.ancla = caracterVisible();
     pag.saltando = true;
     clearTimeout(tempoSalto);
     tempoSalto = setTimeout(() => { pag.saltando = false; }, 420);
-    if (guardar && api.anotarPagina) api.anotarPagina(pag.ancla);
+    if (guardar) {
+      pag.ancla = caracterVisible();
+      if (api.anotarPagina) api.anotarPagina(pag.ancla);
+    }
   }
 
   /** En qué página cae un elemento del texto. */
@@ -336,23 +339,6 @@ export function initLibroVista({ el, estado, api }) {
       if (ev.key === 'ArrowLeft' || ev.key === 'PageUp') { ev.preventDefault(); irAPagina(pag.actual - 1); }
     });
 
-    /* Deslizar pasa página; el toque simple sigue siendo «leer desde aquí»,
-     * así que los dos gestos conviven sin pisarse. */
-    let inicio = null;
-    el.lectura.addEventListener('touchstart', (ev) => {
-      const t = ev.changedTouches && ev.changedTouches[0];
-      inicio = t ? { x: t.clientX, y: t.clientY } : null;
-    }, { passive: true });
-    el.lectura.addEventListener('touchend', (ev) => {
-      if (!inicio || !pag.activo) return;
-      const t = ev.changedTouches && ev.changedTouches[0];
-      if (!t) return;
-      const dx = t.clientX - inicio.x;
-      const dy = t.clientY - inicio.y;
-      inicio = null;
-      if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-      irAPagina(pag.actual + (dx < 0 ? 1 : -1));
-    }, { passive: true });
   }
 
   /* Girar el teléfono o abrir el teclado cambia el hueco: se vuelve a repartir
@@ -424,7 +410,11 @@ export function initLibroVista({ el, estado, api }) {
     if (!el.lectura) return;
     const destino = rangoDeCaracter(caracter);
     if (!destino) return;
-    if (pag.activo) { irAPagina(paginaDe(destino), { suave: false, guardar: false }); return; }
+    if (pag.activo) {
+      pag.ancla = Math.max(0, Number(caracter) || 0);
+      irAPagina(paginaDe(destino), { suave: false, guardar: false });
+      return;
+    }
     bloqueDeCaracter(caracter)?.scrollIntoView({ block: 'start' });
   }
 
@@ -833,23 +823,15 @@ export function initLibroVista({ el, estado, api }) {
   /* Apartar el cromo NO cambia el tamaño del texto (el hueco queda
      reservado), así que aquí no se vuelve a repartir nada: es justo lo que
      evita que un salto de página se deshaga solo. */
-  function inmersivo(activo) {
-    if (!enTelefono()) { document.body.classList.remove('jg-inmersivo'); return; }
-    document.body.classList.toggle('jg-inmersivo', !!activo);
+  function inmersivo() {
+    /* En teléfono los controles permanecen visibles. Ocultarlos conservando
+       su hueco dejaba una franja vacía; ocultarlos sin conservarlo refluía las
+       páginas. Una barra estable resulta más predecible y no cambia el alto. */
+    document.body.classList.remove('jg-inmersivo');
   }
   function apartarCromo() {
     clearTimeout(tempoInmersivo);
-    if (!enTelefono()) return;
-    if (hayHojaOAbierto()) return;
-    /* Se espera a que el salto de página termine. Apartar el cromo remaqueta
-     * (el texto crece), y hacerlo a mitad del desplazamiento suave dejaba la
-     * lectura en otra página: pulsabas «siguiente» y volvías al principio.
-     * Lo cazó `verificar_pdf_paginas.mjs`. */
-    const reintentar = () => {
-      if (pag.saltando) { tempoInmersivo = setTimeout(reintentar, 120); return; }
-      inmersivo(true);
-    };
-    tempoInmersivo = setTimeout(reintentar, 460);
+    inmersivo(false);
   }
   function devolverCromo() {
     clearTimeout(tempoInmersivo);
@@ -877,6 +859,14 @@ export function initLibroVista({ el, estado, api }) {
      para que llegue antes que el gesto del párrafo, y sin cancelarlo: el
      doble toque de «leer desde aquí» sigue funcionando igual. */
   let toqueDespertoCromo = false;
+  let tempoConsumirToque = null;
+  function marcarToqueConsumido() {
+    toqueDespertoCromo = true;
+    clearTimeout(tempoConsumirToque);
+    /* Safari/Chrome no siempre generan `click` después de un swipe. La marca
+       no puede quedarse viva y robar el siguiente toque real. */
+    tempoConsumirToque = setTimeout(() => { toqueDespertoCromo = false; }, 500);
+  }
 
   /* ── Pasar página con el dedo ──────────────────────────────────────
      El área de lectura es `overflow-x:hidden`: las páginas se mueven con
@@ -887,41 +877,63 @@ export function initLibroVista({ el, estado, api }) {
 
      Así que el deslizamiento se atiende a mano. Con Pointer Events, que
      cubren dedo, lápiz y ratón por igual. */
-  const DESLIZ_MINIMO = 45;     // menos que esto es un toque tembloroso
+  const DESLIZ_MINIMO = () => Math.max(34, Math.min(56, (el.lectura?.clientWidth || 390) * .12));
   const DESLIZ_VERTICAL = 1.0;  // si baja más de lo que cruza, no es pasar página
   let gesto = null;
   if (el.lectura) {
     el.lectura.addEventListener('pointerdown', (ev) => {
       if (!pag.activo || ev.pointerType === 'mouse') { gesto = null; return; }
       gesto = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+      try { el.lectura.setPointerCapture(ev.pointerId); } catch (_) {}
     }, { passive: true });
     el.lectura.addEventListener('pointerup', (ev) => {
       if (!gesto || ev.pointerId !== gesto.id) return;
       const dx = ev.clientX - gesto.x;
       const dy = ev.clientY - gesto.y;
       gesto = null;
-      if (Math.abs(dx) < DESLIZ_MINIMO) return;
+      try { el.lectura.releasePointerCapture(ev.pointerId); } catch (_) {}
+      if (Math.abs(dx) < DESLIZ_MINIMO()) return;
       if (Math.abs(dy) > Math.abs(dx) * DESLIZ_VERTICAL) return;
       /* Si estaba seleccionando texto, el deslizamiento es suyo, no nuestro. */
       const sel = document.getSelection();
       if (sel && String(sel).trim().length > 1) return;
       /* Este gesto no es «lee desde aquí»: se consume el click que viene. */
-      toqueDespertoCromo = true;
+      marcarToqueConsumido();
       irAPagina(pag.actual + (dx < 0 ? 1 : -1));
     }, { passive: true });
     el.lectura.addEventListener('pointercancel', () => { gesto = null; }, { passive: true });
   }
 
+  /* `100dvh` todavía queda desfasado en algunos WebView/iOS al cambiar la
+     barra del navegador. La altura de VisualViewport representa el área que
+     de verdad puede verse y mantiene el dock pegado al borde útil. */
+  let rafViewport = 0;
+  function sincronizarViewportMovil() {
+    if (!enTelefono()) {
+      document.documentElement.style.removeProperty('--jg-viewport-alto');
+      return;
+    }
+    cancelAnimationFrame(rafViewport);
+    rafViewport = requestAnimationFrame(() => {
+      const alto = Math.round(window.visualViewport?.height || window.innerHeight || 0);
+      if (alto > 0) document.documentElement.style.setProperty('--jg-viewport-alto', `${alto}px`);
+    });
+  }
+  sincronizarViewportMovil();
+  window.visualViewport?.addEventListener('resize', sincronizarViewportMovil, { passive: true });
+  window.addEventListener('orientationchange', sincronizarViewportMovil, { passive: true });
+
   /* Marca puesta por el gesto que despertó el cromo o pasó de página, para que
    * el `click` que viene detrás no se interprete además como «lee desde aquí». */
   function consumirToqueDeCromo() {
     if (!toqueDespertoCromo) return false;
+    clearTimeout(tempoConsumirToque);
     toqueDespertoCromo = false;
     return true;
   }
   if (el.lectura) {
     el.lectura.addEventListener('pointerdown', () => {
-      if (document.body.classList.contains('jg-inmersivo')) toqueDespertoCromo = true;
+      if (document.body.classList.contains('jg-inmersivo')) marcarToqueConsumido();
       devolverCromo();
     }, { capture: true, passive: true });
   }

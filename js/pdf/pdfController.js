@@ -1081,6 +1081,7 @@ export function inicializarLectorPdf(deps = {}) {
     else if (estado.pulidoActivo) asegurarPulido(nuevo, { mostrar: true }).catch(() => {});
   }
 
+  let scrollAntesLector = 0;
   function abrirLector() {
     const nuevo = !(el.area && el.area.classList.contains('has-results'));
     if (el.area) el.area.classList.add('has-results');
@@ -1088,7 +1089,12 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.ocrBox) el.ocrBox.hidden = true;
     /* Modo lectura: el CSS aparta el encabezado y las pestañas de la app en
      * celular y tablet. Son ~120 px que pasan al texto. */
+    if (!document.body.classList.contains('jg-leyendo')) scrollAntesLector = window.scrollY || 0;
     document.body.classList.add('jg-leyendo');
+    /* Entrar desde el selector de archivos puede dejar el documento desplazado
+       cientos de píxeles. Al convertirlo en pantalla fija ese scroll seguía
+       aplicado y cortaba la cabecera del lector por arriba. */
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     /* La pantalla completa de escritorio se recuerda, pero solo mientras hay
      * un libro abierto: en la biblioteca haría falta el encabezado. */
     if (pantallaGuardada()) fijarPantallaCompleta(true);
@@ -1110,6 +1116,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (!desdeHistorial) capas.cerrar('lector');
     document.body.classList.remove('jg-leyendo');
     document.body.classList.remove('jg-pantalla');
+    requestAnimationFrame(() => window.scrollTo({ top: scrollAntesLector, left: 0, behavior: 'auto' }));
     /* El temporizador es de esta sesión de escucha: al salir del libro no
      * tiene sentido que siga corriendo contra el siguiente. */
     pararTemporizadorDormir();

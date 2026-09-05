@@ -5,6 +5,10 @@ Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, tr
 PDF v2.40.0 incorpora páginas de lectura, restauración por carácter y corrección
 con decisiones persistentes. Detalle: [verificación](docs/pdf-v2.40-verificacion.md).
 
+PDF v2.44.0 estabiliza el teléfono: swipe único por página, alto basado en la
+ventana visible, zona segura superior, controles persistentes y estado Groq sin
+avisos mientras la configuración todavía se está comprobando.
+
 ## YouTube con voz y traducción sincronizadas
 
 En el panel YouTube, **Traducir y doblar al español** obtiene la pista inglesa

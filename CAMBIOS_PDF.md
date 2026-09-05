@@ -3,6 +3,16 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-05 · v2.44.0 · Corrección móvil posterior
+
+El lector usa un solo manejador de swipe y avanza exactamente una página. El
+alto sigue la ventana visible del teléfono, conserva la posición al cambiar la
+barra del navegador, reserva la zona segura superior y mantiene los controles
+inferiores visibles. En 320 px las acciones de lectura caben en una fila.
+
+La comprobación de Groq distingue «desconocido» de «no configurado» y el módulo
+de YouTube ya no retrasa el arranque. Evidencia en el informe enlazado arriba.
+
 ## 2026-09-05 · v2.42.0 · Que abra rápido, llene la pantalla y responda al dedo
 
 Auditoría del usuario en el teléfono. Tres fallas reportadas, las tres

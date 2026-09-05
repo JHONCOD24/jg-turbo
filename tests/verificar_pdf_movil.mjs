@@ -77,6 +77,7 @@ const reparto = (p) => p.evaluate(() => {
     && !e.closest('details:not([open])')
     && !e.closest('[hidden]');
   const barra = document.querySelector('#pdfBarraMovil');
+  const modo = document.querySelector('.pdf-modo-barra');
   const tocables = [...document.querySelectorAll('button, [role="button"], select, summary')]
     .filter(visible)
     .map((b) => {
@@ -88,10 +89,13 @@ const reparto = (p) => p.evaluate(() => {
     ventana: innerHeight,
     anchoVentana: innerWidth,
     cabecera: cab ? Math.round(cab.getBoundingClientRect().height) : 0,
+    cabeceraTop: cab ? Math.round(cab.getBoundingClientRect().top) : -1,
     textoAlto: Math.round(lec.height),
     parteTexto: lec.height / innerHeight,
     barraMovilVisible: visible(barra),
     accionesBarra: barra ? [...barra.querySelectorAll('button')].filter(visible).length : 0,
+    filasModo: modo ? new Set([...modo.querySelectorAll('button')].filter(visible)
+      .map((b) => Math.round(b.getBoundingClientRect().top))).size : 0,
     pequenos: tocables.filter((b) => b.h < 44 || b.w < 44),
     scrollHorizontal: document.documentElement.scrollWidth - document.documentElement.clientWidth,
   };
@@ -132,9 +136,12 @@ try {
   console.log('  reparto:', { cabecera: m.cabecera, texto: m.textoAlto, parte: `${Math.round(m.parteTexto * 100)} %` });
 
   comprobar('la cabecera del lector cabe en una fila', m.cabecera > 0 && m.cabecera <= 64, `mide ${m.cabecera} px`);
+  comprobar('la cabecera completa queda dentro del borde superior', m.cabeceraTop >= 0,
+    `empieza en ${m.cabeceraTop} px`);
   comprobar(`el texto se lleva al menos el ${Math.round(MIN_TEXTO_VISIBLE * 100)} % de la pantalla`,
     m.parteTexto >= MIN_TEXTO_VISIBLE, `se lleva ${Math.round(m.parteTexto * 100)} %`);
   comprobar('no hay desplazamiento horizontal', m.scrollHorizontal <= 1, `sobran ${m.scrollHorizontal} px`);
+  comprobar('las acciones de lectura caben en una fila', m.filasModo === 1, `${m.filasModo} filas`);
 
   /* ── 2. La barra del pulgar ─────────────────────────────────────────── */
   console.log('\n── 2. La barra del pulgar ──────────────────────────────────────');
@@ -143,19 +150,16 @@ try {
   comprobar(`todo lo que se toca mide ${TACTIL} px o más`, m.pequenos.length === 0,
     m.pequenos.map((b) => `${b.id} ${b.w}×${b.h}`).join(', '));
 
-  /* ── 3. Lectura inmersiva ───────────────────────────────────────────
-     El cromo se aparta al pasar de página y vuelve al primer toque. NO se
-     usa «un toque en el texto» para apartarlo: en este lector tocar un
-     párrafo ya significa «lee desde aquí», y las dos cosas chocarían. */
-  console.log('\n── 3. Lectura inmersiva ────────────────────────────────────────');
+  /* ── 3. Controles estables y viewport real ────────────────────────── */
+  console.log('\n── 3. Controles estables y viewport real ──────────────────────');
   const paginaAntes = await tel.locator('#pdfPagPos').textContent();
   await tel.locator('#btnPdfPagNext').click();
   await tel.waitForTimeout(1600);
   const dentro = await reparto(tel);
   const paginaDespues = await tel.locator('#pdfPagPos').textContent();
-  console.log('  inmersivo:', { texto: dentro.textoAlto, pagina: paginaDespues });
-  comprobar('el cromo se aparta al pasar de página', !dentro.barraMovilVisible);
-  comprobar('apartarlo NO remaqueta el texto', dentro.textoAlto === m.textoAlto,
+  console.log('  página:', { texto: dentro.textoAlto, pagina: paginaDespues });
+  comprobar('los controles permanecen visibles al pasar de página', dentro.barraMovilVisible);
+  comprobar('pasar página NO remaqueta el texto', dentro.textoAlto === m.textoAlto,
     `antes ${m.textoAlto} px, ahora ${dentro.textoAlto} px`);
   /* El fallo que esto vigila: al remaquetar, el reparto cambiaba y la lectura
      volvía al principio del capítulo. Pasabas de página y no pasabas nada. */
@@ -165,14 +169,44 @@ try {
     paginaAntes.split(' de ')[1] === paginaDespues.split(' de ')[1],
     `${paginaAntes} → ${paginaDespues}`);
 
-  /* Un toque devuelve los controles, y ese mismo toque NO debe robarle el
-     gesto al párrafo: «leer desde aquí» sigue siendo cosa del doble toque. */
+  const viewportReal = await tel.evaluate(() => {
+    const wrap = document.querySelector('body.jg-leyendo > .wrap')?.getBoundingClientRect();
+    return { alto: Math.round(wrap?.height || 0), visual: Math.round(visualViewport?.height || innerHeight) };
+  });
+  comprobar('el lector usa la altura visible real del teléfono',
+    Math.abs(viewportReal.alto - viewportReal.visual) <= 1,
+    `${viewportReal.alto} px frente a ${viewportReal.visual} px`);
+
+  /* La barra del navegador móvil reduce y amplía el viewport durante el uso.
+     Reproducir ese cambio comprueba el hueco inferior que un viewport fijo no
+     detecta. */
+  const paginaAntesResize = await tel.locator('#pdfPagPos').textContent();
+  await tel.setViewportSize({ width:390, height:720 });
+  await tel.waitForTimeout(500);
+  const ajustado = await tel.evaluate(() => {
+    const wrap = document.querySelector('body.jg-leyendo > .wrap')?.getBoundingClientRect();
+    const barra = document.querySelector('#pdfBarraMovil')?.getBoundingClientRect();
+    return { alto:Math.round(wrap?.height || 0), visual:Math.round(visualViewport?.height || innerHeight),
+      fondo:Math.round(barra?.bottom || 0) };
+  });
+  comprobar('al cambiar la barra del navegador no queda hueco inferior',
+    Math.abs(ajustado.alto - ajustado.visual) <= 1 && Math.abs(ajustado.fondo - ajustado.visual) <= 1,
+    JSON.stringify(ajustado));
+  await tel.setViewportSize({ width:390, height:844 });
+  await tel.waitForTimeout(500);
+  comprobar('el cambio de alto conserva el lugar de lectura',
+    (await tel.locator('#pdfPagPos').textContent()).split(' de ')[0] === paginaAntesResize.split(' de ')[0]);
+
+  /* Un toque vacío no cambia la página ni oculta los destinos principales. */
+  const paginaAntesToque = await tel.locator('#pdfPagPos').textContent();
   await tel.locator('#pdfLectura').click({ position: { x: 60, y: 60 } });
   await tel.waitForTimeout(600);
   const vuelta = await reparto(tel);
-  comprobar('un toque devuelve los controles', vuelta.barraMovilVisible);
-  comprobar('devolverlos tampoco remaqueta', vuelta.textoAlto === m.textoAlto,
+  comprobar('un toque conserva los controles', vuelta.barraMovilVisible);
+  comprobar('un toque tampoco remaqueta', vuelta.textoAlto === m.textoAlto,
     `texto ${vuelta.textoAlto} px frente a ${m.textoAlto} px`);
+  comprobar('un toque no cambia de página',
+    await tel.locator('#pdfPagPos').textContent() === paginaAntesToque);
   /* El toque que devuelve los controles NO debe además ponerse a leer en voz
      alta: el gesto de «volver» y el de «lee desde aquí» son el mismo toque, y
      sin esto la app empezaba a narrar sola al recuperar la barra. Se pregunta
@@ -182,26 +216,6 @@ try {
       const b = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
       return !b || b.getAttribute('aria-pressed') !== 'true';
     }));
-  /* Un segundo toque, con los controles ya a la vista, SÍ lee desde ahí:
-     recuperar el cromo no puede costarle el gesto a quien ya lo tenía. */
-  await tel.locator('#pdfLectura p').first().click();
-  await tel.waitForTimeout(700);
-  comprobar('con los controles a la vista, tocar un párrafo sí lee desde ahí',
-    await tel.evaluate(() => {
-      const b = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
-      return !!b && (b.getAttribute('aria-pressed') === 'true' || document.body.classList.contains('jg-voz-activa'));
-    }));
-  /* Se apaga la voz antes de seguir. Con la voz sonando, el lector sigue la
-     lectura y manda sobre la página: es su comportamiento, pero dejaría las
-     comprobaciones de deslizamiento midiendo otra cosa. Contra el dominio real
-     el TTS sí funciona, y ahí se veía; en local nunca llegaba a arrancar. */
-  await tel.evaluate(() => {
-    const b = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
-    if (b && b.getAttribute('aria-pressed') === 'true') b.click();
-    document.body.classList.remove('jg-voz-activa');
-  });
-  await tel.waitForTimeout(900);
-
   /* ── 4. Con la voz sonando nunca se queda sin pausa ─────────────────── */
   console.log('\n── 4. La voz siempre se puede parar ────────────────────────────');
   const conVoz = await tel.evaluate(async () => {
@@ -237,15 +251,23 @@ try {
     await tel.waitForTimeout(700);
   };
   const pagina = () => tel.locator('#pdfPagPos').textContent();
+  const numeroPagina = (etiqueta) => Number(String(etiqueta).split(' de ')[0]);
 
   const p0 = await pagina();
   await deslizar(330, 60);          // dedo hacia la izquierda = página siguiente
   const p1 = await pagina();
-  comprobar('deslizar hacia la izquierda pasa a la página siguiente', p1 !== p0, `${p0} → ${p1}`);
+  comprobar('deslizar hacia la izquierda avanza exactamente 1 página',
+    numeroPagina(p1) === numeroPagina(p0) + 1, `${p0} → ${p1}`);
 
   await deslizar(60, 330);          // hacia la derecha = página anterior
   const p2 = await pagina();
-  comprobar('deslizar hacia la derecha vuelve a la anterior', p2 === p0, `${p1} → ${p2}`);
+  comprobar('deslizar hacia la derecha retrocede exactamente 1 página',
+    numeroPagina(p2) === numeroPagina(p1) - 1 && p2 === p0, `${p1} → ${p2}`);
+
+  const fuenteVista = await readFile(join(app, 'js/pdf/libroVista.js'), 'utf8');
+  comprobar('el gesto horizontal tiene un solo manejador',
+    (fuenteVista.match(/el\.lectura\.addEventListener\('touchstart'/g) || []).length === 0
+      && (fuenteVista.match(/el\.lectura\.addEventListener\('pointerup'/g) || []).length === 1);
 
   /* Un toque no es un deslizamiento: el gesto de leer desde un párrafo tiene
      que seguir intacto, y un roce mínimo no puede cambiar de página. */
@@ -283,7 +305,10 @@ try {
   m = await reparto(estrecho);
   console.log('  reparto:', { cabecera: m.cabecera, texto: m.textoAlto, parte: `${Math.round(m.parteTexto * 100)} %` });
   comprobar('en 320 px la cabecera sigue en una fila', m.cabecera > 0 && m.cabecera <= 64, `mide ${m.cabecera} px`);
+  comprobar('en 320 px la cabecera no está cortada arriba', m.cabeceraTop >= 0,
+    `empieza en ${m.cabeceraTop} px`);
   comprobar('en 320 px no aparece desplazamiento horizontal', m.scrollHorizontal <= 1, `sobran ${m.scrollHorizontal} px`);
+  comprobar('en 320 px las acciones de lectura caben en una fila', m.filasModo === 1, `${m.filasModo} filas`);
   comprobar('en 320 px todo lo que se toca sigue cabiendo bajo el dedo', m.pequenos.length === 0,
     m.pequenos.map((b) => `${b.id} ${b.w}×${b.h}`).join(', '));
   await estrecho.screenshot({ path: join(destino, 'estrecho.png') });
