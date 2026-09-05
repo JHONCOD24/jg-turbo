@@ -11,6 +11,14 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Vista previa móvil v2.44.0, 2026-09-05
+
+`dpl_AxvRSnboJhyFjz8JhFBSsyBNghvn`, estado `READY`, URL
+`jg-turbo-qi9tx1ssg-jhoncod24s-projects.vercel.app`. La vista previa está bajo
+Deployment Protection y sus variables Preview no incluyen Groq/IA. El código
+se verificó localmente; falta autorización específica para promover v2.44 a
+producción y ejecutar allí los recorridos finales.
+
 ## Publicación UX v2.43.0, 2026-09-05
 
 El teléfono desplaza el documento y reserva la zona segura de arriba.
