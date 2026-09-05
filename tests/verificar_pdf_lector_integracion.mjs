@@ -59,7 +59,14 @@ const servidor = createServer(async (peticion, respuesta) => {
   } catch { respuesta.writeHead(404).end('no encontrado'); }
 });
 await new Promise((listo) => servidor.listen(0, '127.0.0.1', listo));
-const BASE = `http://127.0.0.1:${servidor.address().port}/`;
+/* Por defecto se prueba la copia local. Con JG_BASE se apunta al dominio real:
+ *   JG_BASE=https://jg-turbo.vercel.app node tests/verificar_pdf_lector_integracion.mjs
+ * Esa es la única forma de demostrar que lo desplegado funciona, y no solo lo
+ * que hay en el disco. */
+const BASE = process.env.JG_BASE
+  ? String(process.env.JG_BASE).replace(/\/?$/, '/')
+  : `http://127.0.0.1:${servidor.address().port}/`;
+console.log(`Probando contra ${BASE}`);
 
 const temporal = await mkdtemp(join(tmpdir(), 'jg-lector-'));
 const LIBRO = join(temporal, 'libro.pdf');

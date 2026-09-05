@@ -14,6 +14,33 @@ documentado deja de ser un error del proyecto.
 ---
 
 
+## `.pytest_cache` bloqueada tumba el despliegue entero
+
+**Síntoma:** `npx vercel --prod` termina en
+`EPERM: operation not permitted, scandir '...\.pytest_cache'` y **no sube nada**.
+
+Está en `.vercelignore`, pero el CLI recorre el árbol **antes** de aplicar las
+exclusiones, así que una carpeta que ni siquiera se puede leer detiene todo. La
+carpeta quedó con permisos rotos (ni `takeown` ni `icacls` la recuperan sin
+administrador) y `Get-Acl` responde «Attempted to perform an unauthorized
+operation».
+
+**Salida sin administrador:** desplegar desde una copia limpia, llevándose
+`.vercel/` para no publicar en otro proyecto.
+
+```powershell
+robocopy "<proyecto>" "<copia>" /E /XD ".pytest_cache" ".git" "node_modules" ".worktrees" "backend" "tests" "__pycache__"
+cd "<copia>"; npx vercel --prod --yes --scope jhoncod24s-projects
+```
+
+Antes de publicar hay que comprobar que la copia lleva `.vercel/project.json`
+con `prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8` (jg-turbo), o se publica en otro sitio.
+
+**Sospecha razonable:** este mismo error explica el despliegue de v2.39.0 que
+quedó anotado como bueno sirviendo el código viejo. Si el comando falla y solo
+se mira el marcador de versión del HTML, parece que salió bien.
+
+
 ## Un despliegue «verificado» puede estar sirviendo el código viejo
 
 **Qué pasó (2026-09-05, v2.39.0):** se anotó un despliegue como verificado

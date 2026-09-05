@@ -81,6 +81,25 @@ adivinan, y para eso existe «Revisar cortes».
 - `index.html`: `v2.39.1` · `JG_JS_V=v79`
 - `sw.js`: `jg-turbo-shell-v79`
 - `VERSION_RECONSTRUCCION = 7` · `VERSION_TROCEO = 7` · `VERSION_COLA_CORRECCION = 2`
+- Producción: `dpl_4XomYyCo9WMNihKNiH4VDe5MfCis` · Ready · alias `https://jg-turbo.vercel.app`
+
+### Verificado en el dominio real (no en local)
+
+| Módulo | local | producción |
+|---|---:|---:|
+| `mapaLectura.js` | 4 595 b | 4 595 b ✔ |
+| `libroVista.js` | 20 570 b | 20 570 b ✔ |
+| `pdfController.js` | 200 898 b | 200 898 b ✔ |
+| `limites.js` | 19 100 b | 19 100 b ✔ |
+
+`Leer desde aquí` en producción: **0**. `jgLeerTextoPdf`: **0**. `/api/health`: 200.
+
+`JG_BASE=https://jg-turbo.vercel.app node tests/verificar_pdf_lector_integracion.mjs`
+pasa las 7 secciones **contra el dominio real**, con 0 errores de JavaScript.
+
+El despliegue tuvo que hacerse desde una copia limpia: `.pytest_cache` tiene los
+permisos rotos y el CLI aborta con `EPERM` antes de aplicar `.vercelignore`
+(anotado en `TRAMPAS.md`).
 
 ---
 
