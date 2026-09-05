@@ -4184,8 +4184,26 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-modo-barra .mini-btn,.pdf-cortes-barra .mini-btn,.pdf-biblio-barra .mini-btn,.pdf-biblio-mas{min-height:44px;min-width:44px}
 .pdf-modo-estados{font-size:12.5px;color:var(--lec-suave,var(--muted))}
 .pdf-editar-barra{display:flex;gap:8px}.pdf-editar-barra .btn{min-height:44px}
-.pdf-apariencia{border:1px solid var(--line);border-radius:12px}
-.pdf-apariencia summary{min-height:44px;display:flex;align-items:center;padding:10px 14px;cursor:pointer}
+.pdf-apariencia-hoja{position:fixed;left:0;right:0;bottom:0;z-index:40;max-height:80vh;overflow:auto;
+  padding:0 16px calc(16px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0;
+  background:var(--lec-superficie);border-top:1px solid var(--lec-linea);color:var(--lec-texto);
+  box-shadow:0 -12px 32px -18px rgba(0,0,0,.6)}
+.pdf-apariencia-hoja .pdf-apariencia-cuerpo{display:flex;flex-direction:column;gap:14px;padding:8px 0 4px}
+.pdf-apariencia-hoja label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--lec-suave)}
+.pdf-apariencia-hoja select{min-height:44px;background:var(--lec-superficie-2);color:var(--lec-texto);
+  border:1px solid var(--lec-linea);border-radius:10px;padding:0 12px}
+.pdf-apariencia-hoja input[type=range]{width:100%;min-height:44px;accent-color:var(--lec-acento)}
+.pdf-apariencia-temas{display:flex;gap:8px;flex-wrap:wrap}
+.pdf-apariencia-temas .pdf-tema-opcion{flex:1 1 30%;min-height:44px;border-radius:12px;
+  border:1px solid var(--lec-linea);background:var(--lec-superficie-2);color:var(--lec-texto);
+  font:inherit;font-size:14px;cursor:pointer}
+.pdf-apariencia-temas .pdf-tema-opcion.is-on{border-color:var(--lec-acento);color:var(--lec-acento);
+  background:color-mix(in srgb,var(--lec-acento) 12%,transparent)}
+.pdf-apariencia-temas .pdf-tema-opcion:focus-visible{outline:2px solid var(--lec-acento);outline-offset:2px}
+@media (min-width:768px){
+  .pdf-apariencia-hoja{left:auto;right:16px;bottom:auto;top:64px;width:320px;border-radius:16px;
+    border:1px solid var(--lec-linea);max-height:70vh}
+}
 .pdf-apariencia-cuerpo{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
 .pdf-apariencia label{display:flex;flex-direction:column;gap:6px;font-size:13px}
 .pdf-apariencia input[type=range]{width:100%}
@@ -5322,6 +5340,11 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                   <svg class="pdf-icono-abrir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                   <svg class="pdf-icono-cerrar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M16 3v3a2 2 0 0 0 2 2h3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/><path d="M8 21v-3a2 2 0 0 0-2-2H3"/></svg>
                 </button>
+                <button class="mini-btn pdf-btn-solo-icono" id="btnPdfApariencia" type="button"
+                        aria-expanded="false" aria-controls="pdfAparienciaHoja"
+                        title="Tamaño, letra y tema" aria-label="Apariencia de lectura">
+                  <span aria-hidden="true" style="font-size:15px;font-weight:600">Aa</span>
+                </button>
                 <button class="mini-btn pdf-btn-indice" id="btnPdfIndice" type="button" aria-expanded="false" aria-controls="pdfIndice" title="Índice de capítulos">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                   <span>Contenido</span>
@@ -5361,6 +5384,8 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                           <span>Revisar sugerencias (<span id="pdfRevisionCuenta">0</span>)</span>
                         </button>
+                        <button type="button" class="mini-btn" id="btnPdfVincular">Vincular PDF original</button>
+                        <input type="file" id="pdfVincularInput" accept="application/pdf" hidden>
                       </div>
                     </div>
 
@@ -5465,14 +5490,6 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                           </div>
                           <div class="pdf-ask-answer" id="pdfAskAnswer" role="status" aria-live="polite" hidden></div>
                         </section>
-
-                        <div class="pdf-tema-fila">
-                          <span class="pdf-tema-label">Modo lectura</span>
-                          <div class="pdf-tema-cambio" id="pdfTemaCambio" role="group" aria-label="Tema del lector">
-                            <button type="button" class="pdf-tema-opcion" id="btnPdfTemaPapel" data-tema="papel">☀ Papel</button>
-                            <button type="button" class="pdf-tema-opcion is-on" id="btnPdfTemaNoche" data-tema="noche">☾ Noche</button>
-                          </div>
-                        </div>
 
                         <button class="btn ghost pdf-btn-clear" id="btnPdfClear" type="button">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -5596,34 +5613,45 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                 <button type="button" class="btn primary" id="pdfEditarGuardar">Guardar</button>
                 <button type="button" class="btn ghost" id="pdfEditarCancelar">Cancelar</button>
               </div>
-              <details class="pdf-apariencia" id="pdfApariencia">
-                <summary aria-label="Apariencia de lectura">Apariencia</summary>
-                <div class="pdf-apariencia-cuerpo">
-                  <label>Tamaño <input type="range" id="pdfAparTam" min="16" max="28" step="1" value="19"></label>
-                  <label>Interlineado <input type="range" id="pdfAparInter" min="1.4" max="2" step="0.1" value="1.7"></label>
-                  <label>Anchura
-                    <select id="pdfAparAncho">
-                      <option value="52">52 caracteres</option>
-                      <option value="64" selected>64 caracteres</option>
-                      <option value="76">76 caracteres</option>
-                    </select>
-                  </label>
-                  <label>Letra
-                    <select id="pdfAparFuente">
-                      <option value="serif">Serif de sistema</option>
-                      <option value="sans" selected>Sans actual</option>
-                    </select>
-                  </label>
-                  <div class="pdf-apariencia-temas" role="group" aria-label="Tema">
-                    <button type="button" class="mini-btn" id="btnPdfTemaSepia">Sepia</button>
-                  </div>
+              <div class="pdf-apariencia-hoja" id="pdfAparienciaHoja" hidden role="dialog"
+                   aria-labelledby="pdfAparienciaTitulo">
+                <div class="pdf-hoja-cab">
+                  <h4 class="pdf-hoja-titulo" id="pdfAparienciaTitulo">Apariencia</h4>
+                  <button type="button" class="pdf-hoja-cerrar" data-cerrar-hoja="pdfAparienciaHoja"
+                          aria-label="Cerrar apariencia">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
                 </div>
-              </details>
+                <div class="pdf-apariencia-cuerpo">
+                  <div class="pdf-apariencia-temas" role="group" aria-label="Tema de lectura">
+                    <button type="button" class="pdf-tema-opcion" id="btnPdfTemaPapel" data-tema="papel">☀ Papel</button>
+                    <button type="button" class="pdf-tema-opcion" id="btnPdfTemaSepia" data-tema="sepia">◐ Sepia</button>
+                    <button type="button" class="pdf-tema-opcion is-on" id="btnPdfTemaNoche" data-tema="noche">☾ Noche</button>
+                  </div>
+                  <label for="pdfAparTam">Tamaño de letra
+                    <input type="range" id="pdfAparTam" min="16" max="28" step="1" value="19">
+                  </label>
+                  <label for="pdfAparInter">Espacio entre líneas
+                    <input type="range" id="pdfAparInter" min="1.4" max="2" step="0.1" value="1.7">
+                  </label>
+                  <label for="pdfAparAncho">Anchura del texto
+                    <select id="pdfAparAncho">
+                      <option value="52">Estrecha</option>
+                      <option value="64" selected>Normal</option>
+                      <option value="76">Ancha</option>
+                    </select>
+                  </label>
+                  <label for="pdfAparFuente">Letra
+                    <select id="pdfAparFuente">
+                      <option value="serif">Serif (como un libro)</option>
+                      <option value="sans" selected>Sans (como la app)</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
               <div class="pdf-cortes-barra">
-                <button type="button" class="mini-btn" id="btnPdfCortes">Revisar cortes <span id="pdfCortesCuenta"></span></button>
-                <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar</button>
-                <button type="button" class="mini-btn" id="btnPdfVincular">Vincular PDF original</button>
-                <input type="file" id="pdfVincularInput" accept="application/pdf" hidden>
+                <button type="button" class="mini-btn" id="btnPdfCortes" hidden>Revisar cortes <span id="pdfCortesCuenta"></span></button>
+                <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar corrección</button>
               </div>
               <div class="pdf-cortes-hoja" id="pdfCortesHoja" hidden role="dialog" aria-labelledby="pdfCortesTitulo">
                 <h4 id="pdfCortesTitulo">Revisar cortes</h4>

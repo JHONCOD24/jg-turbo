@@ -254,7 +254,40 @@ export function initLibroVista({ el, estado, api }) {
   if (el.aparInter) el.aparInter.addEventListener('input', () => { cfg.inter = Number(el.aparInter.value) || 1.7; aplicarApariencia(); });
   if (el.aparAncho) el.aparAncho.addEventListener('change', () => { cfg.ancho = Number(el.aparAncho.value) || 64; aplicarApariencia(); });
   if (el.aparFuente) el.aparFuente.addEventListener('change', () => { cfg.fuente = el.aparFuente.value === 'serif' ? 'serif' : 'sans'; aplicarApariencia(); });
-  if (el.temaSepia) el.temaSepia.addEventListener('click', () => fijarTema('sepia'));
+  // Los tres temas, en un solo sitio y con su estado a la vista.
+  function pintarTemas(activo) {
+    for (const b of [el.temaPapel, el.temaSepia, el.temaNoche]) {
+      if (!b) continue;
+      const suyo = b.dataset.tema;
+      b.classList.toggle('is-on', suyo === activo);
+      b.setAttribute('aria-pressed', String(suyo === activo));
+    }
+  }
+  for (const b of [el.temaPapel, el.temaSepia, el.temaNoche]) {
+    if (!b) continue;
+    b.addEventListener('click', () => { fijarTema(b.dataset.tema); pintarTemas(b.dataset.tema); });
+  }
+  try { pintarTemas(localStorage.getItem('jg_pdf_tema') || 'noche'); } catch (_) { pintarTemas('noche'); }
+
+  // Hoja de apariencia: se abre desde la cabecera, se cierra con Escape o con
+  // su botón, y devuelve el foco al botón que la abrió.
+  if (el.btnApariencia && el.aparienciaHoja) {
+    const cerrarApariencia = () => {
+      el.aparienciaHoja.hidden = true;
+      el.btnApariencia.setAttribute('aria-expanded', 'false');
+      el.btnApariencia.focus();
+    };
+    el.btnApariencia.addEventListener('click', () => {
+      if (!el.aparienciaHoja.hidden) { cerrarApariencia(); return; }
+      el.aparienciaHoja.hidden = false;
+      el.btnApariencia.setAttribute('aria-expanded', 'true');
+      const primero = el.aparienciaHoja.querySelector('button, select, input');
+      if (primero) primero.focus();
+    });
+    el.aparienciaHoja.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarApariencia(); });
+    const cerrarBoton = el.aparienciaHoja.querySelector('[data-cerrar-hoja="pdfAparienciaHoja"]');
+    if (cerrarBoton) cerrarBoton.addEventListener('click', cerrarApariencia);
+  }
 
   // Revisar cortes: contexto, propuesta, página y Unir / Separar / Párrafo / Deshacer.
   const pilaDeshacer = [];
@@ -354,12 +387,13 @@ export function initLibroVista({ el, estado, api }) {
     });
   }
 
-  // Pausar / reanudar (la recarga recupera el último bloque confirmado).
-  if (el.btnPausar) {
-    const refrescarPausa = () => { el.btnPausar.hidden = !estado.correccionProgreso?.ejecutando; };
-    setInterval(refrescarPausa, 1000);
-    el.btnPausar.addEventListener('click', () => api.pausar && api.pausar());
+  /* «Pausar» aparece cuando hay corrección en marcha. El controlador avisa al
+   * cambiar el estado: no hace falta preguntar cada segundo. */
+  function refrescarPausa() {
+    if (el.btnPausar) el.btnPausar.hidden = !estado.correccionProgreso?.ejecutando;
   }
+  if (el.btnPausar) el.btnPausar.addEventListener('click', () => api.pausar && api.pausar());
+  refrescarPausa();
 
   // Búsqueda con coincidencias, contexto y ubicación (conserva el lugar).
   if (el.buscar) {
@@ -418,6 +452,7 @@ export function initLibroVista({ el, estado, api }) {
     aplicarApariencia,
     fijarModo,
     construirLectura,
+    refrescarPausa,
     leerOrden() { try { return localStorage.getItem('jg_pdf_orden') || 'reciente'; } catch (_) { return 'reciente'; } },
   };
 }

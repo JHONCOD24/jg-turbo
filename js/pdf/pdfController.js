@@ -158,6 +158,7 @@ export function inicializarLectorPdf(deps = {}) {
     textoCaja: $('pdfTextoCaja'), docRef: $('pdfDocRef'),
     aparTam: $('pdfAparTam'), aparInter: $('pdfAparInter'), aparAncho: $('pdfAparAncho'),
     aparFuente: $('pdfAparFuente'), temaSepia: $('btnPdfTemaSepia'),
+    btnApariencia: $('btnPdfApariencia'), aparienciaHoja: $('pdfAparienciaHoja'),
     btnCortes: $('btnPdfCortes'), cortesCuenta: $('pdfCortesCuenta'),
     btnDesdeAqui: $('btnPdfDesdeAqui'),
     cortesHoja: $('pdfCortesHoja'), cortesLista: $('pdfCortesLista'), cortesCerrar: $('pdfCortesCerrar'),
@@ -1533,6 +1534,7 @@ export function inicializarLectorPdf(deps = {}) {
       el.reanudarCorreccion.hidden = !mostrarReanudar;
       if (el.reanudarCorreccionTxt) el.reanudarCorreccionTxt.textContent = texto;
     }
+    try { if (libroVista && libroVista.refrescarPausa) libroVista.refrescarPausa(); } catch (_) {}
   }
 
   /**
