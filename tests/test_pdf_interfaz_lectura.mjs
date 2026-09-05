@@ -46,7 +46,12 @@ console.log('--- accesibilidad de la hoja ---');
   comprobar(/id="pdfAparienciaHoja"[\s\S]{0,200}role="dialog"/.test(html),
     'la hoja es un diálogo con nombre');
   comprobar(vista.includes("ev.key === 'Escape'"), 'Escape cierra la hoja');
-  comprobar(vista.includes('btnApariencia.focus()'), 'al cerrar, el foco vuelve al botón que abrió');
+  /* Se comprueba que el cierre devuelve el foco, sin fijar el nombre de la
+     variable: quién lo recibe depende de la pantalla (en el teléfono «Aa»
+     vive en la barra del pulgar). Que vuelva al botón CORRECTO lo mide
+     `verificar_pdf_lector_integracion.mjs` en un navegador de verdad. */
+  comprobar(/cerrarApariencia[\s\S]{0,600}\.focus\(\)/.test(vista),
+    'al cerrar, el foco vuelve a un botón que abre la hoja');
   const etiquetas = (html.match(/<label for="pdfApar/g) || []).length;
   comprobar(etiquetas >= 4, 'cada control de apariencia tiene su etiqueta asociada');
 }

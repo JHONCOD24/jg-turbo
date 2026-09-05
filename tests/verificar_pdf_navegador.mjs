@@ -213,11 +213,16 @@ for (const [nombre, opciones] of [
   }
   comprobar(await pagina.locator('[data-tts-console="pdf"]').count() === 1, 'la consola de voz está montada');
 
-  /* El buscador vive plegado tras la lupa de la cabecera: en el celular una
-     fila fija de búsqueda le quitaba alto al texto durante toda la lectura. */
-  await pagina.locator('#btnPdfBuscarToggle').click();
+  /* El buscador vive plegado: en el celular una fila fija de búsqueda le
+     quitaba alto al texto durante toda la lectura. Tras la lupa de la
+     cabecera desde tablet; en el teléfono, dentro de «Opciones», porque
+     allí la cabecera es una sola fila. Las dos puertas abren el mismo. */
+  const anchoVista = pagina.viewportSize().width;
+  if (anchoVista > 640) await pagina.locator('#btnPdfBuscarToggle').click();
+  else { await pagina.locator('#btnPdfBmOpciones').click(); await pagina.waitForTimeout(250);
+         await pagina.locator('#btnPdfBuscarMovil').click(); }
   await pagina.waitForTimeout(250);
-  comprobar(!(await pagina.locator('#pdfSearchRow').isHidden()), 'la lupa despliega el buscador');
+  comprobar(!(await pagina.locator('#pdfSearchRow').isHidden()), 'el buscador se despliega'); 
 
   await pagina.locator('#pdfSearch').fill('niebla');
   await pagina.waitForTimeout(500);
@@ -362,7 +367,11 @@ console.log('\n── Libro de 300 páginas ────────────
   const segundos = (Date.now() - arranque) / 1000;
   await pagina.waitForTimeout(800);
 
-  await pagina.locator('#btnPdfIndice').click();
+  /* «Contenido» está en la cabecera desde tablet y en la barra del pulgar en
+     el teléfono. Se usa la puerta que exista en esta pantalla. */
+  const puertaIndice = (await pagina.locator('#btnPdfIndice').isVisible())
+    ? '#btnPdfIndice' : '#btnPdfBmIndice';
+  await pagina.locator(puertaIndice).click();
   await pagina.waitForTimeout(400);
   const capitulos = await pagina.locator('#pdfIndiceLista .pdf-cap').count();
   const enPantalla = (await pagina.locator('#pdfOutput').inputValue()).length;
@@ -391,6 +400,11 @@ console.log('\n── Libro de 300 páginas ────────────
     'la barra de progreso del documento avanza'
   );
 
+  /* Pasar de capítulo vive en el dock. En el teléfono el dock es la hoja que
+     abre «Voz» (prev/siguiente capítulo arriba, como en un reproductor). */
+  if (!(await pagina.locator('#btnPdfNext').isVisible())) {
+    await pagina.locator('#btnPdfBmVoz').click(); await pagina.waitForTimeout(350);
+  }
   await pagina.locator('#btnPdfNext').click();
   await pagina.waitForTimeout(500);
   comprobar(
@@ -398,9 +412,14 @@ console.log('\n── Libro de 300 páginas ────────────
     'el botón siguiente avanza de capítulo'
   );
 
-  if (await pagina.locator('#pdfSearchRow').isHidden()) {
-    await pagina.locator('#btnPdfBuscarToggle').click();
-    await pagina.waitForTimeout(250);
+  if (await pagina.locator('#pdfSearchRow').isHidden() || !(await pagina.locator('#pdfSearch').isVisible())) {
+    if (await pagina.locator('#btnPdfBuscarToggle').isVisible()) {
+      await pagina.locator('#btnPdfBuscarToggle').click();
+    } else {
+      await pagina.locator('#btnPdfBmOpciones').click(); await pagina.waitForTimeout(250);
+      await pagina.locator('#btnPdfBuscarMovil').click();
+    }
+    await pagina.waitForTimeout(300);
   }
   await pagina.locator('#pdfSearch').fill('promesa');
   await pagina.waitForTimeout(700);

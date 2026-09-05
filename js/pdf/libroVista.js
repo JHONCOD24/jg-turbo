@@ -191,7 +191,10 @@ export function initLibroVista({ el, estado, api }) {
    * Lo importante es que el DOM no cambia: son los mismos bloques con sus
    * mismos `data-ini`, así que las posiciones guardadas, el resaltado de la
    * voz y «leer desde aquí» siguen funcionando sin enterarse. */
-  const pag = { total: 1, actual: 0, paso: 0, activo: false };
+  const pag = { total: 1, actual: 0, paso: 0, activo: false, ancla: 0, saltando: false };
+  /* Un salto de página lleva ~300 ms de desplazamiento suave. Remaquetar
+   * durante ese rato deja la lectura en un sitio que no eligió nadie. */
+  let tempoSalto = null;
 
   function hayPaginado() { return cfg.modoPagina !== 'scroll'; }
 
@@ -210,7 +213,13 @@ export function initLibroVista({ el, estado, api }) {
       behavior: suave && !prefiereMenosMovimiento() ? 'smooth' : 'auto',
     });
     pintarPaginacion();
+    /* `caracterVisible()` se apoya en `pag.actual`, que aquí ya es la página
+     * destino, y su cálculo no depende de dónde vaya la animación: por eso
+     * puede anotarse el sitio sin esperar a que el desplazamiento termine. */
     pag.ancla = caracterVisible();
+    pag.saltando = true;
+    clearTimeout(tempoSalto);
+    tempoSalto = setTimeout(() => { pag.saltando = false; }, 420);
     if (guardar && api.anotarPagina) api.anotarPagina(pag.ancla);
   }
 
@@ -222,6 +231,9 @@ export function initLibroVista({ el, estado, api }) {
   }
 
   function paginaDeRect(rect) {
+    /* `scrollLeft` no es un detalle: convierte la posición en pantalla del
+     * rectángulo a posición dentro del texto. Sustituirlo por el destino de
+     * un salto en curso rompe esa conversión y la lectura vuelve al inicio. */
     return Math.max(0, Math.floor((rect.left - el.lectura.getBoundingClientRect().left + el.lectura.scrollLeft + 2) / pag.paso));
   }
 
@@ -487,22 +499,170 @@ export function initLibroVista({ el, estado, api }) {
   // Hoja de apariencia: se abre desde la cabecera, se cierra con Escape o con
   // su botón, y devuelve el foco al botón que la abrió.
   if (el.btnApariencia && el.aparienciaHoja) {
+    /* Quién abrió la hoja: en el teléfono es el botón de la barra del pulgar y
+     * en escritorio el de la cabecera. Devolver el foco «al de la cabecera»
+     * sin mirar lo perdía en el teléfono, porque allí está oculto y `focus()`
+     * sobre un elemento sin caja no hace nada: el foco se iba al <body> y
+     * quien navega con teclado quedaba en la nada. */
+    let abrioApariencia = el.btnApariencia;
     const cerrarApariencia = () => {
       el.aparienciaHoja.hidden = true;
       el.btnApariencia.setAttribute('aria-expanded', 'false');
-      el.btnApariencia.focus();
+      /* Se vuelve al control que abrió; si ese no está a la vista (la hoja
+       * se abrió desde la cabecera pero estamos en el teléfono, donde vive
+       * en la barra del pulgar), al equivalente que sí lo esté. Nunca al
+       * <body>: quien navega con teclado se quedaría sin sitio. */
+      const candidatos = [abrioApariencia, el.btnApariencia, document.getElementById('btnPdfBmApariencia')];
+      const volver = candidatos.find((c) => c && c.offsetParent !== null);
+      if (volver) volver.focus();
     };
-    el.btnApariencia.addEventListener('click', () => {
+    const abrirApariencia = (origen) => {
       if (!el.aparienciaHoja.hidden) { cerrarApariencia(); return; }
+      abrioApariencia = origen || el.btnApariencia;
       el.aparienciaHoja.hidden = false;
       el.btnApariencia.setAttribute('aria-expanded', 'true');
       const primero = el.aparienciaHoja.querySelector('button, select, input');
       if (primero) primero.focus();
-    });
+    };
+    el.abrirApariencia = abrirApariencia;
+    el.btnApariencia.addEventListener('click', () => abrirApariencia(el.btnApariencia));
     el.aparienciaHoja.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarApariencia(); });
     const cerrarBoton = el.aparienciaHoja.querySelector('[data-cerrar-hoja="pdfAparienciaHoja"]');
     if (cerrarBoton) cerrarBoton.addEventListener('click', cerrarApariencia);
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Teléfono: barra del pulgar y lectura inmersiva
+     ──────────────────────────────────────────────────────────────────────
+     Medido antes de esto en 390×844: la cabecera se partía en dos filas
+     (108 px), abajo se apilaban cuatro barras (198 px) y al texto le
+     quedaba el 44 % de la pantalla. En 320 px, el 23 %.
+
+     Aquí no se duplica ningún control: los cuatro botones de abajo
+     accionan los MISMOS elementos de la cabecera, que en el teléfono se
+     ocultan por CSS. Una sola fuente de verdad; si mañana cambia el
+     comportamiento de «Contenido», cambia en un solo sitio.
+     ═══════════════════════════════════════════════════════════════════════ */
+  const TELEFONO = '(max-width:640px)';
+  const enTelefono = () => window.matchMedia(TELEFONO).matches;
+  const $$ = (id) => document.getElementById(id);
+
+  const barraMovil = $$('pdfBarraMovil');
+  const dock = $$('pdfDockNav');
+
+  /* El reproductor completo vive tras el botón «Voz»: solo ocupa pantalla
+     mientras se usa, en vez de robar 198 px permanentes. */
+  /* `modo`: false = cerrada · true/'si' = reproductor · 'buscar' = buscador. */
+  function abrirDock(modo) {
+    if (!dock || !enTelefono()) return;
+    const valor = modo === 'buscar' ? 'buscar' : (modo ? 'si' : 'no');
+    dock.dataset.abierto = valor;
+    const btn = $$('btnPdfBmVoz');
+    if (btn) btn.classList.toggle('is-on', valor === 'si');
+  }
+  if (dock) dock.dataset.abierto = 'no';
+
+  const puentes = [
+    ['btnPdfBmVoz', () => abrirDock((dock?.dataset.abierto || 'no') !== 'si')],
+    ['btnPdfBmApariencia', () => {
+      abrirDock(false);
+      const b = $$('btnPdfBmApariencia');
+      if (el.abrirApariencia) el.abrirApariencia(b); else el.btnApariencia?.click();
+    }],
+    ['btnPdfBmIndice', () => { abrirDock(false); el.btnIndice?.click(); }],
+    ['btnPdfBmOpciones', () => { abrirDock(false); el.btnMas?.click(); }],
+    /* La entrada de búsqueda del teléfono vive DENTRO de «Opciones», así que
+       al usarla hay que cerrar esa hoja y desplegar el mismo buscador de la
+       cabecera: no hay dos buscadores, hay dos puertas al mismo. */
+    ['btnPdfBuscarMovil', () => {
+      if (el.masMenu && el.masMenu.open) el.btnMas?.click();
+      if (el.buscarFila && el.buscarFila.hidden) el.buscarToggle?.click();
+      abrirDock('buscar');
+      const campo = document.getElementById('pdfSearch');
+      if (campo) campo.focus();
+    }],
+  ];
+  for (const [id, accion] of puentes) {
+    const b = $$(id);
+    if (b) b.addEventListener('click', accion);
+  }
+
+  /* Lectura inmersiva: el cromo se aparta al pasar de página y vuelve con
+     cualquier toque. NO se usa «un toque en el texto» para apartarlo: en
+     este lector tocar un párrafo ya significa «lee desde aquí», y las dos
+     cosas se robarían el gesto. */
+  let tempoInmersivo = null;
+  /* Apartar el cromo NO cambia el tamaño del texto (el hueco queda
+     reservado), así que aquí no se vuelve a repartir nada: es justo lo que
+     evita que un salto de página se deshaga solo. */
+  function inmersivo(activo) {
+    if (!enTelefono()) { document.body.classList.remove('jg-inmersivo'); return; }
+    document.body.classList.toggle('jg-inmersivo', !!activo);
+  }
+  function apartarCromo() {
+    clearTimeout(tempoInmersivo);
+    if (!enTelefono()) return;
+    if (hayHojaOAbierto()) return;
+    /* Se espera a que el salto de página termine. Apartar el cromo remaqueta
+     * (el texto crece), y hacerlo a mitad del desplazamiento suave dejaba la
+     * lectura en otra página: pulsabas «siguiente» y volvías al principio.
+     * Lo cazó `verificar_pdf_paginas.mjs`. */
+    const reintentar = () => {
+      if (pag.saltando) { tempoInmersivo = setTimeout(reintentar, 120); return; }
+      inmersivo(true);
+    };
+    tempoInmersivo = setTimeout(reintentar, 460);
+  }
+  function devolverCromo() {
+    clearTimeout(tempoInmersivo);
+    if (!document.body.classList.contains('jg-inmersivo')) return;
+    inmersivo(false);
+  }
+  /* Con una hoja abierta o el reproductor desplegado, apartar el cromo
+     dejaría al usuario mirando una hoja flotando sobre nada. */
+  function hayHojaOAbierto() {
+    if (dock && dock.dataset.abierto === 'si') return true;
+    if (el.indice && !el.indice.hidden) return true;
+    if (el.aparienciaHoja && !el.aparienciaHoja.hidden) return true;
+    if (el.masMenu && el.masMenu.open) return true;
+    return false;
+  }
+
+  /* Cerrar el buscador cierra la hoja: si no, quedaría una hoja vacía. */
+  if (el.buscarToggle) el.buscarToggle.addEventListener('click', () => {
+    if (el.buscarFila && el.buscarFila.hidden && dock?.dataset.abierto === 'buscar') abrirDock(false);
+  });
+
+  if (el.pagPrev) el.pagPrev.addEventListener('click', apartarCromo);
+  if (el.pagNext) el.pagNext.addEventListener('click', apartarCromo);
+  /* Cualquier toque devuelve los controles. `pointerdown` en fase de captura
+     para que llegue antes que el gesto del párrafo, y sin cancelarlo: el
+     doble toque de «leer desde aquí» sigue funcionando igual. */
+  if (el.lectura) {
+    el.lectura.addEventListener('pointerdown', devolverCromo, { capture: true, passive: true });
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && document.body.classList.contains('jg-inmersivo')) devolverCromo();
+  });
+
+  /* El único control que sobrevive al modo inmersivo: parar la voz. */
+  const vozMiniPausa = $$('btnPdfVozMiniPausa');
+  if (vozMiniPausa) {
+    vozMiniPausa.addEventListener('click', () => {
+      devolverCromo();
+      abrirDock(true);
+      const parar = $$('btnPdfAudiolibroStop') || document.querySelector('#pdfDockNav .btn-tts-stop');
+      if (parar) parar.click();
+    });
+  }
+
+  /* Al salir del teléfono (girar a horizontal, tablet) no queda un estado
+     inmersivo colgado que en escritorio no tiene forma de deshacerse. */
+  try {
+    window.matchMedia(TELEFONO).addEventListener('change', (ev) => {
+      if (!ev.matches) { document.body.classList.remove('jg-inmersivo'); if (dock) dock.dataset.abierto = 'no'; }
+    });
+  } catch (_) { /* navegador antiguo: se queda con el estado que tenga */ }
 
   // Revisar cortes: contexto, propuesta, página y Unir / Separar / Párrafo / Deshacer.
   const pilaDeshacer = [];

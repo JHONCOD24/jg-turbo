@@ -2418,6 +2418,190 @@
     .btn-back#btnPdfBack span{display:inline}
     .btn-back#btnPdfBack{padding-inline:14px}
   }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     TELÉFONO (≤640 px) · el texto manda
+     ─────────────────────────────────────────────────────────────────────
+     El problema medido: en 390 px la cabecera se partía en DOS filas
+     (108 px) porque `.pdf-doc-acciones` pasaba a `grid-column:1/-1`, y
+     abajo se apilaban cuatro barras (198 px). Entre las dos se comían el
+     56 % de la pantalla y al texto le quedaba el 44 %. En 320 px era peor:
+     157 px de cabecera y un 23 % de texto.
+
+     La solución es la de cualquier lector serio: UNA fila arriba, UNA barra
+     de cuatro destinos abajo, y todo lo demás dentro de ellos.
+     Nada de esto aplica en tablet ni escritorio: allí sí cabe la fila
+     completa y el usuario la quiere tal como está.
+     ══════════════════════════════════════════════════════════════════════ */
+  /* La barra del pulgar y el control mínimo de voz existen SOLO en el
+     teléfono. La regla base va fuera del media query a propósito: si vive
+     dentro, en tablet y escritorio no queda nada que los oculte y se cuelan
+     sobre el texto. (Pasó; lo cazó `verificar_pdf_movil.mjs`.) */
+  .pdf-barra-movil,.pdf-voz-mini,.pdf-solo-telefono{display:none}
+  @media (max-width:640px){ .pdf-solo-telefono{display:block} }
+
+  @media (max-width:640px){
+    /* 1. Cabecera de una sola fila: volver · título · Opciones. */
+    body.jg-leyendo .pdf-doc-cab{
+      grid-template-columns:auto 1fr auto;gap:10px;min-height:48px;flex-wrap:nowrap;
+    }
+    /* La portada en miniatura y el contador de palabras no compiten con el
+       título en 390 px: el título es lo único que ubica al lector. */
+    body.jg-leyendo .pdf-doc-tapa,
+    body.jg-leyendo .pdf-doc-acciones .count{display:none}
+    /* Las acciones dejan de ser una segunda fila: solo sobrevive «Opciones»,
+       y el resto se reparte entre la barra del pulgar y esa misma hoja. */
+    body.jg-leyendo .pdf-doc-acciones{
+      grid-column:auto;padding-top:0;flex-wrap:nowrap;gap:0;justify-content:flex-end;
+    }
+    body.jg-leyendo .pdf-doc-acciones > #btnPdfCapPrev,
+    body.jg-leyendo .pdf-doc-acciones > #btnPdfCapNext,
+    body.jg-leyendo .pdf-doc-acciones > #btnPdfBuscarToggle,
+    body.jg-leyendo .pdf-doc-acciones > #btnPdfPantalla,
+    body.jg-leyendo .pdf-doc-acciones > #btnPdfApariencia,
+    body.jg-leyendo .pdf-doc-acciones > #btnPdfIndice{display:none}
+    body.jg-leyendo .pdf-doc-acciones .pdf-mas-summary span{display:none}
+    body.jg-leyendo .pdf-doc-acciones .pdf-mas-summary{
+      min-width:44px;min-height:44px;justify-content:center;padding:0 12px;
+    }
+    /* El título ocupa el ancho que le sobra y el subtítulo se resume: en un
+       teléfono «Cap. 1 de 2 · 0 % leído · quedan ~7 min» no cabe entero, y
+       recortarlo a «que…» no le sirve a nadie. */
+    /* Tres textos competían por 200 px: el título, «Cap. 1 de 2 · 0 % leído ·
+       quedan ~7 min» (que salía cortado en «0 % leído…») y «Capítulo 1 de 2 ·
+       Página 1» (que se partía en dos líneas). Mientras se lee, lo que sirve
+       es dónde vas; el porcentaje y los minutos están en Opciones. */
+    body.jg-leyendo .pdf-doc-donde{display:none}
+    body.jg-leyendo .pdf-doc-ident{gap:1px}
+    body.jg-leyendo .pdf-doc-ident h3{font-size:15.5px;line-height:1.25}
+    body.jg-leyendo .pdf-doc-ref{
+      font-size:11.5px;color:var(--lec-suave, var(--muted-2));
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    /* Si aparece el aviso del pulido, manda él y la referencia se aparta:
+       dos avisos a la vez en 200 px no los lee nadie. */
+    body.jg-leyendo .pdf-doc-linea:has(.pdf-pulido-estado:not([hidden])) .pdf-doc-ref{display:none}
+
+    /* 2. Abajo, cuatro destinos fijos al alcance del pulgar. */
+    /* Alto real de la barra del pulgar: 6 + 52 + 6 y lo que pida el notch.
+       Lo usan el hueco del texto y el tope de la hoja del reproductor, para
+       que las tres medidas no se desincronicen nunca. */
+    body.jg-leyendo{--pdf-bm-alto:calc(64px + env(safe-area-inset-bottom))}
+    .pdf-barra-movil{
+      display:none;
+      position:fixed;inset:auto 0 0 0;z-index:24;
+      grid-template-columns:repeat(4,1fr);align-items:stretch;
+      padding:6px 6px calc(6px + env(safe-area-inset-bottom));
+      background:var(--lec-bg, var(--bg));
+      border-top:1px solid var(--lec-linea, var(--line));
+      box-shadow:0 -8px 24px -18px rgba(0,0,0,.7);
+    }
+    body.jg-leyendo .pdf-barra-movil{display:grid}
+    .pdf-bm-btn{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+      min-height:52px;padding:6px 2px;border:0;border-radius:var(--pdf-r-sm, 12px);
+      background:none;color:var(--lec-suave, var(--muted));
+      font:inherit;font-size:10.5px;font-weight:600;letter-spacing:.01em;cursor:pointer;
+      transition:color var(--t,.18s) ease, background var(--t,.18s) ease;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .pdf-bm-btn svg{width:21px;height:21px;flex:none}
+    .pdf-bm-aa{font-size:16px;font-weight:800;line-height:21px;height:21px}
+    .pdf-bm-btn:active{background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent)}
+    .pdf-bm-btn[aria-expanded="true"],
+    .pdf-bm-btn.is-on{color:var(--lec-acento, var(--cyan))}
+    .pdf-bm-btn:focus-visible{
+      outline:2px solid var(--lec-acento, var(--cyan));outline-offset:-2px;
+      color:var(--lec-acento, var(--cyan));
+    }
+
+    /* 3. Lectura inmersiva: al pasar de página el cromo se aparta y el texto
+          se queda con casi toda la pantalla. Vuelve con cualquier toque.
+          No se usa «un toque en el texto» para apartarlo porque en este
+          lector tocar un párrafo ya significa «lee desde aquí». */
+    body.jg-leyendo .pdf-doc-top,
+    body.jg-leyendo .pdf-barra-movil,
+    body.jg-leyendo .pdf-modo-barra,
+    body.jg-leyendo #pdfPaginacion{
+      transition:opacity .22s ease, transform .22s ease;
+    }
+    /* El cromo se DESVANECE, pero conserva su hueco. Sacarlo del flujo
+       (display:none o position:absolute) hacía crecer el texto, y con
+       páginas eso obliga a repartirlas otra vez: al pasar de página el
+       reparto cambiaba y volvías al principio del capítulo. Un lector que
+       se remaqueta bajo el dedo está roto; ganar 15 % de alto no lo paga. */
+    body.jg-leyendo.jg-inmersivo .pdf-doc-top,
+    body.jg-leyendo.jg-inmersivo .pdf-modo-barra{opacity:0;pointer-events:none}
+    body.jg-leyendo.jg-inmersivo .pdf-barra-movil{opacity:0;transform:translateY(100%);pointer-events:none}
+    body.jg-leyendo.jg-inmersivo #pdfPaginacion{opacity:.55}
+
+    /* 4. El único superviviente del modo inmersivo: parar la voz. */
+    .pdf-voz-mini{display:none}
+    body.jg-leyendo.jg-voz-activa.jg-inmersivo .pdf-voz-mini{
+      display:flex;align-items:center;gap:10px;
+      position:fixed;inset:auto 12px calc(12px + env(safe-area-inset-bottom)) auto;z-index:25;
+      padding:6px 14px 6px 6px;border-radius:999px;
+      background:var(--lec-superficie, var(--surface));
+      border:1px solid var(--lec-linea, var(--line));
+      box-shadow:0 8px 26px -14px rgba(0,0,0,.75);
+      animation:pdfPulidoIn .18s ease;
+    }
+    .pdf-vm-btn{
+      display:inline-flex;align-items:center;justify-content:center;
+      width:44px;height:44px;flex:none;border:0;border-radius:50%;cursor:pointer;
+      background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 16%, transparent);
+      color:var(--lec-acento, var(--cyan));
+    }
+    .pdf-vm-btn svg{width:17px;height:17px}
+    .pdf-vm-btn:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:2px}
+    .pdf-vm-texto{
+      font-size:12px;font-weight:600;color:var(--lec-suave, var(--muted));
+      max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+
+    /* 5. El texto se queda con lo que sobra, y el dock deja de apilar
+          cuatro barras: el reproductor entero vive tras el botón Voz. */
+    body.jg-leyendo .pdf-area{padding-bottom:0}
+    /* El hueco de la barra del pulgar se reserva SIEMPRE, esté visible o no:
+       es lo que garantiza que ocultarla no remaquete nada. */
+    body.jg-leyendo .pdf-texto-col{padding-bottom:var(--pdf-bm-alto)}
+    /* La hoja se detiene ENCIMA de la barra del pulgar. Si la tapara, el
+       botón «Voz» quedaría debajo y no habría forma de volver a cerrarla:
+       un callejón sin salida. (Pasó; lo cazó `verificar_pdf_paginas.mjs`.) */
+    body.jg-leyendo #pdfDockNav{
+      position:fixed;inset:auto 0 var(--pdf-bm-alto) 0;z-index:23;
+      max-height:calc(76dvh - var(--pdf-bm-alto));overflow:auto;
+      border-radius:var(--pdf-r) var(--pdf-r) 0 0;
+      box-shadow:0 -12px 40px -18px rgba(0,0,0,.8);
+      transform:translateY(calc(100% + var(--pdf-bm-alto)));
+      transition:transform .24s ease;
+      visibility:hidden;
+    }
+    body.jg-leyendo #pdfDockNav[data-abierto="si"],
+    body.jg-leyendo #pdfDockNav[data-abierto="buscar"]{transform:none;visibility:visible}
+    /* La fila de búsqueda vive dentro del dock. En el teléfono el dock es una
+       hoja, así que la hoja tiene dos modos: reproductor o buscador. Es eso o
+       duplicar el buscador en otro sitio, y dos buscadores es un buscador que
+       se desincroniza. */
+    body.jg-leyendo #pdfDockNav[data-abierto="buscar"] > :not(#pdfSearchRow){display:none}
+    body.jg-leyendo #pdfDockNav[data-abierto="buscar"]{padding:12px}
+
+    /* 6. Objetivos táctiles: nada por debajo de 44 px.
+          Medido antes del cambio: btnPdfAudiolibro 37 px, el selector de voz
+          14 px de ancho, y los botones de cerrar hoja y volver, 40 px. */
+    body.jg-leyendo .pdf-hoja-cerrar,
+    body.jg-leyendo .btn-back#btnPdfBack{min-width:44px;min-height:44px}
+    body.jg-leyendo #btnPdfAudiolibro{min-width:44px;min-height:44px}
+    body.jg-leyendo .tts-voice-select,
+    body.jg-leyendo #pdfDockNav .tts-voice-select,
+    body.jg-leyendo #pdfDockNav .tts-rate-control{min-width:44px;min-height:44px}
+  }
+
+  @media (max-width:640px) and (prefers-reduced-motion:reduce){
+    body.jg-leyendo .pdf-doc-top,
+    body.jg-leyendo .pdf-barra-movil,
+    body.jg-leyendo #pdfDockNav{transition:none}
+  }
   @media (max-width:380px){
     .btn-back#btnPdfBack span{display:none}
     .btn-back#btnPdfBack{padding-inline:12px}
@@ -4269,7 +4453,12 @@ body.jg-leyendo .pdf-dock-nav .tts-console{display:flex;flex-wrap:wrap;align-ite
 body.jg-leyendo .pdf-dock-nav .tts-transport{flex-basis:100%;width:100%}
 body.jg-leyendo .pdf-dock-nav .tts-voice-select{flex:1;min-width:0}
 .pdf-lectura > :first-child{margin-top:0}
-body.jg-leyendo .pdf-doc-acciones .pdf-btn-indice{display:inline-flex!important}
+/* «Contenido» va en la cabecera a partir de tablet. En el teléfono vive en la
+   barra del pulgar, así que aquí NO puede forzarse: el `!important` le ganaba
+   al `display:none` del bloque de teléfono y el botón se colaba en la fila. */
+@media(min-width:641px){
+  body.jg-leyendo .pdf-doc-acciones .pdf-btn-indice{display:inline-flex!important}
+}
 body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 .pdf-cortes-hoja:not([hidden]){position:fixed;inset:10% max(16px,calc((100vw - 720px)/2));z-index:110;max-height:80dvh;overflow:auto;background:var(--lec-bg);padding:20px;border:1px solid var(--lec-linea);border-radius:16px}
 @media(min-width:1024px){
@@ -4277,10 +4466,12 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
   body.jg-leyendo .pdf-lector-cuerpo:has(.pdf-indice:not([hidden])){grid-template-columns:220px minmax(0,1fr)}
   body.jg-leyendo .pdf-texto-col{padding-inline:24px}
 }
+/* Este bloque repartía la cabecera en DOS columnas, y como va después del
+   bloque de teléfono le ganaba: las acciones caían a una segunda fila y la
+   cabecera medía 109 px. El reparto de columnas ahora lo decide un solo
+   sitio (el bloque «TELÉFONO ≤640 px»); aquí quedan solo los ajustes de
+   tamaño, que no compiten con nadie. */
 @media(max-width:560px){
-  body.jg-leyendo .pdf-doc-cab{grid-template-columns:auto minmax(0,1fr);gap:6px}
-  body.jg-leyendo .pdf-doc-tapa{display:none}
-  body.jg-leyendo .pdf-doc-acciones{gap:5px;justify-content:space-between}
   body.jg-leyendo .pdf-doc-acciones .mini-btn{padding-inline:10px}
   body.jg-leyendo .pdf-doc-ref{font-size:11px}
   body.jg-leyendo .pdf-doc-linea{gap:4px}
@@ -5462,6 +5653,18 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
                     </div>
+                    <!-- Buscar vive en la cabecera desde tablet. En el teléfono
+                         la cabecera es una sola fila, así que su entrada está
+                         aquí, la primera: buscar es lo que más se busca. -->
+                    <div class="pdf-mas-seccion pdf-solo-telefono">
+                      <div class="pdf-mas-grupo">
+                        <button class="mini-btn" id="btnPdfBuscarMovil" type="button" aria-controls="pdfSearchRow">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                          <span>Buscar en el documento</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div class="pdf-mas-seccion">
                       <h5 class="pdf-mas-tit">Texto</h5>
                       <div class="pdf-mas-grupo">
@@ -5847,6 +6050,39 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- Barra del pulgar (solo teléfono, ≤640 px). Cuatro destinos fijos
+               que no cambian de sitio nunca: es lo único que se puede alcanzar
+               con una mano. Todo lo demás vive dentro de ellos. En pantallas
+               mayores no se pinta: escritorio y tablet siguen con su fila. -->
+          <nav class="pdf-barra-movil" id="pdfBarraMovil" aria-label="Acciones de lectura">
+            <button type="button" class="pdf-bm-btn" id="btnPdfBmVoz" aria-label="Escuchar el libro">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+              <span>Voz</span>
+            </button>
+            <button type="button" class="pdf-bm-btn" id="btnPdfBmApariencia" aria-label="Tamaño, letra y tema">
+              <span class="pdf-bm-aa" aria-hidden="true">Aa</span>
+              <span>Apariencia</span>
+            </button>
+            <button type="button" class="pdf-bm-btn" id="btnPdfBmIndice" aria-label="Índice de capítulos">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>Contenido</span>
+            </button>
+            <button type="button" class="pdf-bm-btn" id="btnPdfBmOpciones" aria-label="Más opciones del documento">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><circle cx="5" cy="12" r="2.2"/></svg>
+              <span>Opciones</span>
+            </button>
+          </nav>
+
+          <!-- Mientras la voz suena, esto queda SIEMPRE a la vista aunque el
+               resto del cromo se aparte. Sin ello, la lectura inmersiva te
+               dejaría sin forma de parar la voz salvo a ciegas. -->
+          <div class="pdf-voz-mini" id="pdfVozMini" aria-live="off">
+            <button type="button" class="pdf-vm-btn" id="btnPdfVozMiniPausa" aria-label="Pausar la lectura en voz alta">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+            </button>
+            <span class="pdf-vm-texto" id="pdfVozMiniTexto">Leyendo…</span>
           </div>
         </div>
       </div>

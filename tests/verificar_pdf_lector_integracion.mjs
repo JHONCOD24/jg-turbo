@@ -216,7 +216,11 @@ console.log('\n── 5. La hoja de Apariencia abre, cierra y devuelve el foco �
     return { cerrada: hoja.hidden, foco: document.activeElement?.id || '' };
   });
   comprobar(cerrar.cerrada, 'Escape cierra la hoja');
-  comprobar(cerrar.foco === 'btnPdfApariencia', `el foco vuelve al botón que abrió (fue a «${cerrar.foco}»)`);
+  /* A 390 px «Aa» vive en la barra del pulgar y el de la cabecera está
+     oculto: el contrato es que el foco vuelva a un control VISIBLE que
+     abra la hoja, nunca al <body>. */
+  comprobar(['btnPdfApariencia', 'btnPdfBmApariencia'].includes(cerrar.foco),
+    `el foco vuelve a un botón visible que abre la hoja (fue a «${cerrar.foco}»)`);
 }
 
 console.log('\n── 6. Los tres temas cambian y se recuerdan ────────────────────');

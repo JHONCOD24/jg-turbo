@@ -35,14 +35,29 @@ try {
   });
   let medida=await medir(); console.log(nombre,medida);
   assert(medida.alto>120,'altura útil del libro'); assert(medida.ancho>240,'ancho legible');
-  assert(medida.desborde<=3,'sin scroll vertical de lectura'); assert(medida.fondo<=height+2,'reproductor dentro de pantalla');
+  assert(medida.desborde<=3,'sin scroll vertical de lectura');
+  /* El reproductor tiene que poder alcanzarse ENTERO. En tablet y escritorio
+     es una barra siempre a la vista. En el teléfono (≤640 px) es una hoja que
+     sube desde el botón «Voz»: cerrada está fuera de pantalla a propósito, así
+     que lo que se comprueba es que al abrirla quepa completa. */
+  if (width > 640) { assert(medida.fondo<=height+2,'reproductor dentro de pantalla'); }
+  else {
+    await p.locator('#btnPdfBmVoz').click(); await p.waitForTimeout(400);
+    const abierto = await p.evaluate(() => { const d=document.querySelector('#pdfDockNav').getBoundingClientRect();
+      return {top:d.top, bottom:d.bottom}; });
+    assert(abierto.bottom<=height+2 && abierto.top>=-2,'reproductor completo al abrirlo en el teléfono');
+    await p.locator('#btnPdfBmVoz').click(); await p.waitForTimeout(300);
+  }
   assert.equal(medida.ocultos,0); assert.equal(medida.dialogo,false);
   assert(Number(medida.paginas.split(' de ')[1])>1,'paginación real');
   const texto=await p.locator('#pdfOutput').inputValue();
   await p.locator('#btnPdfPagNext').click(); await p.waitForTimeout(400);
   medida=await medir(); assert(medida.desplazamiento>100,'siguiente mueve el texto');
   assert(medida.paginas.startsWith('2 de ')); assert.equal(await p.locator('#pdfOutput').inputValue(),texto);
-  await p.locator('#btnPdfApariencia').click();
+  /* En el teléfono, Apariencia / Contenido / Opciones se accionan desde la
+     barra del pulgar; en tablet y escritorio siguen en la cabecera. */
+  const puerta = (escritorio, movil) => p.locator(width > 640 ? escritorio : movil);
+  await puerta('#btnPdfApariencia', '#btnPdfBmApariencia').click();
   await p.locator('#pdfAparTam').fill('24'); await p.locator('#pdfAparTam').dispatchEvent('input');
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   assert((await medir()).desplazamiento>0,'cambiar letra conserva el lugar');
@@ -67,7 +82,7 @@ try {
       window.jgDecidirLimitesPdf=async limites=>{window.pruebaPeticiones.cortes++;return {ia_used:true,decisions:limites.filter((l,i)=>!(window.pruebaOmitirUno && i===0)).map(l=>({boundaryId:l.boundaryId,action:'space',confidence:1}))};};
       window.jgCorregirBloqueLectura=async texto=>{window.pruebaPeticiones.puntuacion++;return {text:texto,ia_used:true};};
     });
-    await p.locator('#btnPdfMas').click(); await p.locator('#btnPdfCorregirLibro').click();
+    await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();
     assert(await p.locator('#pdfAuditoriaHoja').isVisible());
     assert.equal(await p.evaluate(()=>window.pruebaPeticiones.cortes),0,'sin IA antes del consentimiento');
     await p.locator('#btnPdfAuditoriaAceptar').click();
@@ -77,7 +92,7 @@ try {
     assert(await p.locator('#btnPdfCortes').isVisible(),'las decisiones omitidas quedan pendientes');
     assert((await p.locator('#pdfPulidoEstado').textContent()).includes('cortes por revisar'),'puntuación parcial no se presenta como libro corregido');
     await p.evaluate(()=>{window.pruebaOmitirUno=false;});
-    await p.locator('#btnPdfMas').click(); await p.locator('#btnPdfCorregirLibro').click();
+    await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();
     await p.waitForFunction(()=>document.querySelector('#btnPdfCortes').hidden,null,{timeout:15000});
     await p.waitForTimeout(1000);
     assert(!(await p.locator('#btnPdfCortes').isVisible()),'decisiones aceptadas dejan cero pendientes');
@@ -101,7 +116,7 @@ try {
     assert(!(await p.locator('#pdfReanudarCorreccion').isVisible()),'no reaparecen partes ya completadas');
     await p.locator('#btnPdfIndice').click(); assert(await p.locator('#pdfIndice').isVisible(),'índice accesible en escritorio');
     await p.locator('#btnPdfIndice').click();
-    await p.locator('#btnPdfMas').click();
+    await puerta('#btnPdfMas', '#btnPdfBmOpciones').click();
     await p.locator('#pdfVincularInput').setInputFiles(pdf);
     await p.waitForTimeout(500);
     assert((await p.locator('#pdfNoticeLector').textContent()).includes('PDF original vinculado'),'vincular compara la huella del archivo');
