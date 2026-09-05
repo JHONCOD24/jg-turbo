@@ -21,6 +21,14 @@ proyecto vinculado, los hashes de los 27 módulos PDF, HTML y SW en el dominio,
 HTTP 200 en salud y dos recorridos de navegador contra producción.
 Detalle: [verificación PDF v2.40](docs/pdf-v2.40-verificacion.md).
 
+**Cierre en Git (2026-09-05).** El despliegue salió por CLI y dejó el repositorio atrás:
+`origin/main` estaba en v2.38.0 (`30e83c9`) con producción sirviendo v2.40.0, y a GitHub le
+faltaba `js/pdf/huella.js`, que tres módulos importan. Se avanzó `main` al commit `c31a967`
+(fast-forward desde `fix/pdf-paginacion-y-correccion`) y se empujó: `30e83c9..c31a967`.
+GitHub no está conectado a Vercel (el proyecto no tiene integración Git), así que el push
+no generó ningún despliegue nuevo: `dpl_3EpViMULsw7FFzi6mZoPiqsNsRid` sigue siendo
+el de producción. Queda anotado en `TRAMPAS.md` para que el push forme parte del cierre.
+
 Esta guía explica la arquitectura productiva, los archivos obligatorios y el procedimiento de despliegue. Los cambios de audio se publicaron y validaron en producción el 23 de julio de 2026.
 
 

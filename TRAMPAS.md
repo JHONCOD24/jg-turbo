@@ -1,5 +1,23 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Publicar en Vercel no es cerrar: Git puede quedarse atrás
+
+**Síntoma (2026-09-05, v2.40):** producción servía v2.40.0 verificada byte a byte,
+y `origin/main` seguía en v2.38.0. Catorce commits vivían solo en este equipo, entre
+ellos el que metía `js/pdf/huella.js` en Git: **clonar el repositorio seguía dando una
+app rota**, justo el fallo que la auditoría de v2.39.1 creía haber cerrado.
+**Causa:** el despliegue sale por CLI desde la carpeta local, así que publicar no toca
+Git; la lista de cierre pedía documentar, desplegar y verificar, pero no empujar.
+**Regla:** una entrega no está cerrada hasta que `git log --oneline origin/main..HEAD`
+sale vacío. Comprobarlo al final, junto con los hashes del dominio:
+
+```bash
+git fetch origin && git log --oneline origin/main..HEAD   # debe salir vacío
+```
+
+Si la rama de trabajo no es `main`, avanzar `main` (`git merge --ff-only <rama>`) antes
+de empujar: dejar el cierre en una rama sin publicar es el mismo agujero.
+
 ## La cola debe conservar su propia huella de fuente
 
 **Síntoma (v2.40, desarrollo):** al reabrir aparecían pendientes partes ya

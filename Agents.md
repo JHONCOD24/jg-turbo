@@ -41,7 +41,15 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 
 **Siempre desplegar en Vercel** cuando se termine una mejora o feature de esta app. No dejar solo cambios locales.
 
-**Regla persistente para futuros agentes:** una mejora no se considera cerrada hasta que esté documentada en el MD del feature, desplegada al proyecto `jg-turbo` y verificada contra `https://jg-turbo.vercel.app`. Recordar esta regla en cada sesión.
+**Regla persistente para futuros agentes:** una mejora no se considera cerrada hasta que esté documentada en el MD del feature, desplegada al proyecto `jg-turbo`, verificada contra `https://jg-turbo.vercel.app` **y empujada a `origin/main`**. Recordar esta regla en cada sesión.
+
+⚠️ **Publicar en Vercel no toca Git.** El deploy sale por CLI desde la carpeta local, así que
+producción puede ir por delante del repositorio. El 2026-09-05 quedaron 14 commits sin empujar
+con la app ya en producción (`TRAMPAS.md` §«Publicar en Vercel no es cerrar»). Cerrar así:
+
+```bash
+git fetch origin && git log --oneline origin/main..HEAD   # debe salir vacío
+```
 
 > Reestructuración 2026-09-03: la app vive en la raíz del repo (`jg-turbo/`).
 > Ya NO existe `Spech to text App/` ni `vercel_deploy/` como carpetas de
@@ -64,6 +72,9 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 6. Verificar prod **contra el dominio real**, no contra la URL que imprime el CLI:
    marcador en el HTML + `/api/health` (ver checklist en `CAMBIOS_YOUTUBE.md` §6).
 7. Anotar `dpl_…` en la documentación
+8. **Empujar a GitHub**: si trabajaste en una rama, `git merge --ff-only <rama>` sobre `main`
+   y `git push origin main`. GitHub **no** está conectado a Vercel: el push no despliega nada,
+   solo respalda. Sin este paso, producción vive únicamente en este equipo.
 
 Detalle TTS completo: **`CAMBIOS_TTS.md`**. Persistencia: `CONFIG_PERSISTENTE.md`. Deploy: `DOCUMENTACION_DESPLIEGUE.md`.
 

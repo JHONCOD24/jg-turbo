@@ -77,3 +77,40 @@ El despliegue usó una copia temporal de los archivos productivos de la raíz
 actual, vinculada al mismo proyecto. No incluyó `.env`, PDF privados, pruebas
 ni capturas. La copia evita recorrer `.pytest_cache`, cuyo acceso está denegado
 en este equipo. No se utilizó código del respaldo `JG Turbo_OLD`.
+
+## Cierre en Git y recomprobación (2026-09-05)
+
+La publicación quedó verificada, pero el repositorio no: `origin/main` estaba en
+v2.38.0 (`30e83c9`), catorce commits por detrás de producción, y `js/pdf/huella.js`
+—que `libroVista.js`, `pdfController.js` y `colaCorreccion.js` importan— no existía
+en GitHub. Se avanzó `main` con `merge --ff-only` desde
+`fix/pdf-paginacion-y-correccion` y se empujó: `30e83c9..c31a967`, sin forzar.
+El proyecto de Vercel no tiene integración con GitHub, así que el push no creó
+ningún despliegue: producción sigue en `dpl_3EpViMULsw7FFzi6mZoPiqsNsRid`.
+
+Medido después del push, no antes:
+
+- 23 suites de Node: **1.077 líneas OK, 0 fallos** (la referencia de v2.39.1 eran
+  ~1.000; menos habría significado una corrida cortada).
+- `index.html`, `sw.js` y los **27** módulos de `js/pdf/`: SHA-256 idéntico entre
+  el disco y `https://jg-turbo.vercel.app`.
+- `/api/health`: HTTP 200. Marcadores servidos: `v2.40.0`, `JG_JS_V=v80`,
+  `jg-turbo-shell-v80`.
+- `JG_BASE=https://jg-turbo.vercel.app node tests/verificar_pdf_paginas.mjs`:
+  salida 0 en escritorio, tablet, móvil y 320 px, incluido el párrafo largo y la
+  restauración por carácter.
+- `JG_BASE=… node tests/verificar_pdf_lector_integracion.mjs`: salida 0, sin
+  errores de JavaScript.
+- Ningún módulo importado por `js/pdf/*.js` queda fuera de Git (comprobación de
+  `TRAMPAS.md`).
+
+- `JG_PDF_REAL=tests/private/becoming.pdf node tests/test_pdf_reales.mjs`: salida 0,
+  con las mismas cifras de v2.39.1 — 431 páginas, 23.650 átomos, 793.112 caracteres,
+  1.068 límites pendientes y 3 guiones no resueltos (`1962- author`, `alpha- and`,
+  `five- and`: rango de año y guion suspendido del inglés, no particiones). El libro
+  vive en `tests/private/`, ignorado por `.gitignore`: está en este equipo, no en el
+  repositorio, así que la prueba se salta sola en un clon limpio.
+
+Los 1.068 límites pendientes (4,5 %) siguen sin resolver a propósito: sin evidencia no
+se adivinan y no bloquean la lectura ni la puntuación del resto. Quedan disponibles en
+«Revisar cortes» para quien quiera decidirlos a mano.

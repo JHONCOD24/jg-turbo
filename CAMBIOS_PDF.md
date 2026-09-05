@@ -14,6 +14,17 @@ Publicado en `jg-turbo.vercel.app`: `dpl_3EpViMULsw7FFzi6mZoPiqsNsRid`, READY.
 Hashes de los 27 módulos PDF, HTML y SW verificados en producción. Pruebas de
 páginas en cuatro tamaños y 27 comprobaciones de integración aprobadas allí.
 
+**Cierre (2026-09-05).** La entrega se había publicado sin llegar a Git: `origin/main`
+seguía en v2.38.0 y a GitHub le faltaba `js/pdf/huella.js`. Se avanzó `main` a `c31a967`
+y se empujó (`30e83c9..c31a967`); el push no despliega, porque el proyecto de Vercel no
+tiene integración con GitHub. Recomprobado después: 23 suites de Node con 1.077 líneas OK
+y 0 fallos; `index.html`, `sw.js` y los 27 módulos de `js/pdf/` iguales por SHA-256 a lo
+servido en el dominio; `/api/health` 200; `verificar_pdf_paginas.mjs` y
+`verificar_pdf_lector_integracion.mjs` con salida 0 contra `https://jg-turbo.vercel.app`.
+La prueba con el libro real de 431 páginas vuelve a salir en 0, con las mismas cifras.
+Los cortes ambiguos (1.068 límites pendientes, 4,5 %) siguen a la espera en «Revisar
+cortes»: sin evidencia no se adivinan, y no bloquean la lectura ni la puntuación.
+
 ## Entrega 2026-09-05 · v2.39.1 · Agente 4 · Auditoría de cierre
 
 Auditoría del trabajo de los tres agentes y cierre de la versión. Tres hallazgos
