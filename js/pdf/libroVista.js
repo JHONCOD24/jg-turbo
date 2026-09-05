@@ -128,39 +128,65 @@ export function initLibroVista({ el, estado, api }) {
     });
   }
 
-  function resaltarFraseEnLectura(fragmento) {
-    if (!el.lectura || !fragmento) return;
-    const marca = el.lectura.querySelector('mark');
-    if (marca) {
-      const txt = document.createTextNode(marca.textContent);
-      marca.replaceWith(txt);
-    }
-    const texto = String(fragmento).trim().slice(0, 80);
-    if (!texto) return;
-    const walker = document.createTreeWalker(el.lectura, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const nodo = walker.currentNode;
-      const idx = nodo.textContent.indexOf(texto);
-      if (idx >= 0) {
-        const antes = nodo.textContent.slice(0, idx);
-        const medio = nodo.textContent.slice(idx, idx + texto.length);
-        const despues = nodo.textContent.slice(idx + texto.length);
-        const frag = document.createDocumentFragment();
-        if (antes) frag.appendChild(document.createTextNode(antes));
-        const m = document.createElement('mark');
-        m.textContent = medio;
-        frag.appendChild(m);
-        if (despues) frag.appendChild(document.createTextNode(despues));
-        nodo.replaceWith(frag);
-        const r = m.getBoundingClientRect();
-        if (r.top < 0 || r.bottom > innerHeight) m.scrollIntoView({ block: 'center' });
+  let seguimiento = true;
+  /* Marca el tramo [ini, fin) del texto dentro de la vista.
+   *
+   * Antes se buscaba el fragmento con `indexOf`, que marcaba la primera
+   * aparición de la frase aunque la voz fuera por la quinta. Con las
+   * posiciones del mapa se marca exactamente lo que suena. */
+  function marcarRango(ini, fin) {
+    if (!el.lectura || !(fin > ini)) return null;
+    const previa = el.lectura.querySelector('mark');
+    if (previa) previa.replaceWith(document.createTextNode(previa.textContent));
+
+    const bloque = [...el.lectura.querySelectorAll('[data-ini]')].reverse()
+      .find((b) => Number(b.dataset.ini) <= ini && Number(b.dataset.fin) > ini);
+    if (!bloque) return null;
+
+    const base = Number(bloque.dataset.ini);
+    const desde = ini - base;
+    const hasta = Math.min(fin - base, bloque.textContent.length);
+    if (!(hasta > desde)) return null;
+
+    const recorrido = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
+    let visto = 0;
+    let marca = null;
+    while (recorrido.nextNode()) {
+      const nodo = recorrido.currentNode;
+      const largo = nodo.textContent.length;
+      if (visto + largo > desde) {
+        const a = Math.max(0, desde - visto);
+        const b = Math.min(largo, hasta - visto);
+        const trozos = document.createDocumentFragment();
+        if (a > 0) trozos.appendChild(document.createTextNode(nodo.textContent.slice(0, a)));
+        marca = document.createElement('mark');
+        marca.textContent = nodo.textContent.slice(a, b);
+        trozos.appendChild(marca);
+        if (b < largo) trozos.appendChild(document.createTextNode(nodo.textContent.slice(b)));
+        nodo.replaceWith(trozos);
         break;
       }
+      visto += largo;
     }
+    return marca;
+  }
+
+  function prefiereMenosMovimiento() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
+  }
+
+  /* Lleva la marca a la zona cómoda de lectura (algo por encima del centro,
+   * que es donde el ojo la espera) y solo cuando hace falta: si la frase ya se
+   * ve, mover la página sería un tirón gratuito. */
+  function desplazarA(elemento) {
+    if (!elemento || !seguimiento) return;
+    const caja = elemento.getBoundingClientRect();
+    const alto = window.innerHeight || 800;
+    if (caja.top > alto * 0.20 && caja.bottom < alto * 0.80) return;
+    elemento.scrollIntoView({ block: 'center', behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth' });
   }
 
   // Suspender el seguimiento al desplazarse a mano + Volver a la lectura.
-  let seguimiento = true;
   function onScrollManual() {
     if (!seguimiento) return;
     seguimiento = false;
@@ -356,7 +382,8 @@ export function initLibroVista({ el, estado, api }) {
 
   return {
     renderLectura,
-    resaltarFraseEnLectura,
+    marcarRango,
+    desplazarA,
     pintarCortes,
     aplicarApariencia,
     fijarModo,

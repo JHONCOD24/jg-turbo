@@ -236,5 +236,20 @@ console.log('--- vista de lectura: sin botones inyectados y con posiciones ---')
     'el controlador expone leerDesdeCaracter');
 }
 
+console.log('--- la vista de lectura sigue a la voz ---');
+{
+  const vista = readFileSync(new URL('../js/pdf/libroVista.js', import.meta.url), 'utf8');
+  comprobar(vista.includes('marcarRango'), 'la vista sabe marcar un rango de caracteres');
+  comprobar(!vista.includes('indexOf(texto)'),
+    'el resaltado ya no busca el texto a ciegas: usa las posiciones');
+  const ctrl = readFileSync(new URL('../js/pdf/pdfController.js', import.meta.url), 'utf8');
+  comprobar(ctrl.includes('enModoLectura'),
+    'el controlador distingue qué contenedor se está viendo');
+  comprobar(/libroVista(\s*&&\s*libroVista|\?)\.marcarRango/.test(ctrl),
+    'el avance de la voz pinta la frase en la vista de lectura');
+  comprobar(ctrl.includes('guia.desdeCaracter'),
+    'una lectura empezada más abajo sigue resaltándose');
+}
+
 if (fallos > 0) { console.error(`\n❌ ${fallos} fallaron · ${ok} bien.`); process.exit(1); }
 console.log(`\n✅ Mejora apartado PDF: ${ok} comprobaciones bien.`);

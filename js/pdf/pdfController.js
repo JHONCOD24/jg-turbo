@@ -228,6 +228,11 @@ export function inicializarLectorPdf(deps = {}) {
 
   const idiomaActual = () => (el.lang && el.lang.value !== 'auto' ? el.lang.value : 'es');
   const hayDocumento = () => estado.partes.length > 0;
+  /* Qué se está viendo: la vista de libro o el textarea de edición. Todo lo
+   * que mida, marque o desplace tiene que preguntar por aquí, porque medir un
+   * elemento oculto devuelve ceros: ese era el motivo de que la lectura no
+   * siguiera a la voz. */
+  const enModoLectura = () => !!el.lectura && !el.lectura.hidden;
 
   /** Texto de un capítulo según se esté viendo el original o el español (con pulido si aplica). */
   function textoDeParte(indice) {
@@ -3780,19 +3785,31 @@ export function inicializarLectorPdf(deps = {}) {
     anotarPosicion({ desplazamiento: datos.fraccion, caracter: exacto != null ? exacto : undefined });
     if (!voz.siguiendo) { limpiarGuia(); return; }
 
-    /* Si lo que suena es una selección y no el capítulo entero, la posición
-     * relativa no corresponde con el texto de la pantalla: mejor no señalar
-     * nada que señalar mal. */
+    /* Si lo que suena es una selección suelta, la posición relativa no
+     * corresponde con el texto de la pantalla. Pero una lectura pedida con
+     * «leer desde aquí» también es más corta que el capítulo y SÍ corresponde:
+     * `guia.desdeCaracter` las distingue. */
     const largo = el.salida.value.length;
-    const parcial = datos.caracteres > 0 && largo > 0 && datos.caracteres < largo * 0.7;
+    const empezadaMasAbajo = guia.desdeCaracter >= 0;
+    const parcial = !empezadaMasAbajo && datos.caracteres > 0 && largo > 0 && datos.caracteres < largo * 0.7;
     const marca = parcial ? null : marcarFrase(datos);
-    if (parcial) limpiarGuia();
+    if (parcial) { limpiarGuia(); return; }
 
     if (Date.now() - voz.pausaManual < ESPERA_TRAS_TOCAR_MS) return;
+
+    /* En modo lectura se marca y se desplaza sobre el artículo visible; en
+     * modo edición, sobre el textarea y su capa gemela, como siempre. */
+    if (enModoLectura()) {
+      if (libroVista && libroVista.marcarRango && guia.desde >= 0) {
+        const rango = fraseEn(guia.frases, guia.desde);
+        const pintada = rango ? libroVista.marcarRango(rango[0], rango[1]) : null;
+        if (pintada) libroVista.desplazarA(pintada);
+      }
+      return;
+    }
+
     const alto = el.salida.scrollHeight - el.salida.clientHeight;
     if (alto <= 0) return;
-    /* Con la frase localizada se salta a ella exactamente; sin ella (una
-     * selección, un texto sin frases) se cae al avance proporcional. */
     const destino = marca
       ? marca.offsetTop - el.salida.clientHeight * 0.38
       : alto * datos.fraccion;
