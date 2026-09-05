@@ -67,16 +67,48 @@ if (sinTexto) console.log(`aviso: ${sinTexto} (OCR disponible a petición)`);
  *   que se unieron sin espacio.
  * - Dos trozos cortos separados justo antes de un signo suelen ser una palabra
  *   partida por la mitad. */
+/* Los patrones se afinaron tras medirlos contra un libro de 431 páginas: los
+ * dos últimos daban 39 y 544 indicios y TODOS eran falsos positivos.
+ *
+ * - «eartMath», «hatsApp», «ouTube» venían de HeartMath, WhatsApp y YouTube:
+ *   faltaba anclar al principio de palabra, así que cualquier nombre en
+ *   mayúscula intercalada contaba como error. Con `\b` delante, un nombre
+ *   propio bien escrito ya no cuenta y una unión real («casaMesa») sí.
+ * - «in awe», «of him», «et al» son inglés normal, no palabras partidas. Dos
+ *   trozos cortos solo son sospechosos si al unirlos forman una palabra que el
+ *   propio documento usa entera en otro sitio: esa es la única evidencia que
+ *   distingue «alu vión» de «in awe». */
 const patrones = [
   [/\w+-\s+\w+/g, 'guion de partición sin resolver'],
-  [/[a-záéíóúñ]{2,}[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}/g, 'dos palabras pegadas sin espacio'],
-  [/\b[a-záéíóúñ]{1,3}\s+[a-záéíóúñ]{1,3}\b(?=[,.;])/g, 'posible palabra partida antes de puntuación'],
+  [/\b[a-záéíóúñ]{2,}[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}/g, 'dos palabras pegadas sin espacio'],
 ];
 console.log(`páginas=${totalPaginas} atomos=${atomos.length} pendientes=${r.pendientes} chars=${r.texto.length}`);
 for (const [patron, motivo] of patrones) {
   const hallados = r.texto.match(patron) || [];
   /* Solo un ejemplo corto: el libro es privado y no se vuelca en la consola. */
   if (hallados.length) console.log(`  · ${motivo}: ${hallados.length} (ej. «${hallados[0].slice(0, 40)}»)`);
+}
+
+/* Palabra partida con evidencia: dos trozos separados cuya unión aparece en el
+ * propio documento como palabra entera, y que por separado no son palabras que
+ * el documento use. Sin esa segunda condición, «in awe» (que sí une «inawe»
+ * en ninguna parte) y cualquier par de artículos darían falso positivo. */
+{
+  /* El vocabulario incluye palabras de dos letras: «to» y «do» son palabras
+   * reales, y sin ellas «to do» pasaba por partida solo porque «todo» existe. */
+  const palabras = new Set((r.texto.toLowerCase().match(/[a-záéíóúñ]{2,}/g) || []));
+  const sospechosas = [];
+  const pares = r.texto.match(/\b[a-záéíóúñ]{2,5}\s+[a-záéíóúñ]{2,5}\b/g) || [];
+  for (const par of pares) {
+    const [izq, der] = par.toLowerCase().split(/\s+/);
+    if (!palabras.has(izq + der)) continue;      /* la unión no existe en el libro */
+    if (palabras.has(izq) && palabras.has(der)) continue; /* ambas son palabras reales */
+    sospechosas.push(par);
+    if (sospechosas.length >= 200) break;
+  }
+  if (sospechosas.length) {
+    console.log(`  · palabra partida con evidencia: ${sospechosas.length} (ej. «${sospechosas[0]}»)`);
+  }
 }
 
 const fallos = [];
