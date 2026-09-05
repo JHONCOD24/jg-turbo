@@ -160,7 +160,7 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
       if (!linea.texto.trim()) motivo = 'vacio';
       else if (esNumeroDePagina(linea.texto)) motivo = 'numero_pagina';
       else if (relleno.has(normalizarClave(linea.texto))) motivo = 'cabecera_pie_repetido';
-      if (!motivo) continue;
+      if (!motivo || opciones.atomosYaFiltrados) continue;
       descartadas += linea.atomos.length;
       omisiones.push({ pagina: pag.numero, texto: linea.texto, motivo, confianza: motivo === 'vacio' ? 1 : 0.9 });
       for (const a of linea.atomos) omitidos.add(a.id);
@@ -261,6 +261,15 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
 
   if (Array.isArray(opciones.decisionesIA) && opciones.decisionesIA.length) {
     aceptarDecisionesIA(limites, opciones.decisionesIA);
+  }
+  // Decisiones ya validadas contra estos mismos átomos, incluidas las del usuario.
+  const previos = new Map((opciones.limitesPrevios || []).map(l => [l.id, l]));
+  for (const limite of limites) {
+    const previo = previos.get(limite.id);
+    if (previo && previo.leftAtomId === limite.leftAtomId && previo.rightAtomId === limite.rightAtomId
+        && ['join','space','paragraph','pending'].includes(previo.decision)) {
+      Object.assign(limite, { decision: previo.decision, source: previo.source, quitarGuion: previo.quitarGuion });
+    }
   }
 
   // Composición única: texto, bloques, páginas y posiciones salen de la

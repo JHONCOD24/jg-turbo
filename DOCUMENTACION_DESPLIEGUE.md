@@ -11,6 +11,16 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.40.0, 2026-09-05
+
+Producción autorizada por el usuario y publicada como
+`dpl_3EpViMULsw7FFzi6mZoPiqsNsRid` (READY), alias `jg-turbo.vercel.app`.
+Se usó una copia temporal de los archivos productivos del repo actual para
+evitar el directorio `.pytest_cache` con acceso denegado. Se verificaron el
+proyecto vinculado, los hashes de los 27 módulos PDF, HTML y SW en el dominio,
+HTTP 200 en salud y dos recorridos de navegador contra producción.
+Detalle: [verificación PDF v2.40](docs/pdf-v2.40-verificacion.md).
+
 Esta guía explica la arquitectura productiva, los archivos obligatorios y el procedimiento de despliegue. Los cambios de audio se publicaron y validaron en producción el 23 de julio de 2026.
 
 

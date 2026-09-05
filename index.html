@@ -1,4 +1,4 @@
-<!-- v2.39.1 · Lector tipo libro: leer tocando, seguir la voz y retomar la lectura -->
+<!-- v2.40.0 · PDF: páginas de lectura, corrección conectada y decisiones persistentes -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -4230,6 +4230,86 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-search-lista{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto}
 .pdf-search-lista button{min-height:44px;text-align:left}
 #pdfVolverLectura{position:sticky;bottom:12px}
+/* ── Paso de páginas ──────────────────────────────────────────────────
+   El texto fluye en columnas del ancho exacto del lector: cada columna es
+   una página y se avanza moviendo el contenedor de lado. El DOM no cambia,
+   así que las posiciones (data-ini), el resaltado de la voz y «leer desde
+   aquí» siguen funcionando igual que con desplazamiento. */
+.pdf-lectura[data-paginado="si"]{
+  column-fill:auto;column-gap:var(--pdf-pag-hueco,44px);
+  overflow:hidden;max-width:none;padding:0;
+  scroll-behavior:auto;
+}
+.pdf-lectura[data-paginado="si"] > *{orphans:2;widows:2}
+.pdf-lectura[data-paginado="si"] > h3{break-after:avoid}
+.pdf-lectura[data-paginado="si"] table{max-height:100%;overflow:auto}
+/* Con páginas, la columna no se desplaza: el alto lo manda el lector. */
+.pdf-texto-col[data-paginado="si"]{overflow:hidden}
+/* Los estilos display:flex/block no deben volver visibles las capas ocultas.
+   El editor y las hojas ocultas consumían todo el alto y dejaban el libro en 0px. */
+#panelPdf [hidden]{display:none!important}
+.pdf-cortes-barra:not(:has(button:not([hidden]))){display:none}
+.pdf-texto-col > .pdf-modo-barra{flex:none}
+.pdf-lectura[data-paginado="si"]{min-height:0;position:relative;word-break:normal;overflow-wrap:break-word}
+.pdf-lector-cuerpo{overflow:hidden}
+.pdf-texto-col{overflow:auto}
+body.jg-leyendo > .wrap > header,
+body.jg-leyendo > .wrap > .tabs-row,
+body.jg-leyendo > .wrap > footer{display:none}
+body.jg-leyendo > .wrap{max-width:1440px;padding-block:0;height:100dvh}
+body.jg-leyendo .pdf-area.has-results{max-width:none}
+body.jg-leyendo .pdf-doc-top{position:static}
+body.jg-leyendo .pdf-texto-col{gap:10px;max-width:var(--pdf-col-ancho,76ch)}
+body.jg-leyendo .pdf-dock-nav{padding:8px 12px;gap:4px}
+body.jg-leyendo .pdf-dock-nav .tts-console{padding:0;border:0;gap:6px}
+body.jg-leyendo .pdf-dock-nav .tts-console-head{display:none}
+body.jg-leyendo .pdf-texto-col > :not(.pdf-lectura):not(.pdf-texto-caja){flex:none}
+body.jg-leyendo .pdf-dock-nav{position:static;margin:0}
+body.jg-leyendo .pdf-dock-nav .tts-console{display:flex;flex-wrap:wrap;align-items:center}
+body.jg-leyendo .pdf-dock-nav .tts-transport{flex-basis:100%;width:100%}
+body.jg-leyendo .pdf-dock-nav .tts-voice-select{flex:1;min-width:0}
+.pdf-lectura > :first-child{margin-top:0}
+body.jg-leyendo .pdf-doc-acciones .pdf-btn-indice{display:inline-flex!important}
+body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
+.pdf-cortes-hoja:not([hidden]){position:fixed;inset:10% max(16px,calc((100vw - 720px)/2));z-index:110;max-height:80dvh;overflow:auto;background:var(--lec-bg);padding:20px;border:1px solid var(--lec-linea);border-radius:16px}
+@media(min-width:1024px){
+  body.jg-leyendo .pdf-lector-cuerpo{grid-template-columns:minmax(0,1fr);gap:28px}
+  body.jg-leyendo .pdf-lector-cuerpo:has(.pdf-indice:not([hidden])){grid-template-columns:220px minmax(0,1fr)}
+  body.jg-leyendo .pdf-texto-col{padding-inline:24px}
+}
+@media(max-width:560px){
+  body.jg-leyendo .pdf-doc-cab{grid-template-columns:auto minmax(0,1fr);gap:6px}
+  body.jg-leyendo .pdf-doc-tapa{display:none}
+  body.jg-leyendo .pdf-doc-acciones{gap:5px;justify-content:space-between}
+  body.jg-leyendo .pdf-doc-acciones .mini-btn{padding-inline:10px}
+  body.jg-leyendo .pdf-doc-ref{font-size:11px}
+  body.jg-leyendo .pdf-doc-linea{gap:4px}
+  body.jg-leyendo .pdf-texto-col{padding-inline:10px}
+}
+
+.pdf-paginacion{
+  display:flex;align-items:center;justify-content:center;gap:14px;flex:none;
+  padding:2px 0 4px;
+}
+.pdf-pag-btn{
+  min-width:44px;min-height:44px;display:grid;place-items:center;
+  border:1px solid var(--lec-linea);border-radius:12px;cursor:pointer;
+  background:var(--lec-superficie);color:var(--lec-texto);
+}
+.pdf-pag-btn svg{width:18px;height:18px}
+.pdf-pag-btn:hover:not(:disabled){background:var(--lec-superficie-2)}
+.pdf-pag-btn:disabled{opacity:.38;cursor:default}
+.pdf-pag-btn:focus-visible{outline:2px solid var(--lec-acento);outline-offset:2px}
+.pdf-pag-pos{
+  font-size:13px;color:var(--lec-suave);min-width:9ch;text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.pdf-pag-pos::before{content:'Página '}
+#pdfNavPos::before{content:'Cap. '}
+@media (max-width:767px){
+  .pdf-lectura[data-paginado="si"]{--pdf-pag-hueco:28px}
+}
+
 .pdf-volver-lectura{position:sticky;bottom:12px;margin:0 auto;display:block;min-height:44px;
   padding:0 18px;border-radius:22px;border:1px solid var(--lec-linea);
   background:var(--lec-superficie);color:var(--lec-texto);font:inherit;font-size:14px;
@@ -5405,6 +5485,7 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                           <span>Revisar sugerencias (<span id="pdfRevisionCuenta">0</span>)</span>
                         </button>
+                        <button type="button" class="mini-btn" id="btnPdfCorregirLibro">Corregir cortes y puntuación</button>
                         <button type="button" class="mini-btn" id="btnPdfVincular">Vincular PDF original</button>
                         <input type="file" id="pdfVincularInput" accept="application/pdf" hidden>
                       </div>
@@ -5624,12 +5705,27 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
               <div class="pdf-modo-barra" role="group" aria-label="Modo de lectura">
                 <button type="button" class="mini-btn is-on" id="pdfVistaLectura" aria-pressed="true">Lectura</button>
                 <button type="button" class="mini-btn" id="pdfVistaEditar" aria-pressed="false">Editar</button>
+                <div class="pdf-cortes-barra">
+                  <button type="button" class="mini-btn" id="btnPdfCortes" hidden>Revisar cortes <span id="pdfCortesCuenta"></span></button>
+                  <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar corrección</button>
+                </div>
                 <span class="pdf-modo-estados" id="pdfModoEstados" role="status" aria-live="polite"></span>
               </div>
               <article class="pdf-lectura" id="pdfLectura" aria-label="Texto del libro" tabindex="0"></article>
               <button type="button" class="pdf-volver-lectura" id="pdfVolverLectura" hidden>
                 ↓ Volver a la lectura
               </button>
+              <!-- Paso de páginas: como un libro, sin scroll. Se oculta entero
+                   cuando se elige leer con desplazamiento. -->
+              <div class="pdf-paginacion" id="pdfPaginacion" hidden>
+                <button type="button" class="pdf-pag-btn" id="btnPdfPagPrev" aria-label="Página anterior">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <span class="pdf-pag-pos" id="pdfPagPos" role="status" aria-live="polite">1 de 1</span>
+                <button type="button" class="pdf-pag-btn" id="btnPdfPagNext" aria-label="Página siguiente">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
               <div class="pdf-editar-barra" id="pdfEditarBarra" hidden>
                 <button type="button" class="btn primary" id="pdfEditarGuardar">Guardar</button>
                 <button type="button" class="btn ghost" id="pdfEditarCancelar">Cancelar</button>
@@ -5662,6 +5758,12 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                       <option value="76">Ancha</option>
                     </select>
                   </label>
+                  <label for="pdfAparModo">Cómo pasar el texto
+                    <select id="pdfAparModo">
+                      <option value="paginas" selected>Pasando páginas (como un libro)</option>
+                      <option value="scroll">Desplazando hacia abajo</option>
+                    </select>
+                  </label>
                   <label for="pdfAparFuente">Letra
                     <select id="pdfAparFuente">
                       <option value="serif">Serif (como un libro)</option>
@@ -5669,10 +5771,6 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                     </select>
                   </label>
                 </div>
-              </div>
-              <div class="pdf-cortes-barra">
-                <button type="button" class="mini-btn" id="btnPdfCortes" hidden>Revisar cortes <span id="pdfCortesCuenta"></span></button>
-                <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar corrección</button>
               </div>
               <div class="pdf-cortes-hoja" id="pdfCortesHoja" hidden role="dialog" aria-labelledby="pdfCortesTitulo">
                 <h4 id="pdfCortesTitulo">Revisar cortes</h4>
@@ -15706,7 +15804,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v79';
+const JG_JS_V = 'v80';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

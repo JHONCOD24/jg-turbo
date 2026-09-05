@@ -6,7 +6,6 @@
  * palabras, párrafos ni posición guardada: solo presentación.
  */
 import { aplicarDecisionUsuario } from './limites.js';
-import { sha256Hex } from './huella.js';
 import { construirLectura } from './mapaLectura.js';
 
 /* Se reexporta para que las pruebas y quien ya usaba la vista
@@ -18,7 +17,7 @@ function esc(texto) {
 }
 
 function leerApariencia() {
-  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura' };
+  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas' };
   try {
     const crudo = localStorage.getItem('jg_pdf_lectura');
     if (crudo) cfg = { ...cfg, ...JSON.parse(crudo) };
@@ -52,7 +51,12 @@ export function initLibroVista({ el, estado, api }) {
     if (el.aparInter) el.aparInter.value = String(cfg.inter);
     if (el.aparAncho) el.aparAncho.value = String(cfg.ancho);
     if (el.aparFuente) el.aparFuente.value = cfg.fuente;
+    if (el.aparModo) el.aparModo.value = cfg.modoPagina === 'scroll' ? 'scroll' : 'paginas';
     guardarApariencia(cfg);
+    if (el.textoCol) el.textoCol.style.setProperty('--pdf-col-ancho', cfg.ancho + 'ch');
+    /* Cambiar el tamaño o el ancho cambia cuántas palabras caben: hay que
+     * repartir las páginas otra vez, conservando el sitio. */
+    if (typeof medirPaginas === 'function') medirPaginas();
   }
 
   function fijarTema(tema) {
@@ -86,10 +90,13 @@ export function initLibroVista({ el, estado, api }) {
       el.vistaEditar.classList.toggle('is-on', editar);
       el.vistaEditar.setAttribute('aria-pressed', String(editar));
     }
+    if (el.paginacion) el.paginacion.hidden = editar || !hayPaginado();
+    requestAnimationFrame(() => medirPaginas());
   }
 
-  function renderLectura() {
+  function renderLectura({ conservar = false } = {}) {
     if (!el.lectura) return;
+    const ancla = conservar ? caracterVisible() : 0;
     const texto = api.textoDeParte ? api.textoDeParte(estado.parteActual) : (el.salida ? el.salida.value : '');
     /* El HTML trae las posiciones puestas: no hace falta añadir nada al texto. */
     el.lectura.innerHTML = construirLectura(texto);
@@ -108,6 +115,9 @@ export function initLibroVista({ el, estado, api }) {
     const pend = (estado.limites || []).filter((l) => l && l.decision === 'pending').length;
     if (el.cortesCuenta) el.cortesCuenta.textContent = pend ? '(' + pend + ')' : '';
     if (el.btnCortes) el.btnCortes.hidden = pend === 0;
+    /* Capítulo nuevo: se reparte desde su primera página. */
+    pag.actual = 0;
+    requestAnimationFrame(() => { medirPaginas({ conservar: false }); if (ancla) irACaracter(ancla); });
   }
 
   /* Tocar un párrafo lo lee en voz alta desde ahí.
@@ -171,6 +181,172 @@ export function initLibroVista({ el, estado, api }) {
     return marca;
   }
 
+  /* ── Paso de páginas ─────────────────────────────────────────────────
+   *
+   * Un capítulo de 1 300 palabras ocupaba 5 679 px de alto en una ventana
+   * donde solo se ven 561: diez pantallazos de rueda para leerlo. Aquí el
+   * texto fluye en columnas del ancho exacto del lector, así que cada columna
+   * es una página y se avanza moviendo el contenedor de lado.
+   *
+   * Lo importante es que el DOM no cambia: son los mismos bloques con sus
+   * mismos `data-ini`, así que las posiciones guardadas, el resaltado de la
+   * voz y «leer desde aquí» siguen funcionando sin enterarse. */
+  const pag = { total: 1, actual: 0, paso: 0, activo: false };
+
+  function hayPaginado() { return cfg.modoPagina !== 'scroll'; }
+
+  function pintarPaginacion() {
+    if (el.pagPos) el.pagPos.textContent = (pag.actual + 1) + ' de ' + pag.total;
+    if (el.pagPrev) el.pagPrev.disabled = pag.actual <= 0;
+    if (el.pagNext) el.pagNext.disabled = pag.actual >= pag.total - 1;
+  }
+
+  function irAPagina(n, { suave = true, guardar = true } = {}) {
+    const art = el.lectura;
+    if (!art || !pag.activo || !pag.paso) return;
+    pag.actual = Math.max(0, Math.min(pag.total - 1, Math.round(Number(n) || 0)));
+    art.scrollTo({
+      left: pag.actual * pag.paso,
+      behavior: suave && !prefiereMenosMovimiento() ? 'smooth' : 'auto',
+    });
+    pintarPaginacion();
+    pag.ancla = caracterVisible();
+    if (guardar && api.anotarPagina) api.anotarPagina(pag.ancla);
+  }
+
+  /** En qué página cae un elemento del texto. */
+  function paginaDe(elemento) {
+    if (!pag.activo || !pag.paso || !elemento) return 0;
+    const rect = elemento.getClientRects()[0];
+    return rect ? paginaDeRect(rect) : 0;
+  }
+
+  function paginaDeRect(rect) {
+    return Math.max(0, Math.floor((rect.left - el.lectura.getBoundingClientRect().left + el.lectura.scrollLeft + 2) / pag.paso));
+  }
+
+  /* Mide el hueco disponible y reparte el texto en páginas. Hay que soltar la
+   * altura antes de medir: si se mide con la altura ya fijada, cada recálculo
+   * heredaría el valor anterior y la página iría encogiendo. */
+  function medirPaginas({ conservar = true } = {}) {
+    const art = el.lectura;
+    if (!art || art.hidden || !art.getClientRects().length) return;
+    const col = el.textoCol;
+
+    if (!hayPaginado()) {
+      art.removeAttribute('data-paginado');
+      art.style.height = '';
+      art.style.flex = '';
+      art.style.columnWidth = '';
+      if (col) col.removeAttribute('data-paginado');
+      if (el.paginacion) el.paginacion.hidden = true;
+      pag.activo = false;
+      art.scrollLeft = 0;
+      return;
+    }
+
+    const anclaIni = conservar ? (pag.ancla || 0) : 0;
+
+    art.dataset.paginado = 'si';
+    if (col) col.dataset.paginado = 'si';
+    if (el.paginacion) el.paginacion.hidden = false;
+
+    /* Se suelta la altura para que el flex reparta el hueco de verdad. */
+    art.style.height = '0px';
+    art.style.flex = 'none';
+    art.style.columnWidth = '';
+    const visibles = [...col.children].filter(e => e !== art && getComputedStyle(e).display !== 'none' && !['fixed','absolute'].includes(getComputedStyle(e).position));
+    const estiloCol = getComputedStyle(col);
+    const huecos = (parseFloat(estiloCol.rowGap) || 0) * visibles.length;
+    const bordes = (parseFloat(estiloCol.paddingTop) || 0) + (parseFloat(estiloCol.paddingBottom) || 0);
+    const alto = Math.floor(col.clientHeight - bordes - visibles.reduce((n,e) => n + e.getBoundingClientRect().height, 0) - huecos);
+    const ancho = art.clientWidth;
+    if (alto < 80 || ancho < 80) { pag.activo = false; return; }
+
+    art.style.height = alto + 'px';
+    art.style.flex = 'none';
+    art.style.columnWidth = ancho + 'px';
+    const hueco = parseFloat(getComputedStyle(art).columnGap) || 44;
+    pag.paso = ancho + hueco;
+    pag.activo = true;
+    pag.total = Math.max(1, Math.round((art.scrollWidth + hueco) / pag.paso));
+
+    /* Se vuelve a la página donde estaba el texto que se estaba leyendo, no a
+     * un número de página: cambiar el tamaño de letra mueve los números. */
+    const destino = anclaIni > 0 ? rangoDeCaracter(anclaIni) : null;
+    pag.actual = destino ? paginaDe(destino) : 0;
+    irAPagina(pag.actual, { suave: false, guardar: false });
+  }
+
+  function rangoDeCaracter(caracter) {
+    const bloque = bloqueDeCaracter(caracter);
+    if (!bloque) return null;
+    let resto = Math.max(0, caracter - Number(bloque.dataset.ini));
+    const walker = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const nodo = walker.currentNode;
+      if (resto < nodo.length) {
+        const rango = document.createRange(); rango.setStart(nodo, resto); rango.setEnd(nodo, resto + 1); return rango;
+      }
+      resto -= nodo.length;
+    }
+    return bloque;
+  }
+
+  function bloqueDeCaracter(caracter) {
+    if (!el.lectura) return null;
+    const bloques = [...el.lectura.querySelectorAll('[data-ini]')];
+    if (!bloques.length) return null;
+    return bloques.reverse().find((b) => Number(b.dataset.ini) <= caracter) || bloques[bloques.length - 1];
+  }
+
+  if (el.pagPrev) el.pagPrev.addEventListener('click', () => irAPagina(pag.actual - 1));
+  if (el.pagNext) el.pagNext.addEventListener('click', () => irAPagina(pag.actual + 1));
+
+  /* Con el teclado, las flechas pasan página cuando el foco está en el texto. */
+  if (el.lectura) {
+    el.lectura.addEventListener('keydown', (ev) => {
+      if (!pag.activo) return;
+      if (ev.key === 'ArrowRight' || ev.key === 'PageDown') { ev.preventDefault(); irAPagina(pag.actual + 1); }
+      if (ev.key === 'ArrowLeft' || ev.key === 'PageUp') { ev.preventDefault(); irAPagina(pag.actual - 1); }
+    });
+
+    /* Deslizar pasa página; el toque simple sigue siendo «leer desde aquí»,
+     * así que los dos gestos conviven sin pisarse. */
+    let inicio = null;
+    el.lectura.addEventListener('touchstart', (ev) => {
+      const t = ev.changedTouches && ev.changedTouches[0];
+      inicio = t ? { x: t.clientX, y: t.clientY } : null;
+    }, { passive: true });
+    el.lectura.addEventListener('touchend', (ev) => {
+      if (!inicio || !pag.activo) return;
+      const t = ev.changedTouches && ev.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - inicio.x;
+      const dy = t.clientY - inicio.y;
+      inicio = null;
+      if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      irAPagina(pag.actual + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+  }
+
+  /* Girar el teléfono o abrir el teclado cambia el hueco: se vuelve a repartir
+   * sin perder el sitio. */
+  let tempoMedir = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(tempoMedir);
+    tempoMedir = setTimeout(() => medirPaginas(), 180);
+  });
+  if (typeof ResizeObserver !== 'undefined' && el.textoCol) {
+    const observar = new ResizeObserver(() => {
+      clearTimeout(tempoMedir);
+      tempoMedir = setTimeout(() => medirPaginas(), 40);
+    });
+    observar.observe(el.textoCol);
+    for (const nodo of el.textoCol.children) if (nodo !== el.lectura) observar.observe(nodo);
+  }
+  document.fonts?.ready.then(() => medirPaginas());
+
   function prefiereMenosMovimiento() {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
   }
@@ -180,6 +356,13 @@ export function initLibroVista({ el, estado, api }) {
    * ve, mover la página sería un tirón gratuito. */
   function desplazarA(elemento) {
     if (!elemento || !seguimiento) return;
+    /* Con páginas no se desplaza: se pasa a la página donde suena la frase, y
+     * solo si no es la que ya se está viendo. */
+    if (pag.activo) {
+      const destino = paginaDe(elemento);
+      if (destino !== pag.actual) irAPagina(destino);
+      return;
+    }
     const caja = elemento.getBoundingClientRect();
     const alto = window.innerHeight || 800;
     if (caja.top > alto * 0.20 && caja.bottom < alto * 0.80) return;
@@ -191,6 +374,9 @@ export function initLibroVista({ el, estado, api }) {
    * Antes solo escuchaba la rueda del ratón, así que en el teléfono —donde
    * más se lee— nunca se suspendía. */
   function onDesplazarManual() {
+    /* Pasar página es navegar, no apartarse de la voz: solo el desplazamiento
+     * libre suspende el seguimiento. */
+    if (pag.activo) return;
     if (!seguimiento) return;
     seguimiento = false;
     if (el.volverLectura) el.volverLectura.hidden = false;
@@ -211,16 +397,38 @@ export function initLibroVista({ el, estado, api }) {
   /* Lleva la vista al carácter guardado: así un libro se reabre donde se dejó. */
   function irACaracter(caracter) {
     if (!el.lectura) return;
-    const bloques = [...el.lectura.querySelectorAll('[data-ini]')];
-    if (!bloques.length) return;
-    const destino = bloques.reverse().find((b) => Number(b.dataset.ini) <= caracter) || bloques[bloques.length - 1];
-    if (destino) destino.scrollIntoView({ block: 'start' });
+    const destino = rangoDeCaracter(caracter);
+    if (!destino) return;
+    if (pag.activo) { irAPagina(paginaDe(destino), { suave: false, guardar: false }); return; }
+    bloqueDeCaracter(caracter)?.scrollIntoView({ block: 'start' });
   }
 
   /* Por dónde va quien lee con los ojos: el primer bloque todavía visible. */
   function caracterVisible() {
     if (!el.lectura) return 0;
-    for (const b of el.lectura.querySelectorAll('[data-ini]')) {
+    const bloques = el.lectura.querySelectorAll('[data-ini]');
+    /* Con páginas, «lo que se ve» es el primer bloque de la página abierta. */
+    if (pag.activo && pag.paso) {
+      for (const b of bloques) {
+        if (b.querySelector('[data-ini]')) continue;
+        const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+        let offset = Number(b.dataset.ini) || 0;
+        while (walker.nextNode()) {
+          const nodo = walker.currentNode;
+          if (!nodo.length) continue;
+          const rango = document.createRange();
+          const paginaEn = (i) => { rango.setStart(nodo,i); rango.setEnd(nodo,i+1); return paginaDe(rango); };
+          if (paginaEn(nodo.length - 1) >= pag.actual) {
+            let a = 0, z = nodo.length - 1;
+            while (a < z) { const m = Math.floor((a+z)/2); if (paginaEn(m) < pag.actual) a=m+1; else z=m; }
+            return offset + a;
+          }
+          offset += nodo.length;
+        }
+      }
+      return 0;
+    }
+    for (const b of bloques) {
       if (b.getBoundingClientRect().bottom > 0) return Number(b.dataset.ini) || 0;
     }
     return 0;
@@ -254,6 +462,13 @@ export function initLibroVista({ el, estado, api }) {
   if (el.aparInter) el.aparInter.addEventListener('input', () => { cfg.inter = Number(el.aparInter.value) || 1.7; aplicarApariencia(); });
   if (el.aparAncho) el.aparAncho.addEventListener('change', () => { cfg.ancho = Number(el.aparAncho.value) || 64; aplicarApariencia(); });
   if (el.aparFuente) el.aparFuente.addEventListener('change', () => { cfg.fuente = el.aparFuente.value === 'serif' ? 'serif' : 'sans'; aplicarApariencia(); });
+  /* Pasar páginas o desplazar: cada quien lee distinto, y la elección se
+   * recuerda. */
+  if (el.aparModo) el.aparModo.addEventListener('change', () => {
+    cfg.modoPagina = el.aparModo.value === 'scroll' ? 'scroll' : 'paginas';
+    guardarApariencia(cfg);
+    medirPaginas({ conservar: true });
+  });
   // Los tres temas, en un solo sitio y con su estado a la vista.
   function pintarTemas(activo) {
     for (const b of [el.temaPapel, el.temaSepia, el.temaNoche]) {
@@ -305,7 +520,7 @@ export function initLibroVista({ el, estado, api }) {
       ctx.textContent = '«' + (lim.leftFragment || '') + '» + «' + (lim.rightFragment || '') + '»' + (pagina ? ' · página ' + pagina : '');
       const prop = document.createElement('p');
       prop.className = 'pdf-corte-prop';
-      prop.textContent = 'Propuesta: unir sin espacio. Si son dos palabras, mantenlas separadas.';
+      prop.textContent = 'Comprueba el contexto o la página original y elige cómo deben quedar estos fragmentos.';
       const fila = document.createElement('div');
       fila.className = 'pdf-corte-acciones';
       const acciones = [
@@ -318,12 +533,20 @@ export function initLibroVista({ el, estado, api }) {
         b.type = 'button';
         b.className = 'mini-btn';
         b.textContent = etiqueta;
-        b.addEventListener('click', () => {
-          pilaDeshacer.push({ id: lim.id, antes: lim.decision });
+        b.addEventListener('click', async () => {
+          const antes = { ...lim };
+          b.disabled = true;
+          api.pausar?.();
           aplicarDecisionUsuario(lim, accion);
-          try { api.reconstruirTrasDecision && api.reconstruirTrasDecision(); } catch (_) {}
+          try {
+            await api.reconstruirTrasDecision?.();
+            pilaDeshacer.push({ id: lim.id, antes });
+          } catch (error) {
+            Object.assign(lim, antes);
+            api.avisar?.(error.message || 'No se pudo guardar el corte. Inténtalo de nuevo.', 'warn');
+          }
           pintarCortes();
-          renderLectura();
+          renderLectura({ conservar: true });
         });
         fila.appendChild(b);
       }
@@ -348,12 +571,17 @@ export function initLibroVista({ el, estado, api }) {
     deshacer.className = 'mini-btn';
     deshacer.textContent = 'Deshacer última';
     deshacer.disabled = !pilaDeshacer.length;
-    deshacer.addEventListener('click', () => {
+    deshacer.addEventListener('click', async () => {
       const ultimo = pilaDeshacer.pop();
       const lim = (estado.limites || []).find((l) => l.id === (ultimo && ultimo.id));
-      if (lim && ultimo) aplicarDecisionUsuario(lim, ultimo.antes === 'pending' ? 'pending' : ultimo.antes);
+      if (lim && ultimo) {
+        const actual = { ...lim };
+        Object.assign(lim, ultimo.antes);
+        try { await api.reconstruirTrasDecision?.(); }
+        catch (error) { Object.assign(lim, actual); pilaDeshacer.push(ultimo); api.avisar?.(error.message, 'warn'); }
+      }
       pintarCortes();
-      renderLectura();
+      renderLectura({ conservar: true });
     });
     el.cortesLista.appendChild(deshacer);
   }
@@ -362,6 +590,7 @@ export function initLibroVista({ el, estado, api }) {
     pintarCortes();
   });
   if (el.cortesCerrar) el.cortesCerrar.addEventListener('click', () => { if (el.cortesHoja) el.cortesHoja.hidden = true; });
+  el.cortesHoja?.addEventListener('keydown', ev => { if (ev.key === 'Escape') { el.cortesHoja.hidden = true; el.btnCortes?.focus(); } });
   if (el.recorteCerrar) el.recorteCerrar.addEventListener('click', () => {
     if (el.recorte) el.recorte.hidden = true;
     el.recorteCerrar.hidden = true;
@@ -374,14 +603,9 @@ export function initLibroVista({ el, estado, api }) {
       const archivo = el.vincularInput.files && el.vincularInput.files[0];
       if (!archivo) return;
       try {
-        const buf = await archivo.arrayBuffer();
-        const resumen = await crypto.subtle.digest('SHA-256', buf);
-        const hex = [...new Uint8Array(resumen)].map((b) => b.toString(16).padStart(2, '0')).join('');
-        if (estado.fuenteRevision && hex !== estado.fuenteRevision) {
-          try { api.avisar && api.avisar('Ese PDF no corresponde a este documento.', 'warn'); } catch (_) {}
-          return;
-        }
-        try { api.vincularArchivo && (await api.vincularArchivo(archivo)); } catch (_) {}
+        // La huella del archivo se valida en el controlador. fuenteRevision
+        // identifica texto y no puede compararse con los bytes de un PDF.
+        await api.vincularArchivo?.(archivo);
       } catch (_) {}
       el.vincularInput.value = '';
     });
@@ -453,6 +677,9 @@ export function initLibroVista({ el, estado, api }) {
     fijarModo,
     construirLectura,
     refrescarPausa,
+    medirPaginas,
+    irAPagina,
+    estadoPaginas: () => ({ ...pag }),
     leerOrden() { try { return localStorage.getItem('jg_pdf_orden') || 'reciente'; } catch (_) { return 'reciente'; } },
   };
 }

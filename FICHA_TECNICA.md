@@ -2,6 +2,9 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+PDF v2.40.0 incorpora páginas de lectura, restauración por carácter y corrección
+con decisiones persistentes. Detalle: [verificación](docs/pdf-v2.40-verificacion.md).
+
 ## YouTube con voz y traducción sincronizadas
 
 En el panel YouTube, **Traducir y doblar al español** obtiene la pista inglesa

@@ -1,5 +1,19 @@
 # Lector de PDF · historial de cambios y operación
 
+## 2026-09-05 · v2.40.0 · Páginas y corrección conectada
+
+El lector pasa páginas dentro del espacio disponible, recuerda el lugar por
+carácter y mantiene el reproductor visible. Se corrigieron las capas ocultas
+que ocupaban altura, las acciones Unir/Deshacer, la aplicación de decisiones
+de IA, la reapertura y la vinculación del PDF original. Las dudas en los cortes
+ya no detienen la puntuación del resto, y el estado muestra lo pendiente.
+
+Detalle, límites y evidencia: [verificación v2.40](docs/pdf-v2.40-verificacion.md).
+Versión de módulos `v80`, shell `jg-turbo-shell-v80`. IndexedDB sin cambio de versión.
+Publicado en `jg-turbo.vercel.app`: `dpl_3EpViMULsw7FFzi6mZoPiqsNsRid`, READY.
+Hashes de los 27 módulos PDF, HTML y SW verificados en producción. Pruebas de
+páginas en cuatro tamaños y 27 comprobaciones de integración aprobadas allí.
+
 ## Entrega 2026-09-05 · v2.39.1 · Agente 4 · Auditoría de cierre
 
 Auditoría del trabajo de los tres agentes y cierre de la versión. Tres hallazgos

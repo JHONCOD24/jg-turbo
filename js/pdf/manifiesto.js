@@ -19,6 +19,9 @@ export function serializarReconstruccion(resultado) {
     pendientes: Number(resultado.pendientes) || 0,
     listoParaLectura: resultado.pendientes === 0,
     manifiesto: resultado.manifiesto || [],
+    atomos: resultado.atomos || [],
+    paginas: resultado.paginas || [],
+    offsets: [...(resultado.offsetDeAtomo || new Map())],
     bloques: (resultado.bloquesLectura || resultado.bloques || []).map((b) => ({
       id: b.id,
       type: b.type || b.tipo,

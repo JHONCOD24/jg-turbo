@@ -77,6 +77,11 @@ En **Configuración** hay:
 
 ## Biblioteca PDF (IndexedDB, no localStorage)
 
+PDF v2.40.0 conserva la versión de IndexedDB y añade al registro de contenido
+la reconstrucción local (átomos, decisiones y posiciones). No se cambian claves
+de configuración ni almacenes. La preferencia de páginas se guarda dentro de
+`jg_pdf_lectura`; las decisiones se recuperan al reabrir el documento.
+
 Los libros viven en `jg-turbo-pdf` (versión de base **5**, sin subirla en v2.37). Desde
 `VERSION_RECONSTRUCCION = 6` cada documento puede guardar en los almacenes **ya existentes**:
 

@@ -225,6 +225,7 @@ export async function guardarDocumento({ meta, partes, pdf, portada, reconstrucc
           id: meta.id,
           partes,
           manifiesto: reconstruccion?.manifiesto || meta.manifiesto || null,
+          reconstruccion: reconstruccion || null,
           textoCanonico: reconstruccion?.textoCanonico || null,
           bloquesLectura: reconstruccion?.bloques || null,
           versionReconstruccion: reconstruccion?.versionReconstruccion || meta.versionReconstruccion || null,
@@ -273,6 +274,23 @@ export async function cargarDocumento(id) {
   } catch (_) {
     return null;
   }
+}
+
+/** Geometría y decisiones locales; solo se carga al abrir el documento. */
+export async function cargarReconstruccion(id) {
+  return (await conAlmacenes([CONTENIDO], 'readonly', c => esperar(c.get(id))))?.reconstruccion || null;
+}
+
+/** Vincula el original conservando portada, contenido y progreso. */
+export async function guardarArchivo(id, pdf) {
+  return conAlmacenes([ARCHIVOS, DOCUMENTOS], 'readwrite', async (archivos, docs) => {
+    const doc = await esperar(docs.get(id));
+    if (!doc) throw new Error('Documento no disponible.');
+    const previo = (await esperar(archivos.get(id))) || { id };
+    await esperar(archivos.put({ ...previo, pdf }));
+    await esperar(docs.put({ ...doc, tieneArchivo: true }));
+    return true;
+  });
 }
 
 /** Añade la huella sin tocar progreso ni fechas de contenido. */
@@ -824,6 +842,7 @@ export async function marcarTroceo(id, version, cambios = null) {
           id,
           partes,
           manifiesto: cambios?.reconstruccion?.manifiesto || previoCont.manifiesto || null,
+          reconstruccion: cambios?.reconstruccion || previoCont.reconstruccion || null,
           textoCanonico: cambios?.reconstruccion?.textoCanonico || previoCont.textoCanonico || null,
         }));
       }

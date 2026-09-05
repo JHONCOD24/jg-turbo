@@ -109,8 +109,8 @@ console.log('\n--- 4) UI de revisión y backend presentes ---');
   comprobar(indexHtml.includes('Corregir cortes y puntuación del libro')
       && indexHtml.includes('fragmentos de palabras'),
     'el consentimiento explica la corrección de palabras partidas');
-  comprobar((controller.match(/pulidor\.obtener\(/g) || []).length === 1,
-    'no precarga una copia sin corregir antes de que el usuario acepte la IA');
+  comprobar((controller.match(/pulidor\.obtener\(/g) || []).length === 0,
+    'abrir o precargar un capítulo no lanza una segunda corrección fuera de la cola');
   comprobar(controller.includes("estado: 'lectura_segura'")
       && controller.includes('reg.huellaOrigen !== huellaFuente'),
     'el texto corregido se guarda y solo se reutiliza si la fuente coincide');

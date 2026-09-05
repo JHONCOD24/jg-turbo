@@ -1,5 +1,28 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## La cola debe conservar su propia huella de fuente
+
+**Síntoma (v2.40, desarrollo):** al reabrir aparecían pendientes partes ya
+corregidas. **Causa:** el controlador sustituía la huella calculada por partes
+con otra del libro concatenado, usando separadores distintos. **Regla:** dejar
+que la cola calcule su huella y restaurar el estado de guardado compatible.
+La prueba de navegador verifica que reabrir no genera nuevas solicitudes de IA.
+
+## Recalcular páginas no es avanzar en la lectura
+
+**Síntoma (v2.40, desarrollo):** al reabrir un libro volvía a la primera página.
+**Causa:** el primer cálculo de altura guardaba el carácter cero antes de
+restaurar el avance. **Regla:** separar medir/presentar de guardar navegación.
+Probar reapertura después de pasar varias páginas, también dentro de un párrafo.
+
+## Reconstruir átomos filtrados no debe volver a detectar cabeceras
+
+**Síntoma (v2.40, desarrollo):** Unir/Deshacer quitaba nuevas primeras líneas.
+**Causa:** los átomos de lectura ya estaban filtrados; una segunda detección
+de relleno descartaba otros fragmentos. El invariante comparaba solo la salida
+filtrada y no veía la pérdida. **Regla:** marcar átomos ya filtrados y validar
+contra los átomos de entrada. La regresión verifica ida/vuelta de texto exacto.
+
 **Léelo antes de tocar el código.** No es teoría: cada caso ocurrió de verdad en este proyecto,
 lo pagó el usuario, y aquí está la causa medida y la regla que lo evita. Varios se cometieron dos
 veces por no estar escritos.
