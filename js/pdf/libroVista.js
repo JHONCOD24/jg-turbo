@@ -228,8 +228,6 @@ export function initLibroVista({ el, estado, api }) {
     clearTimeout(tempoSalto);
     tempoSalto = setTimeout(() => { pag.saltando = false; }, 420);
     if (guardar && api.anotarPagina) api.anotarPagina(pag.ancla);
-    /* Página nueva: se mira si trae palabras partidas. Si no, no pasa nada. */
-    if (typeof api.unirPalabrasAuto === 'function') api.unirPalabrasAuto();
   }
 
   /** En qué página cae un elemento del texto. */
@@ -567,22 +565,18 @@ export function initLibroVista({ el, estado, api }) {
   /* Los que se deshicieron y el botón vuelve a considerar en esa pulsación. */
   let rechazadosPrevios = new Set();
 
-  /** Cortes pendientes que caen dentro del tramo de texto que se está viendo. */
-  function pendientesDeLaPagina() {
-    const todos = (estado.limites || []).filter((l) => l && l.decision === 'pending');
-    if (!todos.length) return [];
-    if (!pag.activo || !el.lectura) return todos;
-    /* La página muestra de `desde` a `hasta` caracteres del capítulo. Los
-     * cortes traen su posición, así que basta con el rango. */
-    const desde = pag.ancla || 0;
-    const bloques = [...el.lectura.querySelectorAll('[data-fin]')];
-    const ultimo = bloques.length ? Number(bloques[bloques.length - 1].dataset.fin) : Infinity;
-    const hasta = Number.isFinite(ultimo) ? ultimo : Infinity;
-    const dentro = todos.filter((l) => {
-      const p = Number(l.charStart ?? l.pos ?? NaN);
-      return !Number.isFinite(p) || (p >= desde - 400 && p <= hasta + 400);
-    });
-    return dentro.length ? dentro : todos;
+  /* Un corte NO lleva posición de carácter (mira `crearLimites`): solo conoce
+   * los dos átomos que separa. Así que no se puede acotar «los de esta
+   * página», y fingirlo era peor que no hacerlo: el filtro devolvía siempre
+   * todos y cada salto de página reprocesaba el capítulo entero y lo volvía a
+   * pintar, moviendo la lectura.
+   *
+   * Se hace UNA pasada por capítulo, al abrirlo. El efecto para quien lee es
+   * el mismo —el texto ya está recompuesto cuando llega— y pasar de página
+   * deja de costar nada. */
+  const capitulosRepasados = new Set();
+  function pendientesDelCapitulo() {
+    return (estado.limites || []).filter((l) => l && l.decision === 'pending');
   }
 
   /** Pinta el botón: encendido y con cuenta cuando hay algo que unir. */
@@ -619,7 +613,7 @@ export function initLibroVista({ el, estado, api }) {
      * El pase automático, en cambio, respeta esa decisión y no los toca. */
     const candidatos = alcance === 'capitulo'
       ? (estado.limites || []).filter((l) => l && (l.decision === 'pending' || rechazadosPrevios.has(l.id)))
-      : pendientesDeLaPagina();
+      : pendientesDelCapitulo();
     if (!candidatos.length) { pintarUnir(0); return 0; }
 
     uniendo = true;
@@ -662,7 +656,7 @@ export function initLibroVista({ el, estado, api }) {
       return aUnir.length;
     } finally {
       uniendo = false;
-      pintarUnir(pendientesDeLaPagina().length ? contarUnibles() : 0);
+      pintarUnir(contarUnibles());
     }
   }
 
@@ -674,7 +668,7 @@ export function initLibroVista({ el, estado, api }) {
        * no se enciende nada todavía y se pintará tras el primer intento. */
       const mod = moduloLexico;
       if (!mod) return 0;
-      return pendientesDeLaPagina().filter((l) => mod.decidirPorLexico(
+      return pendientesDelCapitulo().filter((l) => mod.decidirPorLexico(
         l.leftFragment, l.rightFragment,
         { continuidadGeometrica: true, vocabularioDocumento: estado.vocabulario },
         estado.idioma || 'es',
@@ -725,8 +719,14 @@ export function initLibroVista({ el, estado, api }) {
    * unir no ocurre nada y la lectura sigue igual, que es lo pedido. */
   let tempoUnir = null;
   function unirAlLlegar() {
+    /* Una vez por capítulo. Repetirlo en cada salto de página no arreglaba
+     * nada nuevo (los cortes son del capítulo, no de la página) y sí volvía a
+     * pintar el texto mientras alguien lo estaba leyendo. */
+    const cual = `${estado.id || ''}#${estado.parteActual}`;
+    if (capitulosRepasados.has(cual)) return;
+    capitulosRepasados.add(cual);
     clearTimeout(tempoUnir);
-    tempoUnir = setTimeout(() => { unirPalabras({ alcance: 'pagina' }); }, 350);
+    tempoUnir = setTimeout(() => { unirPalabras({ alcance: 'pagina' }); }, 250);
   }
   api.unirPalabrasAuto = unirAlLlegar;
 

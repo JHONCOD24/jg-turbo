@@ -1,5 +1,16 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Un límite de corte no sabe en qué carácter está
+
+**Síntoma (v2.41):** «Unir palabras» decía trabajar «sobre los cortes de esta
+página» y en realidad reprocesaba el capítulo entero en cada salto, volvía a
+pintar el texto y movía la lectura. **Causa:** `crearLimites` guarda los dos
+átomos que separa cada corte, **no** una posición de carácter; el filtro
+`l.charStart ?? l.pos` era `undefined` para todos y caía siempre en «todos».
+**Regla:** antes de filtrar por posición, comprobar que el dato exista. Y solo
+salió a la luz **ejecutando la prueba contra el dominio real**: en local el
+diccionario se lee del disco y llega antes de que nadie note nada.
+
 ## Con páginas, apartar el cromo remaqueta y deshace el salto
 
 **Síntoma (v2.41):** en el teléfono pulsabas «página siguiente» y volvías al

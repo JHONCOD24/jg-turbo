@@ -91,12 +91,25 @@ léxico: las dos son palabras reales («que ellos compren»). Ese corte se resue
 por el guion, que es cosa de la geometría. Equivocarse de menos es el único
 error aceptable: unir de más corrompe el texto del libro.
 
-**Comportamiento:** automático al abrir un capítulo y al pasar de página, sobre
-los cortes de esa página (dos o tres, no los mil del libro). Si no hay nada que
-unir no pasa nada. Si unió algo, aparece un aviso discreto que se va solo:
+**Comportamiento:** una pasada automática **al abrir cada capítulo**. Si no hay
+nada que unir no pasa nada. Si unió algo, aparece un aviso discreto que se va solo:
 «3 palabras unidas · Deshacer». Lo que se deshace **no se vuelve a unir solo**;
 el botón, al ser una petición explícita, sí lo reconsidera y trabaja sobre todo
 el capítulo.
+
+#### Por capítulo, no por página (y por qué)
+
+La primera versión repasaba «los cortes de la página abierta» en cada salto.
+Era mentira: un corte **no guarda posición de carácter** (mira `crearLimites`),
+solo los dos átomos que separa, así que el filtro devolvía siempre todos. En
+local no se notaba; contra el dominio real, con el diccionario llegando por
+red, cada salto de página reprocesaba el capítulo entero, lo volvía a pintar y
+**movía la lectura**. Lo cazó `verificar_pdf_paginas.mjs` ejecutada contra
+producción, no en local.
+
+Ahora se hace **una pasada por capítulo, al abrirlo**. Para quien lee el efecto
+es el mismo —el texto ya está recompuesto cuando llega— y pasar de página deja
+de costar nada.
 
 ### Lo que esto arregla, medido
 
