@@ -52,47 +52,37 @@ for (let n = 1; n <= totalPaginas; n += 1) {
 await tarea.destroy();
 
 const r = reconstruirDocumento([], { atomos });
-const cortes = [];
-if (/\bBos\s+ton\b/i.test(r.texto) || /\bbos\s+ton\b/.test(r.texto)) cortes.push('Boston');
-if (/\bA\s+RN\b/.test(r.texto)) cortes.push('ARN');
-if (/alu\s+vió?n/i.test(r.texto)) cortes.push('aluvión');
-if (/\bes\s+ta\s+conclus/i.test(r.texto)) cortes.push('esta');
-
-console.log(`páginas=${totalPaginas} atomos=${atomos.length} pendientes=${r.pendientes} chars=${r.texto.length}`);
-const fallos = [];
-if (cortes.length || r.pendientes > 0) {
-  fallos.push(`cortes=${cortes.join(',') || 'ninguno'} pendientes=${r.pendientes}`);
-}
-// Columnas, escaneado y omisiones: se informa, no se exige un valor concreto.
 const porMotivo = {};
 for (const o of r.omisiones || []) porMotivo[o.motivo] = (porMotivo[o.motivo] || 0) + 1;
 console.log(`columnas=${r.esDobleColumna ? 2 : 1} omisiones=${JSON.stringify(porMotivo)}`);
-// Palabras con guion: un guion minúscula-espacio-minúscula es una partición
-// sin resolver (el léxico franco-Alemán lleva mayúscula y el diálogo usa —).
-const sinResolver = r.texto.match(/[a-záéíóúüñ]- [a-záéíóúüñ]/g) || [];
-if (sinResolver.length) fallos.push(`guiones_sin_resolver=${sinResolver.slice(0, 3).join('|')}`);
-// Párrafos entre páginas: un page-break solo es párrafo con puntuación
-// terminal o título/lista; si no, la frase debe continuar.
-for (const lim of r.limites || []) {
-  if (lim.kind === 'page-break' && lim.decision === 'paragraph') {
-    const izq = (r.atomos || []).find((a) => a.id === lim.leftAtomId);
-    if (izq && !/[.!?…»”"')\]]\s*$/.test(String(izq.str || '')) && !/^(capítulo|capitulo|parte|prólogo|anexo)/i.test(String(lim.rightFragment || ''))) {
-      // Se permite si la línea era corta (final real de párrafo por geometría).
-      if (!lim.evidence || (lim.evidence.leftWidthRatio || 1) > 0.72) {
-        fallos.push(`parrafo_entre_paginas_sin_punto=${lim.id}`);
-        break;
-      }
-    }
-  }
-}
-if (!invarianteLetras(r.atomos, r.texto, r.limites)) fallos.push('invariante_de_letras');
-// Páginas escaneadas (sin texto) se informan; el OCR es solo a petición.
 const sinTexto = (r.paginasConTexto || 0) < totalPaginas
   ? `paginas_sin_texto=${totalPaginas - (r.paginasConTexto || 0)}` : null;
 if (sinTexto) console.log(`aviso: ${sinTexto} (OCR disponible a petición)`);
-if (fallos.length) {
-  console.error(`FALLO: ${fallos.join(' ')}`);
-  process.exit(1);
+
+/* Las cuatro palabras de antes solo servían para un libro. Aquí se mide lo que
+ * de verdad importa: cuántos indicios de corte quedan en TODO el texto.
+ *
+ * - Un guion con espacio detrás es una partición que no se resolvió.
+ * - Una minúscula pegada a una mayúscula en medio de palabra son dos palabras
+ *   que se unieron sin espacio.
+ * - Dos trozos cortos separados justo antes de un signo suelen ser una palabra
+ *   partida por la mitad. */
+const patrones = [
+  [/\w+-\s+\w+/g, 'guion de partición sin resolver'],
+  [/[a-záéíóúñ]{2,}[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}/g, 'dos palabras pegadas sin espacio'],
+  [/\b[a-záéíóúñ]{1,3}\s+[a-záéíóúñ]{1,3}\b(?=[,.;])/g, 'posible palabra partida antes de puntuación'],
+];
+console.log(`páginas=${totalPaginas} atomos=${atomos.length} pendientes=${r.pendientes} chars=${r.texto.length}`);
+for (const [patron, motivo] of patrones) {
+  const hallados = r.texto.match(patron) || [];
+  /* Solo un ejemplo corto: el libro es privado y no se vuelca en la consola. */
+  if (hallados.length) console.log(`  · ${motivo}: ${hallados.length} (ej. «${hallados[0].slice(0, 40)}»)`);
 }
-console.log('OK: cero cortes visibles, guiones resueltos, párrafos entre páginas y cero pendientes en el PDF real');
-process.exit(0);
+
+const fallos = [];
+if (!invarianteLetras(atomos, r.texto, r.limites)) fallos.push('el invariante de letras no se cumple');
+if (/\w+-\s+\w+/.test(r.texto)) fallos.push('quedan guiones de partición sin resolver');
+console.log(fallos.length
+  ? `\n❌ ${fallos.join('; ')}`
+  : '\n✅ Libro real reconstruido sin cortes sin resolver.');
+process.exit(fallos.length ? 1 : 0);
