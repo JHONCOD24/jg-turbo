@@ -124,6 +124,7 @@ export function initLibroVista({ el, estado, api }) {
        * pintar, así que hay que evitar el bucle: solo se dispara cuando el
        * render NO viene de una unión (ver `uniendo`). */
       if (!uniendo && typeof api.unirPalabrasAuto === 'function') api.unirPalabrasAuto();
+      else if (uniendo) marcarUnir('trabajando');
     });
   }
 
@@ -135,6 +136,11 @@ export function initLibroVista({ el, estado, api }) {
    * secuestrar el copiar y pegar. */
   if (el.lectura) {
     el.lectura.addEventListener('click', (ev) => {
+      /* Si este toque fue el que devolvió los controles apartados, se queda
+       * en eso. Leer en voz alta desde un párrafo que la persona ni siquiera
+       * podía ver bien es sorprendente, y es justo lo que hacía: el gesto de
+       * «volver» y el de «lee desde aquí» son el mismo toque. */
+      if (consumirToqueDeCromo()) return;
       const bloque = ev.target.closest('[data-ini]');
       if (!bloque || !el.lectura.contains(bloque)) return;
       const seleccion = document.getSelection();
@@ -717,16 +723,28 @@ export function initLibroVista({ el, estado, api }) {
 
   /* Automático: al abrir el libro y al pasar de página. Si no hay nada que
    * unir no ocurre nada y la lectura sigue igual, que es lo pedido. */
+  /* «trabajando» mientras la pasada del capítulo esté en curso, «listo» cuando
+   * termine (aunque no haya unido nada). No cambia nada visible: existe para
+   * poder ESPERAR a que acabe. Sin esto, una prueba contra el dominio real
+   * salía antes de que el diccionario llegara por la red y daba por buena una
+   * pantalla que aún iba a cambiar. */
+  function marcarUnir(estadoUnir) {
+    try { document.body.dataset.pdfUnir = estadoUnir; } catch (_) { /* sin DOM */ }
+  }
+
   let tempoUnir = null;
   function unirAlLlegar() {
     /* Una vez por capítulo. Repetirlo en cada salto de página no arreglaba
      * nada nuevo (los cortes son del capítulo, no de la página) y sí volvía a
      * pintar el texto mientras alguien lo estaba leyendo. */
     const cual = `${estado.id || ''}#${estado.parteActual}`;
-    if (capitulosRepasados.has(cual)) return;
+    if (capitulosRepasados.has(cual)) { marcarUnir('listo'); return; }
     capitulosRepasados.add(cual);
+    marcarUnir('trabajando');
     clearTimeout(tempoUnir);
-    tempoUnir = setTimeout(() => { unirPalabras({ alcance: 'pagina' }); }, 250);
+    tempoUnir = setTimeout(() => {
+      unirPalabras({ alcance: 'pagina' }).finally(() => marcarUnir('listo'));
+    }, 250);
   }
   api.unirPalabrasAuto = unirAlLlegar;
 
@@ -837,12 +855,41 @@ export function initLibroVista({ el, estado, api }) {
   /* Cualquier toque devuelve los controles. `pointerdown` en fase de captura
      para que llegue antes que el gesto del párrafo, y sin cancelarlo: el
      doble toque de «leer desde aquí» sigue funcionando igual. */
+  /* Marca puesta por el toque que despertó el cromo, para que el `click` que
+   * viene detrás no se interprete además como «lee desde aquí». */
+  let toqueDespertoCromo = false;
+  function consumirToqueDeCromo() {
+    if (!toqueDespertoCromo) return false;
+    toqueDespertoCromo = false;
+    return true;
+  }
   if (el.lectura) {
-    el.lectura.addEventListener('pointerdown', devolverCromo, { capture: true, passive: true });
+    el.lectura.addEventListener('pointerdown', () => {
+      if (document.body.classList.contains('jg-inmersivo')) toqueDespertoCromo = true;
+      devolverCromo();
+    }, { capture: true, passive: true });
   }
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && document.body.classList.contains('jg-inmersivo')) devolverCromo();
   });
+
+  /* `jg-voz-activa` la mira el CSS para dejar el control de pausa a la vista
+   * aunque el resto del cromo se aparte. Se deduce del botón «Escuchar» de la
+   * consola, que es quien sabe de verdad si suena algo: así no hay que meter
+   * mano en el motor de voz ni mantener dos estados que se desincronizan. */
+  (function seguirEstadoDeVoz() {
+    const consola = document.querySelector('[data-tts-console="pdf"]');
+    const boton = consola && consola.querySelector('[data-tts-action="toggle"]');
+    if (!boton) return;
+    const pintar = () => {
+      const sonando = boton.getAttribute('aria-pressed') === 'true';
+      document.body.classList.toggle('jg-voz-activa', sonando);
+      const texto = document.getElementById('pdfVozMiniTexto');
+      if (texto && sonando) texto.textContent = 'Leyendo…';
+    };
+    new MutationObserver(pintar).observe(boton, { attributes: true, attributeFilter: ['aria-pressed'] });
+    pintar();
+  }());
 
   /* El único control que sobrevive al modo inmersivo: parar la voz. */
   const vozMiniPausa = $$('btnPdfVozMiniPausa');

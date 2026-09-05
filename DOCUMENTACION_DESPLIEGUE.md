@@ -11,6 +11,19 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.41.0, 2026-09-05
+
+Lector rediseñado en el teléfono y «Unir palabras». Publicado como
+`dpl_DgXBDku9ezi775AEMRUnwuJttg1F` (READY), alias `jg-turbo.vercel.app`.
+Verificados los marcadores (`v2.41.0`, `JG_JS_V=v81`, shell `v81`), el SHA-256
+de `index.html`, `sw.js` y los 27 módulos PDF contra el dominio (29 de 29
+idénticos), `/api/health` 200 y siete recorridos de navegador contra
+producción. Git al día en `origin/main`.
+Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
+⚠️ Se siguió usando la copia limpia porque `.pytest_cache` conserva los
+permisos rotos: `takeown` e `icacls` piden elevación, así que no se forzó.
+
 ## Publicación PDF v2.40.0, 2026-09-05
 
 Producción autorizada por el usuario y publicada como

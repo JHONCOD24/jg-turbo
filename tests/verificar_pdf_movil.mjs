@@ -146,8 +146,24 @@ try {
   comprobar('un toque devuelve los controles', vuelta.barraMovilVisible);
   comprobar('devolverlos tampoco remaqueta', vuelta.textoAlto === m.textoAlto,
     `texto ${vuelta.textoAlto} px frente a ${m.textoAlto} px`);
-  comprobar('el toque no disparó «leer desde aquí»',
-    await tel.evaluate(() => !document.body.classList.contains('jg-voz-activa')));
+  /* El toque que devuelve los controles NO debe además ponerse a leer en voz
+     alta: el gesto de «volver» y el de «lee desde aquí» son el mismo toque, y
+     sin esto la app empezaba a narrar sola al recuperar la barra. Se pregunta
+     al botón «Escuchar», que es quien sabe si suena algo. */
+  comprobar('el toque no se puso a leer en voz alta',
+    await tel.evaluate(() => {
+      const b = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
+      return !b || b.getAttribute('aria-pressed') !== 'true';
+    }));
+  /* Un segundo toque, con los controles ya a la vista, SÍ lee desde ahí:
+     recuperar el cromo no puede costarle el gesto a quien ya lo tenía. */
+  await tel.locator('#pdfLectura p').first().click();
+  await tel.waitForTimeout(700);
+  comprobar('con los controles a la vista, tocar un párrafo sí lee desde ahí',
+    await tel.evaluate(() => {
+      const b = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
+      return !!b && (b.getAttribute('aria-pressed') === 'true' || document.body.classList.contains('jg-voz-activa'));
+    }));
 
   /* ── 4. Con la voz sonando nunca se queda sin pausa ─────────────────── */
   console.log('\n── 4. La voz siempre se puede parar ────────────────────────────');

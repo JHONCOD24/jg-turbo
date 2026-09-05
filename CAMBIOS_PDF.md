@@ -147,8 +147,46 @@ sin ese libro.
 `tests/_impacto_lexico.mjs` no es una prueba: es la herramienta con la que se
 midió la tabla de arriba sobre un libro real.
 
+### Dos defectos que solo salieron contra el dominio real
+
+`verificar_pdf_paginas.mjs` pasaba en local y fallaba en producción, siempre en
+móvil. Ninguna suite local los veía:
+
+1. **Tocar para recuperar los controles también leía en voz alta.** El gesto de
+   «volver» y el de «lee desde aquí» son el mismo toque simple, así que al
+   recuperar la barra la app se ponía a narrar sola desde un párrafo que la
+   persona ni siquiera estaba mirando. Ahora ese toque se consume: el segundo,
+   con los controles ya a la vista, sí lee. Las dos cosas tienen prueba.
+2. **`jg-voz-activa` no la activaba nadie.** El control mínimo de pausa —el
+   único que sobrevive al modo inmersivo— estaba diseñado y con CSS, pero la
+   clase solo la ponía la prueba: en uso real no habría aparecido nunca, y
+   quien leyera con la voz puesta se habría quedado sin forma de pararla. Se
+   deduce ahora del botón «Escuchar» de la consola, que es quien sabe si suena
+   algo.
+
 Versión `v2.41.0` · módulos `v81` · shell `jg-turbo-shell-v81`. IndexedDB sin
 cambios; ninguna clave de `localStorage` se renombra.
+
+### Publicación
+
+Publicada en https://jg-turbo.vercel.app con autorización del usuario.
+
+- Despliegue: `dpl_DgXBDku9ezi775AEMRUnwuJttg1F`, estado `READY`, producción.
+- `index.html`, `sw.js` y los **27** módulos de `js/pdf/`: SHA-256 idéntico
+  entre el disco y el dominio público (29 archivos comprobados, 0 distintos).
+- Marcadores servidos: `v2.41.0`, `JG_JS_V=v81`, `jg-turbo-shell-v81`.
+  `/api/health`: HTTP 200.
+- Las listas de palabras se sirven con Brotli: **302 KB** el español y
+  **175 KB** el inglés, una sola vez y quedan en la caché del navegador.
+- Contra el dominio real, con navegador: páginas 5 (dos corridas seguidas),
+  móvil 28, unir palabras 18, geometría 114, scroll 39, integración 27 y
+  recorrido completo 116. Todo con salida 0.
+
+El despliegue salió de una copia limpia de los archivos productivos, vinculada
+al mismo proyecto: `.pytest_cache` sigue con los permisos rotos en este equipo
+y el CLI aborta con `EPERM` antes de aplicar `.vercelignore` (`TRAMPAS.md`).
+Se intentó recuperar los permisos con `takeown`/`icacls` y hace falta elevación,
+así que no se forzó. La copia no incluyó `.env`, pruebas ni PDF privados.
 
 
 ## 2026-09-05 · v2.40.0 · Páginas y corrección conectada

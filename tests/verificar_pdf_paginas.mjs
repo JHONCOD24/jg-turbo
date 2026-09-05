@@ -30,16 +30,14 @@ async function despertarCromo(p) {
   }
 }
 
-/** Espera a que el texto deje de cambiar (dos lecturas iguales seguidas). */
-async function estabilizarTexto(p, intentos = 25) {
-  let previo = null;
-  for (let i = 0; i < intentos; i += 1) {
-    const ahora = await p.locator('#pdfOutput').inputValue();
-    if (ahora === previo) return ahora;
-    previo = ahora;
-    await p.waitForTimeout(250);
-  }
-  return previo;
+/** Espera a que «Unir palabras» termine su pasada del capítulo.
+ *  Se espera a la SEÑAL, no a que el texto parezca quieto: contra el dominio
+ *  real el diccionario llega por la red, y «quieto» solo significaba que el
+ *  trabajo aún no había empezado. */
+async function esperarUnion(p) {
+  await p.waitForFunction(() => document.body.dataset.pdfUnir === 'listo',
+    null, { timeout: 30000 }).catch(() => {});
+  await p.waitForTimeout(300);
 }
 
 const navegador = await chromium.launch();
@@ -54,9 +52,9 @@ try {
   await p.locator('#pdfLectura p').first().waitFor();
   await p.waitForTimeout(1800);
   /* «Unir palabras» hace una pasada al abrir el capítulo y eso CAMBIA el
-     texto. Hay que esperar a que se asiente o las comparaciones de texto de
-     más abajo salen unas veces bien y otras mal. */
-  await estabilizarTexto(p);
+     texto. Hay que esperar a que termine o las comparaciones de más abajo
+     salen unas veces bien y otras mal. */
+  await esperarUnion(p);
   const medir = () => p.evaluate(() => {
     const a=document.querySelector('#pdfLectura'), c=document.querySelector('.pdf-texto-col'), dock=document.querySelector('#pdfDockNav');
     return {alto:a.clientHeight, ancho:a.clientWidth, paginas:document.querySelector('#pdfPagPos').textContent,
