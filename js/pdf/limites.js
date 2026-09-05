@@ -4,14 +4,18 @@
  * está ligado a los átomos originales: nunca se vuelve a buscar un corte
  * emparejando pares de palabras repetidas.
  */
-import { primerFragmento, ultimoFragmento, normalizarAtomStr } from './unicodeTexto.js';
-import { decidirPorLexico, parProhibido } from './lexico.js';
+import { primerFragmento, ultimoFragmento, normalizarAtomStr, claveLexica } from './unicodeTexto.js';
+import { decidirPorLexico, parProhibido, esPalabraValida, esFuncional, vocabularioDelDocumento } from './lexico.js';
 
 export const VERSION_LIMITES = 1;
 export const ACCIONES = new Set(['join', 'space', 'paragraph', 'pending']);
 
 const GUION_BLANDO = /\u00AD$/;
 const GUIONES_CORTE = /[\u002D\u00AD\u2010\u2011\u2012]$/;
+/* Guion al final aunque traiga espacios residuales: «extraor- dinario». */
+const GUION_CORTE_RESIDUAL = /[\u002D\u00AD\u2010\u2011\u2012]\s*$/;
+/* Guion no separable (U+2011): nunca es partición, se conserva siempre. */
+const GUION_NO_SEPARABLE = /‑$/;
 const GUION_DIALOGO_IZQ = /[—–]\s*$/;
 const GUION_DIALOGO_DER = /^\s*[—–]/;
 const PUNT_TERMINAL = /[.!?…»”"'")\]]\s*$/;
@@ -27,11 +31,15 @@ function mediana(numeros) {
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
 
-function kindDe(izq, der, { infoCol, ancho }) {
+function kindDe(izq, der, { infoCol, infoColPorPagina, ancho }) {
   if (izq.page !== der.page) return 'page-break';
-  if (infoCol && infoCol.columnas >= 2 && infoCol.divisionX != null) {
-    const colI = izq.x < infoCol.divisionX ? 0 : 1;
-    const colD = der.x < infoCol.divisionX ? 0 : 1;
+  // Columnas por página y región: cada página decide su propio corte.
+  const info = (infoColPorPagina && infoColPorPagina.get
+    ? infoColPorPagina.get(izq.page) || infoColPorPagina.get(der.page)
+    : null) || infoCol;
+  if (info && info.columnas >= 2 && info.divisionX != null) {
+    const colI = izq.x < info.divisionX ? 0 : 1;
+    const colD = der.x < info.divisionX ? 0 : 1;
     const anchoI = (izq.width || 0) > ancho * 0.7;
     const anchoD = (der.width || 0) > ancho * 0.7;
     if (!anchoI && !anchoD && colI !== colD) return 'column-break';
@@ -45,8 +53,10 @@ function kindDe(izq, der, { infoCol, ancho }) {
 function originalSeparator(izq, der) {
   const izqStr = String(izq.str || '');
   const derStr = String(der.str || '');
+  // El guion con espacio residual («extraor- ») es guion, no espacio.
+  if (GUION_BLANDO.test(izqStr.replace(/\s+$/, ''))) return 'soft-hyphen';
+  if (GUION_CORTE_RESIDUAL.test(izqStr)) return 'hyphen';
   if (/\s$/.test(izqStr) || /^\s/.test(derStr)) return 'space';
-  if (GUION_BLANDO.test(izqStr)) return 'soft-hyphen';
   if (GUIONES_CORTE.test(izqStr)) return 'hyphen';
   if (izq.hasEOL) return 'eol';
   return '';
@@ -75,7 +85,7 @@ function evidenciaDe(izq, der, kind, medidas) {
   };
 }
 
-export function crearLimites(atomos, { ancho = 595, infoCol = null } = {}) {
+export function crearLimites(atomos, { ancho = 595, infoCol = null, infoColPorPagina = null } = {}) {
   const lista = atomos || [];
   if (lista.length < 2) return [];
   const alturaModal = mediana(lista.map((a) => a.height));
@@ -86,7 +96,7 @@ export function crearLimites(atomos, { ancho = 595, infoCol = null } = {}) {
   for (let i = 0; i + 1 < lista.length; i += 1) {
     const izq = lista[i];
     const der = lista[i + 1];
-    const kind = kindDe(izq, der, { infoCol, ancho });
+    const kind = kindDe(izq, der, { infoCol, infoColPorPagina, ancho });
     const sep = originalSeparator(izq, der);
     const leftFragment = ultimoFragmento(izq.str);
     const rightFragment = primerFragmento(der.str);
@@ -107,16 +117,60 @@ export function crearLimites(atomos, { ancho = 595, infoCol = null } = {}) {
   return limites;
 }
 
+/**
+ * Clasifica el guion final del átomo izquierdo.
+ * @returns {'particion'|'lexico'|'dialogo'|'no-separable'|'ninguno'}
+ */
+export function clasificarGuion(izqStr, derStr) {
+  const izq = String(izqStr || '');
+  const der = String(derStr || '');
+  const derRecortada = der.trimStart();
+  if (GUION_DIALOGO_IZQ.test(izq) || GUION_DIALOGO_DER.test(derRecortada)) return 'dialogo';
+  // No separable U+2011: se conserva siempre, nunca es partición.
+  if (GUION_NO_SEPARABLE.test(izq.replace(/\s+$/, ''))) return 'no-separable';
+  if (GUION_BLANDO.test(izq.replace(/\s+$/, ''))) return 'particion';
+  if (!GUION_CORTE_RESIDUAL.test(izq)) return 'ninguno';
+  // Mayúscula tras guion en salto de línea: compuesto léxico (franco-Alemán).
+  if (/^\p{Lu}/u.test(derRecortada)) return 'lexico';
+  // 19th-century: el ordinal vive en el propio átomo, no en una lista.
+  if (/\d+(st|nd|rd|th)[\u002D\u00AD\u2010\u2011\u2012]\s*$/i.test(izq)) return 'lexico';
+  return 'particion';
+}
+
+function formaSinGuion(forma) {
+  return String(forma || '').replace(/^[\u002D\u00AD\u2010\u2011\u2012]+|[\u002D\u00AD\u2010\u2011\u2012\s]+$/g, '');
+}
+
+function nucleoForma(forma, lado) {
+  const piezas = formaSinGuion(forma).split(/[\u002D\u00AD\u2010\u2011\u2012]+/).filter(Boolean);
+  if (!piezas.length) return '';
+  return lado === 'der' ? piezas[0] : piezas[piezas.length - 1];
+}
+
+function formaCompletaObservada(forma, vocabulario, lado = 'izq') {
+  const nucleo = nucleoForma(forma, lado);
+  if (!nucleo) return false;
+  if (esPalabraValida(nucleo) || esFuncional(nucleo)) return true;
+  if (vocabulario && typeof vocabulario.has === 'function' && vocabulario.has(claveLexica(nucleo))) return true;
+  return false;
+}
+
+function comboObservado(izq, der, vocabulario) {
+  const combo = nucleoForma(izq, 'izq') + nucleoForma(der, 'der');
+  if (!combo) return false;
+  if (esPalabraValida(combo)) return true;
+  if (vocabulario && typeof vocabulario.has === 'function' && vocabulario.has(claveLexica(combo))) return true;
+  return false;
+}
+
 function esGuionDeParticion(izq, der, limite) {
   const izqStr = String(izq.str || '');
   const derStr = String(der.str || '').trimStart();
-  if (GUION_DIALOGO_IZQ.test(izqStr) || GUION_DIALOGO_DER.test(derStr)) return false;
-  if (GUION_BLANDO.test(izqStr)) return true;
-  if (!GUIONES_CORTE.test(izqStr)) return false;
+  const clase = clasificarGuion(izqStr, derStr);
+  if (clase !== 'particion') return false;
   if (limite.kind === 'item-gap' && limite.evidence.gap > (limite.evidence.fontSize || 10) * 0.4) {
     return false;
   }
-  if (/^\p{Lu}/u.test(derStr)) return false; /* franco-Alemán: guion léxico */
   return limite.kind === 'line-wrap' || limite.kind === 'page-break' || limite.kind === 'column-break'
     || limite.kind === 'item-gap';
 }
@@ -151,7 +205,11 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
   xModal = 70,
   anchoMaximo = 400,
   lineasPorAtomo = new Map(),
+  anchoLineaPorAtomo = new Map(),
+  vocabularioDocumento = null,
 } = {}) {
+  const vocabulario = vocabularioDocumento
+    || vocabularioDelDocumento([...(atomosPorId?.values?.() || [])], []);
   for (const lim of limites) {
     const izq = atomosPorId.get(lim.leftAtomId);
     const der = atomosPorId.get(lim.rightAtomId);
@@ -164,25 +222,46 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
     const izqStr = String(izq.str || '');
     const derStr = String(der.str || '');
 
-    if (/\s$/.test(izqStr) || /^\s/.test(derStr)) {
-      lim.decision = 'space';
-      lim.source = 'pdf';
+    // El espacio residual tras un guion («extraor- dinario») no es un
+    // espacio real: se decide como partición antes de mirar espacios.
+    const claseGuion = clasificarGuion(izqStr, derStr);
+    if (claseGuion === 'dialogo') {
+      lim.decision = lim.kind === 'line-wrap' && PUNT_TERMINAL.test(izqStr) ? 'paragraph' : 'space';
+      lim.source = 'geometry';
+      lim.quitarGuion = false;
       continue;
     }
-
-    if (esGuionDeParticion(izq, der, lim)) {
+    if (claseGuion === 'no-separable') {
+      // Guion no separable: se conserva el guion, sin espacio.
       lim.decision = 'join';
       lim.source = 'geometry';
-      lim.quitarGuion = true;
+      lim.quitarGuion = false;
       continue;
     }
-    if (GUIONES_CORTE.test(izqStr) && /^\p{Lu}/u.test(derStr.trimStart())
-        && !GUION_DIALOGO_IZQ.test(izqStr) && !GUION_DIALOGO_DER.test(derStr)
-        && lim.kind !== 'item-gap') {
+    if (claseGuion === 'particion' && esGuionDeParticion(izq, der, lim)) {
+      const izqFrag = lim.leftFragment || ultimoFragmento(izqStr);
+      const derFrag = lim.rightFragment || primerFragmento(derStr);
+      const ambosCompletos = formaCompletaObservada(izqFrag, vocabulario, 'izq')
+        && formaCompletaObservada(derFrag, vocabulario, 'der');
+      const comboEsPalabra = comboObservado(izqFrag, derFrag, vocabulario);
+      /* self-limiting: las dos formas existen en el documento y juntas no
+       * son una palabra: el guion es del compuesto, no de una sílaba. */
+      lim.decision = 'join';
+      lim.source = 'geometry';
+      lim.quitarGuion = !(ambosCompletos && !comboEsPalabra);
+      continue;
+    }
+    if (claseGuion === 'lexico' && lim.kind !== 'item-gap') {
       /* Guion léxico (franco-Alemán): se conserva y no se inserta espacio. */
       lim.decision = 'join';
       lim.source = 'geometry';
       lim.quitarGuion = false;
+      continue;
+    }
+
+    if (/\s$/.test(izqStr) || /^\s/.test(derStr)) {
+      lim.decision = 'space';
+      lim.source = 'pdf';
       continue;
     }
 
@@ -195,9 +274,14 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
     const sangria = mismaPagina && (der.x - xModal) > Math.max(4, alturaModal * 0.4);
     const huecoVertical = mismaPagina && alturaModal > 0
       && lim.evidence.yGap > Math.max(alturaModal * 1.8, 6);
+    // Párrafo por línea completa, no por el ancho del fragmento suelto:
+    // una línea corta terminada en punto es final de párrafo aunque el
+    // átomo individual sea estrecho por ser solo una sílaba.
+    const anchoLinea = anchoLineaPorAtomo.get(izq.id) || (izq.width || 0);
+    const anchoRef = Math.max(anchoMaximo, 1);
     const anteriorCorta = anchoMaximo > 0
-      && (izq.width || 0) < anchoMaximo * 0.72
-      && PUNT_TERMINAL.test(izqStr);
+      && anchoLinea < anchoRef * 0.72
+      && PUNT_TERMINAL.test((textoIzq || izqStr).trimEnd());
 
     if (tituloDer || tituloIzq || listaDer || (sangria && PUNT_TERMINAL.test(izqStr)) || huecoVertical || anteriorCorta) {
       if (lim.kind === 'page-break' && !tituloDer && !tituloIzq && !listaDer && !PUNT_TERMINAL.test(izqStr)) {
@@ -209,17 +293,9 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
       }
     }
 
-    if (lim.kind === 'item-gap') {
-      const font = lim.evidence.fontSize || alturaModal || 10;
-      if (lim.evidence.gap < Math.max(0.8, font * 0.12)) {
-        lim.decision = 'join';
-        lim.source = 'geometry';
-        continue;
-      }
-    }
-
     const lex = decidirPorLexico(lim.leftFragment, lim.rightFragment, {
       continuidadGeometrica: lim.evidence.continuidadGeometrica || lim.kind !== 'item-gap',
+      vocabularioDocumento: vocabulario,
     }, lang);
 
     if (lex === 'join') {
@@ -233,8 +309,31 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
       continue;
     }
 
+    /* Hueco diminuto: solo une si el documento o el léxico muestran la
+     * forma completa (Bos+ton → Boston). you+Whoa no es una palabra: espacio. */
+    if (lim.kind === 'item-gap') {
+      const font = lim.evidence.fontSize || alturaModal || 10;
+      if (lim.evidence.gap < Math.max(0.8, font * 0.12)
+          && comboObservado(lim.leftFragment, lim.rightFragment, vocabulario)) {
+        lim.decision = 'join';
+        lim.source = 'lexicon';
+        continue;
+      }
+    }
+
     if (lim.kind === 'item-gap' && lim.evidence.gap >= Math.max(1, (lim.evidence.fontSize || 10) * 0.18)) {
+      // Espacio normal entre palabras completas: se conserva aunque ambas
+      // sean desconocidas para la lista. Solo se duda (pending) si hay
+      // evidencia de fragmentación: hueco diminuto o formas partidas.
       if (!lim.leftFragment || !lim.rightFragment || parProhibido(lim.leftFragment, lim.rightFragment)) {
+        lim.decision = 'space';
+        lim.source = 'geometry';
+        continue;
+      }
+      const fragIzq = String(lim.leftFragment || '');
+      const fragDer = String(lim.rightFragment || '');
+      const parecenCompletas = fragIzq.length >= 2 && fragDer.length >= 2;
+      if (parecenCompletas && lex === null) {
         lim.decision = 'space';
         lim.source = 'geometry';
         continue;
@@ -332,7 +431,10 @@ export function aplicarDecisionUsuario(limite, action) {
 }
 
 function quitarGuionFinal(texto) {
-  return String(texto || '').replace(GUION_BLANDO, '').replace(/[\u002D\u2010\u2011\u2012]$/, '');
+  // «extraor- dinario»: el espacio residual tras el guion se recorta junto
+  // al guion; si no, quedaría «extraor dinario» con advertencia fantasma.
+  const sinEspacios = String(texto || '').replace(/\s+$/, '');
+  return sinEspacios.replace(GUION_BLANDO, '').replace(/[\u002D\u2010\u2011\u2012]$/, '');
 }
 
 export function separadorDe(limite, izq) {

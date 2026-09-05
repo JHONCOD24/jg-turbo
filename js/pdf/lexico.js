@@ -156,7 +156,63 @@ function soloLetras(forma) {
 }
 
 /**
+ * Vocabulario del documento: formas completas vistas en límites inequívocos
+ * (espacios y párrafos ya decididos). Una palabra desconocida para la lista
+ * escrita no es incorrecta por eso: si el propio libro la trae entera en
+ * otro sitio, esa es la evidencia que manda, no el vocabulario de prueba.
+ */
+export function vocabularioDelDocumento(atomos, limites) {
+  const formas = new Set();
+  const porId = new Map((atomos || []).map((a) => [a.id, a]));
+  const agregarForma = (valor) => {
+    const piezas = String(valor || '').split(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/u).filter(Boolean);
+    for (const p of piezas) {
+      if (p.length >= 3) formas.add(claveLexica(p));
+    }
+  };
+  const agregarInteriores = (valor) => {
+    // Solo tokens interiores: los bordes pueden ser fragmentos («Bos» al
+    // final de renglón no es una palabra completa observada).
+    const piezas = String(valor || '').split(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/u).filter(Boolean);
+    for (let i = 1; i + 1 < piezas.length; i += 1) {
+      if (piezas[i].length >= 3) formas.add(claveLexica(piezas[i]));
+    }
+  };
+  for (const lim of limites || []) {
+    if (lim?.decision !== 'space' && lim?.decision !== 'paragraph') continue;
+    const izq = porId.get(lim.leftAtomId);
+    const der = porId.get(lim.rightAtomId);
+    // Límite inequívoco: los fragmentos que lo tocan sí son formas completas.
+    if (izq) {
+      const ultimo = String(izq.str || '').split(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/u).filter(Boolean).pop();
+      if (ultimo && ultimo.length >= 3) formas.add(claveLexica(ultimo));
+    }
+    if (der) {
+      const primero = String(der.str || '').split(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/u).filter(Boolean).shift();
+      if (primero && primero.length >= 3) formas.add(claveLexica(primero));
+    }
+  }
+  // Átomos con espacios: solo interiores, nunca los bordes.
+  for (const a of atomos || []) {
+    if (/\s/.test(String(a?.str || ''))) agregarInteriores(a.str);
+  }
+  void agregarForma;
+  return formas;
+}
+
+function enVocabularioDocumento(forma, vocabulario) {
+  if (!vocabulario || typeof vocabulario.has !== 'function') return false;
+  return vocabulario.has(claveLexica(forma));
+}
+
+/**
  * @returns {'join'|'space'|null} null = el léxico no decide (queda pendiente)
+ *
+ * Regla retirada (plan §3): ya no se une dos fragmentos desconocidos solo
+ * porque uno sea corto o parezca un sufijo. Eso convertía `bonito` + `pez`
+ * en `bonitopez`. Una palabra desconocida no es incorrecta por no estar en
+ * la lista: sin evidencia del documento, el límite queda pendiente o con
+ * espacio según la geometría, nunca unido a ciegas.
  */
 export function decidirPorLexico(izquierda, derecha, evidencia = {}, _lang = 'es') {
   const izq = String(izquierda || '');
@@ -166,18 +222,19 @@ export function decidirPorLexico(izquierda, derecha, evidencia = {}, _lang = 'es
   if (esFuncional(izq) && esFuncional(der) && !esSiglaPartida(izq, der)) return 'space';
 
   const combo = izq + der;
-  const comboOk = esPalabraValida(combo) || esNombrePropio(combo);
-  const izqOk = esPalabraValida(izq);
-  const derOk = esPalabraValida(der);
+  const vocab = evidencia.vocabularioDocumento;
+  const comboEnDoc = enVocabularioDocumento(combo, vocab);
+  const comboOk = esPalabraValida(combo) || esNombrePropio(combo) || comboEnDoc;
+  const izqOk = esPalabraValida(izq) || enVocabularioDocumento(izq, vocab);
+  const derOk = esPalabraValida(der) || enVocabularioDocumento(der, vocab);
 
   if (esSiglaPartida(izq, der)) return 'join';
+  // Forma completa observada en el propio documento: evidencia real, no lista.
+  if (comboEnDoc && (!izqOk || !derOk)) return 'join';
   if (comboOk && (!izqOk || !derOk)) return 'join';
   if (izqOk && derOk) return 'space';
 
-  if (evidencia.continuidadGeometrica && soloLetras(izq) && soloLetras(der)) {
-    if (!izqOk && !derOk && combo.length >= 4 && combo.length <= 28) {
-      if (pareceSufijo(der) || der.length <= 4 || izq.length <= 3) return 'join';
-    }
-  }
+  // Sin evidencia no se une: se deja a la geometría o queda pendiente.
+  // (Antes aquí había una regla que unía desconocidos cortos/sufijos.)
   return null;
 }

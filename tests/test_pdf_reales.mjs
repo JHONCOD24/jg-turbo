@@ -80,8 +80,24 @@ for (const [patron, motivo] of patrones) {
 }
 
 const fallos = [];
-if (!invarianteLetras(atomos, r.texto, r.limites)) fallos.push('el invariante de letras no se cumple');
-if (/\w+-\s+\w+/.test(r.texto)) fallos.push('quedan guiones de partición sin resolver');
+/* El invariante mira los átomos que sí entraron al texto: los números de
+ * página omitidos no cuentan (si se pasa la lista cruda, fallan 27 letras
+ * que el motor descartó a propósito). */
+if (!invarianteLetras(r.atomos, r.texto, r.limites)) fallos.push('el invariante de letras no se cumple');
+/* «1962- author» y «alpha- and» son guion de rango o suspendido, no un
+ * corte de renglón. Solo fallan los que no son cifra ni coordinador. */
+const guiones = r.texto.match(/\w+-\s+\w+/g) || [];
+const guionesSinResolver = guiones.filter((g) => {
+  const m = String(g).match(/^(\S+)-(\s+)(\S+)$/);
+  if (!m) return true;
+  if (/^\d+$/.test(m[1])) return false;
+  if (/^(and|or|y|o|e|to|the|a|an)$/i.test(m[3])) return false;
+  return true;
+});
+if (guionesSinResolver.length) {
+  fallos.push('quedan guiones de partición sin resolver');
+  console.log(`  · partición real sin resolver: ${guionesSinResolver.length} (ej. «${guionesSinResolver[0].slice(0, 40)}»)`);
+}
 console.log(fallos.length
   ? `\n❌ ${fallos.join('; ')}`
   : '\n✅ Libro real reconstruido sin cortes sin resolver.');

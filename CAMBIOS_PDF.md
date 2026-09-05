@@ -1,5 +1,44 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-05 · Agente 3 · Cortes medidos en un libro real
+
+La prueba `tests/test_pdf_reales.mjs` arranca en Node (PDF.js 6.3.289 legacy) y
+su código de salida refleja el resultado. Nunca se imprime el texto del libro.
+
+### Cifras (mismo libro, antes y después de corregir)
+
+| Libro | páginas | átomos | pendientes | guiones sin resolver | palabras pegadas | partidas ante signo |
+|---|---:|---:|---:|---:|---:|---:|
+| cortes-sintetico.pdf | 5 | 7 | 0 | 0 | 0 | 0 |
+| becoming.pdf **antes** | 431 | 23650 | 1065 | 3 | 41 | 544 |
+| becoming.pdf **después** | 431 | 23650 | 1068 | 3 | 39 | 544 |
+
+`becoming.pdf`: 793 049 → 793 112 caracteres. Salida 1 → **0**.
+
+Los 3 «guiones» que quedan son `1962- author`, `alpha- and` y `five- and`: rango
+de año y guion suspendido del inglés, no partición de renglón. El motor no deja
+ningún `originalSeparator: hyphen` sin unir (`guiones_no_unidos=0`).
+
+Las 544 «partidas ante signo» son frases inglesas reales (`in awe,`, `et al.`,
+`of us.`). No son cortes.
+
+### Qué se corrigió (casos en `tests/test_pdf_cortes_reales.mjs`, 33 comprobaciones)
+
+- Compuestos al final de renglón: `self-limiting`, `step-by-step`, `in-depth`,
+  `19th-century` se pegaban sin guion (`selflimiting`). Si ambas formas existen
+  en el documento y juntas no son una palabra, el guion se conserva.
+- Palabras completas con hueco diminuto ya no se pegan (`from New`, `you Whoa`).
+- El invariante de letras se calcula sobre los átomos **incluidos**, no sobre
+  los números de página omitidos (13 omisiones = 27 letras, falso fallo).
+
+### Qué no se tapó
+
+- 39 «palabras pegadas» restantes son **un solo átomo** de PDF.js con la primera
+  letra caída (`eartMath`, `hatsApp`, `ouTube`, `arperSan`, `antaCruz`,
+  `reateSpace`). Inventar esa letra violaría el invariante. Marcado
+  `PENDIENTE` en `tests/test_pdf_cortes_reales.mjs`.
+- 1 068 pendientes de renglón: sin evidencia no se adivina. La cola «Revisar
+  cortes» existe para eso.
 ## Entrega 2026-09-04 · v2.38.0 · Corrección de cortes y puntuación reanudable
 
 «Corregir cortes y puntuación del libro» recorre **todas** las partes, no solo los límites
@@ -2049,3 +2088,4 @@ Resultados de la entrega:
 | Archivo que no es PDF | «Ese archivo no es un PDF. Elige uno que termine en .pdf» |
 | Cancelar a mitad | Confirma la cancelación y deja el documento listo para reintentar |
 | Una página ilegible | Se salta esa página y sigue con el resto del libro |
+
