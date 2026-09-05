@@ -15,6 +15,33 @@ const servidor = createServer(async (q,r) => {
   catch { r.writeHead(404).end(); }
 });
 await new Promise(r => servidor.listen(0, '127.0.0.1', r));
+/** Devuelve los controles si la lectura inmersiva los apartó (teléfono).
+ *  El cromo se aparta ~700 ms DESPUÉS de pasar de página (espera a que
+ *  termine el desplazamiento suave), así que primero hay que dejar que ese
+ *  temporizador entre; si no, se comprueba antes de tiempo y luego el botón
+ *  ya no se puede pulsar. */
+async function despertarCromo(p) {
+  await p.waitForTimeout(1000);
+  for (let i = 0; i < 4; i += 1) {
+    const dormido = await p.evaluate(() => document.body.classList.contains('jg-inmersivo'));
+    if (!dormido) return;
+    await p.locator('#pdfLectura').click({ position: { x: 40, y: 40 } });
+    await p.waitForTimeout(400);
+  }
+}
+
+/** Espera a que el texto deje de cambiar (dos lecturas iguales seguidas). */
+async function estabilizarTexto(p, intentos = 25) {
+  let previo = null;
+  for (let i = 0; i < intentos; i += 1) {
+    const ahora = await p.locator('#pdfOutput').inputValue();
+    if (ahora === previo) return ahora;
+    previo = ahora;
+    await p.waitForTimeout(250);
+  }
+  return previo;
+}
+
 const navegador = await chromium.launch();
 try {
  for (const [nombre,width,height] of [['escritorio',1440,900],['movil',390,844],['estrecho',320,740],['tablet',768,1024]]) {
@@ -26,6 +53,10 @@ try {
   await p.locator('#btnPdfRead').click();
   await p.locator('#pdfLectura p').first().waitFor();
   await p.waitForTimeout(1800);
+  /* «Unir palabras» hace una pasada al abrir el capítulo y eso CAMBIA el
+     texto. Hay que esperar a que se asiente o las comparaciones de texto de
+     más abajo salen unas veces bien y otras mal. */
+  await estabilizarTexto(p);
   const medir = () => p.evaluate(() => {
     const a=document.querySelector('#pdfLectura'), c=document.querySelector('.pdf-texto-col'), dock=document.querySelector('#pdfDockNav');
     return {alto:a.clientHeight, ancho:a.clientWidth, paginas:document.querySelector('#pdfPagPos').textContent,
@@ -57,6 +88,7 @@ try {
   /* En el teléfono, Apariencia / Contenido / Opciones se accionan desde la
      barra del pulgar; en tablet y escritorio siguen en la cabecera. */
   const puerta = (escritorio, movil) => p.locator(width > 640 ? escritorio : movil);
+  await despertarCromo(p);
   await puerta('#btnPdfApariencia', '#btnPdfBmApariencia').click();
   await p.locator('#pdfAparTam').fill('24'); await p.locator('#pdfAparTam').dispatchEvent('input');
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
@@ -82,7 +114,7 @@ try {
       window.jgDecidirLimitesPdf=async limites=>{window.pruebaPeticiones.cortes++;return {ia_used:true,decisions:limites.filter((l,i)=>!(window.pruebaOmitirUno && i===0)).map(l=>({boundaryId:l.boundaryId,action:'space',confidence:1}))};};
       window.jgCorregirBloqueLectura=async texto=>{window.pruebaPeticiones.puntuacion++;return {text:texto,ia_used:true};};
     });
-    await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();
+    await despertarCromo(p); await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();
     assert(await p.locator('#pdfAuditoriaHoja').isVisible());
     assert.equal(await p.evaluate(()=>window.pruebaPeticiones.cortes),0,'sin IA antes del consentimiento');
     await p.locator('#btnPdfAuditoriaAceptar').click();
@@ -92,7 +124,7 @@ try {
     assert(await p.locator('#btnPdfCortes').isVisible(),'las decisiones omitidas quedan pendientes');
     assert((await p.locator('#pdfPulidoEstado').textContent()).includes('cortes por revisar'),'puntuación parcial no se presenta como libro corregido');
     await p.evaluate(()=>{window.pruebaOmitirUno=false;});
-    await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();
+    await despertarCromo(p); await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();
     await p.waitForFunction(()=>document.querySelector('#btnPdfCortes').hidden,null,{timeout:15000});
     await p.waitForTimeout(1000);
     assert(!(await p.locator('#btnPdfCortes').isVisible()),'decisiones aceptadas dejan cero pendientes');
@@ -116,7 +148,7 @@ try {
     assert(!(await p.locator('#pdfReanudarCorreccion').isVisible()),'no reaparecen partes ya completadas');
     await p.locator('#btnPdfIndice').click(); assert(await p.locator('#pdfIndice').isVisible(),'índice accesible en escritorio');
     await p.locator('#btnPdfIndice').click();
-    await puerta('#btnPdfMas', '#btnPdfBmOpciones').click();
+    await despertarCromo(p); await puerta('#btnPdfMas', '#btnPdfBmOpciones').click();
     await p.locator('#pdfVincularInput').setInputFiles(pdf);
     await p.waitForTimeout(500);
     assert((await p.locator('#pdfNoticeLector').textContent()).includes('PDF original vinculado'),'vincular compara la huella del archivo');

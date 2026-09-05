@@ -77,6 +77,12 @@ En **Configuración** hay:
 
 ## Biblioteca PDF (IndexedDB, no localStorage)
 
+PDF v2.41.0 **no cambia ninguna clave ni versión**: el rediseño del teléfono es
+presentación, y «Unir palabras» guarda sus decisiones en los almacenes que ya
+existían (las mismas que ya usaba «Revisar cortes»). Las listas de palabras de
+`js/vendor/lexico/` no son configuración: viven en la caché del navegador y se
+vuelven a bajar solas si se limpian.
+
 PDF v2.40.0 conserva la versión de IndexedDB y añade al registro de contenido
 la reconstrucción local (átomos, decisiones y posiciones). No se cambian claves
 de configuración ni almacenes. La preferencia de páginas se guarda dentro de

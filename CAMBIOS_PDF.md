@@ -1,5 +1,143 @@
 # Lector de PDF · historial de cambios y operación
 
+## 2026-09-05 · v2.41.0 · El teléfono, y las palabras que el PDF partió
+
+Dos cosas pedidas por el usuario: que el lector se entienda en el celular
+(escritorio y tablet le gustaban tal como estaban) y un tercer botón junto a
+Lectura y Editar que recomponga las palabras que el PDF corta al saltar de
+renglón.
+
+### 1. El lector en el teléfono
+
+Medido antes de tocar nada, en un navegador real:
+
+| | Escritorio 1440×900 | Teléfono 390×844 | Estrecho 320×740 |
+|---|---:|---:|---:|
+| Cabecera | 50 px | **108 px** (dos filas) | **157 px** |
+| Texto de lectura | 443 px · 49 % | 372 px · **44 %** | 169 px · **23 %** |
+| Controles a la vez | 26 | 25 | 25 |
+
+La cabecera se partía en dos filas porque `.pdf-doc-acciones` pasaba a
+`grid-column:1/-1`, y abajo se apilaban cuatro barras (198 px). Además había
+cuatro controles por debajo del mínimo táctil de 44 px; el peor, el selector de
+voz, medía **14 px de ancho**.
+
+Qué se hizo, **solo bajo 640 px**:
+
+- Cabecera de una fila: volver · título · Opciones. El subtítulo pasa a decir
+  dónde vas («Capítulo 1 de 2 · Página 1»); el porcentaje y los minutos viven
+  en Opciones, porque los tres textos juntos no caben y salían cortados.
+- Barra inferior fija con cuatro destinos que no se mueven nunca: **Voz ·
+  Apariencia · Contenido · Opciones**. No duplica controles: acciona los mismos
+  de la cabecera, que allí se ocultan.
+- El reproductor deja de ser una barra permanente y pasa a ser una hoja que
+  sube desde «Voz». Se detiene **encima** de la barra: si la tapara, el botón
+  para cerrarla quedaría debajo y no habría salida.
+- Buscar y pasar de capítulo siguen alcanzables. La fila de búsqueda vive
+  dentro del dock, así que la hoja tiene dos modos —reproductor o buscador— en
+  vez de duplicar el buscador y arriesgarse a que los dos se desincronicen.
+- **Lectura inmersiva**: el cromo se desvanece al pasar de página y vuelve al
+  primer toque. No se usa «un toque en el texto» para apartarlo: en este lector
+  tocar un párrafo ya significa «lee desde aquí».
+
+Resultado medido: **44 % → 69 %** de la pantalla para el texto en 390 px, y
+**23 % → 64 %** en 320 px. Cero controles por debajo de 44 px, también dentro
+de cada hoja. Tablet y escritorio quedan **idénticos** (61/572 px y 50/443 px,
+antes y después), y `verificar_pdf_movil.mjs` lo vigila en cada corrida.
+
+#### El cromo conserva su hueco, y no es un detalle
+
+La primera versión sacaba el cromo del flujo (`display:none`), el texto crecía
+al 91 % y había que repartir las páginas otra vez. Con páginas, repartir de
+nuevo cambia dónde empieza cada una: pulsabas «siguiente» y volvías al
+principio del capítulo. **Un lector que se remaqueta bajo el dedo está roto**,
+así que el cromo se desvanece pero conserva su hueco. Se gana menos alto (69 %
+en vez de 91 %) y a cambio el salto de página nunca se deshace solo. La prueba
+comprueba las dos cosas: que el número total de páginas no cambie y que
+`1 de 14` pase a `2 de 14`.
+
+### 2. «Unir palabras»
+
+Un PDF no guarda palabras: guarda trozos con su posición. Cuando una palabra
+cae justo en el salto de renglón, el motor ve `sorprend` y `entes` y no puede
+saber si van juntas. El caso que reportó el usuario, literal:
+
+> «Comparto más historias **sorprend** / **entes** sobre algunos participantes
+> de mis talleres.»
+
+**La causa raíz:** para decidirlo, `js/pdf/lexico.js` consultaba un léxico de
+**576 palabras** —el corpus de las pruebas, no un diccionario—. Un libro en
+español usa unas 20.000 formas distintas, así que casi todo le resultaba
+desconocido y el motor hacía lo correcto: negarse a adivinar y dejar el corte
+pendiente. De ahí los 1.068 pendientes del libro de 431 páginas.
+
+**La solución:** listas de palabras reales en `js/vendor/lexico/`, cargadas
+**solo al usar el lector**.
+
+| Lista | Formas | Crudo | Por la red | Origen y licencia |
+|---|---:|---:|---:|---|
+| `es.txt` | 655.614 | 2,5 MB | ~283 KB | LibreOffice/OpenOffice · MPL 1.1 |
+| `en.txt` | 123.679 | 518 KB | ~160 KB | SCOWL · BSD (Kevin Atkinson) |
+
+Son formas ya conjugadas, no lemas: hace falta reconocer «sorprendentes», no
+solo «sorprendente». Se guardan con **prefijo compartido** (cada línea dice
+cuántas letras repite de la anterior), que es lo que baja la lista española de
+1,5 MB a 283 KB por la red.
+
+**La regla no cambió, y es la que evita corromper el libro:** se une solo si la
+forma pegada es palabra **y** al menos una de las mitades no lo es. Por eso
+`de`+`la` no se toca nunca, y por eso `compren`+`dido` **tampoco** se une por
+léxico: las dos son palabras reales («que ellos compren»). Ese corte se resuelve
+por el guion, que es cosa de la geometría. Equivocarse de menos es el único
+error aceptable: unir de más corrompe el texto del libro.
+
+**Comportamiento:** automático al abrir un capítulo y al pasar de página, sobre
+los cortes de esa página (dos o tres, no los mil del libro). Si no hay nada que
+unir no pasa nada. Si unió algo, aparece un aviso discreto que se va solo:
+«3 palabras unidas · Deshacer». Lo que se deshace **no se vuelve a unir solo**;
+el botón, al ser una petición explícita, sí lo reconsidera y trabaja sobre todo
+el capítulo.
+
+### Lo que esto arregla, medido
+
+Sobre el libro privado de 431 páginas, misma reconstrucción con y sin listas:
+
+| Decisión | Sin diccionario | Con diccionario |
+|---|---:|---:|
+| `pending` (dudosos) | 766 | **252** (−67 %) |
+| `space` | 15.729 | 16.244 |
+| `join` | 4.783 | 4.782 |
+
+**Honestidad sobre este número:** en *ese* libro casi todo se resuelve como
+«son dos palabras, déjalas separadas», y las uniones nuevas son −1. Es
+coherente con la auditoría de v2.39.1, que ya había medido que ese libro se
+reconstruye **sin una sola palabra partida**: no había nada que unir, solo
+incertidumbre que quitar. La unión de verdad está probada sobre una
+reproducción del caso exacto del usuario
+(`tests/verificar_pdf_unir_palabras.mjs`). Cuántas palabras arregle en un libro
+concreto depende de cómo lo generó su editor; no se puede prometer una cifra
+sin ese libro.
+
+### Verificación
+
+| Prueba | Comprobaciones |
+|---|---:|
+| Unitarias (24 archivos) | 1.120 |
+| `verificar_pdf_movil.mjs` (**nueva**) | 27 |
+| `verificar_pdf_unir_palabras.mjs` (**nueva**) | 18 |
+| `verificar_pdf_navegador.mjs` | 116 |
+| `verificar_pdf_geometria.mjs` | 114 |
+| `verificar_pdf_scroll.mjs` | 39 |
+| `verificar_pdf_lector_integracion.mjs` | 27 |
+| `verificar_pdf_paginas.mjs` (4 tamaños) | 5 |
+
+`tests/_impacto_lexico.mjs` no es una prueba: es la herramienta con la que se
+midió la tabla de arriba sobre un libro real.
+
+Versión `v2.41.0` · módulos `v81` · shell `jg-turbo-shell-v81`. IndexedDB sin
+cambios; ninguna clave de `localStorage` se renombra.
+
+
 ## 2026-09-05 · v2.40.0 · Páginas y corrección conectada
 
 El lector pasa páginas dentro del espacio disponible, recuerda el lugar por

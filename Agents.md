@@ -98,7 +98,8 @@ node tests/test_pdf_mejora_apartado.mjs  node tests/test_pdf_cola_correccion.mjs
 node tests/test_pdf_continuidad.mjs      node tests/test_pdf_caratula.mjs
 ```
 
-Referencia al 2026-09-05 (v2.39.0): **~1.000 comprobaciones OK, 0 fallos**
+Referencia al 2026-09-05 (v2.41.0): **1.120 comprobaciones OK, 0 fallos** (24 archivos).
+Referencia anterior (v2.39.0): ~1.000 comprobaciones
 (20 archivos; `test_pdf_mejora_apartado` aporta 50). Si salen menos, la prueba
 se cortó.
 
@@ -109,6 +110,8 @@ se cortó.
 | `node tests/verificar_pdf_geometria.mjs` | Desbordes, toques ≥44px (los <44px fallan) y solapes en móvil/tablet/escritorio | 54 |
 | `node tests/verificar_pdf_scroll.mjs` | Que la biblioteca **se pueda desplazar** con nueve libros, y que las otras pestañas y el lector conserven su modelo de scroll | 39 |
 | `node tests/verificar_pdf_navegador.mjs` | Recorrido funcional completo del lector | 116 |
+| `node tests/verificar_pdf_movil.mjs` | **Obligatoria al tocar el lector en móvil**: reparto real de la pantalla, alcance del pulgar hoja por hoja, y que tablet y escritorio NO cambien | 27 |
+| `node tests/verificar_pdf_unir_palabras.mjs` | «Unir palabras» sobre una palabra partida de verdad, con su Deshacer | 18 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -118,6 +121,13 @@ archivos concretos que te afecten.
 **Cuando toques CSS de alturas o scroll**, `verificar_pdf_scroll.mjs` es obligatoria: es la única
 que trabaja con volumen suficiente para que el scroll exista. Las otras dos dieron 42/42 y 103/103
 con el scroll completamente roto.
+
+**Cuando toques el lector en el teléfono**, `verificar_pdf_movil.mjs` es obligatoria: es la única
+que mide *cuánta pantalla se lleva el texto* y que tablet y escritorio siguen intactos. Las demás
+daban verde con la cabecera partida en dos filas y el 44 % de la pantalla para el texto.
+
+**Nunca saques el cromo del flujo en un lector paginado**: cambia el tamaño del área de texto,
+obliga a repartir las páginas otra vez y deshace el salto de página. Ver `TRAMPAS.md`.
 
 ## Stack
 
@@ -281,7 +291,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v80`** (lector paginado y corrección conectada, PDF v2.40.0). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v81`** (lector del teléfono y «Unir palabras», PDF v2.41.0). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

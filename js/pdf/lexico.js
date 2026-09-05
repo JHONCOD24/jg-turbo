@@ -119,10 +119,85 @@ const SUFIJOS = [
   'ieron', 'amos', 'emos', 'imos',
 ];
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Listas de palabras de verdad (`js/vendor/lexico/`)
+   ──────────────────────────────────────────────────────────────────────────
+   Las listas de arriba son el corpus de las pruebas: 576 palabras. Un libro en
+   español usa unas 20.000 formas distintas, así que casi todo le resultaba
+   desconocido y cualquier corte de renglón quedaba «pendiente». De ahí los
+   1.068 cortes sin resolver de un libro de 431 páginas.
+
+   Se cargan bajo petición: quien no usa «Unir palabras» no descarga nada.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const LISTAS = new Map();   // idioma -> Set de claves léxicas
+const CARGAS = new Map();   // idioma -> promesa en curso (evita cargar dos veces)
+
+/** ¿Ya está la lista de ese idioma en memoria? */
+export function lexicoCargado(idioma = 'es') {
+  return LISTAS.has(idioma);
+}
+
+/* Formato de las listas: ordenadas y con prefijo compartido. Cada línea
+ * empieza por un carácter que dice cuántas letras repite de la anterior
+ * ('0' = 0, '1' = 1, …) y sigue con el resto. Comprime la lista española de
+ * 1,5 MB a 283 KB por la red. Detalle en `js/vendor/lexico/LEEME.md`. */
+export function descodificarLista(texto) {
+  const formas = [];
+  let previa = '';
+  for (const linea of String(texto || '').split('\n')) {
+    if (!linea) continue;
+    const repite = linea.charCodeAt(0) - 48;
+    if (repite < 0 || repite > previa.length) continue;
+    previa = previa.slice(0, repite) + linea.slice(1);
+    formas.push(previa);
+  }
+  return formas;
+}
+
+/**
+ * Carga la lista de un idioma. `traer` recibe el idioma y devuelve el texto;
+ * por defecto se pide por red (en el navegador). Las pruebas lo leen del disco
+ * para ejercitar el mismo descodificador.
+ *
+ * Nunca lanza: si la lista no llega, el lector sigue funcionando con lo que
+ * tenía y simplemente deja más cortes pendientes. Quedarse sin diccionario es
+ * peor lectura, no una pantalla rota.
+ */
+export function cargarLexico(idioma = 'es', traer = null) {
+  if (LISTAS.has(idioma)) return Promise.resolve(true);
+  if (CARGAS.has(idioma)) return CARGAS.get(idioma);
+  const pedir = traer || ((id) => fetch(new URL(`../vendor/lexico/${id}.txt`, import.meta.url)).then((r) => {
+    if (!r.ok) throw new Error(`lista ${id}: ${r.status}`);
+    return r.text();
+  }));
+  const promesa = Promise.resolve()
+    .then(() => pedir(idioma))
+    .then((texto) => {
+      const set = new Set();
+      for (const forma of descodificarLista(texto)) {
+        const k = claveLexica(forma);
+        if (k) set.add(k);
+      }
+      if (!set.size) throw new Error(`lista ${idioma} vacía`);
+      LISTAS.set(idioma, set);
+      return true;
+    })
+    .catch((e) => {
+      /* Sin lista se sigue leyendo: solo quedan más cortes por revisar. */
+      console.warn('[lexico] no se pudo cargar', idioma, e && e.message);
+      return false;
+    })
+    .finally(() => { CARGAS.delete(idioma); });
+  CARGAS.set(idioma, promesa);
+  return promesa;
+}
+
 export function esPalabraValida(forma, _lang = 'es') {
   const k = claveLexica(forma);
   if (!k) return false;
   if (FUNCIONALES.has(k) || PALABRAS.has(k) || NOMBRES.has(k)) return true;
+  for (const lista of LISTAS.values()) if (lista.has(k)) return true;
   return false;
 }
 

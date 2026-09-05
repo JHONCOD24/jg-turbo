@@ -117,7 +117,14 @@ export function initLibroVista({ el, estado, api }) {
     if (el.btnCortes) el.btnCortes.hidden = pend === 0;
     /* Capítulo nuevo: se reparte desde su primera página. */
     pag.actual = 0;
-    requestAnimationFrame(() => { medirPaginas({ conservar: false }); if (ancla) irACaracter(ancla); });
+    requestAnimationFrame(() => {
+      medirPaginas({ conservar: false });
+      if (ancla) irACaracter(ancla);
+      /* Se intenta también al abrir el capítulo. `unirPalabras` vuelve a
+       * pintar, así que hay que evitar el bucle: solo se dispara cuando el
+       * render NO viene de una unión (ver `uniendo`). */
+      if (!uniendo && typeof api.unirPalabrasAuto === 'function') api.unirPalabrasAuto();
+    });
   }
 
   /* Tocar un párrafo lo lee en voz alta desde ahí.
@@ -221,6 +228,8 @@ export function initLibroVista({ el, estado, api }) {
     clearTimeout(tempoSalto);
     tempoSalto = setTimeout(() => { pag.saltando = false; }, 420);
     if (guardar && api.anotarPagina) api.anotarPagina(pag.ancla);
+    /* Página nueva: se mira si trae palabras partidas. Si no, no pasa nada. */
+    if (typeof api.unirPalabrasAuto === 'function') api.unirPalabrasAuto();
   }
 
   /** En qué página cae un elemento del texto. */
@@ -530,6 +539,196 @@ export function initLibroVista({ el, estado, api }) {
     const cerrarBoton = el.aparienciaHoja.querySelector('[data-cerrar-hoja="pdfAparienciaHoja"]');
     if (cerrarBoton) cerrarBoton.addEventListener('click', cerrarApariencia);
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     «Unir palabras»: recomponer lo que el PDF partió al saltar de renglón
+     ──────────────────────────────────────────────────────────────────────
+     Un PDF no guarda palabras: guarda trozos con su posición. Cuando una
+     palabra cae en el salto de renglón, el motor ve «sorprend» y «entes» y no
+     puede saber si van juntas. Hasta ahora se rendía y dejaba el corte
+     «pendiente» (1.068 en un libro de 431 páginas), porque el léxico que
+     tenía eran 576 palabras.
+
+     Con las listas de `js/vendor/lexico/` la mayoría se decide sola. La regla
+     no cambia y es la que evita corromper el libro: se une SOLO si la forma
+     pegada es palabra Y al menos una de las mitades no lo es. Por eso
+     «de»+«la» no se toca nunca.
+
+     Se trabaja sobre los cortes de la PÁGINA que se está leyendo (dos o tres),
+     no sobre los mil del libro: es instantáneo y no interrumpe.
+     ═══════════════════════════════════════════════════════════════════════ */
+  let unidosUltimaVez = [];      // para Deshacer
+  let tempoAviso = null;
+  let uniendo = false;
+  /* Lo que la persona deshizo NO se vuelve a unir sola. Sin esto, el pase
+   * automático de la página volvía a pegarlo en el mismo instante y
+   * «Deshacer» no servía para nada. */
+  const rechazados = new Set();
+  /* Los que se deshicieron y el botón vuelve a considerar en esa pulsación. */
+  let rechazadosPrevios = new Set();
+
+  /** Cortes pendientes que caen dentro del tramo de texto que se está viendo. */
+  function pendientesDeLaPagina() {
+    const todos = (estado.limites || []).filter((l) => l && l.decision === 'pending');
+    if (!todos.length) return [];
+    if (!pag.activo || !el.lectura) return todos;
+    /* La página muestra de `desde` a `hasta` caracteres del capítulo. Los
+     * cortes traen su posición, así que basta con el rango. */
+    const desde = pag.ancla || 0;
+    const bloques = [...el.lectura.querySelectorAll('[data-fin]')];
+    const ultimo = bloques.length ? Number(bloques[bloques.length - 1].dataset.fin) : Infinity;
+    const hasta = Number.isFinite(ultimo) ? ultimo : Infinity;
+    const dentro = todos.filter((l) => {
+      const p = Number(l.charStart ?? l.pos ?? NaN);
+      return !Number.isFinite(p) || (p >= desde - 400 && p <= hasta + 400);
+    });
+    return dentro.length ? dentro : todos;
+  }
+
+  /** Pinta el botón: encendido y con cuenta cuando hay algo que unir. */
+  function pintarUnir(cuantos) {
+    if (!el.btnUnirPalabras) return;
+    const n = Number(cuantos) || 0;
+    el.btnUnirPalabras.dataset.hay = n > 0 ? 'si' : 'no';
+    if (el.unirCuenta) el.unirCuenta.textContent = n > 0 ? `(${n})` : '';
+    el.btnUnirPalabras.disabled = uniendo;
+  }
+
+  function mostrarAviso(cuantas) {
+    if (!el.unirAviso) return;
+    clearTimeout(tempoAviso);
+    if (el.unirAvisoTexto) {
+      el.unirAvisoTexto.textContent = cuantas === 1
+        ? '1 palabra unida' : `${cuantas} palabras unidas`;
+    }
+    el.unirAviso.hidden = false;
+    /* Se va solo: es un aviso, no una tarea pendiente. */
+    tempoAviso = setTimeout(() => { el.unirAviso.hidden = true; }, 7000);
+  }
+
+  /**
+   * Une lo que se pueda decidir con evidencia. `alcance`:
+   *   'pagina'   — los cortes de la página abierta (automático)
+   *   'capitulo' — todos los del capítulo (al pulsar el botón)
+   * Devuelve cuántas unió.
+   */
+  async function unirPalabras({ alcance = 'pagina', avisar = true } = {}) {
+    if (uniendo) return 0;
+    /* Pulsar el botón es una petición explícita, así que reconsidera también
+     * los cortes que se deshicieron antes (quedaron como «space» del usuario).
+     * El pase automático, en cambio, respeta esa decisión y no los toca. */
+    const candidatos = alcance === 'capitulo'
+      ? (estado.limites || []).filter((l) => l && (l.decision === 'pending' || rechazadosPrevios.has(l.id)))
+      : pendientesDeLaPagina();
+    if (!candidatos.length) { pintarUnir(0); return 0; }
+
+    uniendo = true;
+    pintarUnir(0);
+    try {
+      const { cargarLexico, decidirPorLexico } = await import('./lexico.js');
+      await cargarLexico(estado.idioma === 'en' ? 'en' : 'es');
+      /* Un libro en español puede citar en inglés y al revés: con las dos
+       * listas cargadas se decide mejor y no cuesta una segunda espera. */
+      cargarLexico(estado.idioma === 'en' ? 'es' : 'en');
+
+      const aUnir = [];
+      for (const lim of candidatos) {
+        if (rechazados.has(lim.id)) continue;
+        const veredicto = decidirPorLexico(lim.leftFragment, lim.rightFragment, {
+          continuidadGeometrica: true,
+          vocabularioDocumento: estado.vocabulario,
+        }, estado.idioma || 'es');
+        if (veredicto === 'join') aUnir.push(lim);
+      }
+      if (!aUnir.length) { pintarUnir(0); return 0; }
+
+      /* Se guarda el IDENTIFICADOR, no el objeto: `reconstruirTrasDecision`
+       * reemplaza el arreglo de cortes por otro nuevo, y guardar la referencia
+       * dejaba a «Deshacer» mutando un objeto que ya nadie miraba. */
+      const antes = aUnir.map((l) => ({ id: l.id, copia: { ...l } }));
+      for (const l of aUnir) aplicarDecisionUsuario(l, 'join');
+      try {
+        await api.reconstruirTrasDecision?.();
+      } catch (error) {
+        /* Si no se pudo reconstruir (por ejemplo, hay ediciones aprobadas que
+         * no se deben pisar), se deja todo como estaba y se dice por qué. */
+        for (const { lim, copia } of antes) Object.assign(lim, copia);
+        api.avisar?.(error.message || 'No se pudieron unir las palabras.', 'warn');
+        return 0;
+      }
+      unidosUltimaVez = antes;
+      renderLectura({ conservar: true });
+      if (avisar) mostrarAviso(aUnir.length);
+      return aUnir.length;
+    } finally {
+      uniendo = false;
+      pintarUnir(pendientesDeLaPagina().length ? contarUnibles() : 0);
+    }
+  }
+
+  /* Cuántos de los pendientes de esta página tienen ya evidencia suficiente.
+   * Solo sirve para encender el botón; no cambia nada. */
+  function contarUnibles() {
+    try {
+      /* `decidirPorLexico` viaja en el módulo cargado; si aún no lo está,
+       * no se enciende nada todavía y se pintará tras el primer intento. */
+      const mod = moduloLexico;
+      if (!mod) return 0;
+      return pendientesDeLaPagina().filter((l) => mod.decidirPorLexico(
+        l.leftFragment, l.rightFragment,
+        { continuidadGeometrica: true, vocabularioDocumento: estado.vocabulario },
+        estado.idioma || 'es',
+      ) === 'join').length;
+    } catch (_) { return 0; }
+  }
+  let moduloLexico = null;
+  import('./lexico.js').then((m) => { moduloLexico = m; }).catch(() => {});
+
+  async function deshacerUnion() {
+    if (!unidosUltimaVez.length) return;
+    const copia = unidosUltimaVez;
+    unidosUltimaVez = [];
+    const porId = new Map((estado.limites || []).map((l) => [l.id, l]));
+    for (const { id, copia: previa } of copia) {
+      const lim = porId.get(id);
+      if (!lim) continue;
+      /* Se marca como decisión de la PERSONA, no como «pendiente»: la
+       * reconstrucción vuelve a resolver los pendientes con el diccionario y
+       * los habría unido otra vez en el mismo instante. */
+      Object.assign(lim, previa, { decision: 'space', source: 'user' });
+      rechazados.add(id);
+    }
+    try {
+      await api.reconstruirTrasDecision?.();
+    } catch (error) {
+      api.avisar?.(error.message || 'No se pudo deshacer.', 'warn');
+      return;
+    }
+    renderLectura({ conservar: true });
+    if (el.unirAviso) el.unirAviso.hidden = true;
+    clearTimeout(tempoAviso);
+    pintarUnir(contarUnibles());
+  }
+
+  if (el.btnUnirPalabras) {
+    /* Pulsarlo es una petición explícita: vuelve a considerar incluso lo que
+     * se deshizo antes. El automático, en cambio, respeta esa decisión. */
+    el.btnUnirPalabras.addEventListener('click', () => {
+      rechazadosPrevios = new Set(rechazados);
+      rechazados.clear();
+      unirPalabras({ alcance: 'capitulo' }).finally(() => { rechazadosPrevios = new Set(); });
+    });
+  }
+  if (el.btnUnirDeshacer) el.btnUnirDeshacer.addEventListener('click', deshacerUnion);
+
+  /* Automático: al abrir el libro y al pasar de página. Si no hay nada que
+   * unir no ocurre nada y la lectura sigue igual, que es lo pedido. */
+  let tempoUnir = null;
+  function unirAlLlegar() {
+    clearTimeout(tempoUnir);
+    tempoUnir = setTimeout(() => { unirPalabras({ alcance: 'pagina' }); }, 350);
+  }
+  api.unirPalabrasAuto = unirAlLlegar;
 
   /* ═══════════════════════════════════════════════════════════════════════
      Teléfono: barra del pulgar y lectura inmersiva

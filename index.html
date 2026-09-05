@@ -1,4 +1,4 @@
-<!-- v2.40.0 · PDF: páginas de lectura, corrección conectada y decisiones persistentes -->
+<!-- v2.41.0 · PDF: lector rediseñado en el teléfono y «Unir palabras» con diccionario local -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -2439,6 +2439,34 @@
      sobre el texto. (Pasó; lo cazó `verificar_pdf_movil.mjs`.) */
   .pdf-barra-movil,.pdf-voz-mini,.pdf-solo-telefono{display:none}
   @media (max-width:640px){ .pdf-solo-telefono{display:block} }
+
+  /* Aviso de «Unir palabras»: discreto, abajo, y se va solo. Si no unió nada
+     no aparece, que es lo que pidió el usuario: si el párrafo está bien, la
+     lectura sigue igual. */
+  .pdf-unir-aviso{
+    position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(18px + env(safe-area-inset-bottom));z-index:30;
+    display:flex;align-items:center;gap:12px;
+    padding:8px 8px 8px 16px;border-radius:999px;
+    background:var(--lec-superficie, var(--surface));
+    border:1px solid var(--lec-linea, var(--line));
+    color:var(--lec-texto, var(--text));font-size:13px;font-weight:600;
+    box-shadow:0 10px 34px -14px rgba(0,0,0,.8);
+    animation:pdfPulidoIn .2s ease;max-width:min(92vw,420px);
+  }
+  .pdf-unir-aviso[hidden]{display:none !important}
+  .pdf-unir-aviso .mini-btn{min-height:36px;padding:7px 14px;border-radius:999px;flex:none}
+  @media (max-width:640px){
+    /* Encima de la barra del pulgar, no debajo ni tapándola. */
+    .pdf-unir-aviso{bottom:calc(var(--pdf-bm-alto, 64px) + 12px)}
+  }
+  /* El botón se enciende cuando hay algo que unir en la página. */
+  #btnPdfUnirPalabras[data-hay="si"]{
+    color:var(--lec-acento, var(--cyan));
+    border-color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 45%, transparent);
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent);
+  }
+  #pdfUnirCuenta:empty{display:none}
 
   @media (max-width:640px){
     /* 1. Cabecera de una sola fila: volver · título · Opciones. */
@@ -5908,6 +5936,13 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
               <div class="pdf-modo-barra" role="group" aria-label="Modo de lectura">
                 <button type="button" class="mini-btn is-on" id="pdfVistaLectura" aria-pressed="true">Lectura</button>
                 <button type="button" class="mini-btn" id="pdfVistaEditar" aria-pressed="false">Editar</button>
+                <!-- Une las palabras que el PDF partió al saltar de renglón
+                     («sorprend» + «entes»). Trabaja solo al pasar de página;
+                     el botón queda para pedirlo a mano en todo el capítulo. -->
+                <button type="button" class="mini-btn" id="btnPdfUnirPalabras"
+                        title="Unir las palabras que el PDF partió al cambiar de renglón">
+                  Unir palabras <span id="pdfUnirCuenta"></span>
+                </button>
                 <div class="pdf-cortes-barra">
                   <button type="button" class="mini-btn" id="btnPdfCortes" hidden>Revisar cortes <span id="pdfCortesCuenta"></span></button>
                   <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar corrección</button>
@@ -6074,6 +6109,15 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
               <span>Opciones</span>
             </button>
           </nav>
+
+          <!-- Aviso de lo que se unió. Aparece solo si hubo algo que unir y se
+               va solo a los pocos segundos: si no cambió nada, no interrumpe la
+               lectura. `role="status"` para que un lector de pantalla lo lea al
+               terminar la frase en curso, no encima. -->
+          <div class="pdf-unir-aviso" id="pdfUnirAviso" role="status" aria-live="polite" hidden>
+            <span id="pdfUnirAvisoTexto"></span>
+            <button type="button" class="mini-btn" id="btnPdfUnirDeshacer">Deshacer</button>
+          </div>
 
           <!-- Mientras la voz suena, esto queda SIEMPRE a la vista aunque el
                resto del cromo se aparte. Sin ello, la lectura inmersiva te
@@ -16040,7 +16084,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v80';
+const JG_JS_V = 'v81';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

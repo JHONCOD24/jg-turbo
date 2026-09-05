@@ -1,5 +1,35 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Con páginas, apartar el cromo remaqueta y deshace el salto
+
+**Síntoma (v2.41):** en el teléfono pulsabas «página siguiente» y volvías al
+principio del capítulo. **Causa:** la lectura inmersiva sacaba la cabecera y la
+barra del flujo (`display:none`), el texto crecía y había que repartir las
+páginas otra vez; con el reparto nuevo, el carácter guardado caía dentro de la
+página 1. **Regla:** en un lector paginado, mostrar u ocultar cromo **no puede
+cambiar el tamaño del área de texto**. Se reserva el hueco siempre y solo se
+desvanece (`opacity`). Se gana menos alto y a cambio la lectura no se mueve.
+La prueba vigila que el total de páginas no cambie al apartar el cromo.
+
+## Un control que se oculta se lleva el foco al `<body>`
+
+**Síntoma (v2.41):** al cerrar la hoja de Apariencia en el teléfono, el foco se
+perdía. **Causa:** el cierre hacía `btnApariencia.focus()` sin mirar, y en el
+teléfono ese botón está oculto: `focus()` sobre un elemento sin caja no hace
+nada. **Regla:** al devolver el foco, buscar el primer candidato **visible**
+(`offsetParent !== null`), nunca uno fijo. Si un control existe en dos sitios
+según la pantalla, el foco vuelve al que esté a la vista.
+
+## Guardar el objeto para deshacer no sirve si el arreglo se reemplaza
+
+**Síntoma (v2.41):** «Deshacer» no deshacía nada. **Causa:** se guardaba la
+referencia al corte, pero `reconstruirTrasDecision` **reemplaza** el arreglo de
+límites por otro nuevo; se estaba mutando un objeto que ya nadie miraba.
+**Regla:** guardar el `id` y volver a buscarlo. Y al deshacer, marcar la
+decisión como del usuario (`source:'user'`), no como «pendiente»: la
+reconstrucción vuelve a resolver los pendientes y los habría unido otra vez en
+el mismo instante.
+
 ## Publicar en Vercel no es cerrar: Git puede quedarse atrás
 
 **Síntoma (2026-09-05, v2.40):** producción servía v2.40.0 verificada byte a byte,

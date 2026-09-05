@@ -183,6 +183,27 @@ export function crearLibroConCortesSinGuion(ruta) {
   return armarPdf([paginaUno, paginaDos, paginaTres, paginaCuatro, paginaCinco].map(flujoDeTexto), ruta);
 }
 
+/**
+ * El caso que reportó el usuario: el PDF parte «sorprendentes» al final de un
+ * renglón, SIN guion, y el resto aparece al empezar el siguiente. No hay
+ * ninguna marca que delate el corte: solo el diccionario puede saber que
+ * «sorprend» no es palabra y «sorprendentes» sí.
+ *
+ * Lleva además dos trampas que deben quedarse quietas: «de la» y «sin
+ * embargo», dos palabras reales seguidas que nadie debe pegar.
+ */
+export function crearLibroConPalabraPartida(ruta) {
+  const pagina = [
+    ['CAPITULO I', 70, 760, 18],
+    ['Comparto mas historias sorprend', 90, 710, 11],
+    ['entes sobre algunos participantes de mis talleres. La', 70, 694, 11],
+    ['conver', 70, 678, 11],
+    ['sacion siguio de la mano de sin embargo otro asunto.', 70, 662, 11],
+    ['1', 295, 40, 9],
+  ];
+  return armarPdf([flujoDeTexto(pagina)], ruta);
+}
+
 /** PDF sin capa de texto: solo un rectángulo, como una página escaneada. */
 export function crearEscaneado(ruta, paginas = 6) {
   const flujo = Buffer.from('0.5 0.5 0.5 rg\n50 50 495 742 re f\n', 'latin1');
