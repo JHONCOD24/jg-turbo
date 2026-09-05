@@ -1481,9 +1481,21 @@
   }
   body:not(.jg-leyendo):not(.jg-pantalla):has(#panelPdf.active) > .wrap{
     height:auto;min-height:100dvh;overflow:visible;
+    /* `.wrap` era `display:block`, así que el `flex:1` de abajo no hacía
+       NADA: la tarjeta se quedaba en su alto natural y dejaba 192 px de negro
+       muerto al final de la pantalla (medido en 390×844). Como columna
+       flexible, el panel sí se estira.
+       El scroll no se toca: `height:auto` y `overflow:visible` siguen ahí, y
+       quien desplaza sigue siendo el documento. `TRAMPAS.md` §3 cuenta que
+       fijar `height:100dvh` aquí dejó la biblioteca sin scroll; por eso se
+       usa `min-height`, que deja crecer. */
+    display:flex;flex-direction:column;
   }
-  body:not(.jg-leyendo) #panelPdf{flex:1 0 auto;min-height:0}
-  body:not(.jg-leyendo) #panelPdf > .card{flex:1 0 auto;min-height:0}
+  /* La cadena tiene que ser flexible ENTERA: `.wrap` estiraba el panel a
+     688 px, pero el panel era `display:block` y su tarjeta se quedaba en
+     512 px. Un eslabón rígido en medio y el estirado no llega. */
+  body:not(.jg-leyendo) #panelPdf{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}
+  body:not(.jg-leyendo) #panelPdf > .card{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}
   body:not(.jg-leyendo) #panelPdf .pdf-area{
     height:auto;min-height:0;overflow:visible;
   }
@@ -4441,6 +4453,11 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-recorte{max-width:100%;border:1px solid var(--line);border-radius:8px}
 .pdf-search-lista{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto}
 .pdf-search-lista button{min-height:44px;text-align:left}
+/* El lector paginado no tiene desplazamiento propio (las páginas se mueven
+   con `scrollTo`), así que el navegador debe dejarnos el gesto horizontal:
+   con `pan-y` el dedo sigue pudiendo bajar la página y el deslizamiento
+   lateral llega a nuestro manejador en vez de perderse. */
+.pdf-lectura[data-paginado="si"]{touch-action:pan-y}
 #pdfVolverLectura{position:sticky;bottom:12px}
 /* ── Paso de páginas ──────────────────────────────────────────────────
    El texto fluye en columnas del ancho exacto del lector: cada columna es
@@ -7755,6 +7772,11 @@ function jgActivarPanel(tabActiva, enfocar = false){
     panel.hidden = !activa;
   });
   badge.textContent = badgeText[tabActiva.dataset.tab];
+  /* El lector de PDF se descarga la primera vez que se entra en su pestaña,
+   * no al abrir la app: son 553 KB que no le sirven a quien viene a dictar. */
+  if(tabActiva.dataset.tab === 'pdf' && typeof window.jgAsegurarLectorPdf === 'function'){
+    window.jgAsegurarLectorPdf();
+  }
   if(enfocar) tabActiva.focus();
   // FAB de grabación solo aplica al panel Mic (móvil).
   if(typeof jgActualizarVisibilidadRecFab === 'function'){
@@ -10948,6 +10970,9 @@ async function cargarArchivoCompartido(file, { autoTranscribe = true, origen = '
   // de PDF, no a la pestaña de audio.
   if((file.type === 'application/pdf') || /\.pdf$/i.test(file.name || '')){
     activarTab('pdf');
+    /* `activarTab` ya lo pide al entrar en la pestaña, pero si la pestaña no
+     * existiera o el clic no llegara, aquí queda asegurado. */
+    if(typeof window.jgAsegurarLectorPdf === 'function') window.jgAsegurarLectorPdf();
     const esperaPdf = setInterval(() => {
       if(jgPdfListo && typeof jgPdfListo.cargarPdfExterno === 'function'){
         clearInterval(esperaPdf);
@@ -16105,7 +16130,20 @@ import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarY
  * esta pestaña no paga ese peso al abrir la app. */
 const pdfOutput = document.getElementById('pdfOutput');
 let jgPdfListo = null;
-import('/js/pdf/pdfController.js?v=' + JG_JS_V).then(({ inicializarLectorPdf }) => {
+let jgCargaPdf = null;
+/**
+ * Trae el lector de PDF la primera vez que de verdad hace falta.
+ *
+ * Antes esto se ejecutaba al arrancar, así que **todo el mundo** descargaba
+ * 553 KB de módulos aunque nunca abriera un PDF: medido en la pantalla de
+ * inicio de un teléfono. El comentario de arriba ya decía que no debía pasar;
+ * lo que faltaba era no llamarlo hasta abrir la pestaña.
+ *
+ * Devuelve siempre la MISMA promesa: llamarlo dos veces no descarga dos veces.
+ */
+function asegurarLectorPdf(){
+  if(jgCargaPdf) return jgCargaPdf;
+  jgCargaPdf = import('/js/pdf/pdfController.js?v=' + JG_JS_V).then(({ inicializarLectorPdf }) => {
   jgPdfListo = inicializarLectorPdf({
     contarPalabras,
     /* Preguntar al documento: reutiliza la clave de IA ya configurada y su
@@ -16155,7 +16193,11 @@ import('/js/pdf/pdfController.js?v=' + JG_JS_V).then(({ inicializarLectorPdf }) 
   });
   if (typeof window !== 'undefined') window.jgPdfListo = jgPdfListo;
   sincronizarAccionesPanel('pdf');
+  return jgPdfListo;
 }).catch((error) => {
+  /* Si falla, se olvida la promesa para poder reintentar al volver a entrar:
+   * un corte de red pasajero no puede dejar la pestaña muerta hasta recargar. */
+  jgCargaPdf = null;
   console.error('[jg-pdf]', error);
   const aviso = document.getElementById('pdfNotice');
   if(aviso){
@@ -16163,7 +16205,13 @@ import('/js/pdf/pdfController.js?v=' + JG_JS_V).then(({ inicializarLectorPdf }) 
     aviso.textContent = 'No se pudo cargar el lector de PDF. Recarga la página e inténtalo de nuevo.';
     aviso.hidden = false;
   }
-});
+  });
+  return jgCargaPdf;
+}
+if (typeof window !== 'undefined') window.jgAsegurarLectorPdf = asegurarLectorPdf;
+/* Si la app abre directamente en PDF (enlace compartido, `?tab=pdf`, `?unir=`
+ * o la pestaña recordada), el lector hace falta ya. */
+if (document.querySelector('#panelPdf.active')) asegurarLectorPdf();
 
 document.getElementById('btnPdfCopy')?.addEventListener('click', ()=>
   copiarTexto(pdfOutput, document.getElementById('pdfCopyLabel'), document.getElementById('btnPdfCopy')));

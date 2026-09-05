@@ -855,9 +855,44 @@ export function initLibroVista({ el, estado, api }) {
   /* Cualquier toque devuelve los controles. `pointerdown` en fase de captura
      para que llegue antes que el gesto del párrafo, y sin cancelarlo: el
      doble toque de «leer desde aquí» sigue funcionando igual. */
-  /* Marca puesta por el toque que despertó el cromo, para que el `click` que
-   * viene detrás no se interprete además como «lee desde aquí». */
   let toqueDespertoCromo = false;
+
+  /* ── Pasar página con el dedo ──────────────────────────────────────
+     El área de lectura es `overflow-x:hidden`: las páginas se mueven con
+     `scrollTo`, no con desplazamiento nativo. En un teléfono real eso
+     significa que **el dedo no hace nada** — ni desliza ni desplaza, porque
+     tampoco hay scroll vertical (es un lector paginado). Se siente bloqueado,
+     y es lo primero que intenta cualquiera.
+
+     Así que el deslizamiento se atiende a mano. Con Pointer Events, que
+     cubren dedo, lápiz y ratón por igual. */
+  const DESLIZ_MINIMO = 45;     // menos que esto es un toque tembloroso
+  const DESLIZ_VERTICAL = 1.0;  // si baja más de lo que cruza, no es pasar página
+  let gesto = null;
+  if (el.lectura) {
+    el.lectura.addEventListener('pointerdown', (ev) => {
+      if (!pag.activo || ev.pointerType === 'mouse') { gesto = null; return; }
+      gesto = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+    }, { passive: true });
+    el.lectura.addEventListener('pointerup', (ev) => {
+      if (!gesto || ev.pointerId !== gesto.id) return;
+      const dx = ev.clientX - gesto.x;
+      const dy = ev.clientY - gesto.y;
+      gesto = null;
+      if (Math.abs(dx) < DESLIZ_MINIMO) return;
+      if (Math.abs(dy) > Math.abs(dx) * DESLIZ_VERTICAL) return;
+      /* Si estaba seleccionando texto, el deslizamiento es suyo, no nuestro. */
+      const sel = document.getSelection();
+      if (sel && String(sel).trim().length > 1) return;
+      /* Este gesto no es «lee desde aquí»: se consume el click que viene. */
+      toqueDespertoCromo = true;
+      irAPagina(pag.actual + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+    el.lectura.addEventListener('pointercancel', () => { gesto = null; }, { passive: true });
+  }
+
+  /* Marca puesta por el gesto que despertó el cromo o pasó de página, para que
+   * el `click` que viene detrás no se interprete además como «lee desde aquí». */
   function consumirToqueDeCromo() {
     if (!toqueDespertoCromo) return false;
     toqueDespertoCromo = false;

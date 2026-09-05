@@ -98,6 +98,33 @@ const reparto = (p) => p.evaluate(() => {
 });
 
 try {
+  /* ── 0. La biblioteca, antes de abrir ningún libro ──────────────────
+     Medido: la tarjeta del panel acababa a 653 px en una pantalla de 839 y
+     dejaba 186 px de negro muerto debajo. Se veía como si la app se hubiera
+     quedado a medias. */
+  console.log('\n── 0. La biblioteca llena la pantalla ──────────────────────────');
+  const biblio = await navegador.newPage({ viewport: { width: 390, height: 844 } });
+  await biblio.goto(base);
+  await biblio.locator('#tabPdf').click();
+  await biblio.waitForTimeout(1500);
+  const hueco = await biblio.evaluate(() => {
+    const card = document.querySelector('#panelPdf > .card');
+    if (!card) return { falta: true };
+    const r = card.getBoundingClientRect();
+    return { muerto: Math.round(innerHeight - r.bottom), alto: Math.round(r.height), ventana: innerHeight };
+  });
+  console.log('  hueco muerto bajo la tarjeta:', hueco.muerto, 'px');
+  comprobar('la biblioteca no deja un hueco negro debajo', hueco.muerto <= 24,
+    `sobran ${hueco.muerto} px`);
+
+  /* Que la biblioteca SIGA desplazándose con volumen es obligatorio al tocar
+     alturas (`TRAMPAS.md` §3: un intento anterior de llenar la pantalla dejó
+     la lista sin scroll). No se duplica aquí a medias: lo mide de verdad
+     `verificar_pdf_scroll.mjs`, que es la única que trabaja con nueve libros.
+     Hay que correrla junto a esta. */
+  await biblio.screenshot({ path: join(destino, 'biblioteca.png') });
+  await biblio.close();
+
   /* ── 1. Teléfono 390×844: el texto manda ────────────────────────────── */
   console.log('\n── 1. Teléfono 390×844 ─────────────────────────────────────────');
   const tel = await abrirLibro(390, 844);
@@ -181,6 +208,41 @@ try {
   comprobar('ese control también cabe bajo el dedo', conVoz.h >= TACTIL && conVoz.w >= TACTIL,
     `mide ${conVoz.w}×${conVoz.h}`);
   await tel.evaluate(() => { document.body.classList.remove('jg-voz-activa', 'jg-inmersivo'); });
+
+  /* ── 4c. Pasar página con el dedo ───────────────────────────────────
+     En un teléfono, un lector paginado sin deslizamiento se siente roto: no
+     hay scroll (es por páginas) y los únicos botones son dos flechas
+     pequeñas. Lo primero que hace cualquiera es deslizar. */
+  console.log('\n── 4c. Pasar página con el dedo ────────────────────────────────');
+  const dedo = await tel.context().newCDPSession(tel);
+  const deslizar = async (desde, hasta, y = 400) => {
+    await dedo.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: desde, y }] });
+    const pasos = 8;
+    for (let i = 1; i <= pasos; i += 1) {
+      const x = Math.round(desde + (hasta - desde) * (i / pasos));
+      await dedo.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
+      await tel.waitForTimeout(16);
+    }
+    await dedo.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await tel.waitForTimeout(700);
+  };
+  const pagina = () => tel.locator('#pdfPagPos').textContent();
+
+  const p0 = await pagina();
+  await deslizar(330, 60);          // dedo hacia la izquierda = página siguiente
+  const p1 = await pagina();
+  comprobar('deslizar hacia la izquierda pasa a la página siguiente', p1 !== p0, `${p0} → ${p1}`);
+
+  await deslizar(60, 330);          // hacia la derecha = página anterior
+  const p2 = await pagina();
+  comprobar('deslizar hacia la derecha vuelve a la anterior', p2 === p0, `${p1} → ${p2}`);
+
+  /* Un toque no es un deslizamiento: el gesto de leer desde un párrafo tiene
+     que seguir intacto, y un roce mínimo no puede cambiar de página. */
+  const p3antes = await pagina();
+  await deslizar(200, 188);         // 12 px: eso es un toque tembloroso
+  comprobar('un roce mínimo NO cambia de página', (await pagina()) === p3antes,
+    `${p3antes} → ${await pagina()}`);
 
   /* ── 4b. Dentro de cada hoja, abierta de verdad ─────────────────────── */
   console.log('\n── 4b. Dentro de las hojas ─────────────────────────────────────');
