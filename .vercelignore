@@ -23,3 +23,7 @@ tests/
 
 .worktrees/
 
+# Build legacy de PDF.js: solo lo usan las pruebas en Node, no el navegador.
+js/vendor/pdfjs/pdf.legacy.min.mjs
+js/vendor/pdfjs/pdf.worker.legacy.min.mjs
+
