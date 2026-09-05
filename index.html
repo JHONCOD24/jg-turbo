@@ -2468,6 +2468,9 @@
       padding:0 16px calc(16px + env(safe-area-inset-bottom));
       animation:pdfHojaIn .24s cubic-bezier(.22,1,.36,1);
       overscroll-behavior:contain;
+      /* Cerrado, el panel conserva cajas que ensanchan el área en 320 px:
+         se recorta en X para no crear scroll horizontal. */
+      overflow-x:hidden;
     }
   }
   @keyframes pdfHojaIn{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
@@ -4164,7 +4167,7 @@
 </style>
 <style id="pdf-libro-v39">
 /* v2.39 · Lector tipo libro (encapsulado en el apartado PDF) */
-#pdfResultArea[data-tema="sepia"]{--lec-bg:#F3E9D2;--lec-texto:#3B2F23;--lec-suave:#7A6A54;--lec-linea:rgba(59,47,35,.16);--lec-acento:#8A5A17;--lec-superficie:#EADFC6;--lec-superficie-2:#E0D2B4}
+#pdfResultArea[data-tema="sepia"]{--lec-bg:#F3E9D2;--lec-texto:#3B2F23;--lec-suave:#746552;--lec-linea:rgba(59,47,35,.16);--lec-acento:#8A5A17;--lec-superficie:#EADFC6;--lec-superficie-2:#E0D2B4}
 body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf{background:#F3E9D2}
 .pdf-lectura{max-width:64ch;margin-inline:auto;width:100%;font-size:19px;line-height:1.7;text-align:left;overflow-wrap:anywhere;word-break:break-word}
 .pdf-lectura[data-ancho="52"]{max-width:52ch}.pdf-lectura[data-ancho="76"]{max-width:76ch}
@@ -4233,10 +4236,28 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
   box-shadow:0 6px 20px -10px rgba(0,0,0,.45);cursor:pointer;z-index:3}
 .pdf-volver-lectura:hover{background:var(--lec-superficie-2)}
 .pdf-volver-lectura:focus-visible{outline:2px solid var(--lec-acento);outline-offset:2px}
-@media (max-width:767px){.pdf-lectura{font-size:18px}.pdf-texto-col{max-width:100%}}
-@media (min-width:768px) and (max-width:1023px){.pdf-lectura{max-width:62ch}}
-@media (min-width:1024px){.pdf-lectura{max-width:var(--pdf-lectura-ancho,64ch)}#pdfIndice{position:sticky;top:12px;max-height:70vh;overflow:auto}}
-@media (prefers-reduced-motion:reduce){.pdf-lectura *,.pdf-realce mark{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+@media (max-width:767px){
+  .pdf-lectura{font-size:clamp(17px,4.4vw,19px)}
+  .pdf-texto-col{max-width:100%;padding-inline:14px}
+  .pdf-cortes-barra{justify-content:center}
+}
+@media (min-width:768px) and (max-width:1023px){
+  .pdf-lectura{max-width:62ch}
+  .pdf-texto-col{padding-inline:20px}
+}
+@media (min-width:1024px){
+  .pdf-lectura{max-width:var(--pdf-lectura-ancho,64ch)}
+  #pdfIndice{position:sticky;top:12px;max-height:70vh;overflow:auto}
+}
+@media (prefers-reduced-motion:reduce){
+  .pdf-lectura *,.pdf-realce mark{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+}
+/* 320 px: el botón «Desde aquí» no tiene celda en la rejilla del dock y abría
+   una columna implícita que desbordaba el área 26 px (medido). En pantalla
+   mínima ocupa su propia fila; el gesto de tocar el párrafo sigue intacto. */
+@media (max-width:360px){
+  .pdf-dock-nav #btnPdfDesdeAqui{grid-column:1 / -1;justify-self:stretch}
+}
 #pdfResultArea :focus-visible,.pdf-area :focus-visible{outline:3px solid var(--lec-acento,var(--cyan));outline-offset:2px}
 #panelPdf button:not([hidden]){min-height:44px}#panelPdf button.mini-btn:not([hidden]),#panelPdf .pdf-filtro:not([hidden]){min-height:44px;min-width:44px}#panelPdf summary:not([hidden]){min-height:44px}
 </style>

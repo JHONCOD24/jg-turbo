@@ -93,7 +93,7 @@ async function medir(pagina, etiqueta) {
         if (el.tagName === 'DETAILS' && !el.open) { cerrado = true; break; }
       }
       if (cerrado) continue;
-      if (rect.height < 40) chicos.push(`${b.id || b.className || b.textContent.trim().slice(0, 18)} → ${Math.round(rect.height)}px`);
+      if (rect.height < 44) chicos.push(`${b.id || b.className || b.textContent.trim().slice(0, 18)} → ${Math.round(rect.height)}px`);
     }
     // 3) elementos que sobresalen del ancho del panel
     const anchoPanel = panel.getBoundingClientRect().width;
@@ -109,7 +109,7 @@ async function medir(pagina, etiqueta) {
   comprobar(r.docOverflow <= 0, `[${etiqueta}] sin scroll horizontal en la página (${r.docOverflow}px)`);
   comprobar(r.areaOverflow <= 0, `[${etiqueta}] el panel no desborda a lo ancho (${r.areaOverflow}px)`);
   comprobar(r.fuera.length === 0, `[${etiqueta}] ninguna zona sobresale del panel ${r.fuera.length ? '→ ' + r.fuera.join(' | ') : ''}`);
-  if (r.chicos.length) console.log(`   aviso [${etiqueta}] controles <40px: ${r.chicos.slice(0, 4).join(', ')}`);
+  comprobar(r.chicos.length === 0, `[${etiqueta}] controles de al menos 44×44px ${r.chicos.length ? '→ ' + r.chicos.slice(0, 4).join(', ') : ''}`);
   return r;
 }
 
@@ -133,9 +133,12 @@ async function leer(pagina, archivo) {
 }
 
 for (const [nombre, opciones] of [
-  ['móvil', { ...devices['Pixel 7'] }],
+  ['móvil pequeño', { viewport: { width: 320, height: 640 } }],
+  ['móvil', { viewport: { width: 390, height: 844 } }],
   ['tablet', { viewport: { width: 768, height: 1024 } }],
+  ['tablet ancha', { viewport: { width: 1024, height: 768 } }],
   ['escritorio', { viewport: { width: 1280, height: 860 } }],
+  ['escritorio ancho', { viewport: { width: 1440, height: 900 } }],
 ]) {
   console.log(`\n── ${nombre} ──────────────────────────────`);
   const contexto = await navegador.newContext(opciones);
@@ -169,6 +172,29 @@ for (const [nombre, opciones] of [
     await pagina.waitForTimeout(300);
   }
   await medir(pagina, `${nombre}·lector`);
+
+  /* Un solo eje de desplazamiento durante la lectura. Se excluyen los
+   * desplegables cerrados (p. ej. el panel de Opciones dentro de su <details>)
+   * y los overlays fijos (p. ej. la hoja modal de consentimiento): tienen
+   * contenido que desborda y contarían como «ejes», pero el lector no se
+   * desplaza por ellos. Medido con sonda: sin este filtro salen 3
+   * (Opciones, consentimiento y el textarea de edición) en las seis pantallas,
+   * aunque el eje visible sea uno solo. */
+  const desplazables = await pagina.evaluate(() => {
+    const zona = document.getElementById('pdfResultArea');
+    if (!zona) return 0;
+    return [...zona.querySelectorAll('*')].filter((n) => {
+      const e = getComputedStyle(n);
+      if (!/(auto|scroll)/.test(e.overflowY) || !(n.scrollHeight > n.clientHeight + 4)) return false;
+      if (e.position === 'fixed') return false;
+      for (let el = n.parentElement; el; el = el.parentElement) {
+        if (el.tagName === 'DETAILS' && !el.open) return false;
+      }
+      return true;
+    }).length;
+  });
+  comprobar(desplazables <= 1,
+    `${nombre}: un solo contenedor se desplaza durante la lectura (hay ${desplazables})`);
 
   // el toolbar queda fijo al desplazar el texto (el que hace scroll es
   // el propio resultArea: es su hijo sticky)
