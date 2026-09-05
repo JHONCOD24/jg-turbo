@@ -98,7 +98,28 @@ La app vive en la **raíz del repo** (`jg-turbo/`: `index.html`, `js/`, `api/`,
 de trabajo: `sincronizar_deploy.mjs` es un resto del flujo antiguo y apunta a
 carpetas que ya no existen (**no usarlo**).
 
-**Siempre desplegar en Vercel** al cerrar una mejora de la aplicación. No entregar solo el cambio local. Desplegar **desde la raíz del repo** al proyecto **`jg-turbo`**.
+**Un despliegue por tanda, al final (2026-09-05).** No se despliega cada vez que
+se cierra una mejora suelta: se trabaja, se prueba en local y se commitea, y
+**cuando todo el encargo está listo** se hace un despliegue, una verificación
+contra el dominio y un push.
+
+Antes la regla pedía desplegar al cerrar cada mejora. En la sesión del
+2026-09-05 eso salieron **siete despliegues** para un solo encargo, y cada uno
+cuesta la espera del build, la copia limpia, la comprobación de hashes y las
+suites de navegador contra producción. Agrupar da la misma garantía por una
+fracción del tiempo.
+
+**Sigue siendo obligatorio** que nada se dé por cerrado sin estar documentado,
+desplegado, verificado contra `https://jg-turbo.vercel.app` y empujado a
+`origin/main`. Se agrupa el despliegue; no se salta.
+
+**Dos excepciones** en las que sí se despliega antes de terminar: (1) un fallo
+que está roto en producción ahora mismo, y (2) algo que solo se puede
+comprobar en el dominio real —en esta app ha pasado tres veces con el gesto
+táctil, la zona segura y la barra del navegador—. Para mirar algo a mitad sin
+tocar producción: `npx vercel --yes` (vista previa, sin `--prod`).
+
+Desplegar **desde la raíz del repo** al proyecto **`jg-turbo`**.
 
 ```bash
 # Comando vigente (Vercel CLI 59.x):

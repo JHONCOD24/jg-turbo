@@ -130,6 +130,22 @@ decisión como del usuario (`source:'user'`), no como «pendiente»: la
 reconstrucción vuelve a resolver los pendientes y los habría unido otra vez en
 el mismo instante.
 
+## Desplegar en cada mejora suelta cuesta horas y no aporta nada
+
+**Síntoma (2026-09-05):** un solo encargo salieron **siete despliegues**. Cada
+uno pide esperar el build, armar la copia limpia, comprobar los hashes contra el
+dominio y volver a correr las suites de navegador. **Causa:** la regla escrita
+decía «desplegar al cerrar cada mejora», y una tanda de trabajo tiene varias.
+**Regla:** un despliegue por tanda, al final. Durante el trabajo se prueba en
+local y se commitea. Solo se adelanta si hay algo roto en producción ahora
+mismo, o si la duda **solo** se resuelve en el dominio real (en esta app ha
+pasado con el gesto táctil, la zona segura y la barra del navegador). Para
+mirar algo a mitad sin tocar producción: `npx vercel --yes`, sin `--prod`.
+
+Ojo con lo que NO cambia: agrupar el despliegue no es saltárselo. Nada está
+cerrado sin estar documentado, desplegado, verificado contra el dominio y
+empujado a `origin/main`.
+
 ## Publicar en Vercel no es cerrar: Git puede quedarse atrás
 
 **Síntoma (2026-09-05, v2.40):** producción servía v2.40.0 verificada byte a byte,

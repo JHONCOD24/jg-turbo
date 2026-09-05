@@ -1358,40 +1358,40 @@ Un deploy en el **mismo dominio** no borra preferencias. Ver `CONFIG_PERSISTENTE
 
 ## 8. Proceso de trabajo y despliegue (obligatorio)
 
-### 8.1 Pasos al cerrar una mejora TTS
+### 8.1 Pasos al cerrar una tanda de trabajo
 
-1. Editar en `Spech to text App/` (nunca solo en `vercel_deploy/` a mano sin origen).  
-2. Actualizar **este** `CAMBIOS_TTS.md` (versión, IDs, cambios, pruebas).  
-3. Alinear satélites si aplica: `DOCUMENTACION_DESPLIEGUE.md`, `FICHA_TECNICA.md`, `Agents.md`, `CONFIG_PERSISTENTE.md`.  
-4. Sincronizar a `vercel_deploy/`:
+> **Obsoleto y peligroso lo que había aquí.** Describía copiar a
+> `vercel_deploy/` desde `Spech to text App/`: **ninguna de las dos carpetas
+> existe** desde la reestructuración del 2026-09-03. Seguir esos pasos hoy no
+> despliega nada, o despliega lo que no es.
 
-```powershell
-$src = "Spech to text App"
-$dst = "vercel_deploy"
-Copy-Item "$src\index.html" "$dst\index.html" -Force
-Copy-Item "$src\api\index.py" "$dst\api\index.py" -Force
-Copy-Item "$src\api\requirements.txt" "$dst\api\requirements.txt" -Force
-# docs que se quieran en el deploy:
-Copy-Item "$src\CAMBIOS_TTS.md" "$dst\CAMBIOS_TTS.md" -Force
-Copy-Item "$src\DOCUMENTACION_DESPLIEGUE.md" "$dst\DOCUMENTACION_DESPLIEGUE.md" -Force
-Copy-Item "$src\FICHA_TECNICA.md" "$dst\FICHA_TECNICA.md" -Force
-Copy-Item "$src\CONFIG_PERSISTENTE.md" "$dst\CONFIG_PERSISTENTE.md" -Force
-Copy-Item "$src\Agents.md" "$dst\Agents.md" -Force
-```
+**Regla vigente (2026-09-05): un despliegue por tanda, al final.** No se
+despliega al cerrar cada mejora suelta. Durante el trabajo se edita, se prueba
+en local y se commitea; cuando todo el encargo está listo, se hace **un**
+despliegue, **una** verificación contra el dominio y **un** push.
 
-5. Desplegar **solo** desde `vercel_deploy/`:
+1. Editar en la raíz del repo (`jg-turbo/`).
+2. Actualizar **este** `CAMBIOS_TTS.md` (versión, `dpl_…`, cambios, pruebas).
+3. Alinear satélites si aplica: `DOCUMENTACION_DESPLIEGUE.md`,
+   `FICHA_TECNICA.md`, `Agents.md`, `CONFIG_PERSISTENTE.md`.
+4. Subir `JG_JS_V` y `CACHE_SHELL` **una vez** por tanda.
+5. Desplegar desde la raíz:
 
 ```powershell
-cd "C:\Users\juanl\Documents\Proyectos\JG Turbo\vercel_deploy"
+cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
 npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
-⚠️ `--cwd vercel_deploy` **ya no sirve**: con Vercel CLI 59.x devuelve
-`Not authorized` aunque `npx vercel whoami` responda `jhoncod24`
-(comprobado 2026-08-15). Entrar en la carpeta y pasar `--scope`.
+⚠️ `--cwd` **no sirve**: con Vercel CLI 59.x devuelve `Not authorized` aunque
+`npx vercel whoami` responda `jhoncod24` (comprobado 2026-08-15). Entrar en la
+carpeta y pasar `--scope`.
 
-6. Verificar producción (sección 9).  
-7. Anotar el `dpl_…` en este documento.
+6. Verificar producción **contra el dominio real** (sección 9).
+7. Anotar el `dpl_…` aquí.
+8. Empujar a `origin/main`.
+
+Detalle completo y las dos excepciones en las que sí se despliega antes de
+terminar: `Agents.md` § «Despliegue».
 
 ### 8.2 Error 404 por deploy desde la raíz
 

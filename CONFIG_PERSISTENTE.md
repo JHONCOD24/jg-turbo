@@ -109,13 +109,25 @@ reextrae al abrirlo; uno sin PDF ni manifiesto se marca `needsSource` y no se fi
 - Token de sesión del backend local (se regenera al reiniciar el servidor local).
 
 
-## Despliegue obligatorio
+## Despliegue: uno al final de la tanda
 
-**Siempre desplegar en Vercel** al cerrar mejoras de código de la app (no dejar solo local). Tras editar:
+**Regla vigente (2026-09-05).** Se despliega **una sola vez, cuando todo el
+trabajo pedido está listo**, no cada vez que se cierra una mejora suelta.
+Durante el trabajo: editar, probar en local y commitear. Detalle y las dos
+excepciones (un fallo roto en producción, o algo que solo se comprueba en el
+dominio real): `Agents.md` § «Despliegue».
 
-1. Sync a `vercel_deploy/`
-2. `npx vercel --prod --yes --scope jhoncod24s-projects` **desde** `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\` (nunca desde la raíz del monorepo ni con `--cwd`)
-3. Comprobar https://jg-turbo.vercel.app
+```bash
+cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
+npx vercel --prod --yes --scope jhoncod24s-projects
+```
+
+Después: comprobar https://jg-turbo.vercel.app **contra el dominio real**, no
+contra la URL que imprime el CLI.
+
+⚠️ Los pasos que había aquí (`sync a vercel_deploy/` y desplegar desde
+`G:\Mi unidad\…`) **ya no existen**: ni esa carpeta ni esa unidad. La app vive
+en la raíz del repo desde la reestructuración del 2026-09-03.
 
 Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md`. En **v2.9.0** no se renombra ninguna clave `jg_tts_*`: `jg_tts_bilingual` acepta `regional | unified | off`; el valor histórico `auto` se interpreta como `regional` para que la voz nativa seleccionada se aplique realmente.
 
@@ -128,9 +140,10 @@ Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md`. En **
 
 ## Proyecto y producción
 
-- Workspace: `G:\Mi unidad\PROYECTS\JG Turbo\`
-- App local + git: `G:\Mi unidad\PROYECTS\JG Turbo\Spech to text App\`
-- Deploy CLI: `G:\Mi unidad\PROYECTS\JG Turbo\vercel_deploy\`
+- App local + git: `C:\Users\juanl\Documents\Proyectos\jg-turbo\` (la app vive en
+  la raíz del repo desde la reestructuración del 2026-09-03)
+- Deploy: desde esa misma raíz. Ya NO existen `Spech to text App/` ni
+  `vercel_deploy/`, ni la unidad `G:\Mi unidad\`
 - GitHub: `JHONCOD24/jg-turbo` (raíz del repo = esta carpeta app)
 - URL: https://jg-turbo.vercel.app
 - Cuenta Vercel: `jhoncod24` / email `juanloras35@gmail.com`

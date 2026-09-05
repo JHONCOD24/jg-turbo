@@ -44,11 +44,37 @@ Lee **`CONFIG_PERSISTENTE.md`** antes de tocar configuración o `localStorage`.
 - Prod: https://jg-turbo.vercel.app
 
 
-## Despliegue (obligatorio al cerrar mejoras)
+## Despliegue: UNO al final, no uno por cambio
 
-**Siempre desplegar en Vercel** cuando se termine una mejora o feature de esta app. No dejar solo cambios locales.
+**Regla vigente (2026-09-05).** Se despliega **una sola vez, al final de todo el
+trabajo pedido**, no cada vez que se termina una mejora suelta.
 
-**Regla persistente para futuros agentes:** una mejora no se considera cerrada hasta que esté documentada en el MD del feature, desplegada al proyecto `jg-turbo`, verificada contra `https://jg-turbo.vercel.app` **y empujada a `origin/main`**. Recordar esta regla en cada sesión.
+Durante la sesión: editar, probar en local y **commitear**. Cuando la tanda
+entera esté lista y verificada, entonces sí: un despliegue, una verificación
+contra el dominio y un push.
+
+**Por qué cambió.** Antes la regla decía «desplegar al cerrar cada mejora». En
+la sesión del 2026-09-05 eso salieron **siete despliegues** para un solo
+encargo: cada uno cuesta minutos de espera, la copia limpia, la verificación de
+hashes y las suites de navegador contra producción. Hacerlo una vez al final da
+exactamente la misma garantía y ahorra ese tiempo repetido.
+
+**Qué NO cambió, y es lo importante:** el trabajo sigue sin estar cerrado hasta
+que esté **documentado** en el MD del feature, **desplegado**, **verificado
+contra `https://jg-turbo.vercel.app`** y **empujado a `origin/main`**. Se
+agrupa el despliegue; no se salta.
+
+**Las dos excepciones en las que sí se despliega antes de terminar:**
+
+1. **Un fallo que está roto en producción ahora mismo.** No espera a la tanda.
+2. **Algo que solo se puede comprobar en el dominio real.** En esta app ha
+   pasado tres veces: el gesto táctil, la zona segura y la barra del navegador
+   se comportan distinto a como los simula un emulador. Si la duda solo se
+   resuelve ahí, se despliega y se mide.
+
+Si la tanda es larga y quieres ver algo a mitad, usa una **vista previa**
+(`npx vercel --yes`, sin `--prod`): no toca producción y no obliga a repetir la
+verificación completa.
 
 ⚠️ **Publicar en Vercel no toca Git.** El deploy sale por CLI desde la carpeta local, así que
 producción puede ir por delante del repositorio. El 2026-09-05 quedaron 14 commits sin empujar
@@ -64,10 +90,19 @@ git fetch origin && git log --oneline origin/main..HEAD   # debe salir vacío
 > antiguo y apunta a carpetas que ya no existen: **no usarlo**. El despliegue
 > sale de la raíz.
 
+### Durante el trabajo (se repite por cada cambio)
+
 1. Editar en la raíz del repo (`jg-turbo/`: `index.html`, `js/`, `api/`, `sw.js`)
-2. **Documentar todo** en el MD del feature (TTS → `CAMBIOS_TTS.md`: versión, dpl_, cambios, pruebas, proceso)
-3. Alinear satélites si aplica (`DOCUMENTACION_DESPLIEGUE.md`, `FICHA_TECNICA.md`, `CONFIG_PERSISTENTE.md`, este `Agents.md`)
-4. Desplegar desde la raíz al proyecto **`jg-turbo`**:
+2. Correr las pruebas que toque **en local** (ver «Verificación»)
+3. **Commitear.** Aquí NO se despliega
+
+### Al final de toda la tanda (se hace una sola vez)
+
+4. **Documentar** en el MD del feature (TTS → `CAMBIOS_TTS.md`: versión, dpl_, cambios, pruebas, proceso)
+5. Alinear satélites si aplica (`DOCUMENTACION_DESPLIEGUE.md`, `FICHA_TECNICA.md`, `CONFIG_PERSISTENTE.md`, este `Agents.md`)
+6. Subir la versión y la caché **una vez** (`JG_JS_V` en `index.html` y `CACHE_SHELL` en `sw.js`): un número por tanda, no uno por cambio
+7. Correr la batería completa en local, incluidas las de navegador
+8. Desplegar desde la raíz al proyecto **`jg-turbo`**:
    ```bash
    cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
    npx vercel --prod --yes --scope jhoncod24s-projects
@@ -76,10 +111,11 @@ git fetch origin && git log --oneline origin/main..HEAD   # debe salir vacío
    (comprobado 2026-08-15). Entrar en la carpeta y pasar `--scope`.
    ⚠️ Sin el `link` a `jg-turbo`, el deploy puede ir al proyecto `vercel_deploy` y **producción no cambia**.  
    ⚠️ Desde la raíz del monorepo → ~1000 archivos y **404** en jg-turbo.vercel.app.
-6. Verificar prod **contra el dominio real**, no contra la URL que imprime el CLI:
-   marcador en el HTML + `/api/health` (ver checklist en `CAMBIOS_YOUTUBE.md` §6).
-7. Anotar `dpl_…` en la documentación
-8. **Empujar a GitHub**: si trabajaste en una rama, `git merge --ff-only <rama>` sobre `main`
+9. Verificar prod **contra el dominio real**, no contra la URL que imprime el CLI:
+   marcador en el HTML + `/api/health` (ver checklist en `CAMBIOS_YOUTUBE.md` §6),
+   y las suites de navegador con `JG_BASE=https://jg-turbo.vercel.app`
+10. Anotar `dpl_…` en la documentación
+11. **Empujar a GitHub**: si trabajaste en una rama, `git merge --ff-only <rama>` sobre `main`
    y `git push origin main`. GitHub **no** está conectado a Vercel: el push no despliega nada,
    solo respalda. Sin este paso, producción vive únicamente en este equipo.
 
