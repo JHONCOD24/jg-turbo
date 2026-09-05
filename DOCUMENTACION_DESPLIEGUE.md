@@ -14,22 +14,33 @@ lastUpdated: 2026-08-02
 Esta guía explica la arquitectura productiva, los archivos obligatorios y el procedimiento de despliegue. Los cambios de audio se publicaron y validaron en producción el 23 de julio de 2026.
 
 
-## Política de despliegue
+## Política de despliegue (vigente desde la reestructuración del 2026-09-03)
 
-**Siempre desplegar en Vercel** al cerrar una mejora de la aplicación. No entregar solo el cambio local. Tras sincronizar `vercel_deploy/`, desplegar **solo** el contenido de esa carpeta al proyecto **`jg-turbo`**.
+La app vive en la **raíz del repo** (`jg-turbo/`: `index.html`, `js/`, `api/`,
+`sw.js`). Ya **no** existe `vercel_deploy/` ni `Spech to text App/` como carpetas
+de trabajo: `sincronizar_deploy.mjs` es un resto del flujo antiguo y apunta a
+carpetas que ya no existen (**no usarlo**).
+
+**Siempre desplegar en Vercel** al cerrar una mejora de la aplicación. No entregar solo el cambio local. Desplegar **desde la raíz del repo** al proyecto **`jg-turbo`**.
 
 ```bash
-# Comando verificado el 2026-08-15 (Vercel CLI 59.0.0):
-cd vercel_deploy
+# Comando vigente (Vercel CLI 59.x):
+cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
 npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
-⚠️ **`--cwd` dejó de funcionar.** Con Vercel CLI 59.x, `npx vercel --prod --yes --cwd vercel_deploy`
+⚠️ **No usar `--cwd`.** Con Vercel CLI 59.x, `npx vercel --prod --yes --cwd <carpeta>`
 responde `{"status":"error","reason":"deploy_failed","message":"Not authorized"}` aunque
-`npx vercel whoami` diga `jhoncod24`. Hay que **entrar en la carpeta** y pasar `--scope`.
+la sesión sea válida (comprobado 2026-08-15). Hay que **entrar en la carpeta** y pasar `--scope`.
 Si el vínculo se rompiera: `npx vercel link --project jg-turbo --yes && rm -f .env.local`.
 
-**Nunca** desde la raíz del monorepo (`JG Turbo/`): sube ~1000 archivos y deja **404** en https://jg-turbo.vercel.app.
+⚠️ Sin el `link` a `jg-turbo`, el deploy puede ir al proyecto `vercel_deploy` y
+**producción no cambia**. Sin el enlace correcto el alias https://jg-turbo.vercel.app
+sigue sirviendo la versión anterior.
+
+**Nunca** desde la raíz del workspace (`Proyectos/`) ni desde `JG Turbo_OLD/`
+(respaldo de agosto, con enlaces desactivados): sube ~1000 archivos y deja
+**404** en https://jg-turbo.vercel.app, o sobrescribe producción con la versión vieja.
 
 ### Estado real del repositorio
 
@@ -46,33 +57,31 @@ Antes de desplegar conviene saber esto, porque no es evidente:
   deploy (pedido, solución, pruebas, ID de deployment).
 - La integración MCP de Vercel puede no alcanzar este proyecto; usar la CLI.
 
-### ⚠️ Corrección importante: `vercel_deploy/` NO publica en producción
+### Proyectos y alias (histórico + vigente)
 
-El procedimiento que estaba documentado (`cd vercel_deploy` →
-`npx vercel --prod --yes`) **publica en un proyecto distinto al de producción**.
+Histórico (julio-agosto 2026, flujo con `vercel_deploy/`): `cd vercel_deploy` →
+`npx vercel --prod --yes` **publicaba en un proyecto distinto al de producción**.
 Comprobado el 31 de julio de 2026: ese comando creó
 `dpl_B1e8dWsiaDUgU8sXRzkMEk1FT6v2` en el proyecto **`vercel_deploy`**, y
 https://jg-turbo.vercel.app siguió sirviendo la versión anterior.
-
-Los dominios pertenecen a proyectos diferentes:
 
 | Proyecto Vercel | Dominio |
 |---|---|
 | `jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`) | **https://jg-turbo.vercel.app** ← producción real |
 | `vercel_deploy` (`prj_1lNARR6bNqHH67YDPYQbtVeS6E90`) | `verceldeploy-*.vercel.app` (además responde 302 por Deployment Protection) |
 
-**Procedimiento correcto:** desplegar el contenido de `vercel_deploy/` desde una
-carpeta vinculada al proyecto `jg-turbo` (o con `--cwd`).
+**Procedimiento vigente:** desplegar **la raíz del repo** desde una carpeta
+vinculada al proyecto `jg-turbo` (nunca con `--cwd`).
 
 ```bash
-cd vercel_deploy
+cd "C:\Users\juanl\Documents\Proyectos\jg-turbo"
 npx vercel link --project jg-turbo --yes   # solo si el vínculo se rompió
 rm -f .env.local                           # el link genera un token OIDC: no subirlo
 npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
 Comprueba que el CLI diga **«Downloading N deployment files»** con N bajo
-(decenas, no miles). Si ves ~1000 archivos, **abortaste mal el cwd**.
+(decenas, no miles). Si ves ~1000 archivos, **estás en la carpeta equivocada**.
 
 Después, **verificar siempre contra el dominio real**, no contra la URL que
 imprime el CLI:
@@ -104,22 +113,25 @@ La versión productiva usa:
 
 El backend local permanece en `backend/`. Puedes usarlo con `faster-whisper` y FFmpeg sin afectar Vercel.
 
-## Archivos obligatorios
+## Archivos obligatorios (repo aplanado, vigente)
 
-La carpeta `vercel_deploy/` debe contener estas copias actualizadas:
+El despliegue sale de la **raíz del repo** (`jg-turbo/`). Estos archivos viajan
+siempre (ya no hay copias en `vercel_deploy/` ni en `Spech to text App/`:
+ambas rutas son del flujo antiguo y no existen):
 
-| Origen | Destino |
+| Archivo en el repo | Papel |
 |---|---|
-| `Spech to text App/index.html` | `vercel_deploy/index.html` |
-| `Spech to text App/api/index.py` | `vercel_deploy/api/index.py` |
-| `Spech to text App/api/calidad_linguistica.py` | `vercel_deploy/api/calidad_linguistica.py` |
-| `Spech to text App/api/youtube_subs.py` | `vercel_deploy/api/youtube_subs.py` |
-| `Spech to text App/api/supadata.py` | `vercel_deploy/api/supadata.py` |
-| `Spech to text App/api/requirements.txt` | `vercel_deploy/api/requirements.txt` |
-| `Spech to text App/sw.js` | `vercel_deploy/sw.js` |
-| `Spech to text App/vercel.json` | `vercel_deploy/vercel.json` |
+| `index.html` | Interfaz (SPA) |
+| `api/index.py` | API FastAPI (Vercel) |
+| `api/calidad_linguistica.py` | Revisión de segmentos y traducciones |
+| `api/youtube_subs.py` | Subtítulos de YouTube |
+| `api/supadata.py` | Transcripción automática de YouTube |
+| `api/requirements.txt` | Dependencias de la función |
+| `sw.js` | Service worker (shell PWA) |
+| `vercel.json` | Enrutado `/api/*` |
+| `js/pdf/` | Lector PDF (incluye `huella.js`, `libroVista.js`) |
 
-Copia también iconos o imágenes cuando cambien. No copies el corpus privado, el entorno virtual ni archivos `.env`.
+No se suben el corpus privado, el entorno virtual ni archivos `.env`.
 
 ## Dependencias de producción
 

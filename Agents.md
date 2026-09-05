@@ -83,17 +83,21 @@ node tests/test_pdf_pulido_mecanico.mjs  node tests/test_pdf_pulido_troceo.mjs
 node tests/test_pdf_exportar.mjs         node tests/test_pdf_busqueda.mjs
 node tests/test_pdf_traduccion.mjs       node tests/test_pdf_auditoria_p0.mjs
 node tests/test_pdf_voz.mjs              node tests/test_tts_narracion.mjs
+node tests/test_pdf_mejora_apartado.mjs  node tests/test_pdf_cola_correccion.mjs
+node tests/test_pdf_continuidad.mjs      node tests/test_pdf_caratula.mjs
 ```
 
-Referencia al 2026-09-03: **451 comprobaciones, 0 fallos**.
+Referencia al 2026-09-05 (v2.39.0): **~1.000 comprobaciones OK, 0 fallos**
+(20 archivos; `test_pdf_mejora_apartado` aporta 50). Si salen menos, la prueba
+se cortó.
 
 **Con navegador** (Playwright; se busca en el repo, en `../node_modules` y en `JG Turbo_OLD/`):
 
 | Comando | Qué cubre | Referencia |
 |---|---|---|
-| `node tests/verificar_pdf_geometria.mjs` | Desbordes, toques ≥44px y solapes en móvil/tablet/escritorio | 42, sin avisos |
+| `node tests/verificar_pdf_geometria.mjs` | Desbordes, toques ≥44px (los <44px fallan) y solapes en móvil/tablet/escritorio | 54 |
 | `node tests/verificar_pdf_scroll.mjs` | Que la biblioteca **se pueda desplazar** con nueve libros, y que las otras pestañas y el lector conserven su modelo de scroll | 39 |
-| `node tests/verificar_pdf_navegador.mjs` | Recorrido funcional completo del lector | 103 |
+| `node tests/verificar_pdf_navegador.mjs` | Recorrido funcional completo del lector | 116 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -266,7 +270,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v77`** (corrección de lectura reanudable, PDF v2.38.0). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v78`** (mejora integral apartado PDF, PDF v2.39.0). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

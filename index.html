@@ -1,4 +1,4 @@
-<!-- v2.39.0 · Lector tipo libro, cortes revisables y corrección en tres etapas -->
+<!-- v2.39.1 · Lector tipo libro: leer tocando, seguir la voz y retomar la lectura -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -15706,7 +15706,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v78';
+const JG_JS_V = 'v79';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

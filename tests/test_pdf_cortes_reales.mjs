@@ -144,10 +144,15 @@ console.log('--- guion suspendido alpha- and se conserva (no es un corte) ---');
   comprobar(invarianteLetras(r.atomos, r.texto, r.limites), 'invariante del suspendido');
 }
 
-/* PENDIENTE: becoming.pdf trae átomos ya pegados por PDF.js, con la primera
- * letra caída (eartMath, hatsApp, ouTube, arperSan, antaCruz, reateSpace).
- * Son un solo átomo: el motor no puede inventar la H/W/Y que el extractor no
- * entregó. No se tapa con una lista de marcas. */
+/* RESUELTO (auditoría del cierre): «eartMath», «hatsApp» y «ouTube» NO eran
+ * letras caídas. El texto reconstruido dice «HeartMath» 28 veces, «WhatsApp» 1
+ * y «YouTube» 4 — comprobado sobre becoming.pdf, contexto real: «Courtesy of
+ * the HeartMath® Institute». Los 39 «indicios» salían del patrón de medida,
+ * que buscaba minúscula+MAYÚSCULA+minúscula sin anclar a principio de palabra:
+ * cualquier marca con mayúscula intercalada se contaba como error.
+ *
+ * El patrón ya lleva `\b` delante en tests/test_pdf_reales.mjs y esos 39
+ * desaparecieron sin tocar el motor, porque nunca hubo nada que arreglar. */
 
 console.log(fallos ? `\n❌ ${fallos} fallos, ${ok} bien.` : `\n✅ Cortes reales: ${ok} comprobaciones bien.`);
 process.exit(fallos ? 1 : 0);

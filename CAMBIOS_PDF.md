@@ -1,5 +1,89 @@
 # Lector de PDF · historial de cambios y operación
 
+## Entrega 2026-09-05 · v2.39.1 · Agente 4 · Auditoría de cierre
+
+Auditoría del trabajo de los tres agentes y cierre de la versión. Tres hallazgos
+que ninguna suite detectaba, porque las suites miraban el código, no el resultado.
+
+### 1. Producción NO tenía el trabajo de los agentes
+
+El despliegue `dpl_9sARJRFFbA2xNXyNoqEsarCuJ18j`, documentado más abajo como
+«verificado con el código nuevo», servía la versión **anterior**. Medido contra
+`https://jg-turbo.vercel.app`:
+
+| Módulo | local | producción | estado |
+|---|---:|---:|---|
+| `mapaLectura.js` | 4 595 b | — | **404** |
+| `libroVista.js` | 20 570 b | 17 945 b | versión vieja |
+| `pdfController.js` | 200 898 b | 197 455 b | versión vieja |
+| `limites.js` | 19 100 b | 16 922 b | versión vieja |
+
+`libroVista.js` en producción seguía trayendo `Leer desde aquí` y
+`pdfController.js` seguía llamando a `jgLeerTextoPdf`: **el fallo original
+seguía vivo para quien usaba la app**. Con `mapaLectura.js` en 404, un despliegue
+a medias habría roto la lectura entera, porque `libroVista.js` lo importa.
+
+Además, `JG_JS_V` y el shell se quedaron en `v78`, el mismo valor con el que se
+sirvió el código viejo: redesplegar sin subirlo habría dejado el módulo antiguo
+en la caché del navegador. Por eso esta entrega sube a **v79**.
+
+### 2. `js/pdf/huella.js` no estaba en Git
+
+Estaba sin seguimiento mientras `libroVista.js`, `pdfController.js` y
+`colaCorreccion.js` —los tres ya confirmados— lo importaban. Clonar el
+repositorio daba una app rota. Corregido en `2398674`.
+
+### 3. Las cifras de cortes eran falsas (39 y 544 falsos positivos)
+
+Comprobado sobre `becoming.pdf`: el texto reconstruido dice `HeartMath` 28 veces,
+`WhatsApp` 1 y `YouTube` 4. No había ninguna letra caída. Los 39 «indicios»
+salían del patrón de medida, que buscaba minúscula+MAYÚSCULA+minúscula **sin
+anclar a principio de palabra**, así que contaba como error cualquier marca con
+mayúscula intercalada. Las 544 «partidas ante signo» eran inglés normal
+(`in awe,`, `of him.`).
+
+Patrón corregido con `` y sustituido el tercero por uno con evidencia real:
+dos trozos solo cuentan si al unirlos forman una palabra que el propio documento
+usa entera y sus mitades no lo son.
+
+### Cifras verdaderas (patrones corregidos)
+
+| Libro | páginas | átomos | caracteres | pendientes | guiones reales | pegadas | partidas |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `cortes-sintetico.pdf` | 5 | 7 | 321 | 0 | 0 | 0 | 0 |
+| `becoming.pdf` | 431 | 23 650 | 793 112 | 1 068 | 0 | **0** | **0** |
+
+Los 3 guiones que informa el medidor son `1962- author`, `alpha- and` y
+`five- and`: rango de año y guion suspendido del inglés, no partición. **Un libro
+de 431 páginas se reconstruye sin una sola palabra cortada ni pegada.**
+
+Quedan 1 068 límites pendientes (4,5 % de los límites): sin evidencia no se
+adivinan, y para eso existe «Revisar cortes».
+
+### Verificación ejecutada
+
+- 23 suites de Node: **todas verdes**.
+- `backend/tests/test_pdf_improve_lectura.py` + `test_pdf_ask.py`: **18 pasan**.
+  (Los otros 5 módulos de backend fallan al importar `api.subtitulos_limpieza` y
+  `api.pulido`, que **no existen en el repositorio**: roto desde antes, ajeno al PDF.)
+- `verificar_pdf_geometria.mjs`: verde en 320, 390, 768, 1024, 1280 y 1440 px,
+  incluido «un solo contenedor se desplaza».
+- `verificar_pdf_navegador.mjs`: verde.
+- `verificar_pdf_lector_integracion.mjs` (**nuevo**): abre la app en Chromium con
+  un libro y comprueba comportamiento, no cadenas en el código —
+  38 bloques con posición, 0 botones dentro del texto, cada bloque muestra
+  exactamente el texto de su posición, tocar un párrafo apunta la lectura a su
+  carácter (583 = 583), el avance de la voz resalta dentro de la vista visible,
+  la hoja de Apariencia abre/cierra con Escape y devuelve el foco, y los tres
+  temas se aplican y se recuerdan. **0 errores de JavaScript.**
+
+### Versión
+- `index.html`: `v2.39.1` · `JG_JS_V=v79`
+- `sw.js`: `jg-turbo-shell-v79`
+- `VERSION_RECONSTRUCCION = 7` · `VERSION_TROCEO = 7` · `VERSION_COLA_CORRECCION = 2`
+
+---
+
 ## Entrega 2026-09-05 · Agente 3 · Cortes medidos en un libro real
 
 La prueba `tests/test_pdf_reales.mjs` arranca en Node (PDF.js 6.3.289 legacy) y
@@ -33,12 +117,106 @@ Las 544 «partidas ante signo» son frases inglesas reales (`in awe,`, `et al.`,
 
 ### Qué no se tapó
 
-- 39 «palabras pegadas» restantes son **un solo átomo** de PDF.js con la primera
-  letra caída (`eartMath`, `hatsApp`, `ouTube`, `arperSan`, `antaCruz`,
-  `reateSpace`). Inventar esa letra violaría el invariante. Marcado
-  `PENDIENTE` en `tests/test_pdf_cortes_reales.mjs`.
 - 1 068 pendientes de renglón: sin evidencia no se adivina. La cola «Revisar
   cortes» existe para eso.
+
+> **Corregido en la auditoría de cierre (ver entrada del 2026-09-05 · Agente 4):**
+> esta entrada afirmaba que las 39 «palabras pegadas» restantes eran átomos con
+> la primera letra caída (`eartMath`, `hatsApp`, `ouTube`). **No lo eran.** El
+> texto reconstruido dice `HeartMath` 28 veces, `WhatsApp` 1 y `YouTube` 4: los
+> 39 salían del patrón de medida, no del libro. Las cifras buenas están en la
+> entrada del Agente 4.
+
+## Entrega 2026-09-05 · v2.39.0 · Mejora integral del apartado PDF (plan «MEJORA APARTADO PDF.md»)
+
+Implementación completa del plan: lector tipo libro, reconstrucción y
+corrección por identificadores, fuente inmutable y cola v2 con SHA-256.
+
+### Lo pedido
+Dejar el apartado PDF tal cual describe el plan: lectura cómoda tipo libro en
+móvil/tableta/escritorio con edición separada; cero uniones falsas (`bonitopez`);
+guiones con espacio residual resueltos (`extraor- dinario` → `extraordinario`);
+separadores conservados al recomponer bloques; reducción progresiva real
+(1.000 caracteres prueba 800 y 400); huellas SHA-256 de contenido completo;
+decisiones por `boundaryId` conectadas al controlador (el servidor ya incluye
+el contexto en la petición); «Libro corregido» solo con cola completa, cero
+límites pendientes, integridad validada y guardado confirmado; fuente inmutable
++ revisión derivada; reconstrucción/troceo v7 y cola v2 con revalidación de lo
+guardado; documentación de rutas corregida al repo aplanado.
+
+### Causas medidas (contra v2.38.0)
+- `decidirPorLexico` unía desconocidos si uno era corto o parecía sufijo
+  (`pez` ≤ 4 → `bonitopez`). Regla retirada: sin evidencia del documento no se une.
+- `esGuionDeParticion` exigía el guion al final exacto: `extraor- ` con espacio
+  residual no era partición y quedaba `extraor- dinario`.
+- `textoCorregidoDeParte` unía bloques con `join('')` sobre texto recortado por
+  el proveedor → `palabrapalabra`. Ahora los separadores viajan fuera del núcleo.
+- `encogerItem` pedía el siguiente escalón fijo (3.000 → 1.500): un bloque de
+  1.000 quedaba fallido sin probar 800/400. Ahora salta lo que no reduce.
+- `huellaParte` era `largo:32:32`: dos textos del mismo tamaño con cambios en el
+  centro compartían huella. Ahora SHA-256 del contenido completo.
+- `mismasPalabrasLectura` autorizaba por parejas repetibles; el modo
+  `pdf_boundary_decisions` no estaba conectado (el servidor recogía contexto y
+  no lo enviaba). Etapa 1 conectada por `boundaryId`; etapa 2 estricta.
+- `finalizarCorreccionLibro` reemplazaba `originalTexto` y aplicaba
+  `aplicarExito` sin importar (ReferenceError al completar). Guardado atómico
+  con edición aprobada preservada.
+- SHA-256 puro de cadenas bloqueaba el hilo 90 s con 300 páginas (medido con
+  `longtask`): reescrito sobre bytes (~44 ms/1,9 MB). Ver `TRAMPAS.md` §6.7.
+
+### Qué cambió
+- Nuevos: `js/pdf/huella.js` (SHA-256), `js/pdf/libroVista.js` (vista libro,
+  apariencia, Revisar cortes, vincular PDF, biblioteca orden/vista/paginación).
+- `lexico.js`: vocabulario del documento (formas completas en límites
+  inequívocos, solo interiores); retirada la unión de desconocidos cortos.
+- `limites.js`: guion residual, `clasificarGuion` (partición/léxico/diálogo/
+  no-separable U+2011), columnas por página, líneas completas para párrafos,
+  espacios normales conservados.
+- `atomos.js`: títulos de ancho completo en su posición vertical; columnas por página.
+- `reconstruccion.js` v7: composición única con correspondencias recalculadas
+  sobre el texto final; bloques recortados del final; segunda pasada de
+  vocabulario solo para pendientes.
+- `colaCorreccion.js` v2: `documentId`/`sourceRevision`/`stage`/`blockId`/
+  intervalo/separadores; reducción que salta tamaños inútiles; espera
+  progresiva; cuota/credenciales pausan con acción; documento/revisión/
+  cancelación antes y después de cada petición; `colaListaParaLibro`;
+  persistencia tolerante a fallos de almacenamiento.
+- `api/index.py`: el prompt de `pdf_boundary_decisions` ya incluye contexto
+  anterior/posterior y evidencia por límite.
+- `pdfController.js`: corrección única en tres etapas con Pausar/Reanudar,
+  fuente inmutable, ediciones aprobadas preservadas, recorte de página por
+  PDF.js bajo demanda, biblioteca con orden/vista/paginación de 40.
+- `index.html`: artículo de lectura semántico, Sepia, controles ≥44 px,
+  foco visible, reducción de movimiento; `JG_JS_V=v78`.
+- `sw.js`: `jg-turbo-shell-v78`.
+- Pruebas: `tests/test_pdf_mejora_apartado.mjs` (50; los 5 casos del plan +
+  etapas, pausa, almacenamiento, visible/exportado/TTS); `test_pdf_reales.mjs`
+  añade guiones, párrafos entre páginas e invariante (pendiente sin archivo:
+  `JG_PDF_REAL`); geométrica exige 44 px (54 comprobaciones).
+- Docs: `DOCUMENTACION_DESPLIEGUE.md` al flujo del repo aplanado;
+  `FICHA_TECNICA.md` §2; `TRAMPAS.md` §6.7 (hash lento).
+
+### Pruebas
+- Unitarias PDF + TTS: 20 archivos, 0 fallos (incluye 50 nuevas + 90 de cola).
+- `verificar_pdf_geometria.mjs`: 54/54 · `verificar_pdf_scroll.mjs`: 39/39 ·
+  `verificar_pdf_navegador.mjs`: 116/116 en Chromium (incluye libro de 300
+  páginas en <60 s tras el arreglo del hash).
+- `test_pdf_reales.mjs`: pendiente (sin `JG_PDF_REAL`; en este Node, pdf.js
+  vendor falla igual en la base v2.38: `n.toHex is not a function`).
+- Matriz extendida (320/360/390/768/1024/1280/1440, horizontal, zoom 200 %,
+  teclado abierto, 200 libros): pendiente de comprobación manual.
+
+### Versión
+- `index.html`: `v2.39.0` · `JG_JS_V=v78`
+- `sw.js`: `jg-turbo-shell-v78`
+- `VERSION_RECONSTRUCCION = 7` · `VERSION_TROCEO = 7` · `VERSION_COLA_CORRECCION = 2`
+- Producción: `dpl_9sARJRFFbA2xNXyNoqEsarCuJ18j` · alias `https://jg-turbo.vercel.app`
+  (verificado contra el dominio real con `?nocache`: marcador `v2.39.0`,
+  `JG_JS_V=v78`, shell `v78`, `huella.js`/`pdfController.js`/`limites.js`/
+  `libroVista.js` servidos con el código nuevo, `/api/health` 200 `ok`)
+
+---
+
 ## Entrega 2026-09-04 · v2.38.0 · Corrección de cortes y puntuación reanudable
 
 «Corregir cortes y puntuación del libro» recorre **todas** las partes, no solo los límites
@@ -2088,4 +2266,3 @@ Resultados de la entrega:
 | Archivo que no es PDF | «Ese archivo no es un PDF. Elige uno que termine en .pdf» |
 | Cancelar a mitad | Confirma la cancelación y deja el documento listo para reintentar |
 | Una página ilegible | Se salta esa página y sigue con el resto del libro |
-

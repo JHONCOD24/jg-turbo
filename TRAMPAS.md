@@ -13,6 +13,74 @@ documentado deja de ser un error del proyecto.
 
 ---
 
+
+## Un despliegue «verificado» puede estar sirviendo el código viejo
+
+**Qué pasó (2026-09-05, v2.39.0):** se anotó un despliegue como verificado
+contra el dominio real, con marcador de versión y módulos «servidos con el
+código nuevo». Al auditarlo, `js/pdf/mapaLectura.js` daba **404** y
+`libroVista.js` pesaba 17 945 b en producción contra 20 570 b en local: era la
+versión anterior, con el botón roto incluido.
+
+**Por qué engaña:** el marcador de versión vive en `index.html`, que sí se
+había actualizado. Comprobar el marcador no dice nada sobre los módulos.
+
+**Cómo se comprueba de verdad:** comparando tamaños, archivo por archivo.
+
+```bash
+for m in mapaLectura libroVista pdfController limites; do
+  loc=$(wc -c < "js/pdf/$m.js")
+  prod=$(curl -s -o /dev/null -w "%{size_download}" "https://jg-turbo.vercel.app/js/pdf/$m.js")
+  echo "$m local=$loc prod=$prod"
+done
+```
+
+Y buscando en producción lo que **ya no debería estar**:
+
+```bash
+curl -s https://jg-turbo.vercel.app/js/pdf/libroVista.js | grep -c "Leer desde aquí"   # 0
+curl -s https://jg-turbo.vercel.app/js/pdf/pdfController.js | grep -c "jgLeerTextoPdf" # 0
+```
+
+## Redesplegar sin subir `JG_JS_V` deja el módulo viejo en la caché
+
+Los módulos se piden como `pdfController.js?v=' + JG_JS_V`. Si un despliegue
+sirvió código viejo con `v78`, el navegador de quien ya entró tiene cacheado
+`?v=v78` con ese contenido. Volver a desplegar sin cambiar `JG_JS_V` **no le
+llega**: sigue leyendo su copia. Hay que subir `JG_JS_V` en `index.html` **y**
+`CACHE_SHELL` en `sw.js`, siempre los dos.
+
+## Una prueba que hace `grep` sobre el código no prueba que el código funcione
+
+Las suites del rediseño comprobaban que existieran cadenas como `marcarRango` o
+`data-ini` en los archivos. Todas pasaban con el módulo dando 404 en producción,
+porque miraban el disco local, no el comportamiento. Lo que sí lo demuestra es
+abrir la app en un navegador y comprobar el resultado:
+`tests/verificar_pdf_lector_integracion.mjs`.
+
+## Un archivo sin seguimiento puede sostener a tres que sí lo tienen
+
+`js/pdf/huella.js` estaba fuera de Git mientras `libroVista.js`,
+`pdfController.js` y `colaCorreccion.js` lo importaban. En local todo funciona,
+porque el archivo está en el disco; al clonar, la app se rompe. Se detecta así:
+
+```bash
+grep -rhoE "from '\.\.?/[^']+'" js/pdf/*.js | sed "s/from '//;s/'//" | sort -u   | while read -r p; do f="js/pdf/$p"; [ "$(git ls-files "$f" | wc -l)" = "0" ] && echo "FALTA: $f"; done
+```
+
+## Medir con un patrón sin anclar cuenta nombres propios como errores
+
+El medidor de cortes informaba de 39 «palabras pegadas» en un libro. Eran
+`HeartMath`, `WhatsApp` y `YouTube`: el patrón buscaba
+minúscula+MAYÚSCULA+minúscula sin `` delante, así que cualquier marca con
+mayúscula intercalada contaba. Antes de perseguir un defecto medido, hay que
+comprobar que el defecto existe en el texto:
+
+```bash
+grep -c "HeartMath" <(salida del reconstructor)   # 28 → la palabra está bien
+```
+
+
 ## Los cinco minutos que ahorran un día
 
 Antes de dar por terminada una tarea:
@@ -321,6 +389,24 @@ de una corrección que en realidad no estaba ocurriendo.
 confirmado ni meterlo en la caché. El contador visible debe medir exactamente la operación que
 promete su etiqueta. Filtra los elementos pertinentes antes de aplicar un límite global; limitar
 antes de filtrar elimina silenciosamente casos tardíos.
+
+### 6.7 Un hash lento congela la pestaña con libros grandes
+
+**Ocurrió** (v2.39, en desarrollo): al pedir SHA-256 se trajo un fragmento
+puro de cadenas (`charCodeAt` + arreglos normales). Con 50 000 letras tardaba
+4,4 s; con un libro de 300 páginas (~1,8 MB) bloqueaba el hilo principal
+**90 segundos** (medido con `PerformanceObserver/longtask`). El lector no
+abría y `verificar_pdf_navegador` moría esperando `#pdfProgLabel`.
+
+**Causa:** el algoritmo era correcto pero con estructuras lentas (cadenas
+inmutables concatenadas y arreglos normales). Nada lo delataba con libros
+pequeños: todas las unitarias pasaban en verde.
+
+**Regla:** toda función síncrona nueva que toque el texto completo se mide
+con el libro de 300 páginas, no solo con unitarias pequeñas. SHA-256 va
+sobre bytes (`TextEncoder` + `Uint32Array`): ~44 ms para 1,9 MB. Si algo
+tarda más de ~200 ms con ese libro, va fuera del hilo principal o se
+trocea con `await` entre bloques.
 
 ---
 
