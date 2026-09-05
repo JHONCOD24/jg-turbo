@@ -1,4 +1,4 @@
-<!-- v2.38.0 · Corrección de cortes y puntuación reanudable -->
+<!-- v2.39.0 · Lector tipo libro, cortes revisables y corrección en tres etapas -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -4162,6 +4162,60 @@
     .tts-nav:active{transform:none}
   }
 </style>
+<style id="pdf-libro-v39">
+/* v2.39 · Lector tipo libro (encapsulado en el apartado PDF) */
+#pdfResultArea[data-tema="sepia"]{--lec-bg:#F3E9D2;--lec-texto:#3B2F23;--lec-suave:#7A6A54;--lec-linea:rgba(59,47,35,.16);--lec-acento:#8A5A17;--lec-superficie:#EADFC6;--lec-superficie-2:#E0D2B4}
+body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf{background:#F3E9D2}
+.pdf-lectura{max-width:64ch;margin-inline:auto;width:100%;font-size:19px;line-height:1.7;text-align:left;overflow-wrap:anywhere;word-break:break-word}
+.pdf-lectura[data-ancho="52"]{max-width:52ch}.pdf-lectura[data-ancho="76"]{max-width:76ch}
+.pdf-lectura[data-fuente="serif"]{font-family:Georgia,'Times New Roman',serif}
+.pdf-lectura[data-fuente="sans"]{font-family:'Figtree',system-ui,sans-serif}
+.pdf-lectura h2,.pdf-lectura h3{line-height:1.3;margin:1.2em 0 .6em}
+.pdf-lectura p{margin:0 0 1em}.pdf-lectura blockquote{border-left:3px solid var(--lec-linea);margin:0 0 1em;padding:.2em 0 .2em 1em;color:var(--lec-suave)}
+.pdf-lectura ul,.pdf-lectura ol{margin:0 0 1em;padding-left:1.4em}.pdf-lectura table{border-collapse:collapse;width:100%;margin:0 0 1em;display:block;overflow-x:auto}
+.pdf-lectura th,.pdf-lectura td{border:1px solid var(--lec-linea);padding:.4em .6em;text-align:left}
+.pdf-lectura mark{background:color-mix(in srgb,var(--lec-acento) 24%,transparent);border-radius:4px}
+.pdf-lectura [data-ini]{cursor:pointer;border-radius:6px;transition:background .18s ease}
+.pdf-lectura [data-ini]:hover{background:color-mix(in srgb,var(--lec-acento) 8%,transparent)}
+.pdf-lectura [data-ini]:active{background:color-mix(in srgb,var(--lec-acento) 14%,transparent)}
+@media (hover:none){.pdf-lectura [data-ini]:hover{background:none}}
+@media (prefers-reduced-motion:reduce){.pdf-lectura [data-ini]{transition:none}}
+.pdf-modo-barra,.pdf-cortes-barra{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pdf-modo-barra .mini-btn,.pdf-cortes-barra .mini-btn,.pdf-biblio-barra .mini-btn,.pdf-biblio-mas{min-height:44px;min-width:44px}
+.pdf-modo-estados{font-size:12.5px;color:var(--lec-suave,var(--muted))}
+.pdf-editar-barra{display:flex;gap:8px}.pdf-editar-barra .btn{min-height:44px}
+.pdf-apariencia{border:1px solid var(--line);border-radius:12px}
+.pdf-apariencia summary{min-height:44px;display:flex;align-items:center;padding:10px 14px;cursor:pointer}
+.pdf-apariencia-cuerpo{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+.pdf-apariencia label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.pdf-apariencia input[type=range]{width:100%}
+.pdf-apariencia select{min-height:44px}
+.pdf-doc-ref{font-size:12.5px;color:var(--lec-suave,var(--muted));margin:2px 0 0}
+.pdf-biblio-barra{display:flex;gap:10px;flex-wrap:wrap;align-items:end;justify-content:space-between}
+.pdf-biblio-orden{display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+.pdf-biblio-orden select{min-height:44px}
+.pdf-biblio-vistas{display:flex;gap:8px}
+.pdf-biblio-mas{margin:12px auto}
+#pdfBiblioteca[data-vista="compacta"] #pdfRejilla{grid-template-columns:1fr}
+#pdfBiblioteca[data-vista="compacta"] .pdf-libro-tapa{display:none}
+.pdf-libro-sub{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.pdf-libro-error{font-size:12.5px;color:var(--danger,#E5484D);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pdf-cortes-hoja{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.pdf-cortes-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.pdf-corte{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.pdf-corte-ctx{font-size:13px}.pdf-corte-prop{font-size:13px;color:var(--lec-suave,var(--muted))}
+.pdf-corte-acciones{display:flex;gap:8px;flex-wrap:wrap}.pdf-corte-acciones .mini-btn{min-height:44px}
+.pdf-recorte{max-width:100%;border:1px solid var(--line);border-radius:8px}
+.pdf-search-lista{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto}
+.pdf-search-lista button{min-height:44px;text-align:left}
+#pdfVolverLectura{position:sticky;bottom:12px}
+@media (max-width:767px){.pdf-lectura{font-size:18px}.pdf-texto-col{max-width:100%}}
+@media (min-width:768px) and (max-width:1023px){.pdf-lectura{max-width:62ch}}
+@media (min-width:1024px){.pdf-lectura{max-width:var(--pdf-lectura-ancho,64ch)}#pdfIndice{position:sticky;top:12px;max-height:70vh;overflow:auto}}
+@media (prefers-reduced-motion:reduce){.pdf-lectura *,.pdf-realce mark{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+#pdfResultArea :focus-visible,.pdf-area :focus-visible{outline:3px solid var(--lec-acento,var(--cyan));outline-offset:2px}
+#panelPdf button:not([hidden]){min-height:44px}#panelPdf button.mini-btn:not([hidden]),#panelPdf .pdf-filtro:not([hidden]){min-height:44px;min-width:44px}#panelPdf summary:not([hidden]){min-height:44px}
+</style>
 </head>
 <body>
 <a class="skip-link" href="#mainApp">Saltar a la herramienta</a>
@@ -5018,7 +5072,21 @@
             </div>
           </div>
 
+          <div class="pdf-biblio-barra" role="group" aria-label="Orden y vista de la biblioteca">
+            <label class="pdf-biblio-orden">Orden
+              <select id="pdfOrden" aria-label="Orden de la biblioteca">
+                <option value="reciente">Última lectura</option>
+                <option value="titulo">Título</option>
+                <option value="creado">Fecha de incorporación</option>
+              </select>
+            </label>
+            <div class="pdf-biblio-vistas" role="group" aria-label="Vista">
+              <button type="button" class="mini-btn is-on" id="pdfVistaPortadas" aria-pressed="true">Portadas</button>
+              <button type="button" class="mini-btn" id="pdfVistaCompacta" aria-pressed="false">Compacta</button>
+            </div>
+          </div>
           <ul class="pdf-rejilla" id="pdfRejilla"></ul>
+          <button type="button" class="mini-btn pdf-biblio-mas" id="pdfMostrarMas" hidden>Mostrar más</button>
 
           <p class="pdf-biblioteca-vacia" id="pdfBibliotecaVacia" hidden>
             No hay documentos con ese filtro.
@@ -5230,6 +5298,7 @@
                 <h3 id="pdfResultTitle">Tu texto</h3>
                 <div class="pdf-doc-linea">
                   <p class="pdf-doc-donde" id="pdfDocDonde">—</p>
+                  <p class="pdf-doc-ref" id="pdfDocRef" aria-live="polite"></p>
                   <span class="pdf-pulido-estado" id="pdfPulidoEstado" hidden aria-live="polite" role="button" tabindex="0" title="Ver qué está haciendo"></span>
                 </div>
               </div>
@@ -5508,7 +5577,55 @@
               <!-- La capa de realce va DEBAJO del textarea, con exactamente su
                    misma tipografía y sus mismos márgenes. Así se puede pintar
                    la frase que suena sin renunciar a editar el texto. -->
-              <div class="pdf-texto-caja">
+              <div class="pdf-modo-barra" role="group" aria-label="Modo de lectura">
+                <button type="button" class="mini-btn is-on" id="pdfVistaLectura" aria-pressed="true">Lectura</button>
+                <button type="button" class="mini-btn" id="pdfVistaEditar" aria-pressed="false">Editar</button>
+                <span class="pdf-modo-estados" id="pdfModoEstados" role="status" aria-live="polite"></span>
+              </div>
+              <article class="pdf-lectura" id="pdfLectura" aria-label="Texto del libro" tabindex="0"></article>
+              <div class="pdf-editar-barra" id="pdfEditarBarra" hidden>
+                <button type="button" class="btn primary" id="pdfEditarGuardar">Guardar</button>
+                <button type="button" class="btn ghost" id="pdfEditarCancelar">Cancelar</button>
+              </div>
+              <details class="pdf-apariencia" id="pdfApariencia">
+                <summary aria-label="Apariencia de lectura">Apariencia</summary>
+                <div class="pdf-apariencia-cuerpo">
+                  <label>Tamaño <input type="range" id="pdfAparTam" min="16" max="28" step="1" value="19"></label>
+                  <label>Interlineado <input type="range" id="pdfAparInter" min="1.4" max="2" step="0.1" value="1.7"></label>
+                  <label>Anchura
+                    <select id="pdfAparAncho">
+                      <option value="52">52 caracteres</option>
+                      <option value="64" selected>64 caracteres</option>
+                      <option value="76">76 caracteres</option>
+                    </select>
+                  </label>
+                  <label>Letra
+                    <select id="pdfAparFuente">
+                      <option value="serif">Serif de sistema</option>
+                      <option value="sans" selected>Sans actual</option>
+                    </select>
+                  </label>
+                  <div class="pdf-apariencia-temas" role="group" aria-label="Tema">
+                    <button type="button" class="mini-btn" id="btnPdfTemaSepia">Sepia</button>
+                  </div>
+                </div>
+              </details>
+              <div class="pdf-cortes-barra">
+                <button type="button" class="mini-btn" id="btnPdfCortes">Revisar cortes <span id="pdfCortesCuenta"></span></button>
+                <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar</button>
+                <button type="button" class="mini-btn" id="btnPdfVincular">Vincular PDF original</button>
+                <input type="file" id="pdfVincularInput" accept="application/pdf" hidden>
+                <button type="button" class="mini-btn" id="pdfVolverLectura" hidden>Volver a la lectura</button>
+              </div>
+              <div class="pdf-cortes-hoja" id="pdfCortesHoja" hidden role="dialog" aria-labelledby="pdfCortesTitulo">
+                <h4 id="pdfCortesTitulo">Revisar cortes</h4>
+                <p class="pdf-cortes-ayuda">Cada corte trae su contexto, su propuesta y su página de origen.</p>
+                <ol class="pdf-cortes-lista" id="pdfCortesLista"></ol>
+                <canvas class="pdf-recorte" id="pdfRecorte" hidden></canvas>
+                <button type="button" class="mini-btn" id="pdfRecorteCerrar" hidden>Cerrar recorte</button>
+                <button type="button" class="mini-btn" id="pdfCortesCerrar">Cerrar</button>
+              </div>
+              <div class="pdf-texto-caja" id="pdfTextoCaja">
                 <div class="pdf-realce" id="pdfRealce" aria-hidden="true"></div>
                 <textarea id="pdfOutput" class="output pdf-output" placeholder="Aquí verás el texto del PDF. Puedes editarlo antes de copiarlo." spellcheck="true"></textarea>
               </div>
@@ -5544,6 +5661,8 @@
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
                       Detener
                     </button>
+                    <button type="button" class="mini-btn" id="btnPdfDesdeAqui"
+                            title="Leer desde el párrafo que estoy viendo">Desde aquí</button>
                     <span class="tts-console-status" data-tts-status>Lista</span>
                   </div>
                   <div class="tts-console-row tts-console-opts">
@@ -8175,6 +8294,7 @@ async function jgPedirDecisionesLimites(limites, idioma = 'es'){
   };
 }
 window.jgPedirDecisionesLimites = jgPedirDecisionesLimites;
+window.jgDecidirLimitesPdf = jgPedirDecisionesLimites;
 
 function mostrarValidacionTraduccion(validacion, destinoEl = null){
   const el = destinoEl || document.getElementById('transValidation');
@@ -15529,7 +15649,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v77';
+const JG_JS_V = 'v78';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,
