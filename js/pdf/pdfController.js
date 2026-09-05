@@ -922,6 +922,7 @@ export function inicializarLectorPdf(deps = {}) {
    * empezar la frase de nuevo se siente natural.
    */
   function caracterVisible() {
+    if (enModoLectura() && libroVista && libroVista.caracterVisible) return libroVista.caracterVisible();
     const texto = el.salida.value || '';
     if (!texto) return 0;
     const bruto = Math.round(desplazamientoActual() * texto.length);
@@ -941,6 +942,12 @@ export function inicializarLectorPdf(deps = {}) {
    */
   function irAPosicion(caracter, { centrar = true } = {}) {
     const texto = el.salida.value || '';
+    /* En modo lectura el textarea está oculto: medirlo devuelve ceros y la
+     * vista se quedaba arriba. Se desplaza el contenedor que de verdad se ve. */
+    if (enModoLectura() && libroVista && libroVista.irACaracter) {
+      libroVista.irACaracter(Math.max(0, Math.floor(Number(caracter) || 0)));
+      return;
+    }
     if (!texto) return;
     const pos = Math.max(0, Math.min(texto.length, Math.floor(Number(caracter) || 0)));
     const alto = el.salida.scrollHeight - el.salida.clientHeight;

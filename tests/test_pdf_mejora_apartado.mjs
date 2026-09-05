@@ -251,5 +251,17 @@ console.log('--- la vista de lectura sigue a la voz ---');
     'una lectura empezada más abajo sigue resaltándose');
 }
 
+console.log('--- retomar la lectura ---');
+{
+  const vista = readFileSync(new URL('../js/pdf/libroVista.js', import.meta.url), 'utf8');
+  comprobar(vista.includes('irACaracter'), 'la vista sabe ir a un carácter guardado');
+  comprobar(vista.includes('function caracterVisible'), 'la vista sabe por dónde va quien lee con los ojos');
+  comprobar(vista.includes("addEventListener('touchmove'"),
+    'el desplazamiento con el dedo también suspende el seguimiento (no solo la rueda del ratón)');
+  const ctrl = readFileSync(new URL('../js/pdf/pdfController.js', import.meta.url), 'utf8');
+  const trozo = ctrl.slice(ctrl.indexOf('function irAPosicion'), ctrl.indexOf('function irAPosicion') + 1400);
+  comprobar(/enModoLectura\(\)/.test(trozo), 'irAPosicion respeta el contenedor visible');
+}
+
 if (fallos > 0) { console.error(`\n❌ ${fallos} fallaron · ${ok} bien.`); process.exit(1); }
 console.log(`\n✅ Mejora apartado PDF: ${ok} comprobaciones bien.`);

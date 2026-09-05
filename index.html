@@ -4209,6 +4209,12 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-search-lista{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto}
 .pdf-search-lista button{min-height:44px;text-align:left}
 #pdfVolverLectura{position:sticky;bottom:12px}
+.pdf-volver-lectura{position:sticky;bottom:12px;margin:0 auto;display:block;min-height:44px;
+  padding:0 18px;border-radius:22px;border:1px solid var(--lec-linea);
+  background:var(--lec-superficie);color:var(--lec-texto);font:inherit;font-size:14px;
+  box-shadow:0 6px 20px -10px rgba(0,0,0,.45);cursor:pointer;z-index:3}
+.pdf-volver-lectura:hover{background:var(--lec-superficie-2)}
+.pdf-volver-lectura:focus-visible{outline:2px solid var(--lec-acento);outline-offset:2px}
 @media (max-width:767px){.pdf-lectura{font-size:18px}.pdf-texto-col{max-width:100%}}
 @media (min-width:768px) and (max-width:1023px){.pdf-lectura{max-width:62ch}}
 @media (min-width:1024px){.pdf-lectura{max-width:var(--pdf-lectura-ancho,64ch)}#pdfIndice{position:sticky;top:12px;max-height:70vh;overflow:auto}}
@@ -5583,6 +5589,9 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                 <span class="pdf-modo-estados" id="pdfModoEstados" role="status" aria-live="polite"></span>
               </div>
               <article class="pdf-lectura" id="pdfLectura" aria-label="Texto del libro" tabindex="0"></article>
+              <button type="button" class="pdf-volver-lectura" id="pdfVolverLectura" hidden>
+                ↓ Volver a la lectura
+              </button>
               <div class="pdf-editar-barra" id="pdfEditarBarra" hidden>
                 <button type="button" class="btn primary" id="pdfEditarGuardar">Guardar</button>
                 <button type="button" class="btn ghost" id="pdfEditarCancelar">Cancelar</button>
@@ -5615,7 +5624,6 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
                 <button type="button" class="mini-btn" id="btnPdfPausarCorreccion" hidden>Pausar</button>
                 <button type="button" class="mini-btn" id="btnPdfVincular">Vincular PDF original</button>
                 <input type="file" id="pdfVincularInput" accept="application/pdf" hidden>
-                <button type="button" class="mini-btn" id="pdfVolverLectura" hidden>Volver a la lectura</button>
               </div>
               <div class="pdf-cortes-hoja" id="pdfCortesHoja" hidden role="dialog" aria-labelledby="pdfCortesTitulo">
                 <h4 id="pdfCortesTitulo">Revisar cortes</h4>

@@ -186,17 +186,45 @@ export function initLibroVista({ el, estado, api }) {
     elemento.scrollIntoView({ block: 'center', behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth' });
   }
 
-  // Suspender el seguimiento al desplazarse a mano + Volver a la lectura.
-  function onScrollManual() {
+  /* Seguimiento del audio: se suspende en cuanto la persona se desplaza a
+   * mano (rueda, dedo o barra) y se recupera con «Volver a la lectura».
+   * Antes solo escuchaba la rueda del ratón, así que en el teléfono —donde
+   * más se lee— nunca se suspendía. */
+  function onDesplazarManual() {
     if (!seguimiento) return;
     seguimiento = false;
     if (el.volverLectura) el.volverLectura.hidden = false;
   }
-  if (el.area) el.area.addEventListener('wheel', onScrollManual, { passive: true });
+  const zona = el.area || el.lectura;
+  if (zona) {
+    zona.addEventListener('wheel', onDesplazarManual, { passive: true });
+    zona.addEventListener('touchmove', onDesplazarManual, { passive: true });
+    zona.addEventListener('scroll', onDesplazarManual, { passive: true });
+  }
   if (el.volverLectura) el.volverLectura.addEventListener('click', () => {
     seguimiento = true;
     el.volverLectura.hidden = true;
+    const marca = el.lectura && el.lectura.querySelector('mark');
+    if (marca) marca.scrollIntoView({ block: 'center' });
   });
+
+  /* Lleva la vista al carácter guardado: así un libro se reabre donde se dejó. */
+  function irACaracter(caracter) {
+    if (!el.lectura) return;
+    const bloques = [...el.lectura.querySelectorAll('[data-ini]')];
+    if (!bloques.length) return;
+    const destino = bloques.reverse().find((b) => Number(b.dataset.ini) <= caracter) || bloques[bloques.length - 1];
+    if (destino) destino.scrollIntoView({ block: 'start' });
+  }
+
+  /* Por dónde va quien lee con los ojos: el primer bloque todavía visible. */
+  function caracterVisible() {
+    if (!el.lectura) return 0;
+    for (const b of el.lectura.querySelectorAll('[data-ini]')) {
+      if (b.getBoundingClientRect().bottom > 0) return Number(b.dataset.ini) || 0;
+    }
+    return 0;
+  }
 
   // Editar con Guardar y Cancelar (una corrección posterior no pisa lo aprobado).
   let borrador = null;
@@ -384,6 +412,8 @@ export function initLibroVista({ el, estado, api }) {
     renderLectura,
     marcarRango,
     desplazarA,
+    irACaracter,
+    caracterVisible,
     pintarCortes,
     aplicarApariencia,
     fijarModo,
