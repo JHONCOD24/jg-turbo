@@ -1,5 +1,12 @@
 # JG Turbo — reglas para agentes
 
+## Si vienes nuevo: `INFORME_2026-09-05.md`
+
+Cuenta la sesión completa del 5 de septiembre de 2026: qué se pidió, qué se
+encontró, qué se arregló **y qué salió mal por el camino** (incluidos los
+errores del propio agente, con su causa). Si vas a tocar el móvil, el lector o
+el despliegue, ahorra medio día de repetir lo mismo.
+
 ## ⚠️ Antes de tocar el código: `TRAMPAS.md`
 
 **`TRAMPAS.md`** recoge los errores que ya se cometieron en este proyecto, con la causa medida y la

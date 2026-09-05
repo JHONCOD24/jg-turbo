@@ -1,5 +1,8 @@
 # Rediseño de experiencia de usuario y calidad — JG Turbo
 
+> Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
+> [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
+
 ## 2026-09-05 · v2.43.0 · El teléfono desplaza como un teléfono
 
 Reportado auditando en el móvil: «sigue quedando un hueco en la parte

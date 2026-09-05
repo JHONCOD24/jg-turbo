@@ -1,5 +1,8 @@
 # Lector de PDF · historial de cambios y operación
 
+> Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
+> [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
+
 ## 2026-09-05 · v2.42.0 · Que abra rápido, llene la pantalla y responda al dedo
 
 Auditoría del usuario en el teléfono. Tres fallas reportadas, las tres
