@@ -50,6 +50,8 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_tts_tone` (neutral / warm / energetic)
 - `jg_tts_rate` (0.75–2.0)
 - `jg_tts_engine` (neural / browser)
+- `jg_pdf_unir` (`normal` | `documento`): cuanto unir palabras partidas. Por
+  defecto `normal`; `documento` ignora los diccionarios y solo usa el libro.
 - `jg_config_bundle` (snapshot JSON versionado)
 - `jg_glossary_seeded` (flag: ya se sembró glosario por defecto)
 

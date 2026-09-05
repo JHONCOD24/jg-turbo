@@ -11,6 +11,35 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.42.0, 2026-09-05
+
+Arranque ligero, la pantalla llena y deslizar para pasar página. Publicado
+como `dpl_4MJ2v2zg7qVRUB6Lkgq8hbnZQZdT` (READY), alias `jg-turbo.vercel.app`.
+Verificados marcadores (`v2.42.0`, `JG_JS_V=v82`, shell `v82`), SHA-256 de
+`index.html`, `sw.js` y los 27 módulos PDF contra el dominio (29 de 29
+idénticos), `/api/health` 200 y las ocho suites de navegador contra
+producción.
+
+### La copia de despliegue ya no vive junto al repositorio
+
+`.pytest_cache` sigue con los permisos rotos (`takeown` e `icacls` piden
+elevación; no se forzó), así que el rodeo de la copia limpia continúa. Lo que
+cambia es **dónde** se arma: en el directorio temporal de la sesión, no en
+`Proyectos/`. Así no queda ninguna carpeta desplegable al lado del repo.
+`TRAMPAS.md` §9.3 documenta que una carpeta así llegó a sobrescribir
+producción con una versión vieja. Las dos `_deploy-jg-turbo-*` que quedaban
+(85 MB entre las dos) se borraron tras comprobar que no contenían un solo
+archivo que no estuviera ya en Git.
+
+```bash
+# Copia limpia en el temporal, vinculada al proyecto de produccion
+mkdir -p "$TMP/despliegue" && cp -r index.html sw.js vercel.json api js ... "$TMP/despliegue/"
+cd "$TMP/despliegue"
+npx vercel link --project jg-turbo --yes --scope jhoncod24s-projects
+rm -f .env.local
+npx vercel --prod --yes --scope jhoncod24s-projects
+```
+
 ## Publicación PDF v2.41.0, 2026-09-05
 
 Lector rediseñado en el teléfono y «Unir palabras». Publicado como

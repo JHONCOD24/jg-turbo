@@ -463,6 +463,10 @@ export function compactarManifiesto(limites) {
     la: l.leftAtomId,
     ra: l.rightAtomId,
     os: l.originalSeparator,
+    /* Dónde cae el corte en el texto. Viaja al manifiesto para que al reabrir
+     * el libro se pueda seguir acotando por tramo y llevar al sitio exacto,
+     * sin rehacer la reconstrucción entera. */
+    c: Number.isFinite(l.charStart) ? l.charStart : undefined,
   }));
 }
 
@@ -479,6 +483,9 @@ export function expandirManifiesto(compacto) {
     rightAtomId: l.ra || l.rightAtomId,
     originalSeparator: l.os || l.originalSeparator || '',
     evidence: l.evidence || {},
+    /* Un manifiesto guardado antes de v2.42 no lo trae: se deja sin definir
+     * en vez de inventar un cero, que apuntaría al principio del capítulo. */
+    charStart: Number.isFinite(l.c) ? l.c : (Number.isFinite(l.charStart) ? l.charStart : undefined),
   }));
 }
 

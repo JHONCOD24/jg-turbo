@@ -399,6 +399,19 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
     }
   }
 
+  /* Dónde cae cada corte en el texto FINAL. Sin esto un límite solo conocía
+   * los dos átomos que separa, y no había forma de acotar «los cortes de esta
+   * página» ni de llevar a nadie al sitio exacto: el primer intento de
+   * filtrar por página devolvía siempre todos (anotado en `TRAMPAS.md`).
+   *
+   * Se toma el arranque del átomo DERECHO, que es justo donde continúa el
+   * texto tras el corte, y se calcula aquí porque es el único punto donde ya
+   * se conoce la normalización final. */
+  for (const lim of limites) {
+    const pos = offset2.get(lim.rightAtomId);
+    if (Number.isFinite(pos)) lim.charStart = pos;
+  }
+
   const posicionesPagina = [];
   const vistoPag = new Set();
   for (const a of incluidos) {

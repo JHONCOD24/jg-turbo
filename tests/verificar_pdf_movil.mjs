@@ -191,6 +191,16 @@ try {
       const b = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
       return !!b && (b.getAttribute('aria-pressed') === 'true' || document.body.classList.contains('jg-voz-activa'));
     }));
+  /* Se apaga la voz antes de seguir. Con la voz sonando, el lector sigue la
+     lectura y manda sobre la página: es su comportamiento, pero dejaría las
+     comprobaciones de deslizamiento midiendo otra cosa. Contra el dominio real
+     el TTS sí funciona, y ahí se veía; en local nunca llegaba a arrancar. */
+  await tel.evaluate(() => {
+    const b = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
+    if (b && b.getAttribute('aria-pressed') === 'true') b.click();
+    document.body.classList.remove('jg-voz-activa');
+  });
+  await tel.waitForTimeout(900);
 
   /* ── 4. Con la voz sonando nunca se queda sin pausa ─────────────────── */
   console.log('\n── 4. La voz siempre se puede parar ────────────────────────────');

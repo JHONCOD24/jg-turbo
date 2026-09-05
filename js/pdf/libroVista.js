@@ -561,6 +561,22 @@ export function initLibroVista({ el, estado, api }) {
      Se trabaja sobre los cortes de la PÁGINA que se está leyendo (dos o tres),
      no sobre los mil del libro: es instantáneo y no interrumpe.
      ═══════════════════════════════════════════════════════════════════════ */
+  /* Cuánto unir: «normal» (diccionario + libro) o «documento» (solo lo que el
+   * propio libro demuestra). Se recuerda entre sesiones como el resto de
+   * preferencias de lectura. */
+  function modoUnir() {
+    try { return localStorage.getItem('jg_pdf_unir') === 'documento' ? 'documento' : 'normal'; }
+    catch (_) { return 'normal'; }
+  }
+  if (el.unirModo) {
+    el.unirModo.value = modoUnir();
+    el.unirModo.addEventListener('change', () => {
+      try { localStorage.setItem('jg_pdf_unir', el.unirModo.value === 'documento' ? 'documento' : 'normal'); }
+      catch (_) { /* sin almacenamiento: vale para esta sesión */ }
+      pintarUnir(contarUnibles());
+    });
+  }
+
   let unidosUltimaVez = [];      // para Deshacer
   let tempoAviso = null;
   let uniendo = false;
@@ -626,10 +642,13 @@ export function initLibroVista({ el, estado, api }) {
     pintarUnir(0);
     try {
       const { cargarLexico, decidirPorLexico } = await import('./lexico.js');
-      await cargarLexico(estado.idioma === 'en' ? 'en' : 'es');
-      /* Un libro en español puede citar en inglés y al revés: con las dos
-       * listas cargadas se decide mejor y no cuesta una segunda espera. */
-      cargarLexico(estado.idioma === 'en' ? 'es' : 'en');
+      /* En modo prudente ni se descargan: solo vale lo que el libro demuestra. */
+      if (modoUnir() !== 'documento') {
+        await cargarLexico(estado.idioma === 'en' ? 'en' : 'es');
+        /* Un libro en español puede citar en inglés y al revés: con las dos
+         * listas cargadas se decide mejor y no cuesta una segunda espera. */
+        cargarLexico(estado.idioma === 'en' ? 'es' : 'en');
+      }
 
       const aUnir = [];
       for (const lim of candidatos) {
@@ -637,6 +656,7 @@ export function initLibroVista({ el, estado, api }) {
         const veredicto = decidirPorLexico(lim.leftFragment, lim.rightFragment, {
           continuidadGeometrica: true,
           vocabularioDocumento: estado.vocabulario,
+          soloDocumento: modoUnir() === 'documento',
         }, estado.idioma || 'es');
         if (veredicto === 'join') aUnir.push(lim);
       }
@@ -676,7 +696,8 @@ export function initLibroVista({ el, estado, api }) {
       if (!mod) return 0;
       return pendientesDelCapitulo().filter((l) => mod.decidirPorLexico(
         l.leftFragment, l.rightFragment,
-        { continuidadGeometrica: true, vocabularioDocumento: estado.vocabulario },
+        { continuidadGeometrica: true, vocabularioDocumento: estado.vocabulario,
+          soloDocumento: modoUnir() === 'documento' },
         estado.idioma || 'es',
       ) === 'join').length;
     } catch (_) { return 0; }
@@ -959,6 +980,23 @@ export function initLibroVista({ el, estado, api }) {
       const ctx = document.createElement('p');
       ctx.className = 'pdf-corte-ctx';
       ctx.textContent = '«' + (lim.leftFragment || '') + '» + «' + (lim.rightFragment || '') + '»' + (pagina ? ' · página ' + pagina : '');
+      /* Con la posición del corte se puede llevar a la persona al sitio en vez
+       * de pedirle que lo busque. Solo si el corte la trae: un libro guardado
+       * antes de v2.42 no la tiene, y entonces esto se queda como texto. */
+      if (Number.isFinite(lim.charStart)) {
+        ctx.classList.add('es-enlace');
+        ctx.tabIndex = 0;
+        ctx.setAttribute('role', 'button');
+        ctx.title = 'Ver este corte en el texto';
+        const irAlCorte = () => {
+          if (el.cortesHoja) el.cortesHoja.hidden = true;
+          irACaracter(lim.charStart);
+        };
+        ctx.addEventListener('click', irAlCorte);
+        ctx.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); irAlCorte(); }
+        });
+      }
       const prop = document.createElement('p');
       prop.className = 'pdf-corte-prop';
       prop.textContent = 'Comprueba el contexto o la página original y elige cómo deben quedar estos fragmentos.';

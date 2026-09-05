@@ -1,4 +1,4 @@
-<!-- v2.41.0 · PDF: lector rediseñado en el teléfono y «Unir palabras» con diccionario local -->
+<!-- v2.42.0 · Arranque ligero, la pantalla llena, deslizar para pasar página -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -4408,6 +4408,12 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 @media (hover:none){.pdf-lectura [data-ini]:hover{background:none}}
 @media (prefers-reduced-motion:reduce){.pdf-lectura [data-ini]{transition:none}}
 .pdf-modo-barra,.pdf-cortes-barra{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* El contexto de un corte lleva al sitio del texto cuando se conoce su
+   posición. Se marca como algo que se puede tocar, con su foco visible. */
+.pdf-corte-ctx.es-enlace{cursor:pointer;text-decoration:underline;text-underline-offset:3px;
+  text-decoration-color:color-mix(in srgb,var(--lec-acento,var(--cyan)) 55%,transparent)}
+.pdf-corte-ctx.es-enlace:hover{color:var(--lec-acento,var(--cyan))}
+.pdf-corte-ctx.es-enlace:focus-visible{outline:2px solid var(--lec-acento,var(--cyan));outline-offset:2px;border-radius:6px}
 .pdf-modo-barra .mini-btn,.pdf-cortes-barra .mini-btn,.pdf-biblio-barra .mini-btn,.pdf-biblio-mas{min-height:44px;min-width:44px}
 .pdf-modo-estados{font-size:12.5px;color:var(--lec-suave,var(--muted))}
 .pdf-editar-barra{display:flex;gap:8px}.pdf-editar-barra .btn{min-height:44px}
@@ -5734,6 +5740,14 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                           <span>Revisar sugerencias (<span id="pdfRevisionCuenta">0</span>)</span>
                         </button>
                         <button type="button" class="mini-btn" id="btnPdfCorregirLibro">Corregir cortes y puntuación</button>
+                        <label class="task-field" for="pdfUnirModo">
+                          <span class="task-field-label">Cuánto unir palabras partidas</span>
+                          <select id="pdfUnirModo">
+                            <option value="normal">Normal · con diccionario</option>
+                            <option value="documento">Solo con el libro · más prudente</option>
+                          </select>
+                        </label>
+                        <p class="pdf-mas-ayuda">«Normal» usa un diccionario de español e inglés para reconocer la palabra completa. «Solo con el libro» une únicamente cuando esa palabra aparece entera en otra parte del mismo libro: acierta menos veces, pero nunca por una palabra que el libro no use.</p>
                         <button type="button" class="mini-btn" id="btnPdfVincular">Vincular PDF original</button>
                         <input type="file" id="pdfVincularInput" accept="application/pdf" hidden>
                       </div>
@@ -16109,7 +16123,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v81';
+const JG_JS_V = 'v82';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

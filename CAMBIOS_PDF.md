@@ -1,5 +1,82 @@
 # Lector de PDF · historial de cambios y operación
 
+## 2026-09-05 · v2.42.0 · Que abra rápido, llene la pantalla y responda al dedo
+
+Auditoría del usuario en el teléfono. Tres fallas reportadas, las tres
+**anteriores a v2.41**: se comprobó A/B sirviendo `ae9fd53` y la versión nueva
+en paralelo y midiendo lo mismo en las dos. No eran regresiones; se arreglan
+igual.
+
+### 1. «Se demora bastante para ingresar»
+
+En la pantalla de inicio, sin tocar nada, se descargaban **553 KB de módulos
+del lector de PDF**, con `pdfController.js` aportando 202 KB él solo. El
+comentario del código decía «quien no use esta pestaña no paga ese peso», pero
+el `import()` se disparaba al arrancar: lo pagaba todo el mundo.
+
+Ahora se pide al **entrar en la pestaña**, memoizado, y los caminos que lo
+necesitan antes (PDF compartido, `?tab=pdf`, `?unir=`) lo aseguran
+explícitamente. Si la descarga falla se olvida la promesa, para que volver a
+entrar reintente en vez de dejar la pestaña muerta hasta recargar.
+
+| | Antes | Ahora |
+|---|---:|---:|
+| Módulos de `js/pdf/` al arrancar | 553 KB | **0 KB** |
+| Total descargado al abrir la app | 1.507 KB | **956 KB** |
+
+### 2. «Quedó todo hacia arriba, gran parte en negro»
+
+La tarjeta del panel PDF acababa a 653 px en una pantalla de 839 y dejaba
+**192 px negros** al final. La cadena era flexible **a medias**: `.wrap` era
+`display:block`, así que el `flex:1` del panel no hacía nada, y el panel
+también, así que su tarjeta tampoco crecía. Un eslabón rígido en medio y el
+estirado no llega. Medido: **192 px → 10 px**.
+
+Se usa `min-height`, nunca `height` fijo: `TRAMPAS.md` §3 cuenta que fijarlo
+aquí dejó la biblioteca sin scroll. `verificar_pdf_scroll.mjs` sigue en 39.
+
+### 3. «No acepta ningún gesto, está bloqueado»
+
+Y era verdad. El área de lectura es `overflow-x:hidden` —las páginas se mueven
+con `scrollTo`— y no tiene scroll vertical porque es paginada: en un teléfono
+real **el dedo no hacía nada**. En el emulador sí parecía responder, y por eso
+ninguna prueba lo veía.
+
+Ahora el deslizamiento se atiende con Pointer Events y el área declara
+`touch-action:pan-y`. Un roce de menos de 45 px, o más vertical que
+horizontal, no pasa página; y si estabas seleccionando texto, el gesto es
+tuyo. Los botones ‹ › siguen donde estaban.
+
+### Mejoras pedidas en la misma sesión
+
+- **Cada corte sabe en qué carácter está** (`charStart`, y viaja en el
+  manifiesto). Antes solo conocía los dos átomos que separa, que es lo que
+  hacía imposible acotar «los cortes de esta página». Ahora, en «Revisar
+  cortes», tocar un corte **lleva a ese punto del texto**. Un libro guardado
+  antes de v2.42 no lo trae: se queda como texto, sin inventar un cero que
+  apuntaría al principio del capítulo.
+- **Ajuste de cuánto unir**, en Opciones. «Normal · con diccionario» por
+  defecto, o «Solo con el libro · más prudente», que ignora las listas y une
+  solo cuando la palabra completa aparece en otra parte del mismo libro. En
+  ese modo ni se descarga el diccionario.
+- **El despliegue ya no deja carpetas desplegables** junto al repositorio: la
+  copia limpia se arma en el directorio temporal de la sesión. Las dos
+  `_deploy-jg-turbo-*` se borraron. `TRAMPAS.md` §9.3 documenta que una
+  carpeta así llegó a sobrescribir producción.
+
+**Lo que no se pudo hacer:** recuperar los permisos de `.pytest_cache` para
+desplegar directo desde la raíz. `takeown` e `icacls` piden elevación y no se
+forzó; el rodeo de la copia limpia sigue siendo necesario.
+
+### Verificación
+
+1.129 unitarias · arranque 7 · móvil 32 · unir palabras 18 · páginas 5 ·
+scroll 39 · geometría 114 · integración 27 · navegador 116.
+
+Versión `v2.42.0` · módulos `v82` · shell `jg-turbo-shell-v82`. Sin cambios de
+IndexedDB. Clave nueva: `jg_pdf_unir`.
+
+
 ## 2026-09-05 · v2.41.0 · El teléfono, y las palabras que el PDF partió
 
 Dos cosas pedidas por el usuario: que el lector se entienda en el celular

@@ -108,3 +108,20 @@ if (fallos.length) {
   process.exit(1);
 }
 console.log(`✔ Unir palabras decide con evidencia. ${ok} comprobaciones.`);
+
+console.log('\n── 8. «Solo con el libro»: más prudente ────────────────────────');
+/* Con el ajuste en «solo con el libro» se ignoran las listas de palabras y
+   vale nada más lo que el propio documento demuestra. Une menos, y esa es la
+   idea: es la opción para quien prefiere revisar a mano. */
+const soloDoc = { soloDocumento: true, vocabularioDocumento: null };
+comprobar('sin el diccionario, «sorprend»+«entes» ya no se une solo',
+  decidirPorLexico('sorprend', 'entes', soloDoc) !== 'join',
+  `devolvió ${decidirPorLexico('sorprend', 'entes', soloDoc)}`);
+comprobar('pero si el propio libro trae la palabra entera, sí se une',
+  decidirPorLexico('sorprend', 'entes', {
+    soloDocumento: true, vocabularioDocumento: new Set(['sorprendentes']),
+  }) === 'join');
+comprobar('y «de»+«la» sigue sin unirse en ese modo',
+  decidirPorLexico('de', 'la', soloDoc) !== 'join');
+if (fallos.length) { console.log(`\n✖ fallos al final: ${fallos.length}`); process.exit(1); }
+console.log(`✔ Con el ajuste prudente también decide bien. ${ok} comprobaciones.`);

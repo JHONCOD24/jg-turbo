@@ -1,5 +1,34 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Un lector paginado sin deslizamiento se siente roto
+
+**Síntoma (auditado 2026-09-05):** «no acepta ningún tipo de gesto ni
+movimiento con el dedo, está como bloqueado». **Causa:** el área de lectura es
+`overflow-x:hidden` (las páginas se mueven con `scrollTo`) y, al ser paginada,
+tampoco tiene scroll vertical: en un teléfono real el dedo no tiene nada que
+mover. **En el emulador de Chromium sí parecía responder**, así que ninguna
+prueba lo veía. **Regla:** si un contenedor no puede desplazarse de forma
+nativa, el gesto se atiende a mano (Pointer Events) y se declara
+`touch-action`. Y desconfiar de un gesto probado solo en emulador.
+
+## Una cadena flexible se rompe por el eslabón rígido
+
+**Síntoma (auditado 2026-09-05):** el panel dejaba 192 px negros al final de la
+pantalla. **Causa:** el panel y su tarjeta declaraban `flex:1`, pero sus
+contenedores (`.wrap` y el propio panel) eran `display:block`, donde `flex` no
+significa nada. **Regla:** para que algo se estire, **todos** los contenedores
+entre él y la ventana deben ser flexibles. Comprobarlo recorriendo la cadena
+con `getComputedStyle`, no leyendo la regla de un solo elemento.
+
+## Un `import()` al arrancar no es carga diferida
+
+**Síntoma (auditado 2026-09-05):** la app tardaba en abrir. **Causa:** el lector
+de PDF se traía con `import()` dinámico —y un comentario decía que por eso
+«quien no use esta pestaña no paga ese peso»— pero la llamada estaba en el
+arranque: 553 KB para todo el mundo. **Regla:** `import()` difiere la descarga
+al momento en que se **llama**, no por ser dinámico. Medir lo que baja la
+pantalla de inicio; no confiar en el comentario.
+
 ## Un límite de corte no sabe en qué carácter está
 
 **Síntoma (v2.41):** «Unir palabras» decía trabajar «sobre los cortes de esta

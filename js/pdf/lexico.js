@@ -299,9 +299,16 @@ export function decidirPorLexico(izquierda, derecha, evidencia = {}, _lang = 'es
   const combo = izq + der;
   const vocab = evidencia.vocabularioDocumento;
   const comboEnDoc = enVocabularioDocumento(combo, vocab);
-  const comboOk = esPalabraValida(combo) || esNombrePropio(combo) || comboEnDoc;
-  const izqOk = esPalabraValida(izq) || enVocabularioDocumento(izq, vocab);
-  const derOk = esPalabraValida(der) || enVocabularioDocumento(der, vocab);
+  /* «Solo con el libro»: se ignoran las listas de palabras y vale únicamente
+   * lo que el propio documento demuestra. Une bastante menos y no puede
+   * equivocarse con una palabra que exista en español pero no en este libro.
+   * Es la opción para quien prefiere revisar a mano. */
+  const valida = evidencia.soloDocumento
+    ? ((f) => enVocabularioDocumento(f, vocab))
+    : ((f) => esPalabraValida(f) || enVocabularioDocumento(f, vocab));
+  const comboOk = valida(combo) || (!evidencia.soloDocumento && esNombrePropio(combo)) || comboEnDoc;
+  const izqOk = valida(izq);
+  const derOk = valida(der);
 
   if (esSiglaPartida(izq, der)) return 'join';
   // Forma completa observada en el propio documento: evidencia real, no lista.

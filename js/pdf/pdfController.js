@@ -163,7 +163,7 @@ export function inicializarLectorPdf(deps = {}) {
     paginacion: $('pdfPaginacion'), pagPrev: $('btnPdfPagPrev'),
     pagNext: $('btnPdfPagNext'), pagPos: $('pdfPagPos'),
     btnCortes: $('btnPdfCortes'), cortesCuenta: $('pdfCortesCuenta'),
-    btnUnirPalabras: $('btnPdfUnirPalabras'), unirCuenta: $('pdfUnirCuenta'),
+    btnUnirPalabras: $('btnPdfUnirPalabras'), unirCuenta: $('pdfUnirCuenta'), unirModo: $('pdfUnirModo'),
     unirAviso: $('pdfUnirAviso'), unirAvisoTexto: $('pdfUnirAvisoTexto'),
     btnUnirDeshacer: $('btnPdfUnirDeshacer'),
     btnDesdeAqui: $('btnPdfDesdeAqui'),
