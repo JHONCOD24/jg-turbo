@@ -1,4 +1,4 @@
-<!-- v2.42.0 · Arranque ligero, la pantalla llena, deslizar para pasar página -->
+<!-- v2.43.0 · Móvil: desplaza el documento, zona segura arriba, sin hueco abajo -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -3154,12 +3154,47 @@
 
   @media (max-width:640px){
     html, body{overflow-x:hidden}
+
+    /* ══════════════════════════════════════════════════════════════════
+       En el TELÉFONO desplaza el DOCUMENTO, no un cajón de dentro
+       ─────────────────────────────────────────────────────────────────
+       `html,body{height:100%}` los dejaba clavados al alto de la ventana,
+       así que el que desplazaba era `.wrap`. Tres consecuencias que solo se
+       ven en un móvil de verdad:
+
+       · la barra de direcciones del navegador NO se retrae —solo lo hace
+         cuando desplaza el documento—, y se pierden ~60-100 px de pantalla
+         de forma permanente;
+       · al aparecer o esconderse esa barra cambia `100dvh`, y el alto ya
+         fijado deja de cuadrar: ese es el hueco de abajo;
+       · el rebote y la inercia nativos se pierden.
+
+       El lector (`jg-leyendo`) y la pantalla completa siguen con su alto
+       fijo a propósito: son pantallas que NO se desplazan, se paginan.
+       ══════════════════════════════════════════════════════════════════ */
+    html:has(> body:not(.jg-leyendo):not(.jg-pantalla)),
+    body:not(.jg-leyendo):not(.jg-pantalla){
+      height:auto;min-height:100%;overflow-y:visible;
+    }
+    body:not(.jg-leyendo):not(.jg-pantalla) > .wrap{
+      height:auto;overflow-y:visible;
+    }
+
     .wrap{
       display:block;
       min-height:100dvh;
       padding:10px 10px max(10px, env(safe-area-inset-bottom, 0px));
       overflow-x:hidden;
       max-width:100%;
+    }
+
+    /* Con `viewport-fit=cover` el contenido pasa POR DEBAJO de la barra de
+       estado y del notch. El encabezado se reserva ese hueco con su propio
+       fondo, de modo que ni se corta ni deja una franja transparente.
+       `--h-header` se mide del DOM, así que las pestañas se recolocan solas. */
+    .wrap > header{
+      padding-top:env(safe-area-inset-top, 0px);
+      box-sizing:content-box;
     }
     .card, .panel, .file-area, .yt-area{max-width:100%;overflow-x:hidden}
     header{
@@ -16123,7 +16158,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v82';
+const JG_JS_V = 'v83';
 import('/js/youtube/youtubeSyncController.js?v=' + JG_JS_V).then(({ inicializarYoutubeSincronizado }) => {
   inicializarYoutubeSincronizado({
     fetchApi,

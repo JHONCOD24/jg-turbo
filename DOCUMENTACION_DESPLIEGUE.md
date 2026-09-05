@@ -11,6 +11,15 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación UX v2.43.0, 2026-09-05
+
+El teléfono desplaza el documento y reserva la zona segura de arriba.
+Publicado como `dpl_7W3NQhbX6PvUCSVDkoh4hyUaYRzU` (READY), alias
+`jg-turbo.vercel.app`. Verificados marcadores (`v2.43.0`, `JG_JS_V=v83`,
+shell `v83`), SHA-256 de `index.html`, `sw.js` y los 27 módulos PDF contra el
+dominio (29 de 29 idénticos), `/api/health` 200 y las nueve suites de
+navegador contra producción. Detalle: [CAMBIOS_UX.md](CAMBIOS_UX.md).
+
 ## Publicación PDF v2.42.0, 2026-09-05
 
 Arranque ligero, la pantalla llena y deslizar para pasar página. Publicado

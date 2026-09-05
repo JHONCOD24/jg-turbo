@@ -1,5 +1,51 @@
 # Rediseño de experiencia de usuario y calidad — JG Turbo
 
+## 2026-09-05 · v2.43.0 · El teléfono desplaza como un teléfono
+
+Reportado auditando en el móvil: «sigue quedando un hueco en la parte
+inferior» y «la parte superior está cortada».
+
+**La causa, medida:** `html,body{height:100%}` los dejaba clavados al alto de
+la ventana, así que el que desplazaba era `.wrap` por dentro. Eso no se nota
+en un emulador y sí en un teléfono:
+
+- La barra de direcciones del navegador **no se retrae nunca** —solo lo hace
+  cuando desplaza el *documento*—, así que se pierden entre 60 y 100 px de
+  pantalla de forma permanente.
+- Cuando esa barra aparece o se esconde, `100dvh` cambia y el alto ya fijado
+  deja de cuadrar: **ese es el hueco de abajo**.
+- Con `viewport-fit=cover` el contenido pasa por debajo de la barra de estado,
+  y el encabezado solo tenía `padding-top:10px` fijo: **el corte de arriba**.
+  De 27 usos de zona segura en la hoja de estilos, **solo uno** era del borde
+  superior, y era del modal.
+
+**Lo que se hizo,** solo bajo 640 px y solo fuera del lector:
+
+- Desplaza el documento (`html`/`body` en alto automático), así que la barra
+  del navegador se retrae y se recupera esa franja de pantalla.
+- El encabezado reserva `env(safe-area-inset-top)` con su propio fondo: ni se
+  corta ni deja una franja transparente sobre el notch. `--h-header` se mide
+  del DOM, así que las pestañas se recolocan solas.
+- El lector (`jg-leyendo`) y la pantalla completa **conservan su alto fijo**:
+  son pantallas que no se desplazan, se paginan.
+
+**Medido en cinco pestañas y cuatro teléfonos** (375×667, 390×844, 412×839 y
+360×600), antes y después:
+
+| | Antes | Ahora |
+|---|---|---|
+| Quién desplaza | un cajón interno | **el documento** |
+| Contenido inalcanzable (Traducir, iPhone SE) | **815 px** | 0 |
+| Hueco muerto al final | hasta 176 px | ≤ 48 px |
+| Reglas con zona segura superior | 1 | 2 |
+
+Prueba nueva `verificar_movil_pantalla.mjs`: **62 comprobaciones** que recorren
+las cinco pestañas en los cuatro tamaños y comprueban quién desplaza, que se
+llegue al final del contenido, que no sobre hueco y que escritorio no cambie.
+
+Versión `v2.43.0` · módulos `v83` · shell `jg-turbo-shell-v83`.
+
+
 Fecha base: 2026-07-30 · **UI actual: v3.10** (2026-08-15) · Prod: <https://jg-turbo.vercel.app>
 
 ---

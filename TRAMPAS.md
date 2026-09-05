@@ -1,5 +1,34 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Si desplaza un cajón interno, el teléfono pierde pantalla para siempre
+
+**Síntoma (auditado 2026-09-05):** «queda un hueco en la parte inferior» y «la
+parte superior está cortada». **Causa:** `html,body{height:100%}` los clavaba
+al alto de la ventana y el que desplazaba era `.wrap`. Un navegador móvil solo
+retrae su barra de direcciones cuando desplaza el **documento**, así que esa
+franja se perdía siempre; y al aparecer o esconderse esa barra cambiaba
+`100dvh` y el alto fijado dejaba de cuadrar: ese era el hueco.
+
+**Regla:** en el teléfono desplaza el documento. Un alto fijo con cajón interno
+solo se justifica en pantallas que NO se desplazan (el lector paginado, la
+pantalla completa), y entonces se acota con `:not()` a esos estados.
+**No se ve en un emulador:** hay que medir quién desplaza
+(`documentElement.scrollHeight > clientHeight` frente al del contenedor).
+
+## `viewport-fit=cover` sin zona segura arriba corta el encabezado
+
+**Síntoma (auditado 2026-09-05):** la parte de arriba se veía cortada.
+**Causa:** el `<meta viewport>` lleva `viewport-fit=cover`, así que el
+contenido pasa por debajo de la barra de estado y del notch; el encabezado
+tenía `padding-top:10px` fijo. De 27 usos de `safe-area-inset` en la hoja de
+estilos, **solo uno** era del borde superior, y era de un modal.
+
+**Regla:** con `viewport-fit=cover`, quien esté pegado a un borde reserva su
+`env(safe-area-inset-*)`. Arriba conviene dárselo al elemento con fondo (el
+encabezado), no al contenedor: así cubre la franja en vez de dejarla
+transparente. En el emulador la zona segura vale 0, así que se comprueba
+contando reglas, no midiendo píxeles.
+
 ## Un lector paginado sin deslizamiento se siente roto
 
 **Síntoma (auditado 2026-09-05):** «no acepta ningún tipo de gesto ni
