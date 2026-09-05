@@ -1,8 +1,9 @@
-/* JG Turbo · Manifiesto compacto de límites y migración v5 → v6
+/* JG Turbo · Manifiesto compacto de límites y migración v6 → v7
  *
  * Los campos nuevos viven en los almacenes existentes. No se sube la versión
  * de IndexedDB. Un documento irrecuperable se marca needs_source: no se finge
- * una corrección.
+ * una corrección. Una cola v1 completa no equivale por sí sola a contenido
+ * íntegro: los libros existentes se revalidan desde su fuente.
  */
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO, reconstruirDesdeAtomos } from './reconstruccion.js';
 import { expandirManifiesto, contarPendientes, VERSION_LIMITES } from './limites.js';
@@ -37,18 +38,18 @@ export function manifiestoSuficiente(manifiesto) {
 }
 
 /**
- * Qué hacer con un documento guardado antes de v6.
+ * Qué hacer con un documento guardado antes de v7 (v6 queda como alias).
  *
- * @returns {{accion:'reextraer'|'reconstruir'|'needs_source'|'capa_nueva', needsSource?:boolean, motivo:string}}
+ * @returns {{accion:'reextraer'|'reconstruir'|'needs_source'|'capa_nueva'|'nada', needsSource?:boolean, motivo:string}}
  */
-export function planMigracionV6(doc = {}) {
+export function planMigracionV7(doc = {}) {
   const version = Number(doc.versionReconstruccion || doc.versionTroceo || 0);
   const tienePdf = Boolean(doc.tieneArchivo || doc.pdf);
   const manifiesto = doc.manifiesto || doc.manifiestoLimites || [];
   const aprobado = Boolean(doc.tieneAprobado || doc.textoAprobado || doc.capaAprobado);
 
   if (version >= VERSION_RECONSTRUCCION && !aprobado) {
-    return { accion: 'nada', motivo: 'ya_v6' };
+    return { accion: 'nada', motivo: 'ya_v7' };
   }
   if (tienePdf) {
     if (aprobado) return { accion: 'capa_nueva', motivo: 'edicion_aprobada_con_pdf' };
@@ -62,6 +63,10 @@ export function planMigracionV6(doc = {}) {
     needsSource: true,
     motivo: 'sin_pdf_ni_manifiesto',
   };
+}
+
+export function planMigracionV6(doc = {}) {
+  return planMigracionV7(doc);
 }
 
 export function reconstruirDesdeManifiesto({ atomos, manifiesto, decisiones, lang = 'es', paginas = [] }) {

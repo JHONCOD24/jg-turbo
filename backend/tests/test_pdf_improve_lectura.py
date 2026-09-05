@@ -101,3 +101,29 @@ def test_vercel_modo_limites_no_reescribe(api_vercel, monkeypatch):
     assert cuerpo["decisions"][0]["action"] == "join"
     assert "NO reescribas" in prompts[0] or "no reescribas" in prompts[0].lower()
     assert "Bos" in prompts[0] and "ton" in prompts[0]
+
+
+def test_vercel_modo_limites_incluye_contexto_y_evidencia(api_vercel, monkeypatch):
+    prompts = []
+    monkeypatch.setattr(api_vercel, "_resolver_ia", lambda *a, **k: ("clave", "gemini"))
+
+    def ia_falsa(_key, _provider, prompt, _model=None, _max_tokens=None):
+        prompts.append(prompt)
+        return '[{"boundaryId":"b1","action":"space","confidence":0.8,"reason":"dos palabras"}]', "gemini"
+
+    monkeypatch.setattr(api_vercel, "_llamar_ia_con_respaldo", ia_falsa)
+    respuesta = TestClient(api_vercel.app).post("/api/improve", json={
+        "text": "limites",
+        "language": "es",
+        "provider": "gemini",
+        "api_key": "clave-prueba",
+        "mode": "pdf_boundary_decisions",
+        "limites": [
+            {"boundaryId": "b1", "leftFragment": "bonito", "rightFragment": "pez",
+             "kind": "page-break", "leftContext": "qué bonito", "rightContext": "pez nada",
+             "evidence": {"gap": 0, "pageChange": True}},
+        ],
+    })
+    assert respuesta.status_code == 200
+    assert "qué bonito" in prompts[0] and "pez nada" in prompts[0]
+    assert "bonito" in prompts[0] and "pez" in prompts[0]

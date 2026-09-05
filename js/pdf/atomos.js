@@ -172,11 +172,56 @@ function ordenarPagina(lista, { ancho = 595 } = {}) {
     return salida;
   };
 
+  // Títulos de ancho completo en su posición vertical: no se mueven todos
+  // al principio. Se ordena por franjas horizontales: cada franja conserva
+  // su Y, y dentro de la franja van primero los de ancho completo y luego
+  // las columnas. Así un título entre dos párrafos queda entre ellos.
+  const alturaRef = mediana(lista.map((a) => a.height).filter((n) => n > 0)) || 10;
+  const tol = Math.max(1.5, alturaRef * 0.45);
+  const franjas = [];
+  for (const a of lista) {
+    const f = franjas.find((g) => Math.abs(g.y - a.y) <= tol);
+    if (f) {
+      f.items.push(a);
+      f.y = (f.y * (f.items.length - 1) + a.y) / f.items.length;
+    } else franjas.push({ y: a.y, items: [a] });
+  }
+  franjas.sort((a, b) => b.y - a.y);
   const resultado = [];
-  if (porColumna.has(-1)) resultado.push(...ordenarEnColumna(porColumna.get(-1)));
-  const cols = [...porColumna.keys()].filter((c) => c >= 0).sort((a, b) => (rtl ? b - a : a - b));
-  for (const c of cols) resultado.push(...ordenarEnColumna(porColumna.get(c)));
+  for (const franja of franjas) {
+    const anchos = franja.items.filter((a) => columnaDe(a, info, ancho) === -1)
+      .sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
+    const porCol = new Map();
+    for (const a of franja.items) {
+      const col = columnaDe(a, info, ancho);
+      if (col === -1) continue;
+      if (!porCol.has(col)) porCol.set(col, []);
+      porCol.get(col).push(a);
+    }
+    resultado.push(...anchos);
+    const cols = [...porCol.keys()].sort((a, b) => (rtl ? b - a : a - b));
+    for (const c of cols) {
+      porCol.get(c).sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
+      resultado.push(...porCol.get(c));
+    }
+  }
   return resultado;
+}
+
+/**
+ * Columnas por página y región: cada página decide su propio corte.
+ * Un título de ancho completo no convierte la página en dos columnas.
+ */
+export function detectarColumnasPorPagina(atomos, ancho = 595) {
+  const porPagina = new Map();
+  for (const a of atomos || []) {
+    const p = Number(a?.page) || 0;
+    if (!porPagina.has(p)) porPagina.set(p, []);
+    porPagina.get(p).push(a);
+  }
+  const mapa = new Map();
+  for (const [p, lista] of porPagina) mapa.set(p, detectarColumnas(lista, ancho));
+  return mapa;
 }
 
 /**

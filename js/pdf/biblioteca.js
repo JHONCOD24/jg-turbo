@@ -837,6 +837,8 @@ export async function marcarTroceo(id, version, cambios = null) {
       }
       doc.versionTroceo = version;
       if (cambios?.versionReconstruccion != null) doc.versionReconstruccion = cambios.versionReconstruccion;
+      if (cambios?.fuenteRevision) doc.fuenteRevision = String(cambios.fuenteRevision);
+      if (cambios?.revisionLectura) doc.revisionLectura = String(cambios.revisionLectura);
       if (cambios?.pendientesLimites != null) doc.pendientesLimites = cambios.pendientesLimites;
       if (cambios?.needsSource) doc.needsSource = true;
       if (cambios?.reconstruccion) {

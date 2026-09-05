@@ -2599,14 +2599,30 @@ async def improve(req: ImproveRequest):
                             "rightContext": str(lim.get("rightContext") or "")[:80],
                         }
                     )
-                lista = "\n".join(
-                    f"- {it['boundaryId']}: «{it['leftFragment']}» + «{it['rightFragment']}» "
-                    f"({it['kind']})"
-                    for it in items
-                ) or "- NINGUNO"
+                def _linea_limite(it):
+                    base = (
+                        f"- {it['boundaryId']}: «{it['leftFragment']}» + «{it['rightFragment']}» "
+                        f"({it['kind']})"
+                    )
+                    ctx = ""
+                    if it.get("leftContext"):
+                        ctx += f" [antes: «{it['leftContext']}»]"
+                    if it.get("rightContext"):
+                        ctx += f" [después: «{it['rightContext']}»]"
+                    ev = it.get("evidence") if isinstance(it.get("evidence"), dict) else {}
+                    if ev:
+                        try:
+                            import json as _js2
+                            ctx += f" [evidencia: {_js2.dumps(ev, ensure_ascii=False)[:220]}]"
+                        except Exception:
+                            pass
+                    return base + ctx
+                lista = "\n".join(_linea_limite(it) for it in items) or "- NINGUNO"
                 return (
                     f"Eres un árbitro de SEPARADORES en texto extraído de un PDF, idioma «{lang_base}».\n"
                     "NO reescribas el texto. NO cambies letras. NO inventes palabras.\n"
+                    "Usa el contexto anterior/posterior y la evidencia (geometría, guion, "
+                    "puntuación) para decidir cada límite por separado.\n"
                     "Para cada límite decide UNA acción: join, space, paragraph o pending.\n"
                     "join = unir sin espacio; space = dejar un espacio; paragraph = párrafo nuevo; "
                     "pending = no estás seguro.\n"
