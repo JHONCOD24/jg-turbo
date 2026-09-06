@@ -600,6 +600,16 @@ export function initLibroVista({ el, estado, api }) {
     return (estado.limites || []).filter((l) => l && l.decision === 'pending');
   }
 
+  /* Blancos que solo son el fin de renglón («que to» / «ma»): el extractor
+   * viejo los guardó como 'space' y el botón no los veía. Se reconsideran con
+   * la misma regla; lo deshecho por la persona no resucita solo. */
+  function espaciosDeRenglon() {
+    return (estado.limites || []).filter((l) => l && l.decision === 'space'
+      && (l.kind === 'line-wrap' || l.kind === 'page-break' || l.kind === 'column-break')
+      && l.originalSeparator === 'space'
+      && !rechazados.has(l.id));
+  }
+
   /** Pinta el botón: encendido y con cuenta cuando hay algo que unir. */
   function pintarUnir(cuantos) {
     if (!el.btnUnirPalabras) return;
@@ -632,9 +642,13 @@ export function initLibroVista({ el, estado, api }) {
     /* Pulsar el botón es una petición explícita, así que reconsidera también
      * los cortes que se deshicieron antes (quedaron como «space» del usuario).
      * El pase automático, en cambio, respeta esa decisión y no los toca. */
-    const candidatos = alcance === 'capitulo'
+    const base = alcance === 'capitulo'
       ? (estado.limites || []).filter((l) => l && (l.decision === 'pending' || rechazadosPrevios.has(l.id)))
       : pendientesDelCapitulo();
+    /* En manual los rechazados ya se vaciaron a rechazadosPrevios (petición
+     * explícita); en automático espaciosDeRenglon respeta los rechazados. */
+    const extras = espaciosDeRenglon();
+    const candidatos = [...base, ...extras.filter((l) => !base.includes(l))];
     if (!candidatos.length) { pintarUnir(0); return 0; }
 
     uniendo = true;
@@ -693,7 +707,7 @@ export function initLibroVista({ el, estado, api }) {
        * no se enciende nada todavía y se pintará tras el primer intento. */
       const mod = moduloLexico;
       if (!mod) return 0;
-      return pendientesDelCapitulo().filter((l) => mod.decidirPorLexico(
+      return [...pendientesDelCapitulo(), ...espaciosDeRenglon()].filter((l) => mod.decidirPorLexico(
         l.leftFragment, l.rightFragment,
         { continuidadGeometrica: true, vocabularioDocumento: estado.vocabulario,
           soloDocumento: modoUnir() === 'documento' },

@@ -259,6 +259,28 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
       continue;
     }
 
+    /* Espacio residual al cambiar de renglón («que to» / «ma un pla»): el
+     * PDF trae un blanco donde el libro parte la palabra. Antes se daba por
+     * espacio sin preguntar y «Unir palabras» no podía hacer nada (ni era
+     * candidato). Se consulta al léxico con la misma regla de siempre: solo
+     * 'join' une; lo demás queda como espacio y NUNCA pendiente (no se infla
+     * «Revisar cortes» ni la etapa 1 de la corrección). */
+    if ((lim.kind === 'line-wrap' || lim.kind === 'page-break' || lim.kind === 'column-break')
+        && (/\s$/.test(izqStr) || /^\s/.test(derStr))) {
+      const lexRenglon = decidirPorLexico(lim.leftFragment, lim.rightFragment, {
+        continuidadGeometrica: true,
+        vocabularioDocumento: vocabulario,
+      }, lang);
+      if (lexRenglon === 'join') {
+        lim.decision = 'join';
+        lim.source = 'lexicon';
+        continue;
+      }
+      lim.decision = 'space';
+      lim.source = 'pdf';
+      continue;
+    }
+
     if (/\s$/.test(izqStr) || /^\s/.test(derStr)) {
       lim.decision = 'space';
       lim.source = 'pdf';
