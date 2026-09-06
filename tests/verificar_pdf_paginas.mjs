@@ -153,13 +153,17 @@ try {
     await p.evaluate(()=>{
       window.pruebaPeticiones={cortes:0,puntuacion:0};
       window.pruebaOmitirUno=true;
-      window.jgDecidirLimitesPdf=async limites=>{window.pruebaPeticiones.cortes++;return {ia_used:true,decisions:limites.filter((l,i)=>!(window.pruebaOmitirUno && i===0)).map(l=>({boundaryId:l.boundaryId,action:'space',confidence:1}))};};
+      window.jgDecidirLimitesPdf=async limites=>{await new Promise(r=>setTimeout(r,400));window.pruebaPeticiones.cortes++;return {ia_used:true,decisions:limites.filter((l,i)=>!(window.pruebaOmitirUno && i===0)).map(l=>({boundaryId:l.boundaryId,action:'space',confidence:1}))};};
       window.jgCorregirBloqueLectura=async texto=>{window.pruebaPeticiones.puntuacion++;return {text:texto,ia_used:true};};
     });
     await despertarCromo(p); await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();
     assert(await p.locator('#pdfAuditoriaHoja').isVisible());
     assert.equal(await p.evaluate(()=>window.pruebaPeticiones.cortes),0,'sin IA antes del consentimiento');
     await p.locator('#btnPdfAuditoriaAceptar').click();
+    /* La etapa 1 cuenta sus lotes: antes se quedaba clavada en «Etapa 1 de 3»
+     * y parecía colgada durante N peticiones en serie. */
+    await p.waitForFunction(() => /lote \d+ de \d+/.test(document.querySelector('#pdfPulidoEstado')?.textContent || ''), null, { timeout: 15000 });
+    console.log('etapa con progreso', await p.locator('#pdfPulidoEstado').textContent());
     await p.waitForFunction(()=>window.pruebaPeticiones.puntuacion>0,null,{timeout:15000});
     await p.waitForTimeout(1000);
     console.log('corrección simulada',await p.evaluate(()=>window.pruebaPeticiones));

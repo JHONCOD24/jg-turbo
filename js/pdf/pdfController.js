@@ -1279,7 +1279,7 @@ export function inicializarLectorPdf(deps = {}) {
       }
     }
     if (estado.pulidoActivo && estado.vista === 'original' && estado.consentido) {
-      iniciarCorreccionLibro().catch(() => {});
+      iniciarCorreccionLibro({ automatica: true }).catch(() => {});
     }
   }
 
@@ -1675,7 +1675,11 @@ export function inicializarLectorPdf(deps = {}) {
       if (!hayDocumento()) { avisar('Abre un libro primero.', 'info', { efimero: true }); return; }
       const menu = document.getElementById('pdfMasMenu');
       if (menu && menu.open) menu.open = false;
-      if (estado.consentido) { iniciarCorreccionLibro().catch(() => {}); return; }
+      if (estado.consentido) {
+        iniciarCorreccionLibro()
+          .catch((e) => avisar('No se pudo corregir: ' + (e?.message || 'inténtalo de nuevo.'), 'warn'));
+        return;
+      }
       pedirConsentimientoAuditoria();
     });
   }
@@ -1685,7 +1689,9 @@ export function inicializarLectorPdf(deps = {}) {
   if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', () => cerrarHojaAuditoria(null));
   if (el.btnReanudarCorreccion) {
     el.btnReanudarCorreccion.addEventListener('click', () => {
-      iniciarCorreccionLibro({ reanudar: true }).catch(() => {});
+      /* Sin este catch, un fallo aquí era silencio total: «el botón falla». */
+      iniciarCorreccionLibro({ reanudar: true })
+        .catch((e) => avisar('No se pudo reanudar: ' + (e?.message || 'inténtalo de nuevo.'), 'warn'));
     });
   }
   if (el.auditoriaHoja) el.auditoriaHoja.addEventListener('keydown', (e) => {
@@ -1947,12 +1953,13 @@ export function inicializarLectorPdf(deps = {}) {
    * revisión de origen, contexto y evidencia; cada respuesta se aplica solo
    * a su límite. Lo ambiguo o inválido queda pendiente (Revisar cortes).
    */
-  async function resolverCortesPendientes({ abortado } = {}) {
+  async function resolverCortesPendientes({ abortado, onAvance } = {}) {
     const pendientes = (estado.limites || []).filter((l) => l?.decision === 'pending');
     if (!pendientes.length) return { resueltos: 0, pendientes: 0 };
     const decidir = window.jgDecidirLimitesPdf || window.jgPedirDecisionesLimites;
     if (typeof decidir !== 'function') return { resueltos: 0, pendientes: pendientes.length };
     const LOTE = 24;
+    const lotes = Math.ceil(pendientes.length / LOTE);
     let resueltos = 0;
     for (let i = 0; i < pendientes.length; i += LOTE) {
       if (abortado?.()) break;
@@ -1978,6 +1985,9 @@ export function inicializarLectorPdf(deps = {}) {
         const decisiones = Array.isArray(resp?.decisions) ? resp.decisions : [];
         const { aplicadas } = aceptarDecisionesIA(estado.limites, decisiones);
         resueltos += aplicadas.length;
+        /* La etapa 1 son N peticiones en serie: sin contar los lotes, la
+         * etiqueta se queda clavada en «Etapa 1 de 3» y parece colgada. */
+        try { onAvance?.({ lote: Math.floor(i / LOTE) + 1, lotes, resueltos }); } catch (_) {}
       } catch (error) {
         avisar('No se pudo consultar la corrección de cortes. Puedes reintentar desde Opciones.', 'warn');
         break;
@@ -2175,8 +2185,14 @@ export function inicializarLectorPdf(deps = {}) {
    * Abrir un capítulo no inicia otro proceso competidor: si ya hay uno en
    * curso, se vuelve sin hacer nada.
    */
-  async function iniciarCorreccionLibro({ reanudar = false } = {}) {
-    if (!estado.consentido || !estado.partes.length) return;
+  async function iniciarCorreccionLibro({ reanudar = false, automatica = false } = {}) {
+    if (!estado.consentido || !estado.partes.length) {
+      /* Reanudar con el permiso caído no puede quedarse callado: desde fuera
+       * se ve como «el botón falla». El arranque automático al abrir el libro
+       * sí sigue silencioso. */
+      if (reanudar && !automatica) avisar('Para reanudar, autoriza primero la corrección desde Opciones → Corregir.', 'info');
+      return;
+    }
     if (estado.correccionProgreso.ejecutando) return;
     const documentoSolicitado = estado.id;
     try { await prepararFuenteCorreccion(); }
@@ -2185,6 +2201,12 @@ export function inicializarLectorPdf(deps = {}) {
     await colaLista;
     if (!estado.consentido || !estado.partes.length) return;
     if (estado.correccionProgreso.ejecutando) return;
+    /* Sin IA no se arranca: antes se colgaba «Etapa 1 de 3» para nada. El
+     * arranque automático al abrir (automatica) sigue silencioso. */
+    if (typeof window.jgHayIAParaCorregir === 'function' && !window.jgHayIAParaCorregir()) {
+      if (!automatica) avisar('Corregir necesita IA: configura una clave en Configuración → Servidor e IA (o revisa la cuota) y vuelve a intentarlo.', 'warn');
+      return;
+    }
 
     if (!estado.fuenteRevision) {
       try {
@@ -2243,7 +2265,11 @@ export function inicializarLectorPdf(deps = {}) {
 
     // Etapa 1/3 · Resolver cortes y estructura.
     try {
-      const r1 = await resolverCortesPendientes({ abortado });
+      const r1 = await resolverCortesPendientes({ abortado,
+        onAvance: ({ lote, lotes, resueltos }) => {
+          estado.correccionProgreso.etapa = `Etapa 1/3 · Cortes (lote ${lote} de ${lotes} · ${resueltos} resueltos)`;
+          actualizarEstadoCorreccion();
+        } });
       if (abortado()) return;
       if (Number(r1?.pendientes) > 0) {
         // La duda sobre un separador no impide revisar la puntuación del

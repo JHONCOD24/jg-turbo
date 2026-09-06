@@ -7051,6 +7051,21 @@ function jgCredencialesIA(){
     openrouter_model: localStorage.getItem('jg_openrouter_model') || sessionOr || 'qwen/qwen3-coder:free',
   };
 }
+/* ¿Hay con qué corregir? En la nube, con el servidor en línea y sin IA en
+ * ningún lado, arrancar la corrección es colgar «Etapa 1 de 3» para nada.
+ * En la duda (sin conexión, salud sin responder) se deja intentar: el fallo
+ * por bloque ya trae su mensaje. */
+window.jgHayIAParaCorregir = function(){
+  try {
+    const k = (localStorage.getItem('jg_api_key') || '').trim();
+    if (k && !/^gsk_/i.test(k)) return true;
+    if (typeof serverInfo !== 'undefined' && serverInfo && serverInfo.online && _isVercel) {
+      return !!(serverInfo.iaConfigured
+        || (serverInfo.aiProviderServer && serverInfo.aiProviderServer !== 'none'));
+    }
+    return true;
+  } catch (_) { return true; }
+};
 
 /** Si la IA del navegador dio 401, reintenta la misma petición sin api_key (usa la del servidor). */
 async function jgFetchIaConRespaldo(path, bodyObj, ms){
