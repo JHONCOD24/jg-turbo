@@ -105,6 +105,36 @@ try {
     const piso = await p.evaluate(() => parseFloat(getComputedStyle(document.querySelector('#pdfLectura')).fontSize));
     assert(piso >= 17, `piso móvil de 17px aunque se elija 16 (mide ${piso}px)`);
   }
+  if (nombre==='movil') {
+    /* Gestos con eventos táctiles sintéticos (el ratón no cuenta: el lector
+     * solo atiende dedo/lápiz). Reproduce lo que el usuario reportó: gestos
+     * que no responden, diagonales muertas y bloqueo tras seleccionar. */
+    const deslizar = (x1,y1,x2,y2) => p.evaluate(([a,b,c,d]) => {
+      const el = document.querySelector('#pdfLectura');
+      const base = { bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 7, isPrimary: true };
+      el.dispatchEvent(new PointerEvent('pointerdown', { ...base, clientX: a, clientY: b }));
+      el.dispatchEvent(new PointerEvent('pointerup', { ...base, clientX: c, clientY: d }));
+    }, [x1,y1,x2,y2]);
+    const pagina = () => p.locator('#pdfPagPos').textContent();
+    let antes = await pagina();
+    await deslizar(300, 400, 180, 405); await p.waitForTimeout(700);
+    assert.notEqual(await pagina(), antes, 'deslizar a la izquierda pasa página');
+    antes = await pagina();
+    await deslizar(200, 400, 185, 402); await p.waitForTimeout(700);
+    assert.equal(await pagina(), antes, 'un roce corto no pasa página');
+    await deslizar(200, 520, 195, 380); await p.waitForTimeout(700);
+    assert.notEqual(await pagina(), antes, 'deslizar hacia arriba también avanza');
+    /* Una selección vieja no puede bloquear los gestos para siempre. */
+    await p.evaluate(() => {
+      const par = document.querySelector('#pdfLectura p');
+      if (par) document.getSelection().selectAllChildren(par);
+    });
+    await p.waitForTimeout(950);
+    antes = await pagina();
+    await deslizar(300, 400, 180, 405); await p.waitForTimeout(700);
+    assert.notEqual(await pagina(), antes, 'con selección vieja el gesto sigue pasando página');
+    await p.evaluate(() => document.getSelection().removeAllRanges());
+  }
   await p.locator('#pdfVistaEditar').click(); assert(await p.locator('#pdfOutput').isVisible());
     assert(!(await p.locator('#pdfPaginacion').isVisible()));
   await p.locator('#pdfEditarCancelar').click(); await p.waitForTimeout(300);

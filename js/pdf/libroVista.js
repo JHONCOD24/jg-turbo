@@ -886,8 +886,18 @@ export function initLibroVista({ el, estado, api }) {
 
      Así que el deslizamiento se atiende a mano. Con Pointer Events, que
      cubren dedo, lápiz y ratón por igual. */
-  const DESLIZ_MINIMO = () => Math.max(34, Math.min(56, (el.lectura?.clientWidth || 390) * .12));
-  const DESLIZ_VERTICAL = 1.0;  // si baja más de lo que cruza, no es pasar página
+  const DESLIZ_MINIMO = () => Math.max(28, Math.min(56, (el.lectura?.clientWidth || 390) * .10));
+  const DESLIZ_VERTICAL = 1.4;  // la diagonal moderada también pasa página
+  /* Cuándo se hizo la última selección dentro de la lectura. Una selección
+   * VIEJA no puede bloquear los gestos para siempre: solo se respeta la que
+   * se está haciendo ahora mismo (menos de un segundo). */
+  let ultimaSeleccion = 0;
+  document.addEventListener('selectionchange', () => {
+    const sel = document.getSelection();
+    if (sel && String(sel).trim().length > 1 && el.lectura?.contains(sel.anchorNode)) {
+      ultimaSeleccion = Date.now();
+    }
+  });
   let gesto = null;
   if (el.lectura) {
     el.lectura.addEventListener('pointerdown', (ev) => {
@@ -901,14 +911,18 @@ export function initLibroVista({ el, estado, api }) {
       const dy = ev.clientY - gesto.y;
       gesto = null;
       try { el.lectura.releasePointerCapture(ev.pointerId); } catch (_) {}
-      if (Math.abs(dx) < DESLIZ_MINIMO()) return;
-      if (Math.abs(dy) > Math.abs(dx) * DESLIZ_VERTICAL) return;
-      /* Si estaba seleccionando texto, el deslizamiento es suyo, no nuestro. */
+      /* En paginado no hay scroll vertical que pelear: si el dedo sube o
+       * baja con decisión, también pasa página (subir avanza). */
+      const horizontal = Math.abs(dx) >= Math.abs(dy);
+      const avance = horizontal ? dx : dy;
+      if (Math.abs(horizontal ? dx : dy) < DESLIZ_MINIMO()) return;
+      if (horizontal && Math.abs(dy) > Math.abs(dx) * DESLIZ_VERTICAL) return;
+      /* Si está seleccionando texto AHORA, el deslizamiento es suyo. */
       const sel = document.getSelection();
-      if (sel && String(sel).trim().length > 1) return;
+      if (sel && String(sel).trim().length > 1 && Date.now() - ultimaSeleccion < 800) return;
       /* Este gesto no es «lee desde aquí»: se consume el click que viene. */
       marcarToqueConsumido();
-      irAPagina(pag.actual + (dx < 0 ? 1 : -1));
+      irAPagina(pag.actual + (avance < 0 ? 1 : -1));
     }, { passive: true });
     el.lectura.addEventListener('pointercancel', () => { gesto = null; }, { passive: true });
   }
