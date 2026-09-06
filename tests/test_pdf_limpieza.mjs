@@ -214,8 +214,8 @@ function pagina(numero, lineas) {
     'conserva el espacio entre «le» y «damos»: son dos palabras'
   );
   comprobar(
-    resultado.texto.includes('componentes. Como ya has ido aprendiendo'),
-    'separa dos oraciones pegadas después del punto'
+    resultado.texto.includes('componentes.Como ya has ido aprendiendo'),
+    'conserva la puntuación exacta y no inserta un espacio editorial'
   );
   comprobar(
     resultado.pendientes === 0 && resultado.listoParaLectura === true,
@@ -291,7 +291,7 @@ function pagina(numero, lineas) {
     texto.includes('oficina') && texto.includes('inflama'),
     'deshace las ligaduras tipográficas (ﬁ, ﬂ) que traen los libros'
   );
-  comprobar(!/ {2}/.test(texto), 'colapsa los espacios repetidos');
+  comprobar(texto.includes('Texto  con   espacios raros'), 'conserva la cantidad de espacios del fragmento fuente');
   comprobar(!texto.includes(' '), 'convierte el espacio duro en espacio normal');
   comprobar(texto.includes('“comillas”'), 'no destruye las comillas tipográficas del original');
 }

@@ -8,18 +8,19 @@ import {
 } from './atomos.js';
 import {
   crearLimites, resolverLimitesDeterministas, aceptarDecisionesIA,
-  separadorDe, textoIzquierdoAjustado, contarPendientes, compactarManifiesto,
+  contarPendientes, compactarManifiesto,
   VERSION_LIMITES,
 } from './limites.js';
 import { vocabularioDelDocumento } from './lexico.js';
 import { normalizarAtomStr, caracteresNoSeparadores } from './unicodeTexto.js';
+import { componerAtomosFiel, crearInformeFidelidad } from './fidelidad.js';
 import {
   esNumeroDePagina, normalizarClave, pareceTitulo, clasificarBloque,
   prepararCapitulosLectura,
 } from './limpiezaTexto.js';
 
-export const VERSION_RECONSTRUCCION = 7;
-export const VERSION_TROCEO = 7;
+export const VERSION_RECONSTRUCCION = 8;
+export const VERSION_TROCEO = 8;
 
 const MIN_PAGINAS_RELLENO = 3;
 const PROPORCION_RELLENO = 0.4;
@@ -30,15 +31,6 @@ function mediana(numeros) {
   if (!v.length) return 0;
   const m = Math.floor(v.length / 2);
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
-}
-
-function tipografiaFinal(texto) {
-  return String(texto || '')
-    .replace(/([.!?])([A-ZÁÉÍÓÚÜÑ])/g, '$1 $2')
-    .replace(/([,;:])(\p{L})/gu, '$1 $2')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ');
 }
 
 function lineasVisuales(atomosDePagina) {
@@ -98,10 +90,6 @@ function detectarRelleno(paginasLineas) {
   return marcadas;
 }
 
-function espaciarPuntoPegado(texto) {
-  return tipografiaFinal(texto);
-}
-
 /**
  * Reconstruye el documento a partir de átomos ya extraídos.
  */
@@ -130,6 +118,11 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
     esDobleColumna: false,
     candidatosUnion: [],
     listoParaLectura: true,
+    fragmentosFuente: [],
+    transformaciones: [],
+    estructura: [],
+    calidadPorPagina: [],
+    estadoFidelidad: null,
   };
   if (!atomos || !atomos.length) return vacio;
 
@@ -154,6 +147,12 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
   const omitidos = new Set();
   const omisiones = [];
   let descartadas = 0;
+  for (const a of ordenados) {
+    if (String(a.str ?? '').length) continue;
+    omitidos.add(a.id);
+    descartadas += 1;
+    omisiones.push({ pagina: a.page, texto: '', motivo: 'vacio', confianza: 1, atomIds: [a.id] });
+  }
   for (const pag of paginasLineas) {
     for (const linea of pag.lineas) {
       let motivo = null;
@@ -161,15 +160,27 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
       else if (esNumeroDePagina(linea.texto)) motivo = 'numero_pagina';
       else if (relleno.has(normalizarClave(linea.texto))) motivo = 'cabecera_pie_repetido';
       if (!motivo || opciones.atomosYaFiltrados) continue;
-      descartadas += linea.atomos.length;
-      omisiones.push({ pagina: pag.numero, texto: linea.texto, motivo, confianza: motivo === 'vacio' ? 1 : 0.9 });
-      for (const a of linea.atomos) omitidos.add(a.id);
+      /* Una línea puede contener un TextItem vacío que ya quedó registrado
+       * arriba. Cada fragmento necesita un único destino, así que esta omisión
+       * incorpora solo los átomos todavía no clasificados. */
+      const nuevos = linea.atomos.filter((a) => !omitidos.has(a.id));
+      if (!nuevos.length) continue;
+      descartadas += nuevos.length;
+      omisiones.push({
+        pagina: pag.numero,
+        texto: nuevos.map((a) => String(a.str ?? '')).join(''),
+        motivo,
+        confianza: motivo === 'vacio' ? 1 : 0.9,
+        atomIds: nuevos.map((a) => a.id),
+      });
+      for (const a of nuevos) omitidos.add(a.id);
     }
   }
 
   const incluidos = ordenados.filter((a) => !omitidos.has(a.id) && String(a.str || '').length);
   if (!incluidos.length) {
-    return { ...vacio, descartadas, omisiones, atomos: ordenados };
+    const baseVacia = { ...vacio, descartadas, omisiones, atomosTodos: ordenados };
+    return { ...baseVacia, ...crearInformeFidelidad(baseVacia, { origen: opciones.origen || 'texto', paginas: listaPaginas }) };
   }
 
   // Columnas por página y región, no un único corte global.
@@ -272,23 +283,14 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
     }
   }
 
-  // Composición única: texto, bloques, páginas y posiciones salen de la
-  // misma pasada. La normalización fina (`.Como` → `. Como`) cambia la
-  // longitud, así que las correspondencias se recalculan DESPUÉS sobre el
-  // texto final, no sobre el borrador.
-  const partesTxt = [];
+  // La estructura se delimita con los mismos límites que usa el texto. La
+  // composición fiel ocurre una sola vez más abajo y no añade puntuación.
   const bloquesLectura = [];
-  let largoCrudo = 0;
   let bloqueActual = null;
   let idBloque = 0;
 
   const abrirBloque = (tipo, atomo) => {
-    if (bloqueActual) {
-      bloqueActual.atomEnd = atomo?.id || bloqueActual.atomEnd;
-      bloqueActual.pageEnd = atomo?.page || bloqueActual.pageEnd;
-      bloqueActual.text = partesTxt.join('').slice(bloqueActual._desde);
-      bloquesLectura.push(bloqueActual);
-    }
+    if (bloqueActual) bloquesLectura.push(bloqueActual);
     bloqueActual = {
       id: `rb${idBloque++}`,
       type: tipo,
@@ -297,9 +299,8 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
       atomStart: atomo.id,
       atomEnd: atomo.id,
       boundaryIds: [],
-      text: '',
+      text: String(atomo.str || ''),
       continuation: false,
-      _desde: largoCrudo,
     };
   };
 
@@ -318,86 +319,16 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
         bloqueActual.pageEnd = atomo.page;
       }
     }
-    if (i === 0) {
-      const primero = normalizarAtomStr(atomo.str);
-      partesTxt.push(primero);
-      largoCrudo += primero.length;
-    } else {
-      // Si hay que quitar un guion (incluido «extraor- » con espacio
-      // residual), se recorta lo ya escrito: también los espacios sobrantes.
-      if (lim.decision === 'join' && lim.quitarGuion) {
-        const actual = partesTxt.join('');
-        const recortado = actual.replace(/\s+$/, '').replace(/[\u00AD\u002D\u2010\u2011\u2012]$/, '');
-        if (recortado.length !== actual.length) {
-          partesTxt.length = 0;
-          partesTxt.push(recortado);
-          largoCrudo = recortado.length;
-        } else {
-          // «extraor- »: el guion quedó antes de espacios ya normalizados.
-          const rec2 = actual.replace(/[\u00AD\u002D\u2010\u2011\u2012]\s*$/, '');
-          if (rec2.length !== actual.length) {
-            partesTxt.length = 0;
-            partesTxt.push(rec2);
-            largoCrudo = rec2.length;
-          }
-        }
-      }
-      const sep = separadorDe(lim, incluidos[i - 1]);
-      // El átomo derecho entra sin sus espacios de borde: el separador ya
-      // los representa. Así no se duplican ni se pierden al recomponer.
-      const derCrudo = normalizarAtomStr(atomo.str);
-      const der = (lim.decision === 'join')
-        ? derCrudo.replace(/^\s+/, '')
-        : derCrudo;
-      partesTxt.push(sep + der);
-      largoCrudo += sep.length + der.length;
-    }
   }
-  if (bloqueActual) {
-    bloqueActual.text = partesTxt.join('').slice(bloqueActual._desde);
-    bloquesLectura.push(bloqueActual);
-  }
+  if (bloqueActual) bloquesLectura.push(bloqueActual);
 
-  const crudo = partesTxt.join('');
-  let texto = espaciarPuntoPegado(crudo).replace(/^\s+/, '');
+  const composicionFiel = componerAtomosFiel(incluidos, limites);
+  let texto = composicionFiel.texto;
   const textoCanonico = texto;
 
-  // Correspondencias sobre el texto FINAL: se localiza cada átomo en orden.
-  // Así un `.Como` → `. Como` desplaza lo que sigue sin romper anclas, TTS
-  // ni búsqueda.
-  const offset2 = new Map();
-  {
-    let cursor = 0;
-    for (let i = 0; i < incluidos.length; i += 1) {
-      const atomo = incluidos[i];
-      let nucleo = normalizarAtomStr(atomo.str).trim();
-      // Si el siguiente límite quita el guion, el núcleo final no lo trae.
-      const sig = limites[i];
-      if (sig?.decision === 'join' && sig.quitarGuion) {
-        nucleo = nucleo.replace(/\s+$/, '').replace(/[\u00AD\u002D\u2010\u2011\u2012]$/, '');
-      }
-      if (!nucleo) {
-        offset2.set(atomo.id, cursor);
-        continue;
-      }
-      const nucleoFinal = espaciarPuntoPegado(nucleo);
-      // Prefijo corto: el orden lo da el cursor, no la unicidad global.
-      const aguja = nucleoFinal.slice(0, 16);
-      let donde = aguja ? texto.indexOf(aguja, cursor) : cursor;
-      if (donde < 0) {
-        // Reserva: primer trozo localizable (átomos con rarezas tipográficas).
-        const trozo = nucleoFinal.slice(0, Math.min(12, nucleoFinal.length));
-        donde = trozo ? texto.indexOf(trozo, cursor) : cursor;
-      }
-      if (donde < 0) donde = cursor;
-      // No retroceder: el orden de átomos manda.
-      if (donde < cursor) donde = cursor;
-      if (donde > texto.length) donde = texto.length;
-      offset2.set(atomo.id, donde);
-      cursor = donde + nucleoFinal.length;
-      if (cursor > texto.length) cursor = texto.length;
-    }
-  }
+  // Correspondencias exactas sobre el texto final, calculadas durante la
+  // misma composición que decide los separadores.
+  const offset2 = composicionFiel.offsets;
 
   /* Dónde cae cada corte en el texto FINAL. Sin esto un límite solo conocía
    * los dos átomos que separa, y no había forma de acotar «los cortes de esta
@@ -466,7 +397,7 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
     let fin = Number.isFinite(finAtomo) ? finAtomo : texto.length;
     if (Number.isFinite(finAtomo)) {
       const atomoFin = atomosPorId.get(b.atomEnd);
-      let nucleoFin = atomoFin ? espaciarPuntoPegado(normalizarAtomStr(atomoFin.str).trim()) : '';
+      let nucleoFin = atomoFin ? normalizarAtomStr(atomoFin.str).trim() : '';
       const sigDeFin = limitePorIzquierdo.get(b.atomEnd);
       if (sigDeFin?.decision === 'join' && sigDeFin.quitarGuion) {
         nucleoFin = nucleoFin.replace(/\s+$/, '').replace(/[\u00AD\u002D\u2010\u2011\u2012]$/, '');
@@ -494,7 +425,7 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
   const esDobleColumna = (infoColPorPagina && [...infoColPorPagina.values()].some((v) => v.columnas >= 2))
     || infoCol.columnas >= 2;
 
-  return {
+  const base = {
     texto,
     textoCanonico: texto,
     capitulos,
@@ -517,6 +448,7 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
     candidatosUnion: [],
     listoParaLectura: pendientes === 0,
   };
+  return { ...base, ...crearInformeFidelidad(base, { origen: opciones.origen || 'texto', paginas: listaPaginas }) };
 }
 
 export function reconstruirDocumento(paginas, opciones = {}) {

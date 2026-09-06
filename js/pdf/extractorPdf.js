@@ -179,6 +179,11 @@ export async function extraerPaginas(doc, opciones = {}) {
         dir: a.dir,
         fontName: a.fontName,
         transform: a.transform,
+        fontFamily: a.fontFamily,
+        fontAscent: a.fontAscent,
+        fontDescent: a.fontDescent,
+        vertical: a.vertical,
+        source: a.source,
       }));
 
       paginas.push({
@@ -252,7 +257,7 @@ export async function procesarPdf(archivo, opciones = {}) {
     const { paginas, cancelado } = await extraerPaginas(doc, opciones);
     if (cancelado) return { cancelado: true };
 
-    const resultado = componerTexto(paginas, { indice });
+    const resultado = componerTexto(paginas, { indice, origen: 'texto' });
     /* La portada se saca ahora, con el documento todavía abierto. */
     const portada = opciones.conPortada === false ? null : await renderizarPortada(doc);
     const caracteres = resultado.texto.length;

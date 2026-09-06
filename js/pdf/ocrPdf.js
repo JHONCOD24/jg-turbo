@@ -72,17 +72,34 @@ function lineasDelResultado(datos, altoImagen) {
   for (const bloque of bloques) {
     for (const parrafo of bloque.paragraphs || []) {
       for (const linea of parrafo.lines || []) {
-        const texto = String(linea.text || '').replace(/\s+/g, ' ').trim();
+        const textoFuente = String(linea.text || '');
+        const texto = textoFuente.replace(/\s+/g, ' ').trim();
         if (!texto) continue;
         const caja = linea.bbox || {};
         const alto = Math.max(1, (caja.y1 || 0) - (caja.y0 || 0));
+        const items = (linea.words || []).map((palabra) => {
+          const pc = palabra.bbox || {};
+          return {
+            str: String(palabra.text || ''),
+            x: pc.x0 || 0,
+            y: altoImagen - (pc.y0 || 0),
+            altura: Math.max(1, (pc.y1 || 0) - (pc.y0 || 0)),
+            ancho: Math.max(1, (pc.x1 || 0) - (pc.x0 || 0)),
+            confidence: Number.isFinite(Number(palabra.confidence)) ? Number(palabra.confidence) : null,
+            source: 'ocr',
+          };
+        }).filter((palabra) => palabra.str);
         lineas.push({
           texto,
+          textoFuente,
           x: caja.x0 || 0,
           /* En una imagen la Y crece hacia abajo; el lector espera lo contrario. */
           y: altoImagen - (caja.y0 || 0),
           altura: alto,
           ancho: Math.max(1, (caja.x1 || 0) - (caja.x0 || 0)),
+          confianza: Number.isFinite(Number(linea.confidence)) ? Number(linea.confidence) : null,
+          source: 'ocr',
+          items,
         });
       }
     }
@@ -91,15 +108,19 @@ function lineasDelResultado(datos, altoImagen) {
   /* Respaldo: si esta versión no entrega bloques, se usa el texto plano y se
    * reparten posiciones parejas. La limpieza sigue funcionando. */
   if (!lineas.length && datos && datos.text) {
-    const sueltas = String(datos.text).split('\n').map((t) => t.trim()).filter(Boolean);
+    const sueltas = String(datos.text).split('\n').filter((t) => t.trim());
     const paso = altoImagen / Math.max(1, sueltas.length + 1);
-    sueltas.forEach((texto, i) => {
+    sueltas.forEach((textoFuente, i) => {
+      const texto = textoFuente.trim();
       lineas.push({
         texto,
+        textoFuente,
         x: 70,
         y: altoImagen - paso * (i + 1),
         altura: paso * 0.6,
         ancho: texto.length * 8,
+        confianza: Number.isFinite(Number(datos.confidence)) ? Number(datos.confidence) : null,
+        source: 'ocr',
       });
     });
   }
@@ -175,6 +196,7 @@ export async function reconocerPaginas(archivo, opciones = {}) {
           ancho: lienzo.width,
           alto: lienzo.height,
           confianza: typeof data.confidence === 'number' ? data.confidence : null,
+          source: 'ocr',
         });
       } catch (error) {
         console.warn('[jg-ocr] página', numero, error);

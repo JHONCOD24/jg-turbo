@@ -28,6 +28,12 @@ export function crearAtomo(campos) {
     markedContentId: campos.markedContentId ?? null,
     rolEstructura: campos.rolEstructura || null,
     transform: Array.isArray(campos.transform) ? campos.transform.slice() : null,
+    fontFamily: campos.fontFamily || '',
+    fontAscent: Number.isFinite(Number(campos.fontAscent)) ? Number(campos.fontAscent) : null,
+    fontDescent: Number.isFinite(Number(campos.fontDescent)) ? Number(campos.fontDescent) : null,
+    vertical: Boolean(campos.vertical),
+    source: campos.source || 'pdf',
+    confidence: Number.isFinite(Number(campos.confidence)) ? Number(campos.confidence) : null,
   };
 }
 
@@ -40,6 +46,7 @@ export function extraerAtomosDeTextContent(textContent, { page, viewport } = {})
   const pila = [];
   let itemIndex = 0;
   const items = textContent?.items || [];
+  const estilos = textContent?.styles || {};
   const alto = viewport?.height || 0;
 
   for (const item of items) {
@@ -64,6 +71,7 @@ export function extraerAtomosDeTextContent(textContent, { page, viewport } = {})
       y = alto - conv[1];
     }
     const altura = Math.hypot(t[2] || 0, t[3] || 0) || item.height || 0;
+    const estilo = estilos[item.fontName] || {};
     atomos.push(crearAtomo({
       page,
       itemIndex,
@@ -77,6 +85,11 @@ export function extraerAtomosDeTextContent(textContent, { page, viewport } = {})
       hasEOL: !!item.hasEOL,
       markedContentId: pila.length ? pila[pila.length - 1] : null,
       transform: t,
+      fontFamily: estilo.fontFamily,
+      fontAscent: estilo.ascent,
+      fontDescent: estilo.descent,
+      vertical: estilo.vertical,
+      source: 'pdf',
     }));
     itemIndex += 1;
   }
@@ -278,6 +291,12 @@ export function atomosDesdePaginas(paginas) {
           hasEOL: it.hasEOL,
           markedContentId: it.markedContentId,
           transform: it.transform,
+          fontFamily: it.fontFamily,
+          fontAscent: it.fontAscent,
+          fontDescent: it.fontDescent,
+          vertical: it.vertical,
+          source: it.source || pag.source || 'pdf',
+          confidence: it.confidence,
         }));
       });
       continue;
@@ -297,16 +316,23 @@ export function atomosDesdePaginas(paginas) {
             hasEOL: j === l.items.length - 1,
             dir: it.dir,
             fontName: it.fontName,
+            fontFamily: it.fontFamily,
+            fontAscent: it.fontAscent,
+            fontDescent: it.fontDescent,
+            vertical: it.vertical,
+            source: it.source || l.source || pag.source || 'pdf',
+            confidence: it.confidence ?? l.confianza ?? pag.confianza,
           }));
         });
         return;
       }
+      const textoFuente = String(l.textoFuente ?? l.texto ?? l.str ?? '');
       const texto = String(l.texto ?? l.str ?? '').replace(/[ \t]+/g, ' ').trim();
       if (!texto) return;
       salida.push(crearAtomo({
         page: numero,
         itemIndex: i,
-        str: texto,
+        str: textoFuente || texto,
         x: l.x || 0,
         y: l.y || 0,
         width: l.ancho ?? l.width ?? String(texto).length * 5,
@@ -314,6 +340,8 @@ export function atomosDesdePaginas(paginas) {
         hasEOL: true,
         dir: l.dir,
         fontName: l.fontName,
+        source: l.source || pag.source || 'pdf',
+        confidence: l.confianza ?? pag.confianza,
       }));
     });
   }

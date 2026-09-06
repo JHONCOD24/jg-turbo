@@ -83,6 +83,7 @@ const patrones = [
   [/\b[a-záéíóúñ]{2,}[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}/g, 'dos palabras pegadas sin espacio'],
 ];
 console.log(`páginas=${totalPaginas} atomos=${atomos.length} pendientes=${r.pendientes} chars=${r.texto.length}`);
+console.log(`fidelidad=${r.estadoFidelidad?.estado || 'sin_datos'} transformaciones=${r.transformaciones?.length || 0}`);
 for (const [patron, motivo] of patrones) {
   const hallados = r.texto.match(patron) || [];
   /* Solo un ejemplo corto: el libro es privado y no se vuelca en la consola. */
@@ -116,6 +117,10 @@ const fallos = [];
  * página omitidos no cuentan (si se pasa la lista cruda, fallan 27 letras
  * que el motor descartó a propósito). */
 if (!invarianteLetras(r.atomos, r.texto, r.limites)) fallos.push('el invariante de letras no se cumple');
+if (r.estadoFidelidad?.integridad?.valido !== true
+    || r.estadoFidelidad?.integridad?.coincidenciaExacta !== true) {
+  fallos.push('la transcripción no se puede reproducir carácter por carácter desde su ledger');
+}
 /* «1962- author» y «alpha- and» son guion de rango o suspendido, no un
  * corte de renglón. Solo fallan los que no son cifra ni coordinador. */
 const guiones = r.texto.match(/\w+-\s+\w+/g) || [];

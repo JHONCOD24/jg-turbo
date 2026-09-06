@@ -4,6 +4,7 @@ import { resolve, join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { crearLibro } from './generarPdfPrueba.mjs';
 import assert from 'node:assert/strict';
+import { despertarCromo as despertar } from './_cromo.mjs';
 const app = resolve(import.meta.dirname, '..');
 const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
 const destino = resolve(app, '.playwright-cli/pdf-paginas');
@@ -71,6 +72,7 @@ try {
      que lo que se comprueba es que al abrirla quepa completa. */
   if (width > 640) { assert(medida.fondo<=height+2,'reproductor dentro de pantalla'); }
   else {
+    await despertar(p);
     await p.locator('#btnPdfBmVoz').click(); await p.waitForTimeout(400);
     const abierto = await p.evaluate(() => { const d=document.querySelector('#pdfDockNav').getBoundingClientRect();
       return {top:d.top, bottom:d.bottom}; });
@@ -103,7 +105,11 @@ try {
     await p.locator('#pdfAparTam').fill('16'); await p.locator('#pdfAparTam').dispatchEvent('input');
     await p.keyboard.press('Escape'); await p.waitForTimeout(300);
     const piso = await p.evaluate(() => parseFloat(getComputedStyle(document.querySelector('#pdfLectura')).fontSize));
-    assert(piso >= 17, `piso móvil de 17px aunque se elija 16 (mide ${piso}px)`);
+    /* El piso pasa de 17 a 16 px con el diseño editorial: 16 es el mínimo del
+       propio control, así que se respeta exactamente lo que elige la persona
+       y nada queda por debajo. La protección de legibilidad sigue: por
+       debajo de 16 no se puede bajar. */
+    assert(piso >= 16, `piso móvil de 16px aunque se elija menos (mide ${piso}px)`);
   }
   if (nombre==='movil') {
     /* Gestos con eventos táctiles sintéticos (el ratón no cuenta: el lector

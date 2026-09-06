@@ -281,6 +281,28 @@ export async function cargarReconstruccion(id) {
   return (await conAlmacenes([CONTENIDO], 'readonly', c => esperar(c.get(id))))?.reconstruccion || null;
 }
 
+/** Guarda qué páginas se compararon con el original sin alterar el texto. */
+export async function guardarEstadoFidelidad(id, estadoFidelidad) {
+  if (!id || !estadoFidelidad) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS, CONTENIDO], 'readwrite', async (docs, contenido) => {
+      const doc = await esperar(docs.get(id));
+      const fila = await esperar(contenido.get(id));
+      if (!doc || !fila?.reconstruccion) return false;
+      const reconstruccion = { ...fila.reconstruccion, estadoFidelidad: { ...estadoFidelidad } };
+      await esperar(contenido.put({ ...fila, reconstruccion }));
+      doc.estadoFidelidad = estadoFidelidad.estado || 'pendiente_revision';
+      doc.paginasVerificadas = [...(estadoFidelidad.paginasVerificadas || [])];
+      doc.actualizado = Date.now();
+      doc.contenidoActualizado = doc.actualizado;
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 /** Vincula el original conservando portada, contenido y progreso. */
 export async function guardarArchivo(id, pdf) {
   return conAlmacenes([ARCHIVOS, DOCUMENTOS], 'readwrite', async (archivos, docs) => {

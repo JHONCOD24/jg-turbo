@@ -142,10 +142,10 @@ console.log('--- 9) cola v1 no equivale a contenido íntegro ---');
   comprobar(nueva.version === 2 && nueva.items.every((i) => i.estado === 'pending' || i.sourceRevision), 'v1 se revalida, no se da por íntegra');
 }
 
-console.log('--- 10) versiones 7/7/2 ---');
+console.log('--- 10) versiones 8/8/2 ---');
 {
-  comprobar(VERSION_RECONSTRUCCION === 7, 'reconstrucción v7');
-  comprobar(VERSION_TROCEO === 7, 'troceo v7');
+  comprobar(VERSION_RECONSTRUCCION === 8, 'reconstrucción v8');
+  comprobar(VERSION_TROCEO === 8, 'troceo v8');
   comprobar(VERSION_COLA_CORRECCION === 2, 'cola v2');
 }
 

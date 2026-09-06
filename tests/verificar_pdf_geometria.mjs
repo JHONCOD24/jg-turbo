@@ -132,6 +132,15 @@ async function leer(pagina, archivo) {
   await pagina.waitForTimeout(700);
 }
 
+async function volverBiblioteca(pagina) {
+  const inmersivo = await pagina.evaluate(() => document.body.classList.contains('jg-inmersivo'));
+  if (inmersivo) {
+    await pagina.locator('#pdfLectura').click({ position: { x: 30, y: 30 } });
+    await pagina.waitForTimeout(120);
+  }
+  await pagina.locator('#btnPdfBack').click();
+}
+
 for (const [nombre, opciones] of [
   ['móvil pequeño', { viewport: { width: 320, height: 640 } }],
   ['móvil', { viewport: { width: 390, height: 844 } }],
@@ -151,10 +160,10 @@ for (const [nombre, opciones] of [
 
   // biblioteca: dos libros
   await leer(pagina, LIBRO);
-  await pagina.locator('#btnPdfBack').click();
+  await volverBiblioteca(pagina);
   await pagina.waitForTimeout(500);
   await leer(pagina, INGLES);
-  await pagina.locator('#btnPdfBack').click();
+  await volverBiblioteca(pagina);
   await pagina.waitForTimeout(800);
   await medir(pagina, `${nombre}·biblioteca`);
 

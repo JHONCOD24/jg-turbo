@@ -20,6 +20,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+/* El lector abre con la pantalla limpia: hay que traer los controles antes
+   de pulsarlos, igual que haría una persona. */
+import { despertarCromo } from './_cromo.mjs';
 import { crearLibro, crearLibroIngles, crearLibroConCortesSinGuion, crearEscaneado, crearRoto } from './generarPdfPrueba.mjs';
 import { pintarPaginaComoImagen, pdfDeImagenes, PAGINAS_ESCANEADAS } from './generarPdfEscaneado.mjs';
 
@@ -179,7 +182,8 @@ async function leer(pagina, archivo, espera = 90000) {
   await pagina.waitForFunction(() => {
     const avisos = ['pdfNotice', 'pdfNoticeLector'].map((id) => document.getElementById(id));
     const res = document.getElementById('pdfResultArea');
-    return avisos.some((a) => a && !a.hidden) || (res && res.style.display !== 'none');
+    return (res && res.style.display !== 'none') || avisos.some((a) =>
+      a && !a.hidden && (a.className || '').includes('err'));
   }, null, { timeout: espera }).catch(() => {});
   await pagina.waitForTimeout(700);
   /* Puede aparecer también al terminar de extraer, no solo al elegir. */
@@ -219,8 +223,13 @@ for (const [nombre, opciones] of [
      allí la cabecera es una sola fila. Las dos puertas abren el mismo. */
   const anchoVista = pagina.viewportSize().width;
   if (anchoVista > 640) await pagina.locator('#btnPdfBuscarToggle').click();
-  else { await pagina.locator('#btnPdfBmOpciones').click(); await pagina.waitForTimeout(250);
-         await pagina.locator('#btnPdfBuscarMovil').click(); }
+  else {
+    /* Con el diseño editorial el cromo se aparta solo mientras se lee, así que
+       primero hay que despertarlo con un toque, igual que haría cualquiera. */
+    await despertarCromo(pagina);
+    await pagina.locator('#btnPdfBmOpciones').click(); await pagina.waitForTimeout(250);
+    await pagina.locator('#btnPdfBuscarMovil').click();
+  }
   await pagina.waitForTimeout(250);
   comprobar(!(await pagina.locator('#pdfSearchRow').isHidden()), 'el buscador se despliega'); 
 
@@ -371,6 +380,7 @@ console.log('\n── Libro de 300 páginas ────────────
      el teléfono. Se usa la puerta que exista en esta pantalla. */
   const puertaIndice = (await pagina.locator('#btnPdfIndice').isVisible())
     ? '#btnPdfIndice' : '#btnPdfBmIndice';
+  await despertarCromo(pagina);
   await pagina.locator(puertaIndice).click();
   await pagina.waitForTimeout(400);
   const capitulos = await pagina.locator('#pdfIndiceLista .pdf-cap').count();
@@ -403,7 +413,7 @@ console.log('\n── Libro de 300 páginas ────────────
   /* Pasar de capítulo vive en el dock. En el teléfono el dock es la hoja que
      abre «Voz» (prev/siguiente capítulo arriba, como en un reproductor). */
   if (!(await pagina.locator('#btnPdfNext').isVisible())) {
-    await pagina.locator('#btnPdfBmVoz').click(); await pagina.waitForTimeout(350);
+    await despertarCromo(pagina); await pagina.locator('#btnPdfBmVoz').click(); await pagina.waitForTimeout(350);
   }
   await pagina.locator('#btnPdfNext').click();
   await pagina.waitForTimeout(500);
@@ -416,7 +426,7 @@ console.log('\n── Libro de 300 páginas ────────────
     if (await pagina.locator('#btnPdfBuscarToggle').isVisible()) {
       await pagina.locator('#btnPdfBuscarToggle').click();
     } else {
-      await pagina.locator('#btnPdfBmOpciones').click(); await pagina.waitForTimeout(250);
+      await despertarCromo(pagina); await pagina.locator('#btnPdfBmOpciones').click(); await pagina.waitForTimeout(250);
       await pagina.locator('#btnPdfBuscarMovil').click();
     }
     await pagina.waitForTimeout(300);
@@ -428,6 +438,7 @@ console.log('\n── Libro de 300 páginas ────────────
     'el buscador recorre el libro completo, no solo el capítulo visible'
   );
 
+  await despertarCromo(pagina);
   await pagina.evaluate(() => {
     const m = document.getElementById('pdfMasMenu');
     if (m) m.open = true;

@@ -1,4 +1,4 @@
-/* JG Turbo · Manifiesto compacto de límites y migración v6 → v7
+/* JG Turbo · Manifiesto compacto de límites y migración a la versión actual
  *
  * Los campos nuevos viven en los almacenes existentes. No se sube la versión
  * de IndexedDB. Un documento irrecuperable se marca needs_source: no se finge
@@ -7,8 +7,9 @@
  */
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO, reconstruirDesdeAtomos } from './reconstruccion.js';
 import { expandirManifiesto, contarPendientes, VERSION_LIMITES } from './limites.js';
+import { VERSION_FIDELIDAD } from './fidelidad.js';
 
-export { VERSION_RECONSTRUCCION, VERSION_TROCEO, VERSION_LIMITES };
+export { VERSION_RECONSTRUCCION, VERSION_TROCEO, VERSION_LIMITES, VERSION_FIDELIDAD };
 
 export function serializarReconstruccion(resultado) {
   if (!resultado) return null;
@@ -16,10 +17,19 @@ export function serializarReconstruccion(resultado) {
     versionReconstruccion: VERSION_RECONSTRUCCION,
     versionTroceo: VERSION_TROCEO,
     versionLimites: VERSION_LIMITES,
+    versionFidelidad: VERSION_FIDELIDAD,
     pendientes: Number(resultado.pendientes) || 0,
     listoParaLectura: resultado.pendientes === 0,
+    textoCanonico: String(resultado.textoCanonico ?? resultado.texto ?? ''),
     manifiesto: resultado.manifiesto || [],
     atomos: resultado.atomos || [],
+    atomosTodos: resultado.atomosTodos || resultado.fragmentosFuente || [],
+    fragmentosFuente: resultado.fragmentosFuente || [],
+    transformaciones: resultado.transformaciones || [],
+    estructura: resultado.estructura || [],
+    calidadPorPagina: resultado.calidadPorPagina || [],
+    estadoFidelidad: resultado.estadoFidelidad || null,
+    omisiones: resultado.omisiones || [],
     paginas: resultado.paginas || [],
     offsets: [...(resultado.offsetDeAtomo || new Map())],
     bloques: (resultado.bloquesLectura || resultado.bloques || []).map((b) => ({
@@ -41,25 +51,21 @@ export function manifiestoSuficiente(manifiesto) {
 }
 
 /**
- * Qué hacer con un documento guardado antes de v7 (v6 queda como alias).
+ * Qué hacer con un documento guardado antes de la versión actual.
  *
  * @returns {{accion:'reextraer'|'reconstruir'|'needs_source'|'capa_nueva'|'nada', needsSource?:boolean, motivo:string}}
  */
-export function planMigracionV7(doc = {}) {
+export function planMigracionV8(doc = {}) {
   const version = Number(doc.versionReconstruccion || doc.versionTroceo || 0);
   const tienePdf = Boolean(doc.tieneArchivo || doc.pdf);
-  const manifiesto = doc.manifiesto || doc.manifiestoLimites || [];
   const aprobado = Boolean(doc.tieneAprobado || doc.textoAprobado || doc.capaAprobado);
 
-  if (version >= VERSION_RECONSTRUCCION && !aprobado) {
-    return { accion: 'nada', motivo: 'ya_v7' };
+  if (version >= VERSION_RECONSTRUCCION) {
+    return { accion: 'nada', motivo: 'version_actual' };
   }
   if (tienePdf) {
     if (aprobado) return { accion: 'capa_nueva', motivo: 'edicion_aprobada_con_pdf' };
     return { accion: 'reextraer', motivo: 'pdf_local' };
-  }
-  if (manifiestoSuficiente(manifiesto) && Array.isArray(doc.atomos) && doc.atomos.length) {
-    return { accion: 'reconstruir', motivo: 'manifiesto_suficiente' };
   }
   return {
     accion: 'needs_source',
@@ -69,7 +75,11 @@ export function planMigracionV7(doc = {}) {
 }
 
 export function planMigracionV6(doc = {}) {
-  return planMigracionV7(doc);
+  return planMigracionV8(doc);
+}
+
+export function planMigracionV7(doc = {}) {
+  return planMigracionV8(doc);
 }
 
 export function reconstruirDesdeManifiesto({ atomos, manifiesto, decisiones, lang = 'es', paginas = [] }) {
@@ -102,6 +112,9 @@ export function camposSyncDocumento(meta = {}) {
     pendientesLimites: meta.pendientesLimites ?? 0,
     needsSource: Boolean(meta.needsSource),
     listoParaLectura: meta.listoParaLectura !== false && !meta.needsSource && !(meta.pendientesLimites > 0),
+    versionFidelidad: meta.versionFidelidad ?? VERSION_FIDELIDAD,
+    estadoFidelidad: meta.estadoFidelidad || (meta.needsSource ? 'legacy_no_verificable' : 'pendiente_revision'),
+    paginasVerificadas: Array.isArray(meta.paginasVerificadas) ? meta.paginasVerificadas.slice() : [],
   };
 }
 

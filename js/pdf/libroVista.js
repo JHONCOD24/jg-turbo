@@ -17,7 +17,11 @@ function esc(texto) {
 }
 
 function leerApariencia() {
-  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas' };
+  /* `tamElegido`: si la persona movió el control de tamaño. Mientras no lo
+   * haga, en el teléfono manda un tamaño fluido que mantiene la línea en
+   * 32-46 caracteres. En cuanto lo mueve, manda ella: alguien con poca
+   * vista tiene que poder agrandar aunque la línea quede corta. */
+  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas', tamElegido: false };
   try {
     const crudo = localStorage.getItem('jg_pdf_lectura');
     if (crudo) cfg = { ...cfg, ...JSON.parse(crudo) };
@@ -49,6 +53,7 @@ export function initLibroVista({ el, estado, api }) {
     if (art) {
       art.dataset.ancho = String(cfg.ancho);
       art.dataset.fuente = cfg.fuente;
+      art.dataset.tamAuto = cfg.tamElegido ? 'no' : 'si';
     }
     if (el.aparTam) el.aparTam.value = String(cfg.tam);
     if (el.aparInter) el.aparInter.value = String(cfg.inter);
@@ -121,9 +126,14 @@ export function initLibroVista({ el, estado, api }) {
     /* Capítulo nuevo: se reparte desde su primera página. */
     pag.actual = 0;
     if (!conservar) pag.ancla = 0;
+    traerTipografiaLectura();
+    ajustarComposicion();
     requestAnimationFrame(() => {
+      medirCabecera();
       medirPaginas({ conservar: false });
       if (ancla) irACaracter(ancla);
+      pintarPieLectura();
+      limpiarAlAbrir();
       /* Se intenta también al abrir el capítulo. `unirPalabras` vuelve a
        * pintar, así que hay que evitar el bucle: solo se dispara cuando el
        * render NO viene de una unión (ver `uniendo`). */
@@ -233,6 +243,7 @@ export function initLibroVista({ el, estado, api }) {
       behavior: suave && !prefiereMenosMovimiento() ? 'smooth' : 'auto',
     });
     pintarPaginacion();
+    pintarPieLectura();
     /* `caracterVisible()` se apoya en `pag.actual`, que aquí ya es la página
      * destino, y su cálculo no depende de dónde vaya la animación: por eso
      * puede anotarse el sitio sin esperar a que el desplazamiento termine. */
@@ -293,9 +304,18 @@ export function initLibroVista({ el, estado, api }) {
     const estiloCol = getComputedStyle(col);
     const huecos = (parseFloat(estiloCol.rowGap) || 0) * visibles.length;
     const bordes = (parseFloat(estiloCol.paddingTop) || 0) + (parseFloat(estiloCol.paddingBottom) || 0);
-    const alto = Math.floor(col.clientHeight - bordes - visibles.reduce((n,e) => n + e.getBoundingClientRect().height, 0) - huecos);
+    let alto = Math.floor(col.clientHeight - bordes - visibles.reduce((n,e) => n + e.getBoundingClientRect().height, 0) - huecos);
     const ancho = art.clientWidth;
     if (alto < 80 || ancho < 80) { pag.activo = false; return; }
+
+    /* La página tiene que caber un número ENTERO de renglones. Si sobra medio,
+     * la última línea aparece cortada por la mitad y eso delata al instante
+     * que no es un libro. Se recorta al múltiplo del interlineado. */
+    const renglon = parseFloat(getComputedStyle(art).lineHeight);
+    if (Number.isFinite(renglon) && renglon > 4) {
+      const enteros = Math.floor(alto / renglon);
+      if (enteros >= 3) alto = Math.round(enteros * renglon);
+    }
 
     art.style.height = alto + 'px';
     art.style.flex = 'none';
@@ -501,7 +521,11 @@ export function initLibroVista({ el, estado, api }) {
   });
 
   // Apariencia
-  if (el.aparTam) el.aparTam.addEventListener('input', () => { cfg.tam = Number(el.aparTam.value) || 19; aplicarApariencia(); });
+  if (el.aparTam) el.aparTam.addEventListener('input', () => {
+    cfg.tam = Number(el.aparTam.value) || 19;
+    cfg.tamElegido = true;   // a partir de aquí manda la persona
+    aplicarApariencia();
+  });
   if (el.aparInter) el.aparInter.addEventListener('input', () => { cfg.inter = Number(el.aparInter.value) || 1.7; aplicarApariencia(); });
   if (el.aparAncho) el.aparAncho.addEventListener('change', () => { cfg.ancho = Number(el.aparAncho.value) || 64; aplicarApariencia(); });
   if (el.aparFuente) el.aparFuente.addEventListener('change', () => { cfg.fuente = el.aparFuente.value === 'serif' ? 'serif' : 'sans'; aplicarApariencia(); });
@@ -564,6 +588,75 @@ export function initLibroVista({ el, estado, api }) {
     const cerrarBoton = el.aparienciaHoja.querySelector('[data-cerrar-hoja="pdfAparienciaHoja"]');
     if (cerrarBoton) cerrarBoton.addEventListener('click', cerrarApariencia);
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Lectura editorial en el teléfono
+     ──────────────────────────────────────────────────────────────────────
+     Tres cosas que el CSS no puede decidir solo:
+       · traer la tipografía SOLO cuando se abre un libro (son 220 KB que no
+         le sirven a quien viene a dictar);
+       · declarar el idioma del libro, porque de él depende cómo se parten
+         las palabras;
+       · decidir si se justifica, que solo tiene sentido si se puede partir.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* Idiomas en los que los navegadores traen patrones de partición. Con otro
+   * idioma se lee alineado a la izquierda: un justificado sin partir abre
+   * ríos de blanco y se lee peor que sin justificar. */
+  const IDIOMAS_CON_GUIONES = new Set(['es', 'en', 'pt', 'fr', 'de', 'it', 'nl', 'ca', 'gl']);
+  const esTelefono = () => window.matchMedia('(max-width:640px)').matches;
+
+  let fuentePedida = false;
+  function traerTipografiaLectura() {
+    if (fuentePedida || typeof document === 'undefined') return;
+    fuentePedida = true;
+    try {
+      const enlace = document.createElement('link');
+      enlace.rel = 'stylesheet';
+      enlace.href = new URL('../vendor/literata/literata.css', import.meta.url).href;
+      /* Si no llega, el CSS ya declara Georgia detrás: se lee igual, con otra
+       * letra. No se bloquea la lectura por una fuente. */
+      enlace.onerror = () => console.warn('[lectura] la tipografía no llegó; se usa la serif del sistema');
+      document.head.appendChild(enlace);
+    } catch (_) { /* sin DOM (pruebas en Node) */ }
+  }
+
+  /** Idioma y justificado del artículo, según el libro abierto. */
+  function ajustarComposicion() {
+    const art = el.lectura;
+    if (!art) return;
+    const idioma = String(estado.idioma || 'es').slice(0, 2).toLowerCase();
+    art.setAttribute('lang', idioma);
+    const puedePartir = IDIOMAS_CON_GUIONES.has(idioma);
+    art.dataset.justificado = (esTelefono() && puedePartir) ? 'si' : 'no';
+  }
+
+  /* Alto real de la cabecera: la barra de modo se coloca justo debajo, y
+   * ambas flotan. Se mide del DOM para que no haya dos números que cuadrar. */
+  function medirCabecera() {
+    const cab = el.resultArea?.querySelector('.pdf-doc-top');
+    if (!cab) return;
+    const alto = Math.round(cab.getBoundingClientRect().height);
+    if (alto > 0) document.body.style.setProperty('--pdf-cab-alto', alto + 'px');
+  }
+
+  /** El pie: cuánto queda y por dónde vas. Se refresca al cambiar de página. */
+  function pintarPieLectura() {
+    const pie = document.getElementById('pdfPieLectura');
+    if (!pie) return;
+    const restante = document.getElementById('pdfPieRestante');
+    const porc = document.getElementById('pdfPiePorcentaje');
+    if (restante) {
+      const min = typeof api.minutosRestantes === 'function' ? api.minutosRestantes() : '';
+      restante.textContent = min ? `restantes ${min} en el capítulo` : '';
+    }
+    if (porc) {
+      const total = Math.max(1, pag.total || 1);
+      const hecho = Math.round(((pag.actual + 1) / total) * 100);
+      porc.textContent = `${Math.min(100, Math.max(0, hecho))} %`;
+    }
+  }
+  api.pintarPieLectura = pintarPieLectura;
 
   /* ═══════════════════════════════════════════════════════════════════════
      «Unir palabras»: recomponer lo que el PDF partió al saltar de renglón
@@ -890,20 +983,61 @@ export function initLibroVista({ el, estado, api }) {
   /* Apartar el cromo NO cambia el tamaño del texto (el hueco queda
      reservado), así que aquí no se vuelve a repartir nada: es justo lo que
      evita que un salto de página se deshaga solo. */
-  function inmersivo() {
-    /* En teléfono los controles permanecen visibles. Ocultarlos conservando
-       su hueco dejaba una franja vacía; ocultarlos sin conservarlo refluía las
-       páginas. Una barra estable resulta más predecible y no cambia el alto. */
-    document.body.classList.remove('jg-inmersivo');
+  /* Apartar el cromo estuvo desactivado un tiempo, y con razón: cuando los
+   * controles vivían EN EL FLUJO había que elegir entre dejar una franja vacía
+   * (si se conservaba su hueco) o volver a paginar el capítulo (si no). Las dos
+   * opciones eran malas.
+   *
+   * Ese dilema ya no existe: desde el diseño editorial del teléfono el cromo
+   * FLOTA por encima del texto (`position:fixed`), así que apartarlo no deja
+   * hueco ninguno y tampoco cambia el alto del texto ni una décima. Por eso
+   * vuelve, que es lo que hace que la página se lea como una página. */
+  function inmersivo(activo) {
+    if (!enTelefono()) { document.body.classList.remove('jg-inmersivo'); return; }
+    document.body.classList.toggle('jg-inmersivo', !!activo);
   }
+  /* Pasar de página es volver a leer: el cromo se aparta.
+   *
+   * Se espera a que termine el desplazamiento suave. Apartarlo a mitad no
+   * remaqueta nada (flota por encima), pero el gesto se ve más limpio si
+   * ocurre con la página ya asentada. */
   function apartarCromo() {
     clearTimeout(tempoInmersivo);
-    inmersivo(false);
+    if (!enTelefono()) return;
+    const reintentar = () => {
+      if (pag.saltando) { tempoInmersivo = setTimeout(reintentar, 120); return; }
+      inmersivo(true);
+    };
+    tempoInmersivo = setTimeout(reintentar, 380);
   }
+
+  /* Mientras el cromo está a la vista tapa las primeras y últimas líneas
+   * (49 px arriba y 79 abajo, medidos). Es el trato del modelo editorial: a
+   * cambio, leyendo se ve la página entera. Por eso lo trae un toque y lo
+   * quita el siguiente paso de página, sin temporizadores de por medio. */
   function devolverCromo() {
     clearTimeout(tempoInmersivo);
-    if (!document.body.classList.contains('jg-inmersivo')) return;
-    inmersivo(false);
+    if (document.body.classList.contains('jg-inmersivo')) inmersivo(false);
+  }
+
+  /* Cuándo se aparta el cromo, y por qué NO hay temporizador.
+   *
+   * La primera versión lo escondía tras 3,2 s sin tocar nada. Mala idea: se
+   * iba en mitad de un ajuste y volvía impredecible cualquier prueba. El
+   * modelo que funciona es el de un lector de libros:
+   *
+   *   · al abrir el capítulo, la pantalla queda limpia;
+   *   · un toque en el texto trae los controles (y ese toque NO lee);
+   *   · pasar de página los vuelve a apartar, porque estás leyendo otra vez.
+   *
+   * Sin relojes: lo decide siempre un gesto de la persona. */
+  let limpiadaInicial = '';
+  function limpiarAlAbrir() {
+    if (!enTelefono()) return;
+    const cual = `${estado.id || ''}#${estado.parteActual}`;
+    if (limpiadaInicial === cual) return;
+    limpiadaInicial = cual;
+    inmersivo(true);
   }
   /* Con una hoja abierta o el reproductor desplegado, apartar el cromo
      dejaría al usuario mirando una hoja flotando sobre nada. */

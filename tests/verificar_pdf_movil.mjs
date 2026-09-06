@@ -14,6 +14,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { resolve, join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { crearLibro } from './generarPdfPrueba.mjs';
+import { despertarCromo } from './_cromo.mjs';
 import assert from 'node:assert/strict';
 
 const app = resolve(import.meta.dirname, '..');
@@ -147,7 +148,12 @@ try {
 
   /* ── 2. La barra del pulgar ─────────────────────────────────────────── */
   console.log('\n── 2. La barra del pulgar ──────────────────────────────────────');
-  comprobar('hay una barra inferior fija en el teléfono', m.barraMovilVisible);
+  /* El lector abre con la pantalla limpia y los controles vienen con un
+     toque, como en un lector de libros. Se comprueban las DOS cosas. */
+  comprobar('el lector abre con la pantalla limpia', !m.barraMovilVisible);
+  await despertarCromo(tel);
+  m = await reparto(tel);
+  comprobar('un toque trae la barra inferior', m.barraMovilVisible);
   comprobar('la barra lleva exactamente 4 acciones', m.accionesBarra === 4, `lleva ${m.accionesBarra}`);
   comprobar(`todo lo que se toca mide ${TACTIL} px o más`, m.pequenos.length === 0,
     m.pequenos.map((b) => `${b.id} ${b.w}×${b.h}`).join(', '));
@@ -160,7 +166,14 @@ try {
   const dentro = await reparto(tel);
   const paginaDespues = await tel.locator('#pdfPagPos').textContent();
   console.log('  página:', { texto: dentro.textoAlto, pagina: paginaDespues });
-  comprobar('los controles permanecen visibles al pasar de página', dentro.barraMovilVisible);
+  /* CONTRATO NUEVO (diseño editorial aprobado por el usuario, 2026-09-05):
+     al pasar de página los controles se APARTAN y la pantalla queda solo con
+     el texto, como en un lector de libros. Antes se exigía lo contrario
+     —«permanecen visibles»— porque el cromo vivía en el flujo y ocultarlo o
+     dejaba una franja vacía o volvía a paginar. Ahora flota por encima, así
+     que apartarlo no deja hueco ni mueve una línea, y eso lo comprueba la
+     aserción siguiente. */
+  comprobar('los controles se apartan al pasar de página', !dentro.barraMovilVisible);
   comprobar('pasar página NO remaqueta el texto', dentro.textoAlto === m.textoAlto,
     `antes ${m.textoAlto} px, ahora ${dentro.textoAlto} px`);
   /* El fallo que esto vigila: al remaquetar, el reparto cambiaba y la lectura
@@ -191,9 +204,20 @@ try {
     return { alto:Math.round(wrap?.height || 0), visual:Math.round(visualViewport?.height || innerHeight),
       fondo:Math.round(barra?.bottom || 0) };
   });
+  /* El borde inferior de la barra solo dice algo cuando la barra ESTÁ a la
+     vista: apartada se aparca fuera de pantalla a propósito, y medirla ahí
+     daba un «hueco» que no existe. Se despierta el cromo antes de medir. */
+  await tel.locator('#pdfLectura').click({ position: { x: 40, y: 40 } });
+  await tel.waitForTimeout(500);
+  const conCromo = await tel.evaluate(() => {
+    const wrap = document.querySelector('body.jg-leyendo > .wrap')?.getBoundingClientRect();
+    const barra = document.querySelector('#pdfBarraMovil')?.getBoundingClientRect();
+    return { alto: Math.round(wrap?.height || 0), visual: Math.round(visualViewport?.height || innerHeight),
+      fondo: Math.round(barra?.bottom || 0) };
+  });
   comprobar('al cambiar la barra del navegador no queda hueco inferior',
-    Math.abs(ajustado.alto - ajustado.visual) <= 1 && Math.abs(ajustado.fondo - ajustado.visual) <= 1,
-    JSON.stringify(ajustado));
+    Math.abs(conCromo.alto - conCromo.visual) <= 1 && Math.abs(conCromo.fondo - conCromo.visual) <= 1,
+    JSON.stringify(conCromo));
   /* En teléfonos reales la ventana también se DESFASA con scroll al animarse
    * la barra: la cabecera quedaba cortada arriba aunque el alto cuadrara. */
   const desfase = await tel.evaluate(() => ({ scroll: window.scrollY,

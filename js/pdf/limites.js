@@ -259,6 +259,34 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
       continue;
     }
 
+    const textoIzq = lineasPorAtomo.get(izq.id) || izqStr;
+    const textoDer = lineasPorAtomo.get(der.id) || derStr;
+    const tituloDer = esTituloEstructural(der, textoDer, alturaModal);
+    const tituloIzq = esTituloEstructural(izq, textoIzq, alturaModal);
+    const listaDer = esLista(der);
+    const mismaPagina = izq.page === der.page && lim.kind !== 'page-break';
+    const sangria = mismaPagina && (der.x - xModal) > Math.max(4, alturaModal * 0.4);
+    const huecoVertical = mismaPagina && alturaModal > 0
+      && lim.evidence.yGap > Math.max(alturaModal * 1.8, 6);
+    const anchoLinea = anchoLineaPorAtomo.get(izq.id) || (izq.width || 0);
+    const anchoRef = Math.max(anchoMaximo, 1);
+    const anteriorCorta = anchoMaximo > 0
+      && anchoLinea < anchoRef * 0.72
+      && PUNT_TERMINAL.test((textoIzq || izqStr).trimEnd());
+
+    /* La estructura se decide antes de interpretar blancos de borde. Una
+     * sangría puede venir dentro de `str`; tratarla primero como un espacio
+     * ordinario borraba el párrafo aunque la geometría fuera inequívoca. */
+    if (tituloDer || tituloIzq || listaDer || (sangria && PUNT_TERMINAL.test(izqStr)) || huecoVertical || anteriorCorta) {
+      if (lim.kind === 'page-break' && !tituloDer && !tituloIzq && !listaDer && !PUNT_TERMINAL.test(izqStr)) {
+        /* Un cambio de página, por sí solo, no crea párrafo. */
+      } else {
+        lim.decision = 'paragraph';
+        lim.source = 'geometry';
+        continue;
+      }
+    }
+
     /* Espacio residual al cambiar de renglón («que to» / «ma un pla»): el
      * PDF trae un blanco donde el libro parte la palabra. Antes se daba por
      * espacio sin preguntar y «Unir palabras» no podía hacer nada (ni era
@@ -285,34 +313,6 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
       lim.decision = 'space';
       lim.source = 'pdf';
       continue;
-    }
-
-    const textoIzq = lineasPorAtomo.get(izq.id) || izqStr;
-    const textoDer = lineasPorAtomo.get(der.id) || derStr;
-    const tituloDer = esTituloEstructural(der, textoDer, alturaModal);
-    const tituloIzq = esTituloEstructural(izq, textoIzq, alturaModal);
-    const listaDer = esLista(der);
-    const mismaPagina = izq.page === der.page && lim.kind !== 'page-break';
-    const sangria = mismaPagina && (der.x - xModal) > Math.max(4, alturaModal * 0.4);
-    const huecoVertical = mismaPagina && alturaModal > 0
-      && lim.evidence.yGap > Math.max(alturaModal * 1.8, 6);
-    // Párrafo por línea completa, no por el ancho del fragmento suelto:
-    // una línea corta terminada en punto es final de párrafo aunque el
-    // átomo individual sea estrecho por ser solo una sílaba.
-    const anchoLinea = anchoLineaPorAtomo.get(izq.id) || (izq.width || 0);
-    const anchoRef = Math.max(anchoMaximo, 1);
-    const anteriorCorta = anchoMaximo > 0
-      && anchoLinea < anchoRef * 0.72
-      && PUNT_TERMINAL.test((textoIzq || izqStr).trimEnd());
-
-    if (tituloDer || tituloIzq || listaDer || (sangria && PUNT_TERMINAL.test(izqStr)) || huecoVertical || anteriorCorta) {
-      if (lim.kind === 'page-break' && !tituloDer && !tituloIzq && !listaDer && !PUNT_TERMINAL.test(izqStr)) {
-        /* Un cambio de página, por sí solo, no crea párrafo. */
-      } else {
-        lim.decision = 'paragraph';
-        lim.source = 'geometry';
-        continue;
-      }
     }
 
     const lex = decidirPorLexico(lim.leftFragment, lim.rightFragment, {

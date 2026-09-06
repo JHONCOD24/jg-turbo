@@ -709,6 +709,27 @@ sobre bytes (`TextEncoder` + `Uint32Array`): ~44 ms para 1,9 MB. Si algo
 tarda más de ~200 ms con ese libro, va fuera del hilo principal o se
 trocea con `await` entre bloques.
 
+### 6.8 El indicador de archivo puede estar atrasado
+
+**Ocurrió** (v2.48): un libro antiguo tenía el PDF en `archivos`, pero su
+documento decía `tieneArchivo: false`. La migración creyó al metadato y dejó el
+texto como no verificable aunque la fuente original sí existía.
+
+**Regla:** para decidir si se puede reextraer, consulta el blob real en
+IndexedDB. El indicador sirve para pintar la biblioteca, no como prueba de que
+la fuente existe o falta.
+
+### 6.9 Cobertura completa también exige un destino único
+
+**Ocurrió** (v2.48): un TextItem vacío compartía línea con un número de página.
+Quedó anotado una vez como vacío y otra dentro de la omisión del número. Los
+conjuntos decían que toda la fuente estaba cubierta, pero ocultaban el destino
+duplicado.
+
+**Regla:** cuenta apariciones, no solo IDs distintos. Cada fragmento debe estar
+incluido una vez o en una sola omisión, y su texto tiene que coincidir con la
+fuente inmutable antes de validar la transcripción.
+
 ---
 
 ## 7. Caché y despliegue

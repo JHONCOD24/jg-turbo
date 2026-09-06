@@ -11,7 +11,7 @@
  *    con tres millones de letras congela hasta un buen computador): se divide
  *    en capítulos y se muestra uno, sin perder el resto.
  */
-import { procesarPdf, ErrorPdf } from './extractorPdf.js';
+import { procesarPdf, abrirPdf, ErrorPdf } from './extractorPdf.js';
 import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
 import { partirTextoCanonico, mejorCorte as mejorCorteCanonico, LIMITE_PARTE as LIMITE_PARTE_CANONICO } from './particion.js';
 import {
@@ -24,6 +24,7 @@ import {
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
 import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource } from './manifiesto.js';
+import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
 import { initLibroVista, ordenarDocumentos, paginarDocumentos } from './libroVista.js';
 import { prepararParaVoz } from './vozTexto.js';
@@ -170,6 +171,12 @@ export function inicializarLectorPdf(deps = {}) {
     cortesHoja: $('pdfCortesHoja'), cortesLista: $('pdfCortesLista'), cortesCerrar: $('pdfCortesCerrar'),
     recorte: $('pdfRecorte'), recorteCerrar: $('pdfRecorteCerrar'),
     btnVincular: $('btnPdfVincular'), vincularInput: $('pdfVincularInput'),
+    compararBtn: $('btnPdfComparar'), fidelidadEstado: $('pdfFidelidadEstado'),
+    compararHoja: $('pdfCompararHoja'), compararCerrar: $('btnPdfCompararCerrar'),
+    compararCanvas: $('pdfCompararCanvas'), compararTexto: $('pdfCompararTexto'),
+    compararDudas: $('pdfCompararDudas'), compararPagina: $('pdfCompararPagina'),
+    compararPrev: $('btnPdfCompararPrev'), compararNext: $('btnPdfCompararNext'),
+    compararVerificada: $('btnPdfPaginaVerificada'),
     btnCorregirLibro: $('btnPdfCorregirLibro'),
     volverLectura: $('pdfVolverLectura'), btnPausar: $('btnPdfPausarCorreccion'),
     orden: $('pdfOrden'), vistaPortadas: $('pdfVistaPortadas'), vistaCompacta: $('pdfVistaCompacta'),
@@ -230,6 +237,12 @@ export function inicializarLectorPdf(deps = {}) {
     offsetDeAtomo: new Map(),
     pendientesLimites: 0,
     needsSource: false,
+    fragmentosFuente: [],
+    transformaciones: [],
+    estructura: [],
+    calidadPorPagina: [],
+    estadoFidelidad: null,
+    paginasFuente: [],
   };
 
   /* ── Ayudas ──────────────────────────────────────────────────────── */
@@ -836,8 +849,14 @@ export function inicializarLectorPdf(deps = {}) {
    * Apariencia ya hacía esto; Contenido, Opciones y Auditoría se quedaban
    * a medias. */
   function devolverFocoHoja(...candidatos) {
-    const volver = candidatos.find((c) => c && c.offsetParent !== null);
-    if (volver) volver.focus();
+    for (const volver of candidatos) {
+      if (!volver || volver.offsetParent === null) continue;
+      volver.focus({ preventScroll: true });
+      /* Un descendiente de <details> cerrado puede conservar geometría en
+       * algunos navegadores aunque no acepte foco. En ese caso se prueba el
+       * acceso visible equivalente, en vez de dejar el foco en <body>. */
+      if (document.activeElement === volver) return;
+    }
   }
   let hojaOrigen = null;
 
@@ -1139,6 +1158,7 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   function cerrarDocumento({ desdeHistorial = false } = {}) {
+    cerrarComparacion({ devolverFoco: false });
     if (estado.id) {
       anotarPosicion();
       clearTimeout(temporizadorGuardado);
@@ -1171,6 +1191,12 @@ export function inicializarLectorPdf(deps = {}) {
     estado.bloques = [];
     estado.bloquesEstructurales = [];
     estado.omisiones = [];
+    estado.fragmentosFuente = [];
+    estado.transformaciones = [];
+    estado.estructura = [];
+    estado.calidadPorPagina = [];
+    estado.estadoFidelidad = null;
+    estado.paginasFuente = [];
     estado.traducido = new Map();
     estado.pulido = new Map();
     estado.pulidor = null;
@@ -1262,6 +1288,7 @@ export function inicializarLectorPdf(deps = {}) {
     prepararPulidor();
     prepararTraduccion();
     abrirLector();
+    actualizarEstadoFidelidad();
     await mostrarParte(estado.progreso.parte || 0, {
       desplazamiento: estado.progreso.desplazamiento || 0,
     });
@@ -1375,15 +1402,19 @@ export function inicializarLectorPdf(deps = {}) {
 
   async function rehacerTroceo(doc, partes) {
     if (!Array.isArray(partes) || !partes.length) return null;
+    /* El metadato `tieneArchivo` de documentos antiguos puede estar atrasado.
+     * La fuente de verdad es el blob que realmente existe en IndexedDB: si
+     * está, se reextrae; si falta, se conserva el texto y se marca para
+     * revisión sin adivinar uniones. */
+    const archivo = await almacen.cargarArchivo(doc.id);
     const plan = planMigracionV6({
       versionTroceo: doc.versionTroceo,
       versionReconstruccion: doc.versionReconstruccion,
-      tieneArchivo: doc.tieneArchivo,
+      tieneArchivo: Boolean(archivo),
       manifiesto: doc.manifiesto,
       tieneAprobado: Boolean(doc.tieneAprobado),
     });
 
-    const archivo = await almacen.cargarArchivo(doc.id);
     if (archivo && (plan.accion === 'reextraer' || plan.accion === 'capa_nueva')) {
       try {
         const resultado = await procesarPdf(archivo, { conPortada: false });
@@ -1452,11 +1483,12 @@ export function inicializarLectorPdf(deps = {}) {
     let capitulos = doc.capitulos || [];
     let progreso = doc.progreso;
     let bloquesRehechos = null;
+    let needsSourceActual = Boolean(doc.needsSource);
     if (doc.versionTroceo !== VERSION_TROCEO || doc.versionReconstruccion !== VERSION_RECONSTRUCCION) {
       avisar('Reconstruyendo el libro para unir palabras partidas…', 'info');
       const rehecho = await rehacerTroceo(doc, partes);
       if (rehecho?.needsSource) {
-        estado.needsSource = true;
+        needsSourceActual = true;
         avisar('Necesita reimportar el PDF o una revisión manual de los límites pendientes.', 'warn');
         await almacen.marcarTroceo(id, VERSION_TROCEO, {
           partes: rehecho.partes || partes,
@@ -1465,6 +1497,7 @@ export function inicializarLectorPdf(deps = {}) {
           needsSource: true,
         });
       } else if (rehecho) {
+        needsSourceActual = false;
         if (rehecho.capaNueva) {
           avisar('Se reconstruyó una capa nueva; el texto que ya habías aprobado se conserva.', 'info', { efimero: true });
         } else {
@@ -1494,13 +1527,19 @@ export function inicializarLectorPdf(deps = {}) {
     estado.offsetDeAtomo = new Map();
     estado.localTexto = componerLibroDesdePartes(partes);
     estado.originalTexto = estado.localTexto;
-    estado.needsSource = !!doc.needsSource;
+    estado.needsSource = needsSourceActual;
     const reconstruccionGuardada = await almacen.cargarReconstruccion(id);
     if (reconstruccionGuardada?.atomos?.length) {
       estado.atomos = reconstruccionGuardada.atomos;
       estado.limites = expandirManifiesto(reconstruccionGuardada.manifiesto || []);
       estado.paginasFuente = reconstruccionGuardada.paginas || [];
       estado.offsetDeAtomo = new Map(reconstruccionGuardada.offsets || []);
+      estado.fragmentosFuente = reconstruccionGuardada.fragmentosFuente || reconstruccionGuardada.atomosTodos || [];
+      estado.transformaciones = reconstruccionGuardada.transformaciones || [];
+      estado.estructura = reconstruccionGuardada.estructura || [];
+      estado.calidadPorPagina = reconstruccionGuardada.calidadPorPagina || [];
+      estado.estadoFidelidad = reconstruccionGuardada.estadoFidelidad || null;
+      estado.omisiones = reconstruccionGuardada.omisiones || [];
     }
     await montarDocumento({
       id: doc.id,
@@ -2751,6 +2790,11 @@ export function inicializarLectorPdf(deps = {}) {
     estado.atomos = resultado.atomos || [];
     estado.paginasFuente = resultado.paginas || [];
     estado.offsetDeAtomo = resultado.offsetDeAtomo || new Map();
+    estado.fragmentosFuente = resultado.fragmentosFuente || resultado.atomosTodos || [];
+    estado.transformaciones = resultado.transformaciones || [];
+    estado.estructura = resultado.estructura || [];
+    estado.calidadPorPagina = resultado.calidadPorPagina || [];
+    estado.estadoFidelidad = resultado.estadoFidelidad || null;
     estado.pendientesLimites = Number(resultado.pendientes) || 0;
     estado.needsSource = false;
     const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
@@ -2796,6 +2840,9 @@ export function inicializarLectorPdf(deps = {}) {
           versionReconstruccion: VERSION_RECONSTRUCCION,
           pendientesLimites: estado.pendientesLimites,
           listoParaLectura: estado.pendientesLimites === 0,
+          estadoFidelidad: resultado.estadoFidelidad?.estado || 'pendiente_revision',
+          paginasVerificadas: resultado.estadoFidelidad?.paginasVerificadas || [],
+          versionFidelidad: resultado.estadoFidelidad ? 1 : 0,
           needsSource: false,
           sincronizar: true,
           capitulos,
@@ -2942,7 +2989,7 @@ export function inicializarLectorPdf(deps = {}) {
         return;
       }
 
-      const resultado = componerTexto(paginas, {});
+      const resultado = componerTexto(paginas, { origen: 'ocr' });
       if (!resultado.texto.trim()) {
         mostrarProgreso(false);
         avisar(
@@ -3451,6 +3498,11 @@ export function inicializarLectorPdf(deps = {}) {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (el.compararHoja && !el.compararHoja.hidden) {
+      e.preventDefault();
+      cerrarComparacion();
+      return;
+    }
     if (hayHojaAbierta()) { e.preventDefault(); cerrarHojas(); return; }
     if (document.body.classList.contains('jg-pantalla')) { e.preventDefault(); fijarPantallaCompleta(false); }
   });
@@ -4078,6 +4130,183 @@ export function inicializarLectorPdf(deps = {}) {
     try { localStorage.setItem('jg_pdf_tema', elegido); } catch (_) {}
   }
 
+  /* ── Comparación fiel, página por página ─────────────────────────── */
+  const comparacion = { doc: null, paginas: [], indice: 0, token: 0 };
+
+  function paginasComparables() {
+    const numeros = new Set();
+    for (const p of estado.calidadPorPagina || []) if (Number(p.pagina) > 0) numeros.add(Number(p.pagina));
+    for (const p of estado.paginasFuente || []) if (Number(p.numero) > 0) numeros.add(Number(p.numero));
+    for (const a of estado.atomos || []) if (Number(a.page) > 0) numeros.add(Number(a.page));
+    return [...numeros].sort((a, b) => a - b);
+  }
+
+  function actualizarEstadoFidelidad() {
+    if (!el.fidelidadEstado) return;
+    const dato = estado.estadoFidelidad;
+    const tipo = dato?.estado || (estado.needsSource ? 'legacy_no_verificable' : 'sin_datos');
+    const paginas = paginasComparables();
+    const revisadas = new Set(dato?.paginasVerificadas || []);
+    const textos = {
+      verificado: `Verificado contra el PDF · ${revisadas.size} de ${paginas.length} páginas`,
+      extraido_sin_alteraciones: 'Transcripción fiel · sin cambios editoriales automáticos',
+      pendiente_revision: `Revisión pendiente · ${revisadas.size} de ${paginas.length} páginas comparadas`,
+      inconsistente: 'Integridad inconsistente · vuelve a procesar el PDF',
+      legacy_no_verificable: 'Texto anterior sin fuente verificable · vincula el PDF original',
+      sin_datos: 'Fidelidad sin verificar',
+    };
+    el.fidelidadEstado.dataset.estado = tipo;
+    el.fidelidadEstado.textContent = textos[tipo] || textos.sin_datos;
+  }
+
+  function textoFielDePagina(numero) {
+    const atomos = (estado.atomos || []).filter((a) => Number(a.page) === Number(numero));
+    if (!atomos.length) return '';
+    const porPar = new Map((estado.limites || []).map((l) => [`${l.leftAtomId}|${l.rightAtomId}`, l]));
+    const limites = [];
+    for (let i = 0; i + 1 < atomos.length; i += 1) {
+      limites.push(porPar.get(`${atomos[i].id}|${atomos[i + 1].id}`) || {
+        id: `b:${atomos[i].id}~${atomos[i + 1].id}`,
+        leftAtomId: atomos[i].id, rightAtomId: atomos[i + 1].id,
+        decision: 'pending', source: 'missing', originalSeparator: '', quitarGuion: false,
+      });
+    }
+    return componerAtomosFiel(atomos, limites).texto;
+  }
+
+  function dudasDePagina(numero) {
+    const ids = new Set((estado.atomos || []).filter((a) => Number(a.page) === Number(numero)).map((a) => a.id));
+    const dudas = [];
+    for (const l of estado.limites || []) {
+      if (l.decision === 'pending' && (ids.has(l.leftAtomId) || ids.has(l.rightAtomId))) {
+        dudas.push(`Corte pendiente: «${l.leftFragment || ''}|${l.rightFragment || ''}»`);
+      }
+    }
+    for (const o of estado.omisiones || []) {
+      if (Number(o.pagina) === Number(numero)) dudas.push(`Excluido de la lectura (${o.motivo}): ${o.texto || '[fragmento vacío]'}`);
+    }
+    const calidad = (estado.calidadPorPagina || []).find((p) => Number(p.pagina) === Number(numero));
+    if (calidad?.fallo) dudas.push('La extracción de esta página falló.');
+    if (Number(calidad?.dudosos) > 0) dudas.push(`${calidad.dudosos} fragmento(s) OCR con confianza menor de 85 %.`);
+    if (calidad?.fuente === 'ocr' && Number.isFinite(Number(calidad.confianza))) {
+      dudas.push(`Confianza OCR media: ${Math.round(Number(calidad.confianza))} %.`);
+    }
+    return dudas;
+  }
+
+  async function cerrarComparacion({ devolverFoco = true } = {}) {
+    const estabaAbierta = Boolean(el.compararHoja && !el.compararHoja.hidden);
+    comparacion.token += 1;
+    if (el.compararHoja) el.compararHoja.hidden = true;
+    const doc = comparacion.doc;
+    comparacion.doc = null;
+    if (estabaAbierta && devolverFoco && el.compararBtn?.isConnected) {
+      devolverFocoHoja(
+        el.compararBtn,
+        document.getElementById('btnPdfBmOpciones'),
+        el.btnMas,
+      );
+    }
+    try { await doc?.destroy(); } catch (_) {}
+  }
+
+  async function renderComparacion() {
+    if (!comparacion.doc || !comparacion.paginas.length || !el.compararCanvas) return;
+    const token = ++comparacion.token;
+    const numero = comparacion.paginas[comparacion.indice];
+    el.compararPagina.textContent = `Página ${numero} · ${comparacion.indice + 1} de ${comparacion.paginas.length}`;
+    el.compararTexto.textContent = textoFielDePagina(numero) || '[Esta página no aportó texto a la lectura.]';
+    const dudas = dudasDePagina(numero);
+    el.compararDudas.replaceChildren();
+    for (const duda of dudas.length ? dudas : ['Sin dudas automáticas registradas.']) {
+      const li = document.createElement('li');
+      li.textContent = duda;
+      el.compararDudas.appendChild(li);
+    }
+    const revisadas = new Set(estado.estadoFidelidad?.paginasVerificadas || []);
+    const revisada = revisadas.has(numero);
+    el.compararVerificada.setAttribute('aria-pressed', revisada ? 'true' : 'false');
+    el.compararVerificada.textContent = revisada ? 'Página revisada' : 'Marcar página revisada';
+    el.compararPrev.disabled = comparacion.indice <= 0;
+    el.compararNext.disabled = comparacion.indice >= comparacion.paginas.length - 1;
+
+    let pagina = null;
+    try {
+      pagina = await comparacion.doc.getPage(numero);
+      if (token !== comparacion.token) return;
+      const base = pagina.getViewport({ scale: 1 });
+      const caja = el.compararCanvas.parentElement;
+      const anchoCss = Math.max(260, Math.min(680, (caja?.clientWidth || 680) - 24));
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const vista = pagina.getViewport({ scale: (anchoCss / Math.max(1, base.width)) * dpr });
+      const canvas = el.compararCanvas;
+      canvas.width = Math.round(vista.width);
+      canvas.height = Math.round(vista.height);
+      canvas.style.width = `${Math.round(vista.width / dpr)}px`;
+      canvas.style.height = `${Math.round(vista.height / dpr)}px`;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await pagina.render({ canvasContext: ctx, viewport: vista }).promise;
+    } catch (error) {
+      if (token === comparacion.token) avisar(`No se pudo mostrar la página ${numero}: ${error?.message || 'error desconocido'}`, 'err');
+    } finally {
+      try { pagina?.cleanup(); } catch (_) {}
+    }
+  }
+
+  async function abrirComparacion() {
+    if (!estado.id || !el.compararHoja) return;
+    const archivo = await almacen.cargarArchivo(estado.id);
+    if (!archivo) {
+      avisar('Vincula el PDF original para compararlo con la transcripción.', 'warn');
+      return;
+    }
+    await cerrarComparacion();
+    try {
+      const abierto = await abrirPdf(archivo);
+      comparacion.doc = abierto.doc;
+      comparacion.paginas = paginasComparables().filter((p) => p <= abierto.totalPaginas);
+      if (!comparacion.paginas.length) comparacion.paginas = Array.from({ length: abierto.totalPaginas }, (_, i) => i + 1);
+      const paginaLectura = Number(estado.partes?.[estado.parteActual]?.pagina || estado.paginasFuente?.[0]?.numero || comparacion.paginas[0]);
+      comparacion.indice = Math.max(0, comparacion.paginas.indexOf(paginaLectura));
+      el.compararHoja.hidden = false;
+      await renderComparacion();
+      el.compararCerrar?.focus({ preventScroll: true });
+    } catch (error) {
+      await cerrarComparacion();
+      avisar(error instanceof ErrorPdf ? error.message : `No se pudo abrir el PDF original: ${error?.message || 'error desconocido'}`, 'err');
+    }
+  }
+
+  async function alternarPaginaVerificada() {
+    const numero = comparacion.paginas[comparacion.indice];
+    if (!numero) return;
+    const anterior = estado.estadoFidelidad || {
+      estado: 'pendiente_revision', origen: 'texto', integridad: { valido: false }, paginasVerificadas: [], verificado: false,
+    };
+    const revisadas = new Set(anterior.paginasVerificadas || []);
+    if (revisadas.has(numero)) revisadas.delete(numero); else revisadas.add(numero);
+    const todas = comparacion.paginas.every((p) => revisadas.has(p));
+    const valida = anterior.integridad?.valido === true;
+    const sinPendientes = Number(estado.pendientesLimites) === 0;
+    const verificado = todas && valida && sinPendientes;
+    estado.estadoFidelidad = {
+      ...anterior,
+      estado: verificado ? 'verificado' : 'pendiente_revision',
+      paginasVerificadas: [...revisadas].sort((a, b) => a - b),
+      verificado,
+      actualizado: Date.now(),
+    };
+    const guardado = await almacen.guardarEstadoFidelidad(estado.id, estado.estadoFidelidad);
+    if (!guardado) {
+      avisar('No se pudo guardar la revisión de esta página.', 'err');
+      return;
+    }
+    actualizarEstadoFidelidad();
+    await renderComparacion();
+  }
+
   const temaInicial = (() => {
     try { return localStorage.getItem('jg_pdf_tema'); } catch (_) { return null; }
   })() || 'noche';
@@ -4115,6 +4344,33 @@ export function inicializarLectorPdf(deps = {}) {
       window.abrirTextModal(el.salida, estado.titulo || 'Documento PDF');
     }
   });
+
+  function activarConDedoYTeclado(boton, accion) {
+    if (!boton) return;
+    let ultimoDedo = 0;
+    boton.addEventListener('pointerup', (evento) => {
+      if (evento.pointerType === 'mouse') return;
+      ultimoDedo = performance.now();
+      accion();
+    });
+    boton.addEventListener('click', () => {
+      if (performance.now() - ultimoDedo < 650) return;
+      accion();
+    });
+  }
+  activarConDedoYTeclado(el.compararBtn, abrirComparacion);
+  activarConDedoYTeclado(el.compararCerrar, cerrarComparacion);
+  activarConDedoYTeclado(el.compararPrev, () => {
+    if (comparacion.indice <= 0) return;
+    comparacion.indice -= 1;
+    renderComparacion();
+  });
+  activarConDedoYTeclado(el.compararNext, () => {
+    if (comparacion.indice >= comparacion.paginas.length - 1) return;
+    comparacion.indice += 1;
+    renderComparacion();
+  });
+  activarConDedoYTeclado(el.compararVerificada, alternarPaginaVerificada);
 
   /* ── Hoja de revisión de sugerencias de gramática ─────────────────── */
   if (el.revisionBtn) el.revisionBtn.addEventListener('click', () => {
@@ -4519,18 +4775,27 @@ export function inicializarLectorPdf(deps = {}) {
     estado.limites = resultado.limites || [];
     estado.offsetDeAtomo = resultado.offsetDeAtomo || new Map();
     estado.paginasFuente = resultado.paginas || [];
+    estado.fragmentosFuente = resultado.fragmentosFuente || resultado.atomosTodos || [];
+    estado.transformaciones = resultado.transformaciones || [];
+    estado.estructura = resultado.estructura || [];
+    estado.calidadPorPagina = resultado.calidadPorPagina || [];
+    estado.estadoFidelidad = resultado.estadoFidelidad || null;
     libroVista?.renderLectura({ conservar: true });
   }
 
   async function reconstruirTrasDecision({ duranteCorreccion = false } = {}) {
     if (!estado.atomos?.length) throw new Error('Falta la geometría del PDF original.');
     const docId = estado.id;
-    const resultado = reconstruirDesdeAtomos(estado.atomos, {
+    const atomosFuente = estado.fragmentosFuente?.length ? estado.fragmentosFuente : estado.atomos;
+    const resultado = reconstruirDesdeAtomos(atomosFuente, {
       paginas: estado.paginasFuente || [], lang: estado.idioma,
+      origen: estado.estadoFidelidad?.origen || 'texto',
       limitesPrevios: estado.limites,
-      atomosYaFiltrados: true,
     });
-    if (!invarianteLetras(estado.atomos, resultado.texto, resultado.limites)) throw new Error('No se pudo conservar el texto del PDF.');
+    if (!invarianteLetras(estado.atomos, resultado.texto, resultado.limites)
+        || resultado.estadoFidelidad?.integridad?.valido === false) {
+      throw new Error('No se pudo conservar el texto del PDF.');
+    }
     const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
     const frescas = partirTexto(resultado.texto, capitulos, resultado.paginas, [], {
       bloques: resultado.bloquesLectura, limites: resultado.limites,
@@ -4569,6 +4834,12 @@ export function inicializarLectorPdf(deps = {}) {
     estado.limites = resultado.limites;
     estado.offsetDeAtomo = resultado.offsetDeAtomo;
     estado.pendientesLimites = resultado.pendientes;
+    estado.fragmentosFuente = resultado.fragmentosFuente || resultado.atomosTodos || [];
+    estado.transformaciones = resultado.transformaciones || [];
+    estado.estructura = resultado.estructura || [];
+    estado.calidadPorPagina = resultado.calidadPorPagina || [];
+    estado.estadoFidelidad = resultado.estadoFidelidad || null;
+    estado.omisiones = resultado.omisiones || [];
     estado.progreso = progreso;
     estado.pulido.clear();
     estado.colaCorreccion = crearColaDesdePartes(partes, {
@@ -4577,6 +4848,7 @@ export function inicializarLectorPdf(deps = {}) {
     await almacen.guardarColaCorreccion(docId, serializarCola(estado.colaCorreccion));
     pintarIndice();
     await mostrarParte(Math.min(progreso.parte || 0, partes.length - 1));
+    actualizarEstadoFidelidad();
     if (!duranteCorreccion) actualizarEstadoCorreccion();
   }
 
@@ -4587,6 +4859,9 @@ export function inicializarLectorPdf(deps = {}) {
       estado,
       api: {
         textoDeParte: (i) => textoDeParte(i),
+        /* Para el pie de lectura del teléfono: «restantes ~12 min». Ya se
+         * calculaba aquí; solo faltaba dejárselo ver a la vista. */
+        minutosRestantes: () => { try { return minutosRestantes(); } catch (_) { return ''; } },
         guardarEdicion: (forzar) => { if (forzar) guardarEdicionActual(); },
         avisar,
         pausar: () => { try { pausarCorreccionLibro(); } catch (_) {} },

@@ -3,6 +3,41 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.48.0 · Transcripción fiel verificable y lectura editorial móvil
+
+La extracción guarda tres capas separadas: fragmentos originales de PDF.js u
+OCR, texto fiel reconstruido y correcciones que la persona apruebe. Cada
+fragmento conserva página, geometría, fuente, procedencia y confianza; toda
+normalización, unión, espacio, párrafo u omisión queda anotada. La validación
+Unicode exige reproducción exacta, un único destino por fragmento y detecta
+alteraciones aunque el texto derivado coincida. La puntuación, mayúsculas y
+gramática ya no se corrigen dentro de la capa fiel.
+
+Opciones incorpora **Comparar con PDF**: muestra la página original junto a su
+transcripción, enumera cortes, omisiones y confianza OCR, permite marcar páginas
+revisadas y conserva ese avance. Solo declara **Verificado** si se compararon
+todas las páginas, la integridad es válida y no quedan límites pendientes. Los
+libros antiguos se reextraen desde el PDF que realmente exista en IndexedDB;
+sin fuente quedan como `Legacy no verificable`.
+
+La misma entrega incorpora el diseño editorial móvil aprobado: Literata local,
+lectura limpia con cromo superpuesto, pie de progreso, gestos y paginación sin
+remezclar el texto. La fuente se guarda en el service worker cuando se abre el
+lector, sin cargarla en el inicio general. Tablet y escritorio conservan su
+composición anterior.
+
+Validación local: 27 suites lógicas sin fallos; PDF privado de 431 páginas,
+23.650 fragmentos y 798.936 caracteres con integridad exacta y 1.068 límites
+visibles pendientes de revisión; navegador integral, comparación fiel, lector,
+paginación, geometría, móvil, scroll, pestañas y migración antigua en verde.
+El libro sintético de 300 páginas se procesó en 1,7 s en la última corrida.
+No se realizó una comparación humana de 10 a 20 páginas ni una prueba en un
+teléfono físico desde este entorno; esas comprobaciones siguen siendo el cierre
+editorial para un PDF concreto.
+
+Marcadores de entrega: `v2.48.0`, `JG_JS_V=v88`, shell `v88`. Despliegue y
+verificación de producción: pendientes de esta misma tanda.
+
 ## 2026-09-06 · v2.47.0 · Leer bien sin friegas (`dpl_2VvULofjSyJrq88UT4uTi7EdTkmC`)
 
 Lo pedido: que se lea bien solo, sin revisar nada a mano.

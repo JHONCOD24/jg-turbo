@@ -1,4 +1,4 @@
-<!-- v2.47.0 · Leer bien sin friegas: ediciones que no tumban, Unir que avisa, avisos que flotan -->
+<!-- v2.48.0 · Transcripción fiel verificable y lectura editorial móvil -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -2690,6 +2690,113 @@
     body.jg-leyendo #pdfDockNav .tts-rate-control{min-width:44px;min-height:44px}
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     LECTURA EDITORIAL EN EL TELÉFONO  ·  solo ≤640 px
+     ─────────────────────────────────────────────────────────────────────
+     Diseño guiado por `ejemplos/PLAN Diseño movil Kindle.md`. No se copia
+     otra app: se persigue lo que hace cómodo un libro —una medida de línea
+     de 32-46 caracteres, una serif de pantalla y márgenes que respiren— y
+     eso es lo que miden las pruebas, no los píxeles de una captura.
+
+     Tablet y escritorio NO entran aquí: conservan su tipografía y su
+     composición actuales.
+     ══════════════════════════════════════════════════════════════════════ */
+  @media (max-width:640px){
+    /* 1. La página: serif editorial, medida de línea acotada por la pantalla.
+          `min(--lec-tam, 5.6vw)` respeta el tamaño que elija la persona pero
+          impide que en un teléfono estrecho la línea baje de ~32 caracteres,
+          que es donde el ojo empieza a saltar de renglón. */
+    body.jg-leyendo .pdf-lectura{
+      font-family:'Literata', Georgia, 'Times New Roman', serif;
+      /* Automático mientras nadie toque el control: el ancho de la pantalla
+         acota el tamaño para que la línea no baje de ~32 caracteres. */
+      font-size:clamp(15px, min(var(--lec-tam, 19px), 4.5vw), 24px);
+      line-height:var(--lec-inter, 1.55);
+      max-width:none;
+      padding-inline:clamp(14px, 4.5vw, 30px);
+      text-align:left;
+      overflow-wrap:normal;
+      word-break:normal;
+    }
+    /* Justificado CON partición de palabras. Sin partir, el justificado abre
+       ríos de blanco: por eso solo se activa cuando el idioma del libro es uno
+       que el navegador sabe partir (lo marca el JS). */
+    body.jg-leyendo .pdf-lectura[data-justificado="si"]{
+      text-align:justify;
+      hyphens:auto;-webkit-hyphens:auto;
+      hyphenate-limit-chars:6 3 3;
+    }
+    /* Sangría desde el segundo párrafo, como en un libro impreso: el primero
+       de cada bloque no la lleva. */
+    /* Si la persona eligió tamaño, manda ella aunque la línea quede corta:
+       poder agrandar la letra es más importante que la medida ideal. */
+    body.jg-leyendo .pdf-lectura[data-tam-auto="no"]{
+      /* El control no baja de 16, así que ese es el piso: se respeta lo que
+         elija la persona y a la vez nada queda ilegible. El 15px del modo
+         automático es más bajo a propósito, y solo se alcanza en pantallas de
+         320 px, donde es lo que mantiene la línea en ~32 caracteres. */
+      font-size:max(16px, var(--lec-tam, 19px));
+    }
+    body.jg-leyendo .pdf-lectura p + p{text-indent:1.25em}
+    body.jg-leyendo .pdf-lectura h1,
+    body.jg-leyendo .pdf-lectura h2,
+    body.jg-leyendo .pdf-lectura h3{font-weight:600;text-align:left;hyphens:none}
+
+    /* 2. El pie: lo único que acompaña al texto. Alto FIJO y siempre
+          presente, así el texto nunca se remaqueta. */
+    .pdf-pie-lectura{
+      display:flex;justify-content:space-between;align-items:center;gap:12px;
+      flex:none;margin:0;height:26px;padding-inline:clamp(16px, 5vw, 28px);
+      font-family:'Literata', Georgia, serif;
+      font-size:12.5px;color:var(--lec-suave, var(--muted));
+      opacity:.75;pointer-events:none;
+      overflow:hidden;white-space:nowrap;
+    }
+    .pdf-pie-lectura span{overflow:hidden;text-overflow:ellipsis}
+
+    /* 3. El cromo FLOTA por encima del texto, no le quita alto.
+          Es lo que permite que el texto se lleve el 90 % de la pantalla y, a
+          la vez, que mostrarlo u ocultarlo no vuelva a paginar. */
+    body.jg-leyendo .pdf-doc-top{
+      position:fixed;inset:0 0 auto 0;z-index:22;
+      /* La regla base lleva `margin:0 -2px` para sangrar dentro de su columna.
+         Flotando a lo ancho de la ventana eso sobresale 4 px y saca barra
+         horizontal: al sacarla del flujo hay que devolver el margen a cero. */
+      margin:0;padding-inline:10px;
+      background:var(--lec-bg, var(--bg));
+    }
+    body.jg-leyendo .pdf-modo-barra{
+      position:fixed;left:0;right:0;top:var(--pdf-cab-alto, 56px);z-index:21;
+      justify-content:center;padding:6px 10px;margin:0;
+      background:var(--lec-bg, var(--bg));
+      border-bottom:1px solid var(--lec-linea, var(--line));
+    }
+    body.jg-leyendo #pdfPaginacion{
+      position:fixed;left:0;right:0;bottom:var(--pdf-bm-alto, 64px);z-index:21;
+      padding:4px 0;margin:0;
+      background:linear-gradient(180deg, transparent, var(--lec-bg, var(--bg)) 45%);
+    }
+    /* Con el cromo fuera del flujo, el texto ocupa la columna entera menos el
+       pie. Ese es el reparto definitivo: no cambia al mostrar controles. */
+    body.jg-leyendo .pdf-texto-col{padding-bottom:0}
+    body.jg-leyendo .pdf-area{padding:0}
+
+    /* 4. Apartado (leyendo): solo queda el texto y su pie. */
+    body.jg-leyendo.jg-inmersivo .pdf-doc-top,
+    body.jg-leyendo.jg-inmersivo .pdf-modo-barra,
+    body.jg-leyendo.jg-inmersivo #pdfPaginacion{opacity:0;pointer-events:none}
+    /* La barra del pulgar también: leyendo, en la pantalla solo queda el
+       texto y su pie, como en un lector de libros. Se desplaza además de
+       desvanecerse para que no quede una sombra fantasma sobre el texto. */
+    body.jg-leyendo.jg-inmersivo .pdf-barra-movil{
+      opacity:0;transform:translateY(100%);pointer-events:none;
+    }
+    body.jg-leyendo .pdf-barra-movil,
+    body.jg-leyendo .pdf-doc-top,
+    body.jg-leyendo .pdf-modo-barra,
+    body.jg-leyendo #pdfPaginacion{transition:opacity .22s ease, transform .22s ease}
+  }
+
   @media (max-width:640px) and (prefers-reduced-motion:reduce){
     body.jg-leyendo .pdf-doc-top,
     body.jg-leyendo .pdf-barra-movil,
@@ -2835,6 +2942,10 @@
     animation:pdfFondoIn .2s ease;border:0;padding:0;cursor:pointer;
   }
   .pdf-hoja-fondo[hidden]{display:none}
+  /* El panel de Opciones vive dentro de la cabecera sticky, que crea su
+     propio contexto de apilado. Al abrirlo se eleva esa cabecera completa;
+     de otro modo el fondo z100 quedaba por encima y absorbía los toques. */
+  #pdfResultArea:has(.pdf-mas-menu[open]) .pdf-doc-top{z-index:103}
   @keyframes pdfFondoIn{from{opacity:0}to{opacity:1}}
   @media (min-width:1024px){
     .pdf-hoja-fondo{display:none !important}
@@ -4695,6 +4806,41 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 @media (max-width:360px){
   .pdf-dock-nav #btnPdfDesdeAqui{grid-column:1 / -1;justify-self:stretch}
 }
+.pdf-fidelidad-estado{
+  margin:2px 0 0;padding:8px 10px;border-radius:9px;border:1px solid var(--lec-linea,var(--line));
+  color:var(--lec-suave,var(--muted));font-size:12px;line-height:1.35;
+}
+.pdf-fidelidad-estado[data-estado="verificado"]{color:#8FE9C8;border-color:rgba(39,225,193,.38)}
+.pdf-fidelidad-estado[data-estado="inconsistente"]{color:#FF9CAA;border-color:rgba(255,100,120,.45)}
+.pdf-fidelidad-estado[data-estado="pendiente_revision"]{color:#F3C16B;border-color:rgba(243,193,107,.38)}
+.pdf-comparar-hoja:not([hidden]){
+  position:fixed;inset:max(12px,env(safe-area-inset-top)) max(12px,calc((100vw - 1180px)/2))
+    max(12px,env(safe-area-inset-bottom));z-index:125;display:flex;flex-direction:column;gap:14px;
+  padding:18px;background:var(--lec-bg,var(--bg));color:var(--lec-texto,var(--text));
+  border:1px solid var(--lec-linea,var(--line));border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.55);
+}
+.pdf-comparar-pagina{margin:3px 0 0;color:var(--lec-suave,var(--muted));font-size:12px}
+.pdf-comparar-cuerpo{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.82fr);gap:18px;min-height:0;flex:1}
+.pdf-comparar-original,.pdf-comparar-transcripcion{margin:0;min-height:0;display:flex;flex-direction:column;gap:8px}
+.pdf-comparar-original figcaption,.pdf-comparar-transcripcion h5{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--lec-suave,var(--muted))}
+.pdf-comparar-lienzo{min-height:0;flex:1;overflow:auto;background:#555;display:grid;place-items:start center;padding:12px;border-radius:12px}
+.pdf-comparar-lienzo canvas{display:block;max-width:100%;height:auto;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.32)}
+.pdf-comparar-transcripcion pre{flex:1;min-height:180px;margin:0;padding:18px;overflow:auto;white-space:pre-wrap;word-break:normal;background:var(--lec-superficie,var(--surface));border:1px solid var(--lec-linea,var(--line));border-radius:12px;color:var(--lec-texto,var(--text));font:16px/1.55 Georgia,serif}
+.pdf-comparar-dudas{margin:0;padding:10px 10px 10px 30px;max-height:150px;overflow:auto;border:1px solid var(--lec-linea,var(--line));border-radius:10px;color:var(--lec-suave,var(--muted));font-size:12px;line-height:1.45}
+.pdf-comparar-dudas li+li{margin-top:6px}
+.pdf-comparar-pie{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.pdf-comparar-pie .btn{justify-self:center;min-height:44px}
+.pdf-comparar-pie .btn[aria-pressed="true"]{background:#14755f;color:#fff}
+@media(max-width:700px){
+  .pdf-comparar-hoja:not([hidden]){inset:0;border-radius:0;padding:12px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .pdf-comparar-cuerpo{grid-template-columns:1fr;overflow:auto}
+  .pdf-comparar-lienzo{min-height:48dvh;flex:none}
+  .pdf-comparar-transcripcion pre{min-height:34dvh;flex:none}
+  .pdf-comparar-pie{grid-template-columns:44px 1fr 44px}
+  .pdf-comparar-pie .mini-btn{font-size:0;padding:0}
+  #btnPdfCompararPrev::before{content:'‹';font-size:28px}
+  #btnPdfCompararNext::before{content:'›';font-size:28px}
+}
 #pdfResultArea :focus-visible,.pdf-area :focus-visible{outline:3px solid var(--lec-acento,var(--cyan));outline-offset:2px}
 #panelPdf button:not([hidden]){min-height:44px}#panelPdf button.mini-btn:not([hidden]),#panelPdf .pdf-filtro:not([hidden]){min-height:44px;min-width:44px}#panelPdf summary:not([hidden]){min-height:44px}
 </style>
@@ -5864,6 +6010,12 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                         </label>
                         <p class="pdf-mas-ayuda">«Normal» usa un diccionario de español e inglés para reconocer la palabra completa. «Solo con el libro» une únicamente cuando esa palabra aparece entera en otra parte del mismo libro: acierta menos veces, pero nunca por una palabra que el libro no use.</p>
                         <button type="button" class="mini-btn" id="btnPdfVincular">Vincular PDF original</button>
+                        <button type="button" class="mini-btn pdf-comparar-btn" id="btnPdfComparar">
+                          Comparar con PDF
+                        </button>
+                        <p class="pdf-fidelidad-estado" id="pdfFidelidadEstado" data-estado="sin_datos" role="status">
+                          Fidelidad sin verificar
+                        </p>
                         <input type="file" id="pdfVincularInput" accept="application/pdf" hidden>
                       </div>
                     </div>
@@ -6097,6 +6249,14 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                 <span class="pdf-modo-estados" id="pdfModoEstados" role="status" aria-live="polite"></span>
               </div>
               <article class="pdf-lectura" id="pdfLectura" aria-label="Texto del libro" tabindex="0"></article>
+              <!-- Pie de lectura (solo teléfono): lo único que acompaña al texto
+                   cuando los controles están apartados, como en un lector de
+                   libros. Ocupa un alto FIJO y siempre está, así que mostrar u
+                   ocultar el cromo no remaqueta ni una línea. -->
+              <p class="pdf-pie-lectura" id="pdfPieLectura" aria-live="off">
+                <span id="pdfPieRestante"></span>
+                <span id="pdfPiePorcentaje"></span>
+              </p>
               <button type="button" class="pdf-volver-lectura" id="pdfVolverLectura" hidden>
                 ↓ Volver a la lectura
               </button>
@@ -6165,6 +6325,35 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                 <button type="button" class="mini-btn" id="pdfRecorteCerrar" hidden>Cerrar recorte</button>
                 <button type="button" class="mini-btn" id="pdfCortesCerrar">Cerrar</button>
               </div>
+              <section class="pdf-comparar-hoja" id="pdfCompararHoja" hidden role="dialog"
+                       aria-modal="true" aria-labelledby="pdfCompararTitulo">
+                <div class="pdf-hoja-cab">
+                  <div>
+                    <h4 class="pdf-hoja-titulo" id="pdfCompararTitulo">Comparar con el PDF original</h4>
+                    <p class="pdf-comparar-pagina" id="pdfCompararPagina">Página 1</p>
+                  </div>
+                  <button type="button" class="pdf-hoja-cerrar" id="btnPdfCompararCerrar" aria-label="Cerrar comparación">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div class="pdf-comparar-cuerpo">
+                  <figure class="pdf-comparar-original">
+                    <figcaption>Original</figcaption>
+                    <div class="pdf-comparar-lienzo"><canvas id="pdfCompararCanvas"></canvas></div>
+                  </figure>
+                  <section class="pdf-comparar-transcripcion" aria-labelledby="pdfCompararTextoTitulo">
+                    <h5 id="pdfCompararTextoTitulo">Transcripción fiel</h5>
+                    <pre id="pdfCompararTexto"></pre>
+                    <h5>Dudas registradas</h5>
+                    <ul id="pdfCompararDudas" class="pdf-comparar-dudas"></ul>
+                  </section>
+                </div>
+                <div class="pdf-comparar-pie">
+                  <button type="button" class="mini-btn" id="btnPdfCompararPrev">Página anterior</button>
+                  <button type="button" class="btn primary" id="btnPdfPaginaVerificada" aria-pressed="false">Marcar página revisada</button>
+                  <button type="button" class="mini-btn" id="btnPdfCompararNext">Página siguiente</button>
+                </div>
+              </section>
               <div class="pdf-texto-caja" id="pdfTextoCaja">
                 <div class="pdf-realce" id="pdfRealce" aria-hidden="true"></div>
                 <textarea id="pdfOutput" class="output pdf-output" placeholder="Aquí verás el texto del PDF. Puedes editarlo antes de copiarlo." spellcheck="true"></textarea>
@@ -16275,7 +16464,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v87';
+const JG_JS_V = 'v88';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
