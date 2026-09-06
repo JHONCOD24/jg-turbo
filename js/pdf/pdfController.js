@@ -136,9 +136,11 @@ export function inicializarLectorPdf(deps = {}) {
     auditoriaCerrar: $('btnPdfAuditoriaCerrar'),
     reanudar: $('pdfReanudar'), reanudarTxt: $('pdfReanudarTxt'),
     reanudarInicio: $('btnPdfReanudarInicio'),
+    btnReanudarCerrar: $('btnPdfReanudarCerrar'),
     reanudarCorreccion: $('pdfReanudarCorreccion'),
     reanudarCorreccionTxt: $('pdfReanudarCorreccionTxt'),
     btnReanudarCorreccion: $('btnPdfReanudarCorreccion'),
+    btnReanudarCorreccionCerrar: $('btnPdfReanudarCorreccionCerrar'),
 
     nube: $('pdfNube'), nubePunto: $('pdfNubePunto'), nubeEstado: $('pdfNubeEstado'),
     nubeMas: $('btnPdfNubeMas'), nubeOpciones: $('pdfNubeOpciones'),
@@ -1704,7 +1706,8 @@ export function inicializarLectorPdf(deps = {}) {
       : texto;
     if (incompletas > 0 || pendientesLimites > 0) mostrarPulidoEstado(mensaje, p.ejecutando ? '' : 'pendiente');
     else mostrarPulidoEstado(mensaje, lista ? 'ok' : '');
-    const mostrarReanudar = !!(cola && !p.ejecutando && estado.consentido && r && !r.lista && incompletas > 0);
+    const mostrarReanudar = !!(cola && !p.ejecutando && estado.consentido && r && !r.lista && incompletas > 0)
+      && !estado.descartoReanudarCorreccion;
     if (el.reanudarCorreccion) {
       el.reanudarCorreccion.hidden = !mostrarReanudar;
       if (el.reanudarCorreccionTxt) el.reanudarCorreccionTxt.textContent = texto;
@@ -1790,8 +1793,20 @@ export function inicializarLectorPdf(deps = {}) {
   if (el.auditoriaAceptar) el.auditoriaAceptar.addEventListener('click', () => cerrarHojaAuditoria(true));
   if (el.auditoriaRechazar) el.auditoriaRechazar.addEventListener('click', () => cerrarHojaAuditoria(false));
   if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', () => cerrarHojaAuditoria(null));
+  if (el.btnReanudarCerrar) {
+    el.btnReanudarCerrar.addEventListener('click', () => {
+      if (el.reanudar) el.reanudar.hidden = true;
+    });
+  }
+  if (el.btnReanudarCorreccionCerrar) {
+    el.btnReanudarCorreccionCerrar.addEventListener('click', () => {
+      if (el.reanudarCorreccion) el.reanudarCorreccion.hidden = true;
+      estado.descartoReanudarCorreccion = true;
+    });
+  }
   if (el.btnReanudarCorreccion) {
     el.btnReanudarCorreccion.addEventListener('click', () => {
+      estado.descartoReanudarCorreccion = false;
       /* Sin este catch, un fallo aquí era silencio total: «el botón falla». */
       iniciarCorreccionLibro({ reanudar: true })
         .catch((e) => avisar('No se pudo reanudar: ' + (e?.message || 'inténtalo de nuevo.'), 'warn'));

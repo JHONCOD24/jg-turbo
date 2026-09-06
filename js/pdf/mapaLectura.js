@@ -109,7 +109,11 @@ export function construirLectura(texto) {
       html.push(`<table${atributos(b)}>${filas}</table>`);
       continue;
     }
-    html.push(`<p${atributos(b)}>${escapar(b.texto).replace(/\n/g, '<br>')}</p>`);
+    /* En prosa editorial los renglones fluyen de forma continua:
+     * un salto simple `\n` del PDF no debe forzar un `<br>` rígido que
+     * rompa el justificado y desarticule las líneas en el teléfono. */
+    const contenidoParrafo = escapar(b.texto).replace(/\r?\n/g, ' ');
+    html.push(`<p${atributos(b)}>${contenidoParrafo}</p>`);
   }
   return html.join('');
 }
