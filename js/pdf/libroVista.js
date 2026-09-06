@@ -139,7 +139,7 @@ export function initLibroVista({ el, estado, api }) {
    * toque simple: desde que el cromo del teléfono es siempre visible
    * (v2.44), cualquier roce accidental del dedo empezaba a narrar solo —
    * el mismo dolor que v2.41 tapó cuando el cromo se escondía. Para leer
-   * a propósito también está el botón «Leer desde aquí» del reproductor.
+   * a propósito también está el botón del reproductor (btnPdfDesdeAqui).
    * Se ignora si la persona estaba seleccionando texto, para no
    * secuestrar el copiar y pegar. */
   if (el.lectura) {
@@ -517,6 +517,7 @@ export function initLibroVista({ el, estado, api }) {
     const cerrarApariencia = () => {
       el.aparienciaHoja.hidden = true;
       el.btnApariencia.setAttribute('aria-expanded', 'false');
+      api.actualizarFondoHojas?.();
       /* Se vuelve al control que abrió; si ese no está a la vista (la hoja
        * se abrió desde la cabecera pero estamos en el teléfono, donde vive
        * en la barra del pulgar), al equivalente que sí lo esté. Nunca al
@@ -530,10 +531,12 @@ export function initLibroVista({ el, estado, api }) {
       abrioApariencia = origen || el.btnApariencia;
       el.aparienciaHoja.hidden = false;
       el.btnApariencia.setAttribute('aria-expanded', 'true');
+      api.actualizarFondoHojas?.();
       const primero = el.aparienciaHoja.querySelector('button, select, input');
       if (primero) primero.focus();
     };
     el.abrirApariencia = abrirApariencia;
+    el.cerrarApariencia = cerrarApariencia;
     el.btnApariencia.addEventListener('click', () => abrirApariencia(el.btnApariencia));
     el.aparienciaHoja.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarApariencia(); });
     const cerrarBoton = el.aparienciaHoja.querySelector('[data-cerrar-hoja="pdfAparienciaHoja"]');
@@ -1084,10 +1087,18 @@ export function initLibroVista({ el, estado, api }) {
   }
   if (el.btnCortes) el.btnCortes.addEventListener('click', () => {
     if (el.cortesHoja) el.cortesHoja.hidden = false;
+    api.actualizarFondoHojas?.();
     pintarCortes();
   });
-  if (el.cortesCerrar) el.cortesCerrar.addEventListener('click', () => { if (el.cortesHoja) el.cortesHoja.hidden = true; });
-  el.cortesHoja?.addEventListener('keydown', ev => { if (ev.key === 'Escape') { el.cortesHoja.hidden = true; el.btnCortes?.focus(); } });
+  if (el.cortesCerrar) el.cortesCerrar.addEventListener('click', () => cerrarCortes());
+  function cerrarCortes() {
+    if (!el.cortesHoja || el.cortesHoja.hidden) return;
+    el.cortesHoja.hidden = true;
+    api.actualizarFondoHojas?.();
+    el.btnCortes?.focus();
+  }
+  el.cerrarCortes = cerrarCortes;
+  el.cortesHoja?.addEventListener('keydown', ev => { if (ev.key === 'Escape') cerrarCortes(); });
   if (el.recorteCerrar) el.recorteCerrar.addEventListener('click', () => {
     if (el.recorte) el.recorte.hidden = true;
     el.recorteCerrar.hidden = true;

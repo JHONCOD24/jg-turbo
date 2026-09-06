@@ -809,23 +809,57 @@ export function inicializarLectorPdf(deps = {}) {
     abrir: () => {}, cerrar: () => false, hay: () => false,
   };
 
-  const hayHojaAbierta = () => (!el.indice.hidden) || !!(el.masMenu && el.masMenu.open);
+  /* Las cuatro hojas del lector comparten un mismo fondo y una misma regla:
+   * solo una abierta a la vez. Antes Apariencia y Cortes se abrían sin fondo
+   * y el texto de atrás seguía interactuable: en el teléfono se podía tocar
+   * un párrafo (y leer en voz alta) sin ver lo que se tocaba. */
+  const hayHojaAbierta = () => (!el.indice.hidden) || !!(el.masMenu && el.masMenu.open)
+    || !!(el.aparienciaHoja && !el.aparienciaHoja.hidden)
+    || !!(el.cortesHoja && !el.cortesHoja.hidden);
+
+  function cerrarHojasFlotantes() {
+    if (typeof el.cerrarApariencia === 'function') el.cerrarApariencia();
+    else if (el.aparienciaHoja) el.aparienciaHoja.hidden = true;
+    if (typeof el.cerrarCortes === 'function') el.cerrarCortes();
+    else if (el.cortesHoja) el.cortesHoja.hidden = true;
+  }
 
   function pintarFondoHojas() {
     if (!el.hojaFondo) return;
     el.hojaFondo.hidden = !hayHojaAbierta();
   }
 
+  /* A quién devolver el foco al cerrar una hoja: al botón que la abrió y,
+   * si ese no está a la vista (abierta desde la barra del pulgar y cerrada
+   * en tablet, o al revés), al equivalente que sí lo esté. Nunca al <body>:
+   * quien navega con teclado se quedaría sin a dónde ir. La hoja de
+   * Apariencia ya hacía esto; Contenido, Opciones y Auditoría se quedaban
+   * a medias. */
+  function devolverFocoHoja(...candidatos) {
+    const volver = candidatos.find((c) => c && c.offsetParent !== null);
+    if (volver) volver.focus();
+  }
+  let hojaOrigen = null;
+
   function cerrarHojas({ desdeHistorial = false } = {}) {
     if (!hayHojaAbierta()) { pintarFondoHojas(); return; }
+    const eraIndice = !el.indice.hidden;
+    const eraMenu = !!(el.masMenu && el.masMenu.open);
     cerrarIndice();
     if (el.masMenu) el.masMenu.open = false;
     if (el.btnMas) el.btnMas.setAttribute('aria-expanded', 'false');
+    cerrarHojasFlotantes();
     pintarFondoHojas();
+    if (eraIndice) {
+      devolverFocoHoja(hojaOrigen, el.btnIndice, document.getElementById('btnPdfBmIndice'));
+    } else if (eraMenu) {
+      devolverFocoHoja(hojaOrigen, el.btnMas, document.getElementById('btnPdfBmOpciones'));
+    }
+    hojaOrigen = null;
     if (!desdeHistorial) capas.cerrar('hoja');
   }
 
-  function abrirHoja(cual) {
+  function abrirHoja(cual, origen) {
     /* Solo una hoja a la vez: dos capas superpuestas es justo lo que hacía
      * imposible saber dónde tocar para volver.
      *
@@ -835,7 +869,9 @@ export function inicializarLectorPdf(deps = {}) {
     const habiaOtra = cual === 'indice'
       ? !!(el.masMenu && el.masMenu.open)
       : !el.indice.hidden;
+    hojaOrigen = origen || null;
     cerrarIndice();
+    cerrarHojasFlotantes();
     if (el.masMenu) el.masMenu.open = false;
     if (cual === 'indice') {
       pintarIndice();
@@ -1606,6 +1642,12 @@ export function inicializarLectorPdf(deps = {}) {
     const resolver = resolverConsentimientoAuditoria;
     resolverConsentimientoAuditoria = null;
     if (resolver) resolver(decision === true);
+    /* El foco vuelve de donde salió: al botón de corregir si su panel sigue
+     * abierto, y si no, al estado de la corrección de la cabecera, que es
+     * quien reabre esta hoja. Sin esto el foco caía al <body>. */
+    if (hayDocumento()) {
+      devolverFocoHoja(document.getElementById('btnPdfCorregirLibro'), el.pulidoEstado);
+    }
     if (decision === true) setTimeout(() => iniciarCorreccionLibro(), 0);
   }
 
@@ -3350,7 +3392,7 @@ export function inicializarLectorPdf(deps = {}) {
 
   el.btnIndice.addEventListener('click', () => {
     if (!el.indice.hidden) cerrarHojas();
-    else abrirHoja('indice');
+    else abrirHoja('indice', el.btnIndice);
   });
 
   /* «Opciones» es un <details>. Se le quita el abrir/cerrar automático del
@@ -3361,7 +3403,7 @@ export function inicializarLectorPdf(deps = {}) {
     el.btnMas.addEventListener('click', (e) => {
       e.preventDefault();
       if (el.masMenu.open) cerrarHojas();
-      else abrirHoja('opciones');
+      else abrirHoja('opciones', el.btnMas);
     });
   }
 
@@ -4511,6 +4553,7 @@ export function inicializarLectorPdf(deps = {}) {
         verRecorte: (lim) => { try { verRecortePagina(lim); } catch (_) {} },
         vincularArchivo: async (archivo) => { await vincularPdfOriginal(archivo); },
         leerDesdeCaracter: (caracter) => { try { leerDesdeCaracter(caracter); } catch (_) {} },
+        actualizarFondoHojas: () => { try { pintarFondoHojas(); } catch (_) {} },
       },
     });
   } catch (_) { libroVista = null; }
