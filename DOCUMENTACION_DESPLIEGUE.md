@@ -49,6 +49,35 @@ Deployment Protection y sus variables Preview no incluyen Groq/IA. El código
 se verificó localmente; falta autorización específica para promover v2.44 a
 producción y ejecutar allí los recorridos finales.
 
+## Publicación v2.48.0, 2026-09-06
+
+Tanda conjunta de dos sesiones que trabajaron en paralelo: transcripción fiel
+verificable (registro de transformaciones, comparación con el PDF, estado de
+revisión, migración de libros antiguos) y lectura editorial en el teléfono
+(Literata auto-alojada, medida de línea acotada, cromo flotante).
+
+Publicado como `dpl_6vXn9jg7NKjzUmyyBgLMpfkRoiv8` (READY), alias
+`jg-turbo.vercel.app`. Producción venía de v2.46.1.
+
+- **30 de 30** archivos idénticos por SHA-256 contra el dominio
+  (`index.html`, `sw.js` y los 28 módulos de `js/pdf/`).
+- Marcadores servidos: `v2.48.0`, `JG_JS_V=v88`, `jg-turbo-shell-v88`.
+  `/api/health` 200. La tipografía Literata responde 200.
+- **Once suites de navegador contra producción**, todas en verde: navegador
+  116, geometría 118, pantalla móvil 58, PDF móvil 43, scroll 39, lectura
+  móvil 32, pestañas 30, integración 28, unir palabras 18, arranque 10,
+  páginas 5. En local, además, 1.159 comprobaciones unitarias y el libro real
+  de 431 páginas con salida 0.
+- Empujado a `origin/main`: `4ab2236..b25e8b5`.
+
+### La sesión de Vercel había caducado
+
+La CLI respondía `Logged out` y no había `VERCEL_TOKEN`. El código de
+dispositivo que traía la sesión anterior ya estaba caducado —duran unos
+minutos—, así que se generó uno nuevo con `npx vercel login` y se autorizó en
+el momento. **Para que no se repita:** un token en `vercel.com/account/tokens`
+guardado como variable de entorno `VERCEL_TOKEN` no caduca.
+
 ## Publicación UX v2.43.0, 2026-09-05
 
 El teléfono desplaza el documento y reserva la zona segura de arriba.
