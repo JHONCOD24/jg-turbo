@@ -3,6 +3,31 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.47.0 · Leer bien sin friegas (pendiente de `dpl_`)
+
+Lo pedido: que se lea bien solo, sin revisar nada a mano.
+
+- **Editar ya no tumba nada:** la edición aprobada se conserva sobre lo
+  recompuesto. Antes, con una sola edición morían Unir y la etapa 1, y
+  «Reanudar» quedaba eterno. Las posiciones tras capítulos editados son
+  aproximadas solo para «llevar al corte», no para leer ni escuchar.
+- **Unir avisa siempre:** unidas, nada que unir, diccionario sin red o el
+  error real. Se corrigió además que el rescate se rompía y tapaba el mensaje
+  (el botón moría en silencio total).
+- **Los avisos flotan:** ningún aviso transitorio vive en el flujo, porque
+  cada aparición re-medía las páginas (19 contra 17 con la misma letra) y la
+  reapertura caía en otra página. Incluye el hallazgo medido y su prueba.
+- **Restaurar cae en el punto, no en el bloque:** si el carácter cae en el
+  hueco entre bloques, se asigna al siguiente en vez de a la primera página
+  del bloque.
+- Casos C y D: las columnas ya se ordenan por posición (con pruebas en libros
+  reales) y el escaneado se detecta con mensaje claro y ruta OCR. Si tu libro
+  mezcla columnas igual, mándame 2-3 líneas y lo afino con tu caso.
+
+Pruebas en local: 27 unitarias sin fallos; navegador `pdf_movil` 42,
+`movil_pantalla` 60 (+5 no-aplica explicados), `pestanas` 30, `unir_palabras`
+18, más `navegador`, `geometria`, `scroll`, `paginas` e `integracion` en verde.
+
 ## 2026-09-06 · v2.46.0 · Móvil que responde y Unir que sí une (`dpl_739sVhTz3FbshU6a31ngiMxMTc6B`)
 
 Reportado desde un Oppo Reno 14 y reproducido en laboratorio donde se pudo.

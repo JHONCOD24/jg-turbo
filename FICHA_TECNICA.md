@@ -17,6 +17,9 @@ PDF v2.46.0 responde en el teléfono (altura que sigue a la barra, gestos que
 sí pasan página, una sola vía a Opciones), cuenta el avance de la corrección
 por lotes, diferencia la pantalla completa y une partidas con blanco residual.
 
+PDF v2.47.0 lee bien sin friegas: editar no tumba Unir ni la corrección, Unir
+avisa siempre, los avisos flotan sin re-paginar y la reapertura cae en el punto.
+
 ## YouTube con voz y traducción sincronizadas
 
 En el panel YouTube, **Traducir y doblar al español** obtiene la pista inglesa

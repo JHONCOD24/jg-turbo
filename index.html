@@ -1,4 +1,4 @@
-<!-- v2.46.0 · Móvil que responde + Unir con blanco residual + corrección que cuenta -->
+<!-- v2.47.0 · Leer bien sin friegas: ediciones que no tumban, Unir que avisa, avisos que flotan -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1493,8 +1493,14 @@
   }
   /* La cadena tiene que ser flexible ENTERA: `.wrap` estiraba el panel a
      688 px, pero el panel era `display:block` y su tarjeta se quedaba en
-     512 px. Un eslabón rígido en medio y el estirado no llega. */
-  body:not(.jg-leyendo) #panelPdf{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}
+     512 px. Un eslabón rígido en medio y el estirado no llega.
+
+     ⚠️ Va acotado a `.active`. Sin eso, el `display:flex` (que lleva un
+     identificador, así que gana a `.panel{display:none}` y al atributo
+     `hidden`) dibujaba el panel de PDF en TODAS las pestañas: Micrófono,
+     Archivo, YouTube y Traducir mostraban además el contenido del lector.
+     Llegó a producción. Lo vigila `verificar_pestanas.mjs`. */
+  body:not(.jg-leyendo) #panelPdf.active{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}
   body:not(.jg-leyendo) #panelPdf > .card{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}
   body:not(.jg-leyendo) #panelPdf .pdf-area{
     height:auto;min-height:0;overflow:visible;
@@ -1866,14 +1872,21 @@
     .pdf-doc-acciones .mini-btn{min-height:42px;padding:8px 12px;font-size:12.5px}
   }
 
-  /* Aviso dentro del lector: va en el dock, encima del reproductor. En flujo,
-     así que no tapa el texto; y se va solo, para no dejar una franja de color
-     ocupando pantalla durante toda la lectura. */
+  /* Aviso dentro del lector: FLOTA, no vive en el flujo. Estando en flujo,
+     cada aviso que aparecía o se iba volvía a medir las páginas (19 contra
+     17 con la misma letra) y la posición guardada caía en otra página al
+     reabrir. Flotando, el texto ni se entera; además no tapa controles
+     porque no recibe toques. */
   .pdf-aviso-lector{
-    margin:0;padding:8px 10px;font-size:12px;line-height:1.35;
-    border-radius:10px;align-items:center;
+    position:fixed;left:50%;translate:-50% 0;
+    bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;
+    max-width:min(92vw,560px);pointer-events:none;text-align:center;
+    margin:0;padding:10px 14px;font-size:12.5px;line-height:1.4;
+    border-radius:12px;align-items:center;
+    box-shadow:0 10px 34px -14px rgba(0,0,0,.8);
   }
   .pdf-aviso-lector[hidden]{display:none}
+  body.jg-leyendo .pdf-aviso-lector{bottom:calc(var(--pdf-bm-alto,64px) + 12px)}
 
   /* Con el lector abierto, el aviso y la barra de extracción de la vista de
      biblioteca sobran: sus mensajes salen ya en el dock. */
@@ -2484,6 +2497,12 @@
      teléfono. La regla base va fuera del media query a propósito: si vive
      dentro, en tablet y escritorio no queda nada que los oculte y se cuelan
      sobre el texto. (Pasó; lo cazó `verificar_pdf_movil.mjs`.) */
+  /* Red de seguridad: `hidden` significa oculto, pase lo que pase. Una regla
+     con identificador puede ganarle al `display:none` del navegador sin que
+     nadie lo note —pasó con `#panelPdf` y el lector aparecía en todas las
+     pestañas—, y eso no se puede dejar al azar de la especificidad. */
+  .panel[hidden], [hidden]{display:none !important}
+
   .pdf-barra-movil,.pdf-voz-mini,.pdf-solo-telefono{display:none}
   @media (max-width:640px){ .pdf-solo-telefono{display:block} }
 
@@ -2491,7 +2510,7 @@
      no aparece, que es lo que pidió el usuario: si el párrafo está bien, la
      lectura sigue igual. */
   .pdf-unir-aviso{
-    position:fixed;left:50%;transform:translateX(-50%);
+    position:fixed;left:50%;translate:-50% 0;
     bottom:calc(18px + env(safe-area-inset-bottom));z-index:30;
     display:flex;align-items:center;gap:12px;
     padding:8px 8px 8px 16px;border-radius:999px;
@@ -2680,17 +2699,23 @@
     .btn-back#btnPdfBack span{display:none}
     .btn-back#btnPdfBack{padding-inline:12px}
   }
-  /* Aviso de reanudación: aparece unos segundos al abrir un libro empezado.
-     Sin él, aterrizar a mitad de un capítulo parece un error de la app. */
+  /* Aviso de reanudación: FLOTA como el resto de avisos (misma razón: en
+     flujo re-medía las páginas al aparecer e irse). Lleva botones, así que
+     sí recibe toques. Aparece unos segundos al abrir un libro empezado. */
   .pdf-reanudar{
+    position:fixed;left:50%;translate:-50% 0;
+    bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;
+    max-width:min(92vw,560px);
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-    margin:6px 0 0;padding:8px 12px;
+    margin:0;padding:8px 12px;
     background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent);
     border:1px solid color-mix(in srgb, var(--lec-acento, var(--cyan)) 34%, transparent);
-    border-radius:10px;
+    border-radius:12px;
     font-size:13px;line-height:1.4;
+    box-shadow:0 10px 34px -14px rgba(0,0,0,.8);
     animation:pdfReanudarEntra .28s ease both;
   }
+  body.jg-leyendo .pdf-reanudar{bottom:calc(var(--pdf-bm-alto,64px) + 12px)}
   .pdf-reanudar[hidden]{display:none !important}
   .pdf-reanudar-txt{flex:1 1 auto;min-width:0}
   .pdf-reanudar .mini-btn{flex:0 0 auto;min-height:var(--h-touch)}
@@ -3212,6 +3237,23 @@
     }
     body:not(.jg-leyendo):not(.jg-pantalla) > .wrap{
       height:auto;overflow-y:visible;
+      /* Columna flexible: sin esto el `flex:1` del panel de abajo no hace
+         NADA, porque `.wrap` es `display:block` en el teléfono. Es el mismo
+         eslabón rígido que ya se documentó en TRAMPAS.md. */
+      display:flex;flex-direction:column;
+    }
+
+    /* El panel abierto se lleva el alto que sobra, sea cual sea la pestaña.
+       Antes esto solo se hacía en PDF, y en Archivo quedaban 58-83 px muertos
+       al final. No se notaba porque el panel de PDF —que se dibujaba en TODAS
+       las pestañas por un fallo de especificidad— rellenaba ese hueco: al
+       corregir el fallo, el hueco de verdad quedó a la vista.
+       Va sobre `.active` para no tocar los paneles ocultos. */
+    body:not(.jg-leyendo):not(.jg-pantalla) .panel.active{
+      display:flex;flex-direction:column;flex:1 0 auto;min-height:0;
+    }
+    body:not(.jg-leyendo):not(.jg-pantalla) .panel.active > .card{
+      flex:1 0 auto;min-height:0;
     }
 
     .wrap{
@@ -16233,7 +16275,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v86';
+const JG_JS_V = 'v87';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
