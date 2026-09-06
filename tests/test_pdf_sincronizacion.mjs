@@ -8,8 +8,9 @@
 import { readFileSync } from 'fs';
 import {
   fusionar, decidir, aplicarRemotos, marcarBorrado, esMasNuevo, necesitaSubirContenido,
-  debeSubir, puedeFaltarPortada, portadasARescatar, esSincronizable,
+  debeSubir, puedeFaltarPortada, portadasARescatar, esSincronizable, estaBorrado,
 } from '../js/pdf/sincronizacion.js';
+import { componerRegistroDocumento } from '../js/pdf/biblioteca.js';
 
 let fallos = 0;
 function comprobar(condicion, mensaje) {
@@ -316,13 +317,86 @@ const doc = (id, actualizado, extra = {}) => ({
 
   const fuenteBiblio = readFileSync(new URL('../js/pdf/biblioteca.js', import.meta.url), 'utf8');
   const exporta = fuenteBiblio.slice(fuenteBiblio.indexOf('export async function exportarParaSincronizar'));
-  comprobar(exporta.slice(0, 700).includes('portadaSincronizada'),
+  comprobar(exporta.slice(0, 1400).includes('portadaSincronizada'),
     'exportarParaSincronizar entrega portadaSincronizada (sin eso la decisión es ciega)');
   comprobar(exporta.includes('incluirLocales || esSincronizable(doc)'),
     'la exportación normal excluye los libros marcados como solo locales');
   const borrar = fuenteBiblio.slice(fuenteBiblio.indexOf('export async function borrarDocumento'));
   comprobar(borrar.slice(0, 1000).includes('sincronizar: previo?.sincronizar !== false'),
     'la marca de borrado conserva que un libro era solo local');
+  comprobar(fuenteBiblio.includes('componerRegistroDocumento'),
+    'guardar un documento pasa por componerRegistroDocumento (quita la lápida)');
+  comprobar(fuenteBiblio.includes('estaBorrado'),
+    'la biblioteca distingue lápida real de libro resucitado');
+  comprobar(fuenteNube.includes('estaBorrado('),
+    'completar capítulos no se salta un libro que se volvió a extraer');
+}
+
+/* ── Volver a extraer un PDF borrado no lo deja fuera de la biblioteca ─
+ *
+ * Caso real: «El Placeo Eres Tú». El id sale del nombre y el tamaño, así que
+ * borrar y volver a sacar el texto reutiliza el id. Mezclar el registro nuevo
+ * con la lápida dejaba `borrado` vivo: el texto se guardaba y la lista lo
+ * ocultaba. Si además se sincronizaba, se reenviaba la lápida a la nube.
+ */
+{
+  const lapida = {
+    id: 'el-placeo-eres-t-pdf-1234',
+    titulo: 'El Placeo Eres Tú',
+    borrado: 1000,
+    actualizado: 1000,
+    sincronizado: 900,
+    sincronizar: true,
+  };
+  comprobar(estaBorrado(lapida) === true, 'una lápida sin contenido nuevo está borrada');
+  comprobar(estaBorrado(null) === false, 'nada no está borrado');
+  comprobar(estaBorrado({ id: 'a' }) === false, 'un libro sin marca está vivo');
+
+  const resucitado = {
+    ...lapida,
+    contenidoActualizado: 2000,
+    actualizado: 2000,
+  };
+  comprobar(estaBorrado(resucitado) === false,
+    'contenido más nuevo que la lápida: el libro vive (Placeo)');
+  comprobar(debeSubir(resucitado, { cursor: 'c1' }) === true,
+    'un resucitado se sube aunque actualizado == sincronizado no aplique: aquí actualizado > sincronizado');
+
+  const resucitadoYaSincronizadoComoLapida = {
+    ...lapida,
+    contenidoActualizado: 3000,
+    actualizado: 3000,
+    sincronizado: 3000,
+    borrado: 1000,
+  };
+  comprobar(estaBorrado(resucitadoYaSincronizadoComoLapida) === false,
+    'aunque la última sync reenvió la lápida, el contenido posterior la anula');
+  comprobar(debeSubir(resucitadoYaSincronizadoComoLapida, { cursor: 'c1' }) === true,
+    'y hay que volver a subirlo vivo (si no, la nube se queda con el borrado)');
+  comprobar(necesitaSubirContenido(resucitadoYaSincronizadoComoLapida) === true,
+    'y hay que mandar los capítulos: la nube no los tiene');
+  comprobar(necesitaSubirContenido(lapida) === false,
+    'una lápida de verdad no manda capítulos');
+
+  const metaVivo = {
+    id: lapida.id,
+    titulo: 'El Placeo Eres Tú',
+    sincronizar: true,
+    estado: 'sin-empezar',
+  };
+  const compuesto = componerRegistroDocumento(lapida, metaVivo, {
+    partes: [{ titulo: 'Capítulo 1', texto: 'El placeo eres tú.' }],
+    ahora: 2500,
+  });
+  comprobar(!compuesto.borrado,
+    'volver a extraer el mismo PDF quita la lápida del registro');
+  comprobar(compuesto.contenidoActualizado === 2500, 'marca el contenido como nuevo');
+  comprobar(compuesto.titulo === 'El Placeo Eres Tú', 'conserva el título');
+  comprobar(compuesto.caracteres === 'El placeo eres tú.'.length, 'cuenta el texto extraído');
+  comprobar(estaBorrado(compuesto) === false, 'el registro compuesto no está borrado');
+
+  const compuestoConLapida = componerRegistroDocumento(lapida, { ...metaVivo, borrado: 4000 }, { ahora: 4000 });
+  comprobar(compuestoConLapida.borrado === 4000, 'si se pide borrar de verdad, la lápida se conserva');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas de sincronización pasaron.' : `\n${fallos} prueba(s) fallaron.`);

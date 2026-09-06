@@ -2894,6 +2894,9 @@ export function inicializarLectorPdf(deps = {}) {
     const idioma = deps.detectarIdioma
       ? deps.detectarIdioma(resultado.texto.slice(0, 4000))
       : 'es';
+    /* El id sale del nombre y el tamaño a propósito: volver a extraer el
+     * mismo archivo actualiza el mismo registro y, si estaba borrado, lo
+     * resucita. Un id aleatorio dejaría lápidas huérfanas en la nube. */
     const id = archivo
       ? `${(archivo.name || 'doc').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${archivo.size || 0}`
       : `doc-${Date.now().toString(36)}`;

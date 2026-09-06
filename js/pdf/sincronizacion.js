@@ -116,11 +116,33 @@ export function marcarBorrado(documento, ahora = Date.now()) {
  */
 export function necesitaSubirContenido(documento) {
   if (!documento) return false;
+  /* Una lápida no lleva capítulos. Un libro que se volvió a extraer encima
+   * de una lápida sí: la nube todavía cree que está borrado y no tiene texto. */
+  if (estaBorrado(documento)) return false;
+  if (documento.borrado) return true;
   const sincronizado = Number(documento.sincronizado) || 0;
   if (!sincronizado) return true;                       /* nunca se subió */
   const contenido = Number(documento.contenidoActualizado) || 0;
   if (!contenido) return true;                          /* registro antiguo */
   return contenido > sincronizado;
+}
+
+/**
+ * ¿Este registro es una lápida de verdad?
+ *
+ * El id de un PDF sale del nombre y el tamaño. Borrar y volver a extraer el
+ * mismo archivo reutiliza el id. Si `guardarDocumento` mezcla el registro
+ * nuevo con la lápida, el campo `borrado` sobrevive: el texto queda en el
+ * aparato y la biblioteca lo oculta («se extrae pero no entra»).
+ *
+ * Un contenido guardado DESPUÉS de la marca de borrado es un libro vivo.
+ */
+export function estaBorrado(documento) {
+  if (!documento || !documento.borrado) return false;
+  const marca = Number(documento.borrado) || 0;
+  const contenido = Number(documento.contenidoActualizado) || 0;
+  if (contenido > marca) return false;
+  return true;
 }
 
 /**
@@ -131,7 +153,7 @@ export function necesitaSubirContenido(documento) {
  * todavía tiene que confirmarlo mirando si de verdad hay una imagen guardada.
  */
 export function puedeFaltarPortada(documento) {
-  if (!esSincronizable(documento) || documento.borrado) return false;
+  if (!esSincronizable(documento) || estaBorrado(documento)) return false;
   return !documento.portadaSincronizada;
 }
 
@@ -198,9 +220,14 @@ export function portadasARescatar(llegados, locales) {
 export function debeSubir(local, { cursor = '', remoto = null, faltaPortada = false } = {}) {
   if (!esSincronizable(local)) return false;
 
+  /* Libro que se volvió a extraer encima de una lápida: hay que enviarlo
+   * vivo aunque las marcas coincidan con la última sync (esa sync reenvió
+   * la lápida por error y dejó actualizado == sincronizado). */
+  if (local.borrado && !estaBorrado(local)) return true;
+
   /* Una carátula pendiente es motivo suficiente por sí sola, pero nunca para
    * un libro borrado: de eso solo viaja la lápida. */
-  if (faltaPortada && !local.borrado) return true;
+  if (faltaPortada && !estaBorrado(local)) return true;
 
   /* Con cursor basta comparar contra lo último que se envió desde aquí. */
   if (cursor) return (Number(local.actualizado) || 0) > (Number(local.sincronizado) || 0);

@@ -2,6 +2,10 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+PDF v2.50.0: volver a extraer un PDF que se había borrado (mismo archivo, mismo
+id) lo devuelve a la biblioteca y a la nube. Antes el texto se extraía y la
+lápida de borrado lo ocultaba. Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 PDF v2.49.1: la corrección automática al abrir es silenciosa y el aviso lector
 flota por encima del dock en el teléfono, sin tapar Anterior/Siguiente/Escuchar.
 

@@ -1,5 +1,17 @@
 # Sincronización entre dispositivos · Proyecto B
 
+## Entrega 2026-09-06 · PDF v2.50.0 · resucitar un libro borrado y vuelto a extraer
+
+El id de un PDF es nombre + tamaño. Borrar y volver a extraer el mismo archivo
+reutiliza el id. La lápida (`borrado`) sobrevivía al guardar, la biblioteca lo
+ocultaba y la sync reenviaba el borrado. Caso real: «El Placeo Eres Tú».
+
+`estaBorrado()` (módulo con pruebas) distingue lápida real de libro con
+contenido posterior. `debeSubir` / `necesitaSubirContenido` fuerzan el envío
+vivo, incluso si la última sync marcó `sincronizado` al reenviar la lápida.
+`paqueteParaSubir` no mete `borrado` en `datos.meta`. Detalle:
+[CAMBIOS_PDF.md](CAMBIOS_PDF.md) v2.50.0.
+
 ## Entrega 2026-09-04 · PDF v2.37 · anclas y decisiones de límites
 
 Las partes sincronizadas pueden llevar, además del texto, `atomStart`, `atomEnd`,

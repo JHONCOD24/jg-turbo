@@ -3,6 +3,37 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.50.0 · Volver a extraer un PDF borrado lo devuelve a la biblioteca
+
+Síntoma medido con «El Placeo Eres Tú»: se sube, el texto se extrae, el lector
+lo abre, y al volver a «Tu biblioteca» el libro no está. Había pasado varias
+veces porque se borraba y se volvía a usar como prueba.
+
+**Causa:** el id del documento sale del nombre y el tamaño del archivo. Borrar
+deja una lápida (marca `borrado`) para que el borrado viaje a los otros
+aparatos. Al extraer de nuevo el mismo PDF se reutiliza el id, y
+`guardarDocumento` mezclaba `{ ...lápida, ...libroNuevo }`. Como el meta nuevo
+no traía `borrado`, la marca sobrevivía. La lista oculta las lápidas; el texto
+sí quedaba guardado. Si además se sincronizaba, se reenviaba el borrado a la
+nube y el libro no llegaba a ningún aparato.
+
+**Corrección:**
+- `componerRegistroDocumento()` quita `borrado` al guardar un libro vivo.
+- `estaBorrado()` trata como vivo un registro cuyo contenido es posterior a la
+  lápida: los que ya quedaron pegados reaparecen al abrir la biblioteca, sin
+  tener que extraer otra vez.
+- La sincronización manda el libro vivo (metadatos + capítulos) aunque la
+  última sync hubiera reenviado la lápida (`actualizado == sincronizado`).
+- Un paquete vivo no lleva la lápida dentro de `datos.meta`.
+
+No cambia IndexedDB (sigue en versión 5). No se toca extracción, cortes, voz
+ni claves.
+
+Pruebas: `test_pdf_sincronizacion.mjs` 95 OK (era 77) · progreso y auditoría P0
+en verde.
+
+Entrega: `JG_JS_V=v91`, shell `v91`.
+
 ## 2026-09-06 · v2.49.1 · El aviso ya no tapa Escuchar en el teléfono
 
 Lo reportado en teléfono físico sobre v2.49.0: al abrir un libro aparecía

@@ -12,7 +12,7 @@
  */
 import {
   decidir, marcarBorrado, necesitaSubirContenido, debeSubir, puedeFaltarPortada,
-  portadasARescatar, esSincronizable,
+  portadasARescatar, esSincronizable, estaBorrado,
 } from './sincronizacion.js';
 
 const CLAVE_LLAVE = 'jg_sync_llave';
@@ -289,7 +289,7 @@ export function crearNube({ pedir, biblioteca }) {
       const locales = await biblioteca.exportarParaSincronizar();
 
       for (const documento of locales) {
-        if (documento.borrado) continue;
+        if (estaBorrado(documento)) continue;
         const partes = await biblioteca.partesParaSubir(documento.id);
         const alla = Number(enLaNube[documento.id] || 0);
 

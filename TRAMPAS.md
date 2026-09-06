@@ -651,6 +651,19 @@ dispara cuando el sistema mata la pestaña. Guarda ahí, y añade un latido mien
 `guardarPortadaRecibida()`: no pasa por `guardarDocumento()` a propósito, para que una carátula que
 llega no pueda hacer retroceder un libro que se estaba leyendo.
 
+### 5.6 Volver a extraer un PDF borrado no puede heredar la lápida
+
+**Ocurrió** (v2.50, «El Placeo Eres Tú»): se subía el libro, el texto se extraía y el lector lo
+mostraba, pero **no aparecía en la biblioteca**. El id de un PDF sale del nombre y el tamaño, así
+que borrar y volver a extraer el mismo archivo reutiliza el id. `guardarDocumento` hacía
+`{ ...previo, ...meta }`: la lápida (`borrado`) sobrevivía, `listarDocumentos` la filtraba y, al
+sincronizar, `paqueteParaSubir` reenviaba el borrado a la nube.
+
+**Regla:** un guardado vivo tiene que **quitar** `borrado`. Mezclar registros no es inocente cuando
+el previo es una lápida. Distingue lápida real de libro resucitado (`estaBorrado`: el contenido
+posterior a la marca gana). Y un paquete vivo no puede llevar la lápida dentro de `datos.meta`,
+porque el otro aparato la reaplicaría.
+
 ---
 
 ## 6. Texto y voz: el guardián que solo mira una dimensión

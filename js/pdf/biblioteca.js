@@ -14,7 +14,7 @@
  *   traducciones → el español de cada capítulo, para no pagarlo dos veces.
  */
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
-import { esSincronizable } from './sincronizacion.js';
+import { esSincronizable, estaBorrado } from './sincronizacion.js';
 
 const BASE = 'jg-turbo-pdf';
 /* Versión 5: compatibilidad hacia adelante. Encontramos dispositivos cuya base
@@ -185,6 +185,44 @@ export async function espacioUsado() {
 /* ── Guardar y leer documentos ─────────────────────────────────────── */
 
 /**
+ * Mezcla el registro previo con lo que se está guardando.
+ *
+ * Extraída para poder probarla sin IndexedDB. El caso que no puede fallar:
+ * si el previo es una lápida (el mismo PDF se borró) y ahora llega un libro
+ * vivo, la marca `borrado` tiene que salir. Si se deja, el texto queda
+ * guardado y la biblioteca lo oculta.
+ */
+export function componerRegistroDocumento(previo, meta, {
+  partes = null, pdf = null, portada = null, ahora = Date.now(),
+} = {}) {
+  const base = previo && typeof previo === 'object' ? previo : {};
+  const datos = meta && typeof meta === 'object' ? meta : {};
+  const registro = {
+    ...base,
+    ...datos,
+    titulosPartes: partes
+      ? partes.map((p) => p.titulo)
+      : (datos.titulosPartes || base.titulosPartes || []),
+    caracteres: partes
+      ? partes.reduce((suma, p) => suma + String(p.texto || '').length, 0)
+      : (datos.caracteres || base.caracteres || 0),
+    tieneArchivo: pdf ? true : Boolean(base.tieneArchivo),
+    tienePortada: portada ? true : Boolean(base.tienePortada),
+    progreso: datos.progreso || base.progreso || progresoInicial(),
+    estado: datos.estado || base.estado || 'sin-empezar',
+    creado: base.creado || datos.creado || ahora,
+    actualizado: datos.actualizado || ahora,
+    /* Momento en que cambió el TEXTO (no la lectura). Guardar un documento
+     * siempre implica contenido nuevo o editado. */
+    contenidoActualizado: datos.contenidoActualizado || datos.actualizado || ahora,
+    sincronizado: datos.sincronizado !== undefined ? datos.sincronizado : (base.sincronizado || 0),
+  };
+  if (datos.borrado) registro.borrado = datos.borrado;
+  else delete registro.borrado;
+  return registro;
+}
+
+/**
  * Guarda un documento completo. `partes`, `pdf` y `portada` son opcionales:
  * si no vienen, se conserva lo que ya hubiera guardado.
  */
@@ -199,24 +237,7 @@ export async function guardarDocumento({ meta, partes, pdf, portada, reconstrucc
   try {
     return await conAlmacenes(almacenes, 'readwrite', async (docs, ...resto) => {
       const previo = (await esperar(docs.get(meta.id))) || {};
-      const registro = {
-        ...previo,
-        ...meta,
-        titulosPartes: partes ? partes.map((p) => p.titulo) : (meta.titulosPartes || previo.titulosPartes || []),
-        caracteres: partes
-          ? partes.reduce((suma, p) => suma + String(p.texto || '').length, 0)
-          : (meta.caracteres || previo.caracteres || 0),
-        tieneArchivo: pdf ? true : Boolean(previo.tieneArchivo),
-        tienePortada: portada ? true : Boolean(previo.tienePortada),
-        progreso: meta.progreso || previo.progreso || progresoInicial(),
-        estado: meta.estado || previo.estado || 'sin-empezar',
-        creado: previo.creado || meta.creado || ahora,
-        actualizado: meta.actualizado || ahora,
-        /* Momento en que cambió el TEXTO (no la lectura). Guardar un documento
-         * siempre implica contenido nuevo o editado. */
-        contenidoActualizado: meta.contenidoActualizado || meta.actualizado || ahora,
-        sincronizado: meta.sincronizado !== undefined ? meta.sincronizado : (previo.sincronizado || 0),
-      };
+      const registro = componerRegistroDocumento(previo, meta, { partes, pdf, portada, ahora });
       await esperar(docs.put(registro));
 
       let i = 0;
@@ -254,14 +275,38 @@ export async function guardarDocumento({ meta, partes, pdf, portada, reconstrucc
   }
 }
 
+/** Quita de verdad la lápida de un libro que se volvió a extraer. */
+function persistirResurreccion(id) {
+  if (!id) return Promise.resolve();
+  return conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+    const doc = await esperar(docs.get(id));
+    if (!doc || !doc.borrado || estaBorrado(doc)) return;
+    delete doc.borrado;
+    const ahora = Date.now();
+    doc.actualizado = ahora;
+    /* La nube tiene una lápida, no capítulos: hay que volver a mandar el texto. */
+    if ((Number(doc.contenidoActualizado) || 0) <= (Number(doc.sincronizado) || 0)) {
+      doc.contenidoActualizado = ahora;
+    }
+    await esperar(docs.put(doc));
+  }).catch(() => {});
+}
+
 /** Lista para pintar la biblioteca: metadatos, sin el texto ni el PDF. */
 export async function listarDocumentos() {
   try {
     const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
     return (todos || [])
       /* Los borrados se conservan como una marca para que el borrado llegue a
-       * los otros dispositivos; en la biblioteca no se muestran. */
-      .filter((doc) => !doc.borrado)
+       * los otros dispositivos; en la biblioteca no se muestran. Si el mismo
+       * PDF se volvió a extraer encima de la lápida, el libro vive otra vez. */
+      .filter((doc) => !estaBorrado(doc))
+      .map((doc) => {
+        if (!doc.borrado) return doc;
+        persistirResurreccion(doc.id);
+        const { borrado: _lapida, ...vivo } = doc;
+        return vivo;
+      })
       .sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
   } catch (_) {
     return [];
@@ -755,7 +800,7 @@ export async function dataURLABlob(dataURL) {
 export async function faltaSubirPortada(id) {
   try {
     const doc = await cargarDocumento(id);
-    if (!doc || doc.borrado || doc.portadaSincronizada) return false;
+    if (!doc || estaBorrado(doc) || doc.portadaSincronizada) return false;
     const archivos = await conAlmacenes([ARCHIVOS], 'readonly', (a) => esperar(a.get(id)));
     return Boolean(archivos?.portada);
   } catch (_) {
@@ -952,8 +997,10 @@ export async function paqueteParaSubir(id, { conPortada = false } = {}) {
   const doc = await cargarDocumento(id);
   if (!doc) return null;
   if (!esSincronizable(doc)) return null;
-  if (doc.borrado) return { id, actualizado: doc.actualizado, borrado: true, datos: null };
-  const { ...meta } = doc;
+  if (estaBorrado(doc)) return { id, actualizado: doc.actualizado, borrado: true, datos: null };
+  /* Un libro vivo no puede llevar la lápida dentro de `datos`: el otro
+   * aparato la reaplicaría al importar. */
+  const { borrado: _lapida, ...meta } = doc;
   const paquete = {
     id,
     actualizado: doc.actualizado || Date.now(),
@@ -1020,7 +1067,9 @@ export async function importarDeSincronizacion(documento) {
     return true;
   }
 
-  const meta = datos?.meta || {};
+  const meta = { ...(datos?.meta || {}) };
+  /* Un paquete vivo no puede reaplicar una lápida que viajara pegada al meta. */
+  delete meta.borrado;
   /* La carátula viaja como texto dentro de `datos` porque la sincronización
    * solo mueve JSON. Al llegar se vuelve imagen y se guarda con el libro:
    * así la biblioteca se ve igual en el celular, la tablet y el escritorio. */
