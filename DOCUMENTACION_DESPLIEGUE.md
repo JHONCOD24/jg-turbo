@@ -11,6 +11,12 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.51.0, 2026-09-06
+
+Lector PDF móvil: texto ordenado continuo con justificación uniforme de izquierda a derecha (eliminados saltos forzados de renglón y sangría desalineada en móvil). Ventana flotante de aviso (.pdf-reanudar) reubicada a la parte superior con diseño sólido oscuro desenfocado y botón de cierre táctil (×). Despliegue https://jg-turbo-40762yg75-jhoncod24s-projects.vercel.app (READY, alias https://jg-turbo.vercel.app). Inspect: https://vercel.com/jhoncod24s-projects/jg-turbo/Eua333ExRduEbNczVyPTmKd9vH7A.
+
+Verificación en producción: marcador v2.51.0, JG_JS_V=v93, jg-turbo-shell-v93, mapaLectura.js con justificado continuo, pdfController.js con cierre de aviso y /api/health 200.
+
 ## Publicación PDF v2.50.0, 2026-09-06
 
 Volver a extraer un PDF borrado (mismo archivo, mismo id) lo devuelve a la
