@@ -32,7 +32,13 @@ ni claves.
 Pruebas: `test_pdf_sincronizacion.mjs` 95 OK (era 77) · progreso y auditoría P0
 en verde.
 
-Entrega: `JG_JS_V=v91`, shell `v91`.
+Entrega: `JG_JS_V=v91`, shell `v91`. Despliegue
+`https://jg-turbo-7jpb6aw0u-jhoncod24s-projects.vercel.app` READY y alias
+`https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador v2.50.0,
+`v91`, shell `v91`, 6/6 SHA-256 idénticos (`index.html`, `sw.js`,
+`biblioteca.js`, `sincronizacion.js`, `nube.js`, `pdfController.js`),
+`estaBorrado` en los módulos servidos y `/api/health` 200. Empujado a
+`origin/main`: `20ad108..04039a6`.
 
 ## 2026-09-06 · v2.49.1 · El aviso ya no tapa Escuchar en el teléfono
 

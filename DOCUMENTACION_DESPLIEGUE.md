@@ -11,6 +11,22 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.50.0, 2026-09-06
+
+Volver a extraer un PDF borrado (mismo archivo, mismo id) lo devuelve a la
+biblioteca y a la nube. Caso real: «El Placeo Eres Tú». Publicado como
+`https://jg-turbo-7jpb6aw0u-jhoncod24s-projects.vercel.app` (READY, alias
+`https://jg-turbo.vercel.app`), desde copia limpia vinculada al proyecto
+`jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`). Inspect:
+`https://vercel.com/jhoncod24s-projects/jg-turbo/CNxhWtDqZpuNNPNULzvgn6aJ2gUR`.
+
+Verificación contra el dominio: marcador `v2.50.0`, `JG_JS_V=v91`,
+`jg-turbo-shell-v91`, 6/6 SHA-256 idénticos (`index.html`, `sw.js`,
+`biblioteca.js`, `sincronizacion.js`, `nube.js`, `pdfController.js`),
+`estaBorrado` presente en los módulos servidos y `/api/health` 200.
+Empujado a `origin/main`: `20ad108..04039a6`. Detalle:
+[CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación PDF v2.49.1, 2026-09-06
 
 El aviso lector ya no tapa Anterior/Siguiente/Escuchar en el teléfono y la
