@@ -3,6 +3,34 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.46.0 · Móvil que responde y Unir que sí une (pendiente de `dpl_`)
+
+Reportado desde un Oppo Reno 14 y reproducido en laboratorio donde se pudo.
+
+**Móvil.** La altura sigue a la barra del navegador también mientras se anima
+(`scroll` del viewport + `interactive-widget=resizes-content`) y la ventana no
+se desfasa con scroll en lectura: se acabó el hueco abajo con la cabecera
+cortada arriba. Los gestos responden: umbral más corto, la diagonal moderada
+pasa página, arriba/abajo también avanzan en paginado y una selección vieja ya
+no los bloquea para siempre. Navegación: una sola vía a Opciones (la del dock)
+y tira de acciones sin scroll lateral.
+
+**Corrección.** La etapa 1 cuenta sus lotes (`lote X de Y · N resueltos`) en vez
+de clavar «Etapa 1 de 3». Sin IA no se arranca (aviso claro, no etiqueta
+colgada) y Reanudar dice por qué falla en vez de quedarse callado.
+
+**Escritorio.** Pantalla completa adelgaza el lector de verdad (fuera título y
+acciones, queda salir; el texto gana alto) y se sale con Escape.
+
+**Unir.** El blanco residual de fin de renglón («que to» / «ma un pla») ya no
+se da por espacio sin preguntar: el léxico opina con la regla de siempre y
+solo 'join' une, sin generar pendientes nuevos. Cura libros ya guardados al
+abrirlos y con el botón; Deshacer sigue valiendo.
+
+Pruebas en local: 27 unitarias sin fallos (nueva `test_pdf_espacio_renglon`
+con 8); navegador `pdf_movil` 42, `movil_pantalla` 62, `unir_palabras` 18,
+más `navegador`, `geometria`, `scroll`, `paginas` e `integracion` en verde.
+
 ## 2026-09-06 · v2.45.0 · UX del lector (`dpl_8QC7focx6swmqMCo7yK1JGpwcJCc`)
 
 Tanda en `feat/ux-pdf`, verificada en local y commiteada. Falta el despliegue

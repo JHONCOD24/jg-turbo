@@ -1,5 +1,35 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Un blanco de fin de renglón no es prueba de espacio
+
+**Síntoma (v2.45):** «Unir palabras» no unía «to»+«ma» aunque el léxico sabía
+que es «toma». **Causa:** el extractor daba por espacio cualquier límite con
+blanco residual, sin consultar al léxico; el botón solo veía pendientes y ese
+límite nunca lo fue. **Regla:** al cambiar de renglón/página/columna con
+blanco residual, el léxico opina con la regla de siempre; solo 'join' une y
+jamás queda pendiente (no se infla «Revisar cortes» ni la etapa 1).
+
+## Un botón que falla en silencio es un botón roto
+
+**Síntoma (v2.45):** «Reanudar corrección» a veces no hacía nada. **Causa:**
+permiso caído con `return` silencioso y un `.catch(()=>{})` que tragaba el
+error real. **Regla:** todo camino de un botón termina en aviso visible o en
+acción; prohibidos los `catch` vacíos en acciones del usuario.
+
+## Una etapa de N peticiones en serie debe contar sus lotes
+
+**Síntoma (v2.45):** «Etapa 1 de 3» clavada y parecía colgada. **Causa:** N
+lotes secuenciales de hasta 90 s actualizando una etiqueta estática.
+**Regla:** progreso por lote (`lote X de Y · N resueltos`) y pre-chequeo de IA
+antes de arrancar, con mensaje claro en vez de colgar la etiqueta.
+
+## Una selección vieja no puede bloquear los gestos para siempre
+
+**Síntoma (v2.45):** tras seleccionar texto, los deslizamientos morían siempre.
+**Causa:** el guardián de «está seleccionando» no distinguía seleccionar AHORA
+de una selección de hace un minuto. **Regla:** el guardián lleva ventana de
+tiempo (~800 ms desde el último `selectionchange` dentro de la lectura).
+
 ## Un teléfono puede emitir Touch Events y Pointer Events por el mismo gesto
 
 **Síntoma (v2.43):** deslizar parecía bloqueado o saltaba de forma errática.

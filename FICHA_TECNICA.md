@@ -13,6 +13,10 @@ PDF v2.45.0 pule la lectura: doble toque para escuchar desde un párrafo,
 tamaño con mínimo legible en el teléfono, fondo único tras las hojas y foco
 que vuelve al botón que abrió.
 
+PDF v2.46.0 responde en el teléfono (altura que sigue a la barra, gestos que
+sí pasan página, una sola vía a Opciones), cuenta el avance de la corrección
+por lotes, diferencia la pantalla completa y une partidas con blanco residual.
+
 ## YouTube con voz y traducción sincronizadas
 
 En el panel YouTube, **Traducir y doblar al español** obtiene la pista inglesa
