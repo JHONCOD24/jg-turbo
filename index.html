@@ -1908,6 +1908,16 @@
     body.jg-pantalla #panelPdf > .card{border-radius:0;border:0}
     body.jg-pantalla .pdf-area{padding:16px 24px}
     body.jg-pantalla .pdf-area.has-results{max-width:1280px}
+    /* En pantalla completa el cromo del lector se adelgaza de verdad: fuera
+       título, tapa, tira de modos y acciones; queda ‹ Biblioteca para volver
+       y el propio botón para salir (más Escape). El texto respira a 76ch y
+       con más alto. Antes solo se escondía el encabezado de la app y
+       «se veía igual». */
+    body.jg-pantalla .pdf-doc-ident,
+    body.jg-pantalla .pdf-doc-tapa,
+    body.jg-pantalla .pdf-texto-col > .pdf-modo-barra,
+    body.jg-pantalla .pdf-doc-acciones > :not(#btnPdfPantalla){display:none !important}
+    body.jg-pantalla .pdf-lectura{max-width:76ch}
   }
 
   /* Lectura inmersiva: al abrir un libro, el encabezado y las pestañas de la

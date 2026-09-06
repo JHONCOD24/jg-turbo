@@ -173,6 +173,31 @@ for (const [nombre, opciones] of [
   }
   await medir(pagina, `${nombre}·lector`);
 
+  /* Pantalla completa (solo escritorio): tiene que VERSE distinta — cromo
+   * adelgazado y más alto de texto — y se sale con Escape. */
+  if (nombre === 'escritorio ancho' && await pagina.locator('#btnPdfPantalla').isVisible()) {
+    await pagina.keyboard.press('Escape'); // cierra hojas (el índice quedó abierto)
+    await pagina.waitForTimeout(300);
+    const altoAntes = await pagina.evaluate(() => document.querySelector('#pdfLectura').getBoundingClientRect().height);
+    await pagina.locator('#btnPdfPantalla').click();
+    await pagina.waitForTimeout(500);
+    const pc = await pagina.evaluate(() => ({
+      ident: getComputedStyle(document.querySelector('.pdf-doc-ident')).display,
+      acciones: [...document.querySelectorAll('.pdf-doc-acciones > *')]
+        .filter((e) => getComputedStyle(e).display !== 'none').map((e) => e.id),
+      alto: document.querySelector('#pdfLectura').getBoundingClientRect().height,
+    }));
+    comprobar(pc.ident === 'none', `[${nombre}·pantalla] el título se aparta`);
+    comprobar(pc.acciones.length === 1 && pc.acciones[0] === 'btnPdfPantalla',
+      `[${nombre}·pantalla] solo queda salir`, pc.acciones.join(','));
+    comprobar(pc.alto > altoAntes + 40, `[${nombre}·pantalla] el texto gana alto visible`,
+      `${Math.round(altoAntes)} → ${Math.round(pc.alto)} px`);
+    await pagina.keyboard.press('Escape');
+    await pagina.waitForTimeout(300);
+    comprobar(!(await pagina.evaluate(() => document.body.classList.contains('jg-pantalla'))),
+      `[${nombre}·pantalla] Escape sale`);
+  }
+
   /* Un solo eje de desplazamiento durante la lectura. Se excluyen los
    * desplegables cerrados (p. ej. el panel de Opciones dentro de su <details>)
    * y los overlays fijos (p. ej. la hoja modal de consentimiento): tienen
