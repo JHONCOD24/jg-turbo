@@ -3,7 +3,7 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
-## 2026-09-06 · v2.46.0 · Móvil que responde y Unir que sí une (pendiente de `dpl_`)
+## 2026-09-06 · v2.46.0 · Móvil que responde y Unir que sí une (`dpl_739sVhTz3FbshU6a31ngiMxMTc6B`)
 
 Reportado desde un Oppo Reno 14 y reproducido en laboratorio donde se pudo.
 
@@ -30,6 +30,14 @@ abrirlos y con el botón; Deshacer sigue valiendo.
 Pruebas en local: 27 unitarias sin fallos (nueva `test_pdf_espacio_renglon`
 con 8); navegador `pdf_movil` 42, `movil_pantalla` 62, `unir_palabras` 18,
 más `navegador`, `geometria`, `scroll`, `paginas` e `integracion` en verde.
+
+Publicado como `dpl_739sVhTz3FbshU6a31ngiMxMTc6B` (READY), alias
+`jg-turbo.vercel.app`. Verificados marcadores (`v2.46.0`, `JG_JS_V=v86`, shell
+`v86`), SHA-256 de `index.html`, `sw.js` y los 27 módulos PDF contra el dominio
+(29 de 29 idénticos), `/api/health` 200 y recorridos de navegador contra
+producción (`pdf_movil` 42, `movil_pantalla` 62, `navegador` en verde). Un solo
+despliegue para toda la tanda, desde copia limpia en el temporal (la raíz sigue
+abortando por `.pytest_cache`).
 
 ## 2026-09-06 · v2.45.0 · UX del lector (`dpl_8QC7focx6swmqMCo7yK1JGpwcJCc`)
 
