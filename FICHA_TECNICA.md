@@ -9,6 +9,10 @@ PDF v2.44.0 estabiliza el teléfono: swipe único por página, alto basado en la
 ventana visible, zona segura superior, controles persistentes y estado Groq sin
 avisos mientras la configuración todavía se está comprobando.
 
+PDF v2.45.0 pule la lectura: doble toque para escuchar desde un párrafo,
+tamaño con mínimo legible en el teléfono, fondo único tras las hojas y foco
+que vuelve al botón que abrió.
+
 ## YouTube con voz y traducción sincronizadas
 
 En el panel YouTube, **Traducir y doblar al español** obtiene la pista inglesa

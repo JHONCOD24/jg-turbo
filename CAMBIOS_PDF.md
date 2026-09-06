@@ -3,7 +3,7 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
-## Pendiente de publicar · UX del lector (sin versión ni despliegue aún)
+## 2026-09-06 · v2.45.0 · UX del lector (pendiente de `dpl_`)
 
 Tanda en `feat/ux-pdf`, verificada en local y commiteada. Falta el despliegue
 único, la verificación contra el dominio y el push (regla vigente: uno por
