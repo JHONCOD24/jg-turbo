@@ -97,6 +97,10 @@ try {
         comprobar(`${nombre}/${tn}: desplaza el documento, no un cajón interno`,
           antes.docDesplaza && !antes.wrapDesplaza,
           `doc=${antes.docDesplaza} wrap=${antes.wrapDesplaza}`);
+      } else {
+        /* Sin nada que desplazar no hay qué verificar; se registra para que
+         * el conteo sea explicable (un cambio de conteo silencioso es alarma). */
+        console.log(`  (sin desplazamiento: ${nombre}/${tn}, no aplica)`);
       }
 
       /* 2. Todo el contenido tiene que poder alcanzarse. */

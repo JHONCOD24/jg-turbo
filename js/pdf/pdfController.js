@@ -4524,9 +4524,6 @@ export function inicializarLectorPdf(deps = {}) {
 
   async function reconstruirTrasDecision({ duranteCorreccion = false } = {}) {
     if (!estado.atomos?.length) throw new Error('Falta la geometría del PDF original.');
-    if (estado.textoAprobadoPorBloque.size) {
-      throw new Error('Este libro tiene ediciones aprobadas. Revisa el corte en Editar para conservarlas.');
-    }
     const docId = estado.id;
     const resultado = reconstruirDesdeAtomos(estado.atomos, {
       paginas: estado.paginasFuente || [], lang: estado.idioma,
@@ -4535,10 +4532,31 @@ export function inicializarLectorPdf(deps = {}) {
     });
     if (!invarianteLetras(estado.atomos, resultado.texto, resultado.limites)) throw new Error('No se pudo conservar el texto del PDF.');
     const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
-    const partes = partirTexto(resultado.texto, capitulos, resultado.paginas, [], {
+    const frescas = partirTexto(resultado.texto, capitulos, resultado.paginas, [], {
       bloques: resultado.bloquesLectura, limites: resultado.limites,
       atomos: resultado.atomos, offsetDeAtomo: resultado.offsetDeAtomo,
     });
+    /* Una edición manual aprobada NO tumba nada: se conserva sobre el texto
+     * recompuesto, igual que al finalizar la corrección. Antes esto lanzaba
+     * error, y con una sola edición hecha a mano morían Unir, la etapa 1 y
+     * Reanudar quedaba eterno. La edición manda sobre lo automático en su
+     * capítulo; el resto se recompone normal.
+     * Matiz honesto: las posiciones de cortes tras un capítulo editado son
+     * aproximadas (el texto aprobado mide distinto), solo afecta a «llevar
+     * al corte exacto», no a leer, buscar ni escuchar. */
+    const partes = frescas.map((p, i) => {
+      const bloqueId = estado.bloques?.[i]?.id || ('cap_' + i);
+      const aprobada = estado.textoAprobadoPorBloque.get(bloqueId) ?? estado.textoAprobadoPorBloque.get('cap_' + i);
+      if (aprobada && String(aprobada).trim()) return { ...p, texto: String(aprobada) };
+      return p;
+    });
+    let off = 0;
+    for (const p of partes) {
+      p.desde = off;
+      off += String(p.texto || '').length;
+      p.hasta = off;
+    }
+    const textoLectura = componerLibroDesdePartes(partes);
     const progreso = reubicarProgreso(estado.progreso, estado.partes, partes);
     const guardado = await almacen.marcarTroceo(docId, VERSION_TROCEO, {
       partes, capitulos, progreso, versionReconstruccion: VERSION_RECONSTRUCCION,
@@ -4547,7 +4565,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (guardado === false) throw new Error('No se pudo guardar el corte en este dispositivo.');
     if (estado.id !== docId) return;
     estado.partes = partes;
-    estado.localTexto = resultado.texto;
+    estado.localTexto = textoLectura;
     estado.limites = resultado.limites;
     estado.offsetDeAtomo = resultado.offsetDeAtomo;
     estado.pendientesLimites = resultado.pendientes;

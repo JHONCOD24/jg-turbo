@@ -149,7 +149,21 @@ try {
     assert.notEqual(await p.locator('#pdfOutput').inputValue(),previo,'Unir cambia el texto visible');
     await p.getByRole('button',{name:'Deshacer última',exact:true}).click(); await p.waitForTimeout(500);
     assert.equal(await p.locator('#pdfOutput').inputValue(),previo,'Deshacer restaura texto exacto');
-    await p.locator('#pdfCortesCerrar').click();
+    /* Editar no puede tumbar Unir: la edición aprobada se conserva y Unir
+     * sigue trabajando en el resto. Antes lanzaba y el botón moría en
+     * silencio (y la etapa 1 no salía nunca del error). */
+    await p.locator('#pdfCortesCerrar').click(); await p.waitForTimeout(300);
+    await p.locator('#pdfVistaEditar').click();
+    await p.locator('#pdfOutput').fill(previo + ' FIN');
+    await p.locator('#pdfEditarGuardar').click(); await p.waitForTimeout(500);
+    await p.locator('#btnPdfUnirPalabras').click(); await p.waitForTimeout(1500);
+    assert((await p.locator('#pdfOutput').inputValue()).includes('FIN'), 'la edición aprobada sobrevive a Unir');
+    const notaTrasUnir = await p.evaluate(() => document.querySelector('#pdfNoticeLector')?.textContent || '');
+    assert(!/no se pud/i.test(notaTrasUnir), `Unir no arroja error tras editar: ${notaTrasUnir}`);
+    /* Segunda pulsación sin nada que unir: dice algo, no se queda muda. */
+    await p.locator('#btnPdfUnirPalabras').click(); await p.waitForTimeout(1200);
+    const nota2 = await p.evaluate(() => document.querySelector('#pdfNoticeLector')?.textContent || '');
+    assert(/no hay (palabras partidas|uniones seguras)/.test(nota2), `Unir avisa cuando no hay nada: ${nota2}`);
     await p.evaluate(()=>{
       window.pruebaPeticiones={cortes:0,puntuacion:0};
       window.pruebaOmitirUno=true;

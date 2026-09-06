@@ -1,5 +1,30 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## El rescate que se rompe tapa el error original
+
+**Síntoma (v2.46):** «Unir palabras» moría en silencio total. **Causa:** el
+`catch` que debía revertir destructuraba un campo inexistente (`{lim}` de
+`{id,copia}`) y lanzaba OTRO error, saltándose el aviso. **Regla:** el código
+de rescate se prueba provocando el fallo; y se resuelve por id contra los
+objetos vivos, nunca por referencia guardada.
+
+## Una edición manual no puede tumbar lo automático para siempre
+
+**Síntoma (v2.46):** con una sola edición, Unir moría, la etapa 1 fallaba
+siempre y «Reanudar» quedaba eterno. **Causa:** `reconstruirTrasDecision`
+lanzaba si había ediciones aprobadas. **Regla:** la edición aprobada se
+conserva SOBRE lo recompuesto (como ya hacía el cierre de la corrección);
+lo manual manda en su capítulo, lo automático sigue en el resto.
+
+## Ningún aviso transitorio vive en el flujo del lector
+
+**Síntoma (v2.46):** reabrir no retomaba (19 páginas contra 17 con la misma
+letra). **Causa:** el aviso del dock medía dentro de la columna: con aviso
+había 19 páginas, sin aviso 17, y la posición guardada caía en otra página.
+**Regla:** los avisos flotan (`fixed`, sin toques si no tienen botones); la
+paginación solo mide cromo permanente. Ojo: `transform:none` de una animación
+mata el `translateX(-50%)`: centrar con la propiedad `translate`.
+
 ## Un blanco de fin de renglón no es prueba de espacio
 
 **Síntoma (v2.45):** «Unir palabras» no unía «to»+«ma» aunque el léxico sabía

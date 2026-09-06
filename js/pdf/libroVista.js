@@ -317,12 +317,34 @@ export function initLibroVista({ el, estado, api }) {
     if (!bloque) return null;
     let resto = Math.max(0, caracter - Number(bloque.dataset.ini));
     const walker = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
+    let ultimo = null;
     while (walker.nextNode()) {
       const nodo = walker.currentNode;
+      ultimo = nodo;
       if (resto < nodo.length) {
         const rango = document.createRange(); rango.setStart(nodo, resto); rango.setEnd(nodo, resto + 1); return rango;
       }
       resto -= nodo.length;
+    }
+    /* El punto cae en el hueco entre bloques (separadores que no viven en
+     * ningún [data-ini]): se asigna al bloque siguiente y, si no hay, al
+     * final de este. Devolver el bloque entero mandaba a su PRIMERA página
+     * aunque el punto estuviera páginas después, y la lectura «volvía al
+     * principio» al reabrir. */
+    const bloques = el.lectura ? [...el.lectura.querySelectorAll('[data-ini]')] : [];
+    const sig = bloques[bloques.indexOf(bloque) + 1];
+    const rango = document.createRange();
+    if (sig) {
+      const w2 = document.createTreeWalker(sig, NodeFilter.SHOW_TEXT);
+      let primero = null;
+      while (w2.nextNode()) { if (w2.currentNode.length > 0) { primero = w2.currentNode; break; } }
+      if (primero) { rango.setStart(primero, 0); rango.setEnd(primero, 1); }
+      else rango.selectNode(sig);
+      return rango;
+    }
+    if (ultimo && ultimo.length > 0) {
+      rango.setStart(ultimo, ultimo.length - 1); rango.setEnd(ultimo, ultimo.length);
+      return rango;
     }
     return bloque;
   }
@@ -649,7 +671,14 @@ export function initLibroVista({ el, estado, api }) {
      * explícita); en automático espaciosDeRenglon respeta los rechazados. */
     const extras = espaciosDeRenglon();
     const candidatos = [...base, ...extras.filter((l) => !base.includes(l))];
-    if (!candidatos.length) { pintarUnir(0); return 0; }
+    /* Petición explícita sin nada que hacer: decirlo. El silencio total se
+     * lee como «el botón no sirve». El pase automático sigue callado. */
+    const explicito = avisar && alcance === 'capitulo';
+    if (!candidatos.length) {
+      pintarUnir(0);
+      if (explicito) api.avisar?.('No hay palabras partidas en este capítulo.', 'info');
+      return 0;
+    }
 
     uniendo = true;
     pintarUnir(0);
@@ -657,10 +686,15 @@ export function initLibroVista({ el, estado, api }) {
       const { cargarLexico, decidirPorLexico } = await import('./lexico.js');
       /* En modo prudente ni se descargan: solo vale lo que el libro demuestra. */
       if (modoUnir() !== 'documento') {
-        await cargarLexico(estado.idioma === 'en' ? 'en' : 'es');
-        /* Un libro en español puede citar en inglés y al revés: con las dos
-         * listas cargadas se decide mejor y no cuesta una segunda espera. */
-        cargarLexico(estado.idioma === 'en' ? 'es' : 'en');
+        try {
+          await cargarLexico(estado.idioma === 'en' ? 'en' : 'es');
+          /* Un libro en español puede citar en inglés y al revés: con las dos
+           * listas cargadas se decide mejor y no cuesta una segunda espera. */
+          cargarLexico(estado.idioma === 'en' ? 'es' : 'en');
+        } catch (_) {
+          if (explicito) api.avisar?.('No se pudo cargar el diccionario. Revisa tu conexión e inténtalo de nuevo.', 'warn');
+          return 0;
+        }
       }
 
       const aUnir = [];
@@ -673,7 +707,11 @@ export function initLibroVista({ el, estado, api }) {
         }, estado.idioma || 'es');
         if (veredicto === 'join') aUnir.push(lim);
       }
-      if (!aUnir.length) { pintarUnir(0); return 0; }
+      if (!aUnir.length) {
+        pintarUnir(0);
+        if (explicito) api.avisar?.('Se revisó el capítulo: no hay uniones seguras.', 'info');
+        return 0;
+      }
 
       /* Se guarda el IDENTIFICADOR, no el objeto: `reconstruirTrasDecision`
        * reemplaza el arreglo de cortes por otro nuevo, y guardar la referencia
@@ -683,10 +721,16 @@ export function initLibroVista({ el, estado, api }) {
       try {
         await api.reconstruirTrasDecision?.();
       } catch (error) {
-        /* Si no se pudo reconstruir (por ejemplo, hay ediciones aprobadas que
-         * no se deben pisar), se deja todo como estaba y se dice por qué. */
-        for (const { lim, copia } of antes) Object.assign(lim, copia);
-        api.avisar?.(error.message || 'No se pudieron unir las palabras.', 'warn');
+        /* Se revierte sobre los cortes VIVOS (por id): la reconstrucción
+         * reemplaza el arreglo y la referencia vieja ya no sirve. Destructurar
+         * un campo que no existe aquí lanzaba otro error y tapaba el mensaje:
+         * el botón moría en silencio total. */
+        const vivos = new Map((estado.limites || []).map((l) => [l?.id, l]));
+        for (const { id, copia } of antes) {
+          const vivo = vivos.get(id);
+          if (vivo) Object.assign(vivo, copia);
+        }
+        api.avisar?.(error?.message || 'No se pudieron unir las palabras.', 'warn');
         return 0;
       }
       unidosUltimaVez = antes;
