@@ -58,7 +58,7 @@ const PESTANAS = [
    por ancho, así que un solo tamaño no habría bastado. */
 const TAMANOS = [['escritorio', 1280, 900], ['teléfono', 390, 844]];
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
 try {
   for (const [tam, w, h] of TAMANOS) {

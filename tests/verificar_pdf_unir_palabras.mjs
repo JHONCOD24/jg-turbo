@@ -40,7 +40,7 @@ const comprobar = (nombre, cond, detalle = '') => {
   else { fallos.push(`${nombre}${detalle ? ` — ${detalle}` : ''}`); console.log(`FALLO: ${nombre}${detalle ? ` — ${detalle}` : ''}`); }
 };
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 const pagina = await navegador.newPage({ viewport: { width: 1280, height: 900 } });
 pagina.on('pageerror', (e) => fallos.push(`error de JavaScript: ${e}`));
 
@@ -53,6 +53,7 @@ try {
   await pagina.waitForTimeout(2500);
 
   console.log('\n── 1. El tercer cuadrito, junto a los otros dos ────────────────');
+  await pagina.locator('#btnPdfHerramientas').click();
   const trio = await pagina.evaluate(() => {
     const barra = document.querySelector('.pdf-modo-barra');
     const ids = [...barra.querySelectorAll('button')].map((b) => b.id);
@@ -73,6 +74,7 @@ try {
     trio.ids.join(','));
   comprobar('se ve igual que los otros dos', trio.mismaClase && trio.mismoAlto);
   comprobar('está a la vista', trio.visible);
+  await pagina.keyboard.press('Escape');
 
   console.log('\n── 2. Se une solo, sin pedir nada ──────────────────────────────');
   await pagina.waitForFunction(
@@ -116,6 +118,7 @@ try {
   comprobar('deshacer no borra ni una letra del resto', tras.includes('talleres') && tras.includes('sin embargo'));
 
   console.log('\n── 6. A mano, desde el botón ───────────────────────────────────');
+  await pagina.locator('#btnPdfHerramientas').click();
   await pagina.locator('#btnPdfUnirPalabras').click();
   await pagina.waitForTimeout(2000);
   const otraVez = await pagina.locator('#pdfOutput').inputValue();

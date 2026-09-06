@@ -47,7 +47,7 @@ const comprobar = (n, c, d = '') => {
    que el lector de PDF no viaje con quien no lo ha pedido. */
 const TECHO_PDF_AL_ARRANCAR = 20 * 1024;
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 const ctx = await navegador.newContext({ ...devices['Pixel 7'] });
 const pagina = await ctx.newPage();
 const errores = [];

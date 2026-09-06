@@ -58,11 +58,13 @@ const MEDIDA_MAX = 48;
    más alto a propósito: la página se recorta al múltiplo del interlineado
    para que la última línea no salga partida por la mitad, y eso cuesta hasta
    un renglón. Línea limpia vale más que ese 1 % de pantalla. */
-const MIN_TEXTO = 0.80;
+/* v2.49 reserva sitio estable para los controles: ninguna primera/última
+   línea queda detrás de ellos. El 80% anterior contaba texto TAPADO. */
+const MIN_TEXTO = 0.62;
 
 const TELEFONOS = [['iPhone SE', 375, 667], ['iPhone 14', 390, 844], ['grande', 430, 932], ['estrecho', 320, 740]];
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
 /** Media de caracteres por línea de las líneas llenas de un párrafo. */
 const medirLectura = (p) => p.evaluate(() => {

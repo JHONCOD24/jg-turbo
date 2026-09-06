@@ -50,7 +50,7 @@ const comprobar = (n, c, d = '') => {
 const PESTANAS = [['Micrófono', '#tabMic'], ['Archivo', '#tabFile'], ['YouTube', '#tabYt'], ['PDF', '#tabPdf'], ['Traducir', '#tabTrans']];
 const TELEFONOS = [['iPhone SE', 375, 667], ['iPhone 14', 390, 844], ['Pixel', 412, 839], ['bajito', 360, 600]];
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
 /** Estado de la pantalla: quién desplaza, qué sobra abajo, dónde empieza arriba. */
 const mirar = (p) => p.evaluate(() => {

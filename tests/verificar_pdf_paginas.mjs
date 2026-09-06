@@ -4,7 +4,7 @@ import { resolve, join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { crearLibro } from './generarPdfPrueba.mjs';
 import assert from 'node:assert/strict';
-import { despertarCromo as despertar } from './_cromo.mjs';
+import { despertarCromo as despertar, abrirHerramientas } from './_cromo.mjs';
 const app = resolve(import.meta.dirname, '..');
 const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
 const destino = resolve(app, '.playwright-cli/pdf-paginas');
@@ -41,7 +41,7 @@ async function esperarUnion(p) {
   await p.waitForTimeout(300);
 }
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 try {
  for (const [nombre,width,height] of [['escritorio',1440,900],['movil',390,844],['estrecho',320,740],['tablet',768,1024]]) {
   const p = await navegador.newPage({viewport:{width,height}});
@@ -141,11 +141,13 @@ try {
     assert.notEqual(await pagina(), antes, 'con selección vieja el gesto sigue pasando página');
     await p.evaluate(() => document.getSelection().removeAllRanges());
   }
+  await abrirHerramientas(p);
   await p.locator('#pdfVistaEditar').click(); assert(await p.locator('#pdfOutput').isVisible());
     assert(!(await p.locator('#pdfPaginacion').isVisible()));
   await p.locator('#pdfEditarCancelar').click(); await p.waitForTimeout(300);
   assert((await medir()).alto>120,'volver a lectura recupera altura');
   if(nombre==='escritorio') {
+    await abrirHerramientas(p);
     await p.locator('#btnPdfCortes').click();
     const ctx=await p.locator('.pdf-corte-ctx').first().textContent();
     console.log('corte de prueba',ctx);
@@ -159,14 +161,17 @@ try {
      * sigue trabajando en el resto. Antes lanzaba y el botón moría en
      * silencio (y la etapa 1 no salía nunca del error). */
     await p.locator('#pdfCortesCerrar').click(); await p.waitForTimeout(300);
+    await abrirHerramientas(p);
     await p.locator('#pdfVistaEditar').click();
     await p.locator('#pdfOutput').fill(previo + ' FIN');
     await p.locator('#pdfEditarGuardar').click(); await p.waitForTimeout(500);
+    await abrirHerramientas(p);
     await p.locator('#btnPdfUnirPalabras').click(); await p.waitForTimeout(1500);
     assert((await p.locator('#pdfOutput').inputValue()).includes('FIN'), 'la edición aprobada sobrevive a Unir');
     const notaTrasUnir = await p.evaluate(() => document.querySelector('#pdfNoticeLector')?.textContent || '');
     assert(!/no se pud/i.test(notaTrasUnir), `Unir no arroja error tras editar: ${notaTrasUnir}`);
     /* Segunda pulsación sin nada que unir: dice algo, no se queda muda. */
+    await abrirHerramientas(p);
     await p.locator('#btnPdfUnirPalabras').click(); await p.waitForTimeout(1200);
     const nota2 = await p.evaluate(() => document.querySelector('#pdfNoticeLector')?.textContent || '');
     assert(/no hay (palabras partidas|uniones seguras)/.test(nota2), `Unir avisa cuando no hay nada: ${nota2}`);
@@ -187,7 +192,7 @@ try {
     await p.waitForFunction(()=>window.pruebaPeticiones.puntuacion>0,null,{timeout:15000});
     await p.waitForTimeout(1000);
     console.log('corrección simulada',await p.evaluate(()=>window.pruebaPeticiones));
-    assert(await p.locator('#btnPdfCortes').isVisible(),'las decisiones omitidas quedan pendientes');
+    assert(!(await p.locator('#btnPdfCortes').evaluate(e => e.hidden)),'las decisiones omitidas quedan pendientes');
     assert((await p.locator('#pdfPulidoEstado').textContent()).includes('cortes por revisar'),'puntuación parcial no se presenta como libro corregido');
     await p.evaluate(()=>{window.pruebaOmitirUno=false;});
     await despertarCromo(p); await puerta('#btnPdfMas', '#btnPdfBmOpciones').click(); await p.locator('#btnPdfCorregirLibro').click();

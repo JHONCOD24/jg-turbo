@@ -64,7 +64,7 @@ export function initLibroVista({ el, estado, api }) {
     if (el.textoCol) el.textoCol.style.setProperty('--pdf-col-ancho', cfg.ancho + 'ch');
     /* Cambiar el tamaño o el ancho cambia cuántas palabras caben: hay que
      * repartir las páginas otra vez, conservando el sitio. */
-    if (typeof medirPaginas === 'function') medirPaginas();
+    programarMedicion(100);
   }
 
   function fijarTema(tema) {
@@ -392,17 +392,21 @@ export function initLibroVista({ el, estado, api }) {
   /* Girar el teléfono o abrir el teclado cambia el hueco: se vuelve a repartir
    * sin perder el sitio. */
   let tempoMedir = null;
-  window.addEventListener('resize', () => {
+  function programarMedicion(espera = 80) {
     clearTimeout(tempoMedir);
-    tempoMedir = setTimeout(() => medirPaginas(), 180);
+    tempoMedir = setTimeout(() => medirPaginas(), espera);
+  }
+  window.addEventListener('resize', () => {
+    programarMedicion(180);
   });
   if (typeof ResizeObserver !== 'undefined' && el.textoCol) {
     const observar = new ResizeObserver(() => {
-      clearTimeout(tempoMedir);
-      tempoMedir = setTimeout(() => medirPaginas(), 40);
+      programarMedicion();
     });
     observar.observe(el.textoCol);
-    for (const nodo of el.textoCol.children) if (nodo !== el.lectura) observar.observe(nodo);
+    for (const nodo of el.textoCol.children) {
+      if (nodo !== el.lectura && !['fixed', 'absolute'].includes(getComputedStyle(nodo).position)) observar.observe(nodo);
+    }
   }
   document.fonts?.ready.then(() => medirPaginas());
 
@@ -559,34 +563,16 @@ export function initLibroVista({ el, estado, api }) {
      * sin mirar lo perdía en el teléfono, porque allí está oculto y `focus()`
      * sobre un elemento sin caja no hace nada: el foco se iba al <body> y
      * quien navega con teclado quedaba en la nada. */
-    let abrioApariencia = el.btnApariencia;
     const cerrarApariencia = () => {
-      el.aparienciaHoja.hidden = true;
-      el.btnApariencia.setAttribute('aria-expanded', 'false');
-      api.actualizarFondoHojas?.();
-      /* Se vuelve al control que abrió; si ese no está a la vista (la hoja
-       * se abrió desde la cabecera pero estamos en el teléfono, donde vive
-       * en la barra del pulgar), al equivalente que sí lo esté. Nunca al
-       * <body>: quien navega con teclado se quedaría sin sitio. */
-      const candidatos = [abrioApariencia, el.btnApariencia, document.getElementById('btnPdfBmApariencia')];
-      const volver = candidatos.find((c) => c && c.offsetParent !== null);
-      if (volver) volver.focus();
+      if (!el.aparienciaHoja.hidden) api.cerrarHoja?.();
     };
     const abrirApariencia = (origen) => {
       if (!el.aparienciaHoja.hidden) { cerrarApariencia(); return; }
-      abrioApariencia = origen || el.btnApariencia;
-      el.aparienciaHoja.hidden = false;
-      el.btnApariencia.setAttribute('aria-expanded', 'true');
-      api.actualizarFondoHojas?.();
-      const primero = el.aparienciaHoja.querySelector('button, select, input');
-      if (primero) primero.focus();
+      api.abrirHoja?.('apariencia', origen || el.btnApariencia);
     };
     el.abrirApariencia = abrirApariencia;
     el.cerrarApariencia = cerrarApariencia;
     el.btnApariencia.addEventListener('click', () => abrirApariencia(el.btnApariencia));
-    el.aparienciaHoja.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarApariencia(); });
-    const cerrarBoton = el.aparienciaHoja.querySelector('[data-cerrar-hoja="pdfAparienciaHoja"]');
-    if (cerrarBoton) cerrarBoton.addEventListener('click', cerrarApariencia);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -957,8 +943,8 @@ export function initLibroVista({ el, estado, api }) {
       const b = $$('btnPdfBmApariencia');
       if (el.abrirApariencia) el.abrirApariencia(b); else el.btnApariencia?.click();
     }],
-    ['btnPdfBmIndice', () => { abrirDock(false); el.btnIndice?.click(); }],
-    ['btnPdfBmOpciones', () => { abrirDock(false); el.btnMas?.click(); }],
+    ['btnPdfBmIndice', () => { abrirDock(false); api.abrirHoja?.('indice', $$('btnPdfBmIndice')); }],
+    ['btnPdfBmOpciones', () => { abrirDock(false); api.abrirHoja?.('opciones', $$('btnPdfBmOpciones')); }],
     /* La entrada de búsqueda del teléfono vive DENTRO de «Opciones», así que
        al usarla hay que cerrar esa hoja y desplegar el mismo buscador de la
        cabecera: no hay dos buscadores, hay dos puertas al mismo. */
@@ -967,7 +953,7 @@ export function initLibroVista({ el, estado, api }) {
       if (el.buscarFila && el.buscarFila.hidden) el.buscarToggle?.click();
       abrirDock('buscar');
       const campo = document.getElementById('pdfSearch');
-      if (campo) campo.focus();
+      if (campo) campo.focus({ preventScroll: true });
     }],
   ];
   for (const [id, accion] of puentes) {
@@ -1229,7 +1215,7 @@ export function initLibroVista({ el, estado, api }) {
         ctx.setAttribute('role', 'button');
         ctx.title = 'Ver este corte en el texto';
         const irAlCorte = () => {
-          if (el.cortesHoja) el.cortesHoja.hidden = true;
+          api.cerrarHoja?.();
           irACaracter(lim.charStart);
         };
         ctx.addEventListener('click', irAlCorte);
@@ -1305,19 +1291,15 @@ export function initLibroVista({ el, estado, api }) {
     el.cortesLista.appendChild(deshacer);
   }
   if (el.btnCortes) el.btnCortes.addEventListener('click', () => {
-    if (el.cortesHoja) el.cortesHoja.hidden = false;
-    api.actualizarFondoHojas?.();
     pintarCortes();
+    api.abrirHoja?.('cortes', document.getElementById('btnPdfHerramientas'));
   });
   if (el.cortesCerrar) el.cortesCerrar.addEventListener('click', () => cerrarCortes());
   function cerrarCortes() {
     if (!el.cortesHoja || el.cortesHoja.hidden) return;
-    el.cortesHoja.hidden = true;
-    api.actualizarFondoHojas?.();
-    el.btnCortes?.focus();
+    api.cerrarHoja?.();
   }
   el.cerrarCortes = cerrarCortes;
-  el.cortesHoja?.addEventListener('keydown', ev => { if (ev.key === 'Escape') cerrarCortes(); });
   if (el.recorteCerrar) el.recorteCerrar.addEventListener('click', () => {
     if (el.recorte) el.recorte.hidden = true;
     el.recorteCerrar.hidden = true;

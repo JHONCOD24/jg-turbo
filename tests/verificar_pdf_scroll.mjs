@@ -158,10 +158,15 @@ for (const [nombre, ancho, alto] of [['móvil', 390, 844], ['tablet', 834, 1112]
     const lector = await pagina.evaluate(() => ({
       leyendo: document.body.classList.contains('jg-leyendo'),
       areaOv: getComputedStyle(document.querySelector('#panelPdf .pdf-area')).overflowY,
+      scrollExterior: (() => {
+        const area = document.querySelector('#panelPdf .pdf-area');
+        area.scrollTop = 200;
+        return area.scrollTop;
+      })(),
     }));
     comprobar(lector.leyendo, 'el lector se abre');
-    comprobar(lector.areaOv === 'auto',
-      `en lectura el área conserva su scroll interno (${lector.areaOv})`);
+    comprobar(lector.areaOv === 'clip' && lector.scrollExterior === 0,
+      `en lectura la envoltura no se desplaza al enfocar (${lector.areaOv})`);
   }
 
   await pagina.close();

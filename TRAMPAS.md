@@ -1,5 +1,28 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Una hoja puede estar visible y no recibir ningún toque
+
+**Síntoma (v2.48):** Apariencia borrosa e inutilizable. **Causa:** la hoja tenía
+z-index 40 y el fondo desenfocado 100. Las pruebas llamaban `.click()` desde
+el DOM, lo cual salta la intercepción real. **Regla:** comprobar `tap/click`
+sin `force`, la capa que recibe el toque, Escape y foco restaurado. Apariencia
+y Cortes no pertenecen al contenedor observado para paginar el texto.
+
+## `scrollY=0` no prueba que la cabecera siga en pantalla
+
+**Síntoma (v2.48):** Contenido dejaba la cabecera a -152 px y un hueco inferior.
+**Causa:** `scrollIntoView` movía un ancestro con `overflow:hidden`; ese valor
+admite scroll programático. **Regla:** desplazar la lista concreta, enfocar con
+`preventScroll`, usar `clip` en envolturas no desplazables y comprobar el
+rectángulo real de cabecera/texto después de abrir Y cerrar cada hoja.
+
+## El padding de una columna también cuenta al pasar de página
+
+**Síntoma (auditado v2.49):** se veía texto de la página siguiente y comienzos
+de línea recortados. **Causa:** se calculaba el paso con `clientWidth`, incluido
+el padding, pero el ancho de columna era el del contenido. **Regla:** el margen
+vive en la envoltura externa; revisar capturas después de avanzar varias páginas.
+
 ## El rescate que se rompe tapa el error original
 
 **Síntoma (v2.46):** «Unir palabras» moría en silencio total. **Causa:** el

@@ -50,7 +50,8 @@ console.log('--- accesibilidad de la hoja ---');
      variable: quién lo recibe depende de la pantalla (en el teléfono «Aa»
      vive en la barra del pulgar). Que vuelva al botón CORRECTO lo mide
      `verificar_pdf_lector_integracion.mjs` en un navegador de verdad. */
-  comprobar(/cerrarApariencia[\s\S]{0,600}\.focus\(\)/.test(vista),
+  comprobar(/cerrarApariencia[\s\S]{0,200}api\.cerrarHoja/.test(vista)
+    && ctrl.includes('devolverFocoHoja(origen') && ctrl.includes('focus({ preventScroll: true })'),
     'al cerrar, el foco vuelve a un botón que abre la hoja');
   const etiquetas = (html.match(/<label for="pdfApar/g) || []).length;
   comprobar(etiquetas >= 4, 'cada control de apariencia tiene su etiqueta asociada');

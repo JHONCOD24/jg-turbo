@@ -1,4 +1,4 @@
-<!-- v2.48.0 · Transcripción fiel verificable y lectura editorial móvil -->
+<!-- v2.49.0 · Menús PDF compactos, apariencia accesible y lectura estable -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -2938,7 +2938,6 @@
      zona donde el dedo toca para cerrar sin pensarlo. */
   .pdf-hoja-fondo{
     position:fixed;inset:0;z-index:100;background:rgba(4,6,10,.58);
-    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
     animation:pdfFondoIn .2s ease;border:0;padding:0;cursor:pointer;
   }
   .pdf-hoja-fondo[hidden]{display:none}
@@ -2947,9 +2946,6 @@
      de otro modo el fondo z100 quedaba por encima y absorbía los toques. */
   #pdfResultArea:has(.pdf-mas-menu[open]) .pdf-doc-top{z-index:103}
   @keyframes pdfFondoIn{from{opacity:0}to{opacity:1}}
-  @media (min-width:1024px){
-    .pdf-hoja-fondo{display:none !important}
-  }
   /* Dentro de la hoja, la etiqueta de un campo no puede vestirse igual que un
      título de apartado: en mayúsculas y espaciada parecía una sección más
      («ESCUCHAR», «DESCARGAR», «APAGAR LA VOZ SOLA») y rompía la jerarquía. */
@@ -4843,6 +4839,75 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 }
 #pdfResultArea :focus-visible,.pdf-area :focus-visible{outline:3px solid var(--lec-acento,var(--cyan));outline-offset:2px}
 #panelPdf button:not([hidden]){min-height:44px}#panelPdf button.mini-btn:not([hidden]),#panelPdf .pdf-filtro:not([hidden]){min-height:44px;min-width:44px}#panelPdf summary:not([hidden]){min-height:44px}
+
+/* PDF v2.49: solo los contenedores de lectura/hojas desplazan. `hidden`
+   todavía admite scroll programático y el foco podía desplazar la tarjeta
+   completa, dejando la cabecera a -152px aunque window.scrollY fuera cero. */
+body.jg-leyendo > .wrap,
+body.jg-leyendo #panelPdf,
+body.jg-leyendo #panelPdf > .card,
+body.jg-leyendo .pdf-area,
+body.jg-leyendo #pdfResultArea,
+body.jg-leyendo .pdf-lector-cuerpo,
+body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
+
+#pdfResultArea .pdf-apariencia-hoja{z-index:110;overscroll-behavior:contain;touch-action:pan-y}
+#pdfResultArea .pdf-hoja-cerrar{min-width:44px;min-height:44px}
+#pdfResultArea .pdf-hoja-titulo{color:var(--lec-texto)}
+#pdfResultArea .pdf-hoja-cerrar{background:var(--lec-superficie-2);color:var(--lec-texto);border-color:var(--lec-linea)}
+#pdfResultArea .pdf-indice-lista,
+#pdfResultArea .pdf-mas-panel,
+#pdfResultArea .pdf-herramientas-panel{overscroll-behavior:contain;touch-action:pan-y}
+.pdf-herramientas-menu{position:relative;flex:none}
+#btnPdfHerramientas{display:flex;align-items:center;justify-content:center;gap:5px;list-style:none;cursor:pointer}
+#btnPdfHerramientas::-webkit-details-marker{display:none}
+.pdf-herramientas-panel{
+  position:fixed;top:76px;right:16px;z-index:110;width:min(320px,calc(100vw - 24px));
+  max-height:calc(var(--jg-viewport-alto,100dvh) - 100px);overflow:auto;
+  padding:0 14px 14px;background:var(--lec-superficie);color:var(--lec-texto);
+  border:1px solid var(--lec-linea);border-radius:14px;box-shadow:0 12px 30px #0004;
+}
+#pdfHerramientasPanel .pdf-modo-barra{
+  position:static;display:flex;flex-direction:column;align-items:stretch;gap:4px;
+  margin:0;padding:0;border:0;opacity:1;pointer-events:auto;transform:none;
+}
+#pdfHerramientasPanel .pdf-modo-barra > .mini-btn,
+#pdfHerramientasPanel .pdf-cortes-barra > .mini-btn{
+  flex:none;justify-content:flex-start;padding:8px 12px;border:0;border-radius:8px;
+  background:transparent;font-size:14px;white-space:normal;text-align:left;
+}
+#pdfHerramientasPanel .pdf-modo-barra .mini-btn:hover{background:var(--lec-superficie-2)}
+#pdfHerramientasPanel .pdf-cortes-barra{flex:none;flex-direction:column;align-items:stretch;gap:4px}
+#pdfHerramientasPanel .pdf-accion-larga{display:inline}
+#pdfHerramientasPanel .pdf-accion-corta{display:none}
+#pdfResultArea .pdf-doc-cab{grid-template-columns:auto minmax(0,1fr) auto;gap:8px}
+#pdfResultArea .pdf-doc-tapa{display:none}
+#pdfResultArea .pdf-doc-acciones{grid-column:auto;padding:0;flex-wrap:nowrap;gap:4px}
+#pdfResultArea .pdf-doc-acciones > .mini-btn,
+#pdfResultArea .pdf-doc-acciones > details > summary{padding:6px 10px;border-radius:8px;font-size:13px}
+#pdfResultArea:has(#pdfHerramientasMenu[open], #pdfMasMenu[open]) .pdf-doc-top{z-index:111}
+@media(min-width:641px){body.jg-leyendo #pdfMasMenu > summary{display:flex}}
+@media(max-width:640px){
+  /* Esta regla debe ir después del ajuste general position:static. */
+  body.jg-leyendo .pdf-doc-top{position:fixed;inset:0 0 auto;margin:0;
+    padding:max(4px,env(safe-area-inset-top)) 10px 4px;z-index:22}
+  body.jg-leyendo .pdf-herramientas-panel{top:calc(env(safe-area-inset-top) + 54px);right:8px}
+  /* El margen vive FUERA del elemento multicolumna. Con padding dentro,
+     clientWidth y el ancho real de columna divergían en cada salto. */
+  body.jg-leyendo .pdf-texto-col{padding-inline:clamp(14px,4.5vw,30px)}
+  body.jg-leyendo .pdf-lectura{padding-inline:0}
+  /* Reserva estable: los controles no tapan las primeras/últimas líneas,
+     ni cambian la paginación cuando se muestran o se apartan. */
+  body.jg-leyendo #pdfResultArea{padding-top:calc(env(safe-area-inset-top) + 58px)}
+  body.jg-leyendo .pdf-texto-col{padding-bottom:calc(var(--pdf-bm-alto,64px) + 48px)}
+  #pdfResultArea .pdf-apariencia-hoja{max-height:calc(var(--jg-viewport-alto,100dvh) - env(safe-area-inset-top) - 12px)}
+  #pdfResultArea .pdf-doc-ident{overflow:hidden}
+  #pdfResultArea .pdf-doc-linea{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  #pdfResultArea .pdf-hoja-fondo,#pdfResultArea .pdf-doc-top,
+  #pdfResultArea .pdf-modo-barra,#pdfResultArea .pdf-barra-movil{animation:none;transition:none}
+}
 </style>
 </head>
 <body>
@@ -5931,6 +5996,15 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
                 </div>
               </div>
               <div class="pdf-doc-acciones">
+                <details class="pdf-herramientas-menu" id="pdfHerramientasMenu">
+                  <summary class="mini-btn" id="btnPdfHerramientas" aria-controls="pdfHerramientasPanel" aria-expanded="false">Texto <span aria-hidden="true">⌄</span></summary>
+                  <div id="pdfHerramientasPanel" class="pdf-herramientas-panel" role="dialog" aria-label="Herramientas de texto">
+                    <div class="pdf-hoja-cab">
+                      <h4 class="pdf-hoja-titulo">Herramientas de texto</h4>
+                      <button type="button" class="pdf-hoja-cerrar" data-cerrar-hoja="pdfHerramientasMenu" aria-label="Cerrar herramientas">×</button>
+                    </div>
+                  </div>
+                </details>
                 <button type="button" class="mini-btn" id="btnPdfCapPrev" title="Capítulo anterior" aria-label="Capítulo anterior">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:15px;height:15px"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
@@ -16464,7 +16538,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v88';
+const JG_JS_V = 'v89';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

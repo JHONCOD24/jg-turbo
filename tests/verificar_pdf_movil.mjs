@@ -52,7 +52,7 @@ const MIN_TEXTO_VISIBLE = 0.62;
    justo la garantía de que pasar de página no remaquete la lectura. Lo que se
    comprueba en modo inmersivo es que el reparto no cambie ni un píxel. */
 
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
 async function abrirLibro(width, height) {
   const p = await navegador.newPage({ viewport: { width, height } });
@@ -143,7 +143,8 @@ try {
   comprobar(`el texto se lleva al menos el ${Math.round(MIN_TEXTO_VISIBLE * 100)} % de la pantalla`,
     m.parteTexto >= MIN_TEXTO_VISIBLE, `se lleva ${Math.round(m.parteTexto * 100)} %`);
   comprobar('no hay desplazamiento horizontal', m.scrollHorizontal <= 1, `sobran ${m.scrollHorizontal} px`);
-  comprobar('las acciones de lectura caben en una fila', m.filasModo === 1, `${m.filasModo} filas`);
+  comprobar('las acciones secundarias están plegadas en Texto',
+    await tel.locator('#pdfHerramientasMenu').getAttribute('open') === null);
   comprobar('la tira de acciones no esconde nada a los lados', m.modoScroll <= 1, `sobran ${m.modoScroll} px`);
 
   /* ── 2. La barra del pulgar ─────────────────────────────────────────── */
@@ -340,7 +341,8 @@ try {
   comprobar('en 320 px la cabecera no está cortada arriba', m.cabeceraTop >= 0,
     `empieza en ${m.cabeceraTop} px`);
   comprobar('en 320 px no aparece desplazamiento horizontal', m.scrollHorizontal <= 1, `sobran ${m.scrollHorizontal} px`);
-  comprobar('en 320 px las acciones de lectura caben en una fila', m.filasModo === 1, `${m.filasModo} filas`);
+  comprobar('en 320 px las acciones de lectura quedan plegadas',
+    await estrecho.locator('#pdfHerramientasMenu').getAttribute('open') === null);
   comprobar('en 320 px todo lo que se toca sigue cabiendo bajo el dedo', m.pequenos.length === 0,
     m.pequenos.map((b) => `${b.id} ${b.w}×${b.h}`).join(', '));
   await estrecho.screenshot({ path: join(destino, 'estrecho.png') });

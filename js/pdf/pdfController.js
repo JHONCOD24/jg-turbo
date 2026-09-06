@@ -826,21 +826,52 @@ export function inicializarLectorPdf(deps = {}) {
    * solo una abierta a la vez. Antes Apariencia y Cortes se abrían sin fondo
    * y el texto de atrás seguía interactuable: en el teléfono se podía tocar
    * un párrafo (y leer en voz alta) sin ver lo que se tocaba. */
-  const hayHojaAbierta = () => (!el.indice.hidden) || !!(el.masMenu && el.masMenu.open)
+  const herramientas = $('pdfHerramientasMenu');
+  const herramientasPanel = $('pdfHerramientasPanel');
+  const btnHerramientas = $('btnPdfHerramientas');
+  const barraTexto = el.resultArea.querySelector('.pdf-modo-barra');
+  if (herramientasPanel && barraTexto) herramientasPanel.append(barraTexto);
+  /* Las hojas no pertenecen al contenedor que pagina el texto. Dejar allí
+     Apariencia disparaba su ResizeObserver al abrirla y al mover cada control. */
+  for (const hoja of [el.aparienciaHoja, el.cortesHoja]) if (hoja) el.resultArea.append(hoja);
+  const hayHojaAbierta = () => (!el.indice.hidden) || !!(el.masMenu && el.masMenu.open) || !!herramientas?.open
     || !!(el.aparienciaHoja && !el.aparienciaHoja.hidden)
     || !!(el.cortesHoja && !el.cortesHoja.hidden);
 
   function cerrarHojasFlotantes() {
-    if (typeof el.cerrarApariencia === 'function') el.cerrarApariencia();
-    else if (el.aparienciaHoja) el.aparienciaHoja.hidden = true;
-    if (typeof el.cerrarCortes === 'function') el.cerrarCortes();
-    else if (el.cortesHoja) el.cortesHoja.hidden = true;
+    if (el.aparienciaHoja) el.aparienciaHoja.hidden = true;
+    if (el.cortesHoja) el.cortesHoja.hidden = true;
+    el.btnApariencia?.setAttribute('aria-expanded', 'false');
+    if (herramientas) herramientas.open = false;
+    btnHerramientas?.setAttribute('aria-expanded', 'false');
   }
 
+  let hojaModal = null;
+  const inertes = new Map();
   function pintarFondoHojas() {
     if (!el.hojaFondo) return;
-    el.hojaFondo.hidden = !hayHojaAbierta();
+    for (const [nodo, previo] of inertes) nodo.inert = previo;
+    inertes.clear();
+    hojaModal?.removeAttribute('aria-modal');
+    hojaModal = el.aparienciaHoja && !el.aparienciaHoja.hidden ? el.aparienciaHoja
+      : el.cortesHoja && !el.cortesHoja.hidden ? el.cortesHoja
+      : herramientas?.open ? herramientasPanel
+      : el.masMenu?.open ? el.masPanel
+      : !el.indice.hidden && innerWidth < 1024 ? el.indice : null;
+    el.hojaFondo.hidden = !hojaModal;
+    if (!hojaModal) return;
+    hojaModal.setAttribute('aria-modal', 'true');
+    /* Inert solo en las ramas ajenas: jamás en un ancestro de la hoja. */
+    const aislar = nodo => {
+      for (const hijo of nodo.children) {
+        if (hijo === hojaModal || hijo === el.hojaFondo) continue;
+        if (hijo.contains(hojaModal) || hijo.contains(el.hojaFondo)) aislar(hijo);
+        else { inertes.set(hijo, hijo.inert); hijo.inert = true; }
+      }
+    };
+    aislar(el.resultArea);
   }
+  window.matchMedia('(min-width:1024px)').addEventListener('change', pintarFondoHojas);
 
   /* A quién devolver el foco al cerrar una hoja: al botón que la abrió y,
    * si ese no está a la vista (abierta desde la barra del pulgar y cerrada
@@ -862,18 +893,16 @@ export function inicializarLectorPdf(deps = {}) {
 
   function cerrarHojas({ desdeHistorial = false } = {}) {
     if (!hayHojaAbierta()) { pintarFondoHojas(); return; }
-    const eraIndice = !el.indice.hidden;
-    const eraMenu = !!(el.masMenu && el.masMenu.open);
+    const origen = hojaOrigen;
+    const equivalentes = !el.aparienciaHoja.hidden ? [el.btnApariencia, $('btnPdfBmApariencia')]
+      : !el.indice.hidden ? [el.btnIndice, $('btnPdfBmIndice')]
+      : [el.btnMas, $('btnPdfBmOpciones')];
     cerrarIndice();
     if (el.masMenu) el.masMenu.open = false;
     if (el.btnMas) el.btnMas.setAttribute('aria-expanded', 'false');
     cerrarHojasFlotantes();
     pintarFondoHojas();
-    if (eraIndice) {
-      devolverFocoHoja(hojaOrigen, el.btnIndice, document.getElementById('btnPdfBmIndice'));
-    } else if (eraMenu) {
-      devolverFocoHoja(hojaOrigen, el.btnMas, document.getElementById('btnPdfBmOpciones'));
-    }
+    devolverFocoHoja(origen, ...equivalentes, btnHerramientas);
     hojaOrigen = null;
     if (!desdeHistorial) capas.cerrar('hoja');
   }
@@ -885,9 +914,7 @@ export function inicializarLectorPdf(deps = {}) {
      * El paso en el historial representa «hay una hoja abierta», no cada
      * hoja: si se pasa de Contenido a Opciones, sigue habiendo una sola, y
      * anotar dos obligaría a pulsar «atrás» dos veces para lo mismo. */
-    const habiaOtra = cual === 'indice'
-      ? !!(el.masMenu && el.masMenu.open)
-      : !el.indice.hidden;
+    const habiaOtra = capas.hay('hoja');
     hojaOrigen = origen || null;
     cerrarIndice();
     cerrarHojasFlotantes();
@@ -898,15 +925,47 @@ export function inicializarLectorPdf(deps = {}) {
       el.btnIndice.setAttribute('aria-expanded', 'true');
       /* Que el capítulo actual quede a la vista sin tener que buscarlo. */
       const actual = el.indiceLista.querySelector('[aria-current="true"]');
-      if (actual) actual.scrollIntoView({ block: 'center' });
+      if (actual) {
+        const lista = el.indiceLista;
+        lista.scrollTop += actual.getBoundingClientRect().top - lista.getBoundingClientRect().top
+          - lista.clientHeight / 2 + actual.clientHeight / 2;
+      }
+    } else if (cual === 'apariencia') {
+      el.aparienciaHoja.hidden = false;
+      el.btnApariencia?.setAttribute('aria-expanded', 'true');
+    } else if (cual === 'cortes') {
+      el.cortesHoja.hidden = false;
+    } else if (cual === 'herramientas') {
+      herramientas.open = true;
+      btnHerramientas.setAttribute('aria-expanded', 'true');
     } else if (el.masMenu) {
       el.masMenu.open = true;
       if (el.btnMas) el.btnMas.setAttribute('aria-expanded', 'true');
       if (el.masPanel) el.masPanel.scrollTop = 0;
     }
     pintarFondoHojas();
+    hojaModal?.querySelector('button:not([disabled]), select, input, summary')?.focus({ preventScroll: true });
     if (!habiaOtra) capas.abrir('hoja', () => cerrarHojas({ desdeHistorial: true }));
   }
+
+  btnHerramientas?.addEventListener('click', ev => {
+    ev.preventDefault();
+    if (herramientas.open) cerrarHojas(); else abrirHoja('herramientas', btnHerramientas);
+  });
+  herramientasPanel?.addEventListener('click', ev => {
+    if (ev.target.closest('#pdfVistaLectura, #pdfVistaEditar, #btnPdfUnirPalabras, #btnPdfPausarCorreccion')) cerrarHojas();
+  });
+  el.resultArea.addEventListener('keydown', ev => {
+    if (ev.key !== 'Tab' || !hojaModal) return;
+    const controles = [...hojaModal.querySelectorAll('button:not([disabled]), select, input, summary, [tabindex="0"]')]
+      .filter(n => n.getClientRects().length && !n.closest('[hidden], [inert]'));
+    const primero = controles[0], ultimo = controles.at(-1);
+    if (ev.shiftKey && (document.activeElement === primero || !hojaModal.contains(document.activeElement))) {
+      ev.preventDefault(); ultimo?.focus({ preventScroll: true });
+    } else if (!ev.shiftKey && (document.activeElement === ultimo || !hojaModal.contains(document.activeElement))) {
+      ev.preventDefault(); primero?.focus({ preventScroll: true });
+    }
+  });
 
   /* Palabras por minuto de una lectura tranquila. Es una media, no una
    * medición: por eso lo que se muestra siempre lleva «~». */
@@ -1137,6 +1196,7 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   let scrollAntesLector = 0;
+  let restauracionScroll = 'auto';
   function abrirLector() {
     const nuevo = !(el.area && el.area.classList.contains('has-results'));
     if (el.area) el.area.classList.add('has-results');
@@ -1144,7 +1204,11 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.ocrBox) el.ocrBox.hidden = true;
     /* Modo lectura: el CSS aparta el encabezado y las pestañas de la app en
      * celular y tablet. Son ~120 px que pasan al texto. */
-    if (!document.body.classList.contains('jg-leyendo')) scrollAntesLector = window.scrollY || 0;
+    if (!document.body.classList.contains('jg-leyendo')) {
+      scrollAntesLector = window.scrollY || 0;
+      restauracionScroll = history.scrollRestoration;
+      history.scrollRestoration = 'manual';
+    }
     document.body.classList.add('jg-leyendo');
     /* Entrar desde el selector de archivos puede dejar el documento desplazado
        cientos de píxeles. Al convertirlo en pantalla fija ese scroll seguía
@@ -1172,6 +1236,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (!desdeHistorial) capas.cerrar('lector');
     document.body.classList.remove('jg-leyendo');
     document.body.classList.remove('jg-pantalla');
+    history.scrollRestoration = restauracionScroll;
     requestAnimationFrame(() => window.scrollTo({ top: scrollAntesLector, left: 0, behavior: 'auto' }));
     /* El temporizador es de esta sesión de escucha: al salir del libro no
      * tiene sentido que siga corriendo contra el siguiente. */
@@ -1712,8 +1777,7 @@ export function inicializarLectorPdf(deps = {}) {
   if (el.btnCorregirLibro) {
     el.btnCorregirLibro.addEventListener('click', () => {
       if (!hayDocumento()) { avisar('Abre un libro primero.', 'info', { efimero: true }); return; }
-      const menu = document.getElementById('pdfMasMenu');
-      if (menu && menu.open) menu.open = false;
+      cerrarHojas();
       if (estado.consentido) {
         iniciarCorreccionLibro()
           .catch((e) => avisar('No se pudo corregir: ' + (e?.message || 'inténtalo de nuevo.'), 'warn'));
@@ -3465,7 +3529,7 @@ export function inicializarLectorPdf(deps = {}) {
 
   el.btnIndice.addEventListener('click', () => {
     if (!el.indice.hidden) cerrarHojas();
-    else abrirHoja('indice', el.btnIndice);
+    else abrirHoja('indice', document.activeElement?.id === 'btnPdfBmIndice' ? document.activeElement : el.btnIndice);
   });
 
   /* «Opciones» es un <details>. Se le quita el abrir/cerrar automático del
@@ -3476,7 +3540,7 @@ export function inicializarLectorPdf(deps = {}) {
     el.btnMas.addEventListener('click', (e) => {
       e.preventDefault();
       if (el.masMenu.open) cerrarHojas();
-      else abrirHoja('opciones', el.btnMas);
+      else abrirHoja('opciones', document.activeElement?.id === 'btnPdfBmOpciones' ? document.activeElement : el.btnMas);
     });
   }
 
@@ -3487,8 +3551,8 @@ export function inicializarLectorPdf(deps = {}) {
    * hoja), así que el «clic fuera» se detecta aquí: es lo que cualquiera
    * espera de un menú y evita que se quede abierto tapando el texto. */
   document.addEventListener('pointerdown', (e) => {
-    if (!el.masMenu || !el.masMenu.open) return;
-    if (e.target.closest('#pdfMasMenu')) return;
+    if (innerWidth < 1024 || (!el.masMenu?.open && !herramientas?.open)) return;
+    if (e.target.closest('#pdfMasMenu, #pdfHerramientasMenu')) return;
     if (e.target.closest('#pdfHojaFondo')) return;
     cerrarHojas();
   });
@@ -3496,6 +3560,9 @@ export function inicializarLectorPdf(deps = {}) {
     const cerrar = e.target.closest('[data-cerrar-hoja]');
     if (cerrar) { e.preventDefault(); cerrarHojas(); }
   });
+  el.masPanel?.addEventListener('click', e => {
+    if (e.target.closest('#btnPdfComparar, #btnPdfRevision, #btnPdfShowText')) cerrarHojas();
+  }, { capture: true });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (el.compararHoja && !el.compararHoja.hidden) {
@@ -3535,7 +3602,7 @@ export function inicializarLectorPdf(deps = {}) {
     const abrir = el.buscarFila.hidden;
     el.buscarFila.hidden = !abrir;
     el.buscarToggle.setAttribute('aria-expanded', abrir ? 'true' : 'false');
-    if (abrir) el.buscar.focus();
+    if (abrir) el.buscar.focus({ preventScroll: true });
     else { el.buscar.value = ''; buscar(''); }
   });
   el.prev.addEventListener('click', () => mostrarParte(estado.parteActual - 1));
@@ -4873,6 +4940,8 @@ export function inicializarLectorPdf(deps = {}) {
         vincularArchivo: async (archivo) => { await vincularPdfOriginal(archivo); },
         leerDesdeCaracter: (caracter) => { try { leerDesdeCaracter(caracter); } catch (_) {} },
         actualizarFondoHojas: () => { try { pintarFondoHojas(); } catch (_) {} },
+        abrirHoja,
+        cerrarHoja: () => cerrarHojas(),
       },
     });
   } catch (_) { libroVista = null; }

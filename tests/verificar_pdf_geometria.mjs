@@ -199,7 +199,9 @@ for (const [nombre, opciones] of [
     comprobar(pc.ident === 'none', `[${nombre}·pantalla] el título se aparta`);
     comprobar(pc.acciones.length === 1 && pc.acciones[0] === 'btnPdfPantalla',
       `[${nombre}·pantalla] solo queda salir`, pc.acciones.join(','));
-    comprobar(pc.alto > altoAntes + 40, `[${nombre}·pantalla] el texto gana alto visible`,
+    /* Texto ya está plegado en la vista normal: no hay una segunda fila de
+       44px que quitar. Pantalla completa aparta acciones sin perder lectura. */
+    comprobar(pc.alto >= altoAntes - 1, `[${nombre}·pantalla] el texto conserva o gana alto visible`,
       `${Math.round(altoAntes)} → ${Math.round(pc.alto)} px`);
     await pagina.keyboard.press('Escape');
     await pagina.waitForTimeout(300);

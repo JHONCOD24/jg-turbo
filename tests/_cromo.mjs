@@ -33,3 +33,11 @@ export async function apartarCromo(pagina) {
   await pagina.evaluate(() => document.body.classList.add('jg-inmersivo'));
   await pagina.waitForTimeout(320);
 }
+
+/** Las acciones de texto viven en un desplegable desde v2.49. */
+export async function abrirHerramientas(pagina) {
+  await despertarCromo(pagina);
+  if (await pagina.locator('#pdfHerramientasMenu').getAttribute('open') === null) {
+    await pagina.locator('#btnPdfHerramientas').click();
+  }
+}

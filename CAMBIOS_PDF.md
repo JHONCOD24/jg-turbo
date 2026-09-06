@@ -3,6 +3,55 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.49.0 · Menús compactos y lectura sin desplazamientos ajenos
+
+Auditoría solicitada sobre v2.48: controles superiores grandes, salto al abrir
+Contenido y Apariencia borrosa sin respuesta. La regresión nueva reprodujo
+7 fallos: cabecera de 8 a -152 px, cambio de paginación al abrir Apariencia
+y toques interceptados por el fondo. No era suficiente comprobar `scrollY=0`.
+
+- Las acciones Lectura, Editar, Unir y Cortes están agrupadas en **Texto**.
+  Cabecera horizontal de 48 px en los teléfonos probados; objetivos táctiles
+  de 44 px. Se conserva Literata y la elección de tema guardada.
+- Una sola gestión de hojas: Contenido, Opciones, Apariencia, Texto y Cortes.
+  Fondo sin desenfoque, paneles por encima, foco contenido, Escape, botón de
+  cierre, retorno al origen y Atrás sin salir del documento. Las transiciones
+  hacia corrección o comparación liberan el fondo y el estado `inert`.
+- Contenido desplaza solo su lista. El foco usa `preventScroll`; las
+  envolturas que no deben desplazarse usan `overflow:clip`, no `hidden`.
+  La restauración automática del historial se suspende mientras se lee.
+- Apariencia y Cortes salen del contenedor observado de paginación. Abrir
+  menús móviles produce **cero mutaciones de estilo de paginación** en la
+  prueba. Los ajustes de tamaño agrupan sus recálculos con una espera de
+  100 ms; no se recompone el texto en cada evento del deslizador.
+- El margen horizontal pasa al contenedor externo de las columnas: el ancho
+  real y el paso de página coinciden. Se reserva espacio estable arriba y
+  abajo para que los controles no tapen las primeras y últimas líneas.
+  Esto sustituye el objetivo anterior de 80% que contaba texto tapado:
+  las pantallas probadas conservan entre 69% y 76% de texto sin superposición.
+
+No se modifica extracción, corrección lingüística, fuente original, biblioteca,
+sincronización ni claves de configuración. No cambia IndexedDB.
+
+Pruebas: `verificar_pdf_menus.mjs --headed` ejercita toques reales en
+320/360/390/768/1024/1280/1440 px, teclado, historial, invariancia de texto y
+posición, voz desplegable y ajustes. Sin `.click()` de DOM ni `force` para
+validar la respuesta de las hojas. Se amplía con desplazamiento libre y giro.
+Se actualizan los recorridos antiguos para abrir Texto antes de Editar/Unir.
+
+Validación local completada: 26 suites lógicas, menús 209, móvil 43,
+lectura editorial 32, integración 28, unión/deshacer 18, páginas 5, scroll
+39, geometría 118, pestañas 30, arranque 10 y pantalla móvil 60
+(5 casos sin scroll señalados como no aplicables). Recorrido integral de
+navegador completo, incluyendo el libro sintético de 300 páginas en 1,7 s
+y OCR de dos páginas en 3 s. Arranque: 924 KB, sin módulos PDF hasta abrir
+su pestaña. Capturas revisadas de lectura, Texto y Apariencia en móvil y
+escritorio dentro de `.playwright-cli/pdf-menus/` (artefactos locales).
+
+Entrega: `JG_JS_V=v89`, shell `v89`. Despliegue pendiente hasta registrar
+el resultado debajo. La prueba automatizada no sustituye una comprobación
+en el teléfono físico del usuario.
+
 ## 2026-09-06 · v2.48.0 · Transcripción fiel verificable y lectura editorial móvil
 
 La extracción guarda tres capas separadas: fragmentos originales de PDF.js u
