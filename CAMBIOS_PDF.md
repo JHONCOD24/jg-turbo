@@ -3,6 +3,37 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.49.1 · El aviso ya no tapa Escuchar en el teléfono
+
+Lo reportado en teléfono físico sobre v2.49.0: al abrir un libro aparecía
+«No se pudieron guardar los cortes» y ocultaba visualmente el panel de escucha
+(Anterior / Siguiente / Escuchar).
+
+Causa medida: abrir con corrección consentida lanza `iniciarCorreccionLibro`
+en automático; su etapa 1 guarda vía `marcarTroceo` y, si falla, gritaba con el
+mismo flotante que una orden manual. El flotante (`fixed`, `pointer-events:none`)
+caía a 12 px sobre la barra, justo encima del dock de ~150-160 px: los toques
+pasaban, pero el cartel lo tapaba 12 s.
+
+- El arranque automático es silencioso (`silencioso: !!automatica` en
+  `resolverCortesPendientes`; `prepararFuenteCorreccion` y los avisos de etapa 1
+  solo hablan si la orden fue manual). El estado queda en la píldora de
+  Opciones («Reintenta desde Opciones»), sin flotante sobre el dock.
+- El aviso lector flota por encima del dock en ≤1023 px (barra + 178 px) y lo
+  mismo el aviso de Unir; en escritorio no cambia. Sigue en `fixed`, así que la
+  paginación no lo mide y la posición de lectura no se mueve.
+- Regla nueva en `TRAMPAS.md`: flotar no basta, hay que caer donde no tape.
+
+No se toca extracción, corrección lingüística, biblioteca, sincronización ni
+claves. No cambia IndexedDB.
+
+Pruebas en local: 28 unitarias (3007 OK, 0 fallos), menús 209, móvil 43,
+pestañas 30, arranque 10, geometría y scroll en verde. Menús repetido tras el
+ajuste de escritorio: 209 OK.
+
+Entrega: `JG_JS_V=v90`, shell `v90`. Despliegue y verificación debajo (una sola
+publicación para la tanda).
+
 ## 2026-09-06 · v2.49.0 · Menús compactos y lectura sin desplazamientos ajenos
 
 Auditoría solicitada sobre v2.48: controles superiores grandes, salto al abrir

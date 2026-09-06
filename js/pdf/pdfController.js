@@ -2056,7 +2056,7 @@ export function inicializarLectorPdf(deps = {}) {
    * revisión de origen, contexto y evidencia; cada respuesta se aplica solo
    * a su límite. Lo ambiguo o inválido queda pendiente (Revisar cortes).
    */
-  async function resolverCortesPendientes({ abortado, onAvance } = {}) {
+  async function resolverCortesPendientes({ abortado, onAvance, silencioso = false } = {}) {
     const pendientes = (estado.limites || []).filter((l) => l?.decision === 'pending');
     if (!pendientes.length) return { resueltos: 0, pendientes: 0 };
     const decidir = window.jgDecidirLimitesPdf || window.jgPedirDecisionesLimites;
@@ -2092,7 +2092,11 @@ export function inicializarLectorPdf(deps = {}) {
          * etiqueta se queda clavada en «Etapa 1 de 3» y parece colgada. */
         try { onAvance?.({ lote: Math.floor(i / LOTE) + 1, lotes, resueltos }); } catch (_) {}
       } catch (error) {
-        avisar('No se pudo consultar la corrección de cortes. Puedes reintentar desde Opciones.', 'warn');
+        /* El arranque automático al abrir el libro sigue silencioso: un fallo
+         * de red o de guardado no puede tapar el dock con un aviso flotante.
+         * El estado queda en la píldora de Opciones («Reintenta desde
+         * Opciones»), que es donde la persona lo busca. */
+        if (!silencioso) avisar('No se pudo consultar la corrección de cortes. Puedes reintentar desde Opciones.', 'warn');
         break;
       }
     }
@@ -2299,7 +2303,12 @@ export function inicializarLectorPdf(deps = {}) {
     if (estado.correccionProgreso.ejecutando) return;
     const documentoSolicitado = estado.id;
     try { await prepararFuenteCorreccion(); }
-    catch (error) { avisar('No se pudo preparar el PDF para corregir: ' + error.message, 'warn'); return; }
+    catch (error) {
+      /* Igual que la falta de IA: el arranque automático al abrir es
+       * silencioso. Solo la acción manual (Corregir / Reanudar) avisa. */
+      if (!automatica) avisar('No se pudo preparar el PDF para corregir: ' + error.message, 'warn');
+      return;
+    }
     if (estado.id !== documentoSolicitado || !estado.atomos?.length) return;
     await colaLista;
     if (!estado.consentido || !estado.partes.length) return;
@@ -2368,7 +2377,7 @@ export function inicializarLectorPdf(deps = {}) {
 
     // Etapa 1/3 · Resolver cortes y estructura.
     try {
-      const r1 = await resolverCortesPendientes({ abortado,
+      const r1 = await resolverCortesPendientes({ abortado, silencioso: !!automatica,
         onAvance: ({ lote, lotes, resueltos }) => {
           estado.correccionProgreso.etapa = `Etapa 1/3 · Cortes (lote ${lote} de ${lotes} · ${resueltos} resueltos)`;
           actualizarEstadoCorreccion();
@@ -2377,14 +2386,20 @@ export function inicializarLectorPdf(deps = {}) {
       if (Number(r1?.pendientes) > 0) {
         // La duda sobre un separador no impide revisar la puntuación del
         // resto. Se conserva el corte y el libro sigue marcado pendiente.
-        avisar('Quedan ' + r1.pendientes + ' cortes para revisión manual. Continúa la revisión de puntuación.', 'warn');
+        // En automático no se grita: el conteo ya vive en la píldora de
+        // Opciones y el aviso flotante taparía Anterior/Siguiente/Escuchar.
+        if (!automatica) avisar('Quedan ' + r1.pendientes + ' cortes para revisión manual. Continúa la revisión de puntuación.', 'warn');
+        else { estado.correccionProgreso.etapa = ''; actualizarEstadoCorreccion(); }
       }
     } catch (error) {
       console.warn('[jg-pdf] etapa 1 no completada', error);
       estado.correccionProgreso.ejecutando = false;
       estado.correccionProgreso.etapa = 'No se pudieron guardar los cortes';
       actualizarEstadoCorreccion();
-      avisar(error.message || 'No se pudieron guardar los cortes. Reintenta desde Opciones.', 'warn');
+      /* Fallo automático silencioso: el estado queda en «Reintenta desde
+       * Opciones» sin flotante sobre el dock. Solo la orden manual avisa,
+       * porque la persona acaba de pulsar y espera respuesta. */
+      if (!automatica) avisar(error.message || 'No se pudieron guardar los cortes. Reintenta desde Opciones.', 'warn');
       return;
     }
     if (abortado()) return;

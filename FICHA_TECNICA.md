@@ -2,6 +2,9 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+PDF v2.49.1: la corrección automática al abrir es silenciosa y el aviso lector
+flota por encima del dock en el teléfono, sin tapar Anterior/Siguiente/Escuchar.
+
 PDF v2.49.0 agrupa las acciones de texto en un desplegable y conserva la
 tipografía Literata. Contenido desplaza solo su lista; Apariencia queda por
 encima del fondo y admite los controles. Abrir las hojas no vuelve a paginar

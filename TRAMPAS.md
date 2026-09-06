@@ -56,6 +56,19 @@ había 19 páginas, sin aviso 17, y la posición guardada caía en otra página.
 paginación solo mide cromo permanente. Ojo: `transform:none` de una animación
 mata el `translateX(-50%)`: centrar con la propiedad `translate`.
 
+## Un aviso flotante que no recibe toques también tapa si cae encima
+
+**Síntoma (v2.49.1, teléfono real):** al abrir un libro aparecía «No se pudieron
+guardar los cortes» y tapaba visualmente Anterior/Siguiente/Escuchar durante
+12 s. **Causa:** el aviso era `fixed` con `pointer-events:none`, y el comentario
+decía que «no tapa controles porque no recibe toques»: los toques pasaban, pero
+el cartel seguía dibujado encima del dock (a 12 px sobre la barra, justo donde
+vive el dock de ~150-160 px). Además el fallo venía del arranque automático al
+abrir (corrección que intenta guardar), que gritaba igual que una orden manual.
+**Regla:** flotar no basta: el aviso lector sube por encima del dock en
+≤1023 px (barra + 178 px) y el arranque automático es silencioso (el estado
+queda en la píldora de Opciones); solo la orden manual muestra flotante.
+
 ## Un blanco de fin de renglón no es prueba de espacio
 
 **Síntoma (v2.45):** «Unir palabras» no unía «to»+«ma» aunque el léxico sabía
