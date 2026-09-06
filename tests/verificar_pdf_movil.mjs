@@ -98,6 +98,7 @@ const reparto = (p) => p.evaluate(() => {
       .map((b) => Math.round(b.getBoundingClientRect().top))).size : 0,
     pequenos: tocables.filter((b) => b.h < 44 || b.w < 44),
     scrollHorizontal: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    modoScroll: modo ? modo.scrollWidth - modo.clientWidth : 0,
   };
 });
 
@@ -142,6 +143,7 @@ try {
     m.parteTexto >= MIN_TEXTO_VISIBLE, `se lleva ${Math.round(m.parteTexto * 100)} %`);
   comprobar('no hay desplazamiento horizontal', m.scrollHorizontal <= 1, `sobran ${m.scrollHorizontal} px`);
   comprobar('las acciones de lectura caben en una fila', m.filasModo === 1, `${m.filasModo} filas`);
+  comprobar('la tira de acciones no esconde nada a los lados', m.modoScroll <= 1, `sobran ${m.modoScroll} px`);
 
   /* ── 2. La barra del pulgar ─────────────────────────────────────────── */
   console.log('\n── 2. La barra del pulgar ──────────────────────────────────────');

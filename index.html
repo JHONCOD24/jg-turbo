@@ -1945,8 +1945,19 @@
     body.jg-leyendo .pdf-doc-acciones .count{display:none}
     /* En lectura, «Lectura» solo repetía el estado actual. Las tres acciones
        útiles caben en una fila incluso a 320 px con rótulos cortos. */
-    body.jg-leyendo .pdf-modo-barra{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-    body.jg-leyendo .pdf-modo-barra::-webkit-scrollbar{display:none}
+    body.jg-leyendo .pdf-modo-barra{flex-wrap:nowrap;overflow:visible}
+    /* Sin tira con scroll: lo visible se reparte a partes iguales y nada
+       queda escondido a la derecha. Una tira que se desplaza a los lados
+       esconde acciones sin avisar y nadie sabe por dónde agarrar. */
+    body.jg-leyendo .pdf-modo-barra > .mini-btn{flex:1 1 0;min-width:0;justify-content:center;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    body.jg-leyendo .pdf-modo-barra > .pdf-cortes-barra{flex:1 1 0;min-width:0;display:flex}
+    body.jg-leyendo .pdf-modo-barra > .pdf-cortes-barra > .mini-btn{flex:1 1 0;min-width:0;justify-content:center;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    body.jg-leyendo .pdf-modo-barra > .pdf-modo-estados{flex:none}
+    /* Una sola vía a Opciones en el teléfono: la del dock. Dos «Opciones»
+       (cabecera + barra) confunden; el panel es el mismo. */
+    body.jg-leyendo #pdfMasMenu > summary{display:none}
     body.jg-leyendo #pdfVistaLectura{display:none}
     body.jg-leyendo .pdf-accion-larga{display:none}
     body.jg-leyendo .pdf-accion-corta{display:inline}
