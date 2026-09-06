@@ -3,6 +3,26 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## Pendiente de publicar · UX del lector (sin versión ni despliegue aún)
+
+Tanda en `feat/ux-pdf`, verificada en local y commiteada. Falta el despliegue
+único, la verificación contra el dominio y el push (regla vigente: uno por
+tanda, no uno por cambio).
+
+- **Doble toque para leer:** un roce simple ya no narra solo; leer a propósito
+  es doble toque o el botón del reproductor.
+- **Métrica en variables CSS** (`--lec-tam`/`--lec-inter` sobre `#pdfResultArea`):
+  una sola fuente de verdad para lectura y editor; piso móvil real de 17 px.
+- **Textos informativos nunca bajo 12 px** (buscador, biblioteca, cabecera).
+- **Fondo compartido y una sola hoja a la vez** (Contenido, Opciones, Apariencia,
+  Cortes); al cerrar, el foco vuelve al botón visible que abrió, nunca al `body`.
+- **Test reparado:** un comentario mencionaba el rótulo del botón y el test
+  ingenuo lo confundía con un botón inyectado; el comentario ahora cita el id.
+
+Pruebas en local: unitarias 65/65 en `test_pdf_mejora_apartado` (cero fallos en
+las 26 suites); navegador `pdf_movil` 40, `movil_pantalla` 62, `unir_palabras` 18,
+más `navegador`, `geometria`, `scroll`, `paginas` e `integracion` en verde.
+
 ## 2026-09-05 · v2.44.0 · Corrección móvil posterior
 
 El lector usa un solo manejador de swipe y avanza exactamente una página. El
