@@ -3,7 +3,7 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
-## 2026-09-06 · v2.45.0 · UX del lector (pendiente de `dpl_`)
+## 2026-09-06 · v2.45.0 · UX del lector (`dpl_8QC7focx6swmqMCo7yK1JGpwcJCc`)
 
 Tanda en `feat/ux-pdf`, verificada en local y commiteada. Falta el despliegue
 único, la verificación contra el dominio y el push (regla vigente: uno por
@@ -22,6 +22,16 @@ tanda, no uno por cambio).
 Pruebas en local: unitarias 65/65 en `test_pdf_mejora_apartado` (cero fallos en
 las 26 suites); navegador `pdf_movil` 40, `movil_pantalla` 62, `unir_palabras` 18,
 más `navegador`, `geometria`, `scroll`, `paginas` e `integracion` en verde.
+
+Publicado como `dpl_8QC7focx6swmqMCo7yK1JGpwcJCc` (READY), alias
+`jg-turbo.vercel.app`. Verificados marcadores (`v2.45.0`, `JG_JS_V=v85`, shell
+`v85`), SHA-256 de `index.html`, `sw.js` y los 27 módulos PDF contra el dominio
+(29 de 29 idénticos), `/api/health` 200 y recorridos de navegador contra
+producción (`pdf_movil` 40, `movil_pantalla` 62, `navegador` en verde).
+
+Nota de despliegue: `npx vercel` desde la raíz sigue abortando por
+`.pytest_cache` (EPERM en el escaneo, aunque esté en `.vercelignore`); se usó la
+copia limpia en el temporal de la sesión, vinculada al proyecto `jg-turbo`.
 
 ## 2026-09-05 · v2.44.0 · Corrección móvil posterior
 

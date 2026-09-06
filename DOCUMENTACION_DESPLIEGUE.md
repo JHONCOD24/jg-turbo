@@ -11,6 +11,17 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación UX v2.45.0, 2026-09-06
+
+Doble toque para leer, métrica en variables CSS con piso móvil de 17 px,
+textos informativos ≥12 px, fondo compartido de hojas y foco que vuelve al
+botón que abrió. Publicado como `dpl_8QC7focx6swmqMCo7yK1JGpwcJCc` (READY),
+alias `jg-turbo.vercel.app`. Verificados marcadores (`v2.45.0`, `JG_JS_V=v85`,
+shell `v85`), SHA-256 de `index.html`, `sw.js` y los 27 módulos PDF contra el
+dominio (29 de 29 idénticos), `/api/health` 200 y recorridos de navegador
+contra producción. Un solo despliegue para toda la tanda. Detalle:
+[CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Vista previa móvil v2.44.0, 2026-09-05
 
 `dpl_AxvRSnboJhyFjz8JhFBSsyBNghvn`, estado `READY`, URL
