@@ -930,7 +930,20 @@ export function initLibroVista({ el, estado, api }) {
   }
   sincronizarViewportMovil();
   window.visualViewport?.addEventListener('resize', sincronizarViewportMovil, { passive: true });
+  /* La barra del navegador también se ANIMA: durante la animación el alto
+   * llega por partes y el desplazamiento visual se mueve. El 'scroll' del
+   * viewport avisa de ese movimiento; sin esto, en teléfonos reales quedaba
+   * un hueco muerto abajo y la cabecera cortada arriba. */
+  window.visualViewport?.addEventListener('scroll', sincronizarViewportMovil, { passive: true });
   window.addEventListener('orientationchange', sincronizarViewportMovil, { passive: true });
+  /* En lectura no hay scroll de documento: la jaula es fija. Si el navegador
+   * desfasa la ventana (típico al mostrar/esconder su barra), se devuelve a
+   * cero en vez de dejar la cabecera cortada. */
+  window.addEventListener('scroll', () => {
+    if (document.body.classList.contains('jg-leyendo') && window.scrollY > 0) {
+      window.scrollTo(0, 0);
+    }
+  }, { passive: true });
 
   /* Marca puesta por el gesto que despertó el cromo o pasó de página, para que
    * el `click` que viene detrás no se interprete además como «lee desde aquí». */

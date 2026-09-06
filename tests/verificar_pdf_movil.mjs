@@ -192,6 +192,12 @@ try {
   comprobar('al cambiar la barra del navegador no queda hueco inferior',
     Math.abs(ajustado.alto - ajustado.visual) <= 1 && Math.abs(ajustado.fondo - ajustado.visual) <= 1,
     JSON.stringify(ajustado));
+  /* En teléfonos reales la ventana también se DESFASA con scroll al animarse
+   * la barra: la cabecera quedaba cortada arriba aunque el alto cuadrara. */
+  const desfase = await tel.evaluate(() => ({ scroll: window.scrollY,
+    cabeceraTop: Math.round(document.querySelector('.pdf-doc-top')?.getBoundingClientRect().top ?? -999) }));
+  comprobar('el cambio de alto no desfasa la ventana ni corta la cabecera',
+    desfase.scroll === 0 && desfase.cabeceraTop >= 0, JSON.stringify(desfase));
   await tel.setViewportSize({ width:390, height:844 });
   await tel.waitForTimeout(500);
   comprobar('el cambio de alto conserva el lugar de lectura',
