@@ -36,16 +36,19 @@ export function initLibroVista({ el, estado, api }) {
   let lugarAnterior = null;
 
   function aplicarApariencia() {
+    /* La métrica viaja en variables CSS sobre #pdfResultArea: así hay una
+     * sola fuente de verdad para el artículo de lectura y las dos capas del
+     * editor, y el mínimo móvil (máx. con 17px en la media query) ya no se
+     * puede pisar desde aquí. */
+    const area = el.resultArea || el.lectura;
+    if (area) {
+      area.style.setProperty('--lec-tam', cfg.tam + 'px');
+      area.style.setProperty('--lec-inter', String(cfg.inter));
+    }
     const art = el.lectura;
     if (art) {
-      art.style.fontSize = cfg.tam + 'px';
-      art.style.lineHeight = String(cfg.inter);
       art.dataset.ancho = String(cfg.ancho);
       art.dataset.fuente = cfg.fuente;
-    }
-    if (el.salida) {
-      el.salida.style.fontSize = cfg.tam + 'px';
-      el.salida.style.lineHeight = String(cfg.inter);
     }
     if (el.aparTam) el.aparTam.value = String(cfg.tam);
     if (el.aparInter) el.aparInter.value = String(cfg.inter);

@@ -1567,6 +1567,13 @@
   /* Los dos fondos del lector viven en :root porque los usan dos sitios: el
      recuadro del texto y, en lectura a pantalla completa, la tarjeta entera. */
   :root{ --lec-papel:#F7F3EA; --lec-noche:#12161F }
+  /* Métrica de lectura — UNA sola fuente de verdad. La hoja Apariencia
+     escribe `--lec-tam`/`--lec-inter` en línea sobre #pdfResultArea
+     (aplicarApariencia), y de ahí las heredan el artículo de lectura y las
+     dos capas del editor. Antes había dos pares fijos (19px/1.7 y
+     17.5px/1.75) y un clamp móvil que el estilo inline se saltaba: quien
+     elegía 16px en el teléfono acababa con menos de los 17px mínimos. */
+  :root{ --lec-tam:19px; --lec-inter:1.7 }
   #pdfResultArea[data-tema="papel"]{
     --lec-bg:var(--lec-papel); --lec-texto:#1A1A1A; --lec-suave:#5C5750;
     --lec-linea:rgba(0,0,0,.12); --lec-acento:#0F766E;
@@ -1708,7 +1715,7 @@
   /* ── Métrica compartida por las dos capas ── */
   .pdf-area.has-results #pdfOutput,
   .pdf-area.has-results #pdfRealce{
-    font-size:17.5px;line-height:1.75;padding:24px 22px;
+    font-size:var(--lec-tam,17.5px);line-height:var(--lec-inter,1.75);padding:24px 22px;
     font-family:'Figtree',system-ui,sans-serif;letter-spacing:-.01em;
     word-break:break-word;overflow-wrap:anywhere;white-space:pre-wrap;
     box-sizing:border-box;border:0;margin:0;
@@ -1736,7 +1743,7 @@
   @media (max-width:700px){
     .pdf-area.has-results .pdf-texto-caja{min-height:50vh;border-radius:14px}
     .pdf-area.has-results #pdfOutput,
-    .pdf-area.has-results #pdfRealce{font-size:17px;line-height:1.78;padding:18px 16px}
+    .pdf-area.has-results #pdfRealce{font-size:max(17px,var(--lec-tam,17.5px));padding:18px 16px}
   }
   @media (min-width:701px) and (max-width:1023px){
     .pdf-area.has-results #pdfOutput,
@@ -4434,7 +4441,7 @@
 /* v2.39 · Lector tipo libro (encapsulado en el apartado PDF) */
 #pdfResultArea[data-tema="sepia"]{--lec-bg:#F3E9D2;--lec-texto:#3B2F23;--lec-suave:#746552;--lec-linea:rgba(59,47,35,.16);--lec-acento:#8A5A17;--lec-superficie:#EADFC6;--lec-superficie-2:#E0D2B4}
 body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf{background:#F3E9D2}
-.pdf-lectura{max-width:64ch;margin-inline:auto;width:100%;font-size:19px;line-height:1.7;text-align:left;overflow-wrap:anywhere;word-break:break-word}
+.pdf-lectura{max-width:64ch;margin-inline:auto;width:100%;font-size:var(--lec-tam,19px);line-height:var(--lec-inter,1.7);text-align:left;overflow-wrap:anywhere;word-break:break-word}
 .pdf-lectura[data-ancho="52"]{max-width:52ch}.pdf-lectura[data-ancho="76"]{max-width:76ch}
 .pdf-lectura[data-fuente="serif"]{font-family:Georgia,'Times New Roman',serif}
 .pdf-lectura[data-fuente="sans"]{font-family:'Figtree',system-ui,sans-serif}
@@ -4600,7 +4607,11 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 .pdf-volver-lectura:hover{background:var(--lec-superficie-2)}
 .pdf-volver-lectura:focus-visible{outline:2px solid var(--lec-acento);outline-offset:2px}
 @media (max-width:767px){
-  .pdf-lectura{font-size:clamp(17px,4.4vw,19px)}
+  /* En el teléfono nunca por debajo de 17px: el tamaño elegido se respeta,
+     pero la legibilidad mínima no se negocia. (El clamp anterior estaba
+     muerto: el estilo inline de aplicarApariencia lo pisaba; ahora la
+     métrica viaja en variables y esto sí aplica.) */
+  .pdf-lectura{font-size:max(17px,var(--lec-tam,19px))}
   .pdf-texto-col{max-width:100%;padding-inline:14px}
   .pdf-cortes-barra{justify-content:center}
 }

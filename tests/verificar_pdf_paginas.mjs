@@ -91,6 +91,20 @@ try {
   await p.locator('#pdfAparTam').fill('24'); await p.locator('#pdfAparTam').dispatchEvent('input');
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   assert((await medir()).desplazamiento>0,'cambiar letra conserva el lugar');
+  /* La métrica viaja en variables CSS: el tamaño elegido tiene que verse de
+   * verdad en el estilo computado (antes el inline se lo llevaba todo). */
+  const tamComputado = await p.evaluate(() => parseFloat(getComputedStyle(document.querySelector('#pdfLectura')).fontSize));
+  assert(tamComputado >= 23.5, `la letra elegida se aplica (mide ${tamComputado}px)`);
+  if (nombre==='movil') {
+    /* Piso de legibilidad: en el teléfono nunca por debajo de 17px, aunque
+     * la persona elija 16. El clamp anterior estaba muerto (el estilo inline
+     * lo pisaba) y 16px se quedaba en 16. */
+    await puerta('#btnPdfApariencia', '#btnPdfBmApariencia').click();
+    await p.locator('#pdfAparTam').fill('16'); await p.locator('#pdfAparTam').dispatchEvent('input');
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+    const piso = await p.evaluate(() => parseFloat(getComputedStyle(document.querySelector('#pdfLectura')).fontSize));
+    assert(piso >= 17, `piso móvil de 17px aunque se elija 16 (mide ${piso}px)`);
+  }
   await p.locator('#pdfVistaEditar').click(); assert(await p.locator('#pdfOutput').isVisible());
     assert(!(await p.locator('#pdfPaginacion').isVisible()));
   await p.locator('#pdfEditarCancelar').click(); await p.waitForTimeout(300);
