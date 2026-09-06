@@ -31,8 +31,12 @@ Pruebas en local: 28 unitarias (3007 OK, 0 fallos), menús 209, móvil 43,
 pestañas 30, arranque 10, geometría y scroll en verde. Menús repetido tras el
 ajuste de escritorio: 209 OK.
 
-Entrega: `JG_JS_V=v90`, shell `v90`. Despliegue y verificación debajo (una sola
-publicación para la tanda).
+Entrega: `JG_JS_V=v90`, shell `v90`. Despliegue
+`https://jg-turbo-eh6gm6geo-jhoncod24s-projects.vercel.app` READY y alias
+`https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador v2.49.1,
+`v90`, shell `v90`, `pdfController.js?v=v90` con `silencioso`, `/api/health`
+200 y menús 209 OK en local y en producción. Queda pendiente probarlo en el
+teléfono físico del usuario.
 
 ## 2026-09-06 · v2.49.0 · Menús compactos y lectura sin desplazamientos ajenos
 

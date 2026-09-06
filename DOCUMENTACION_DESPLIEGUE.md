@@ -11,6 +11,19 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.49.1, 2026-09-06
+
+El aviso lector ya no tapa Anterior/Siguiente/Escuchar en el teléfono y la
+corrección automática al abrir es silenciosa (el fallo queda en la píldora de
+Opciones). Publicado como `https://jg-turbo-eh6gm6geo-jhoncod24s-projects.vercel.app`
+(READY, alias `https://jg-turbo.vercel.app`), desde copia limpia con
+`.vercel/project.json` de `jg-turbo` y sin `.pytest_cache`/`.git`/`node_modules`.
+
+Verificación contra el dominio: marcador `v2.49.1`, `JG_JS_V=v90`,
+`jg-turbo-shell-v90`, módulo `pdfController.js?v=v90` con `silencioso`,
+`/api/health` 200 (IA y Groq configurados) y menús 209 OK en local y en
+producción. Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación PDF v2.49.0, 2026-09-06
 
 Menús superiores compactos, hojas accesibles sin desenfoque bloqueante,
