@@ -3,7 +3,7 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
-## 2026-09-06 · v2.47.0 · Leer bien sin friegas (pendiente de `dpl_`)
+## 2026-09-06 · v2.47.0 · Leer bien sin friegas (`dpl_2VvULofjSyJrq88UT4uTi7EdTkmC`)
 
 Lo pedido: que se lea bien solo, sin revisar nada a mano.
 
@@ -27,6 +27,14 @@ Lo pedido: que se lea bien solo, sin revisar nada a mano.
 Pruebas en local: 27 unitarias sin fallos; navegador `pdf_movil` 42,
 `movil_pantalla` 60 (+5 no-aplica explicados), `pestanas` 30, `unir_palabras`
 18, más `navegador`, `geometria`, `scroll`, `paginas` e `integracion` en verde.
+
+Publicado como `dpl_2VvULofjSyJrq88UT4uTi7EdTkmC` (READY), alias
+`jg-turbo.vercel.app`. Verificados marcadores (`v2.47.0`, `JG_JS_V=v87`, shell
+`v87`), SHA-256 de `index.html`, `sw.js` y los 27 módulos PDF contra el dominio
+(29 de 29 idénticos), `/api/health` 200 y recorridos contra producción
+(`pdf_movil` 42, `movil_pantalla` 58 con 7 no-aplica explicados, `navegador` y
+`pestanas` en verde). Un solo despliegue para toda la tanda, desde copia limpia
+en el temporal (la raíz sigue abortando por `.pytest_cache`).
 
 ## 2026-09-06 · v2.46.0 · Móvil que responde y Unir que sí une (`dpl_739sVhTz3FbshU6a31ngiMxMTc6B`)
 

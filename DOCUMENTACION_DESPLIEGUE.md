@@ -11,6 +11,15 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación v2.47.0, 2026-09-06
+
+Leer bien sin friegas: editar no tumba Unir ni la corrección, Unir avisa
+siempre, avisos flotantes sin re-paginar, reapertura en el punto. Publicado
+como `dpl_2VvULofjSyJrq88UT4uTi7EdTkmC` (READY), alias `jg-turbo.vercel.app`.
+Verificados marcadores (`v2.47.0`, `JG_JS_V=v87`, shell `v87`), SHA-256
+(29 de 29 idénticos), `/api/health` 200 y recorridos contra producción. Un
+solo despliegue para toda la tanda. Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación v2.46.0, 2026-09-06
 
 Móvil que responde (altura que sigue a la barra, gestos, una sola vía a
