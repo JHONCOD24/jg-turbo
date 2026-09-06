@@ -132,7 +132,7 @@ console.log('\n── 2. Las posiciones corresponden con el texto real ───
     `cada bloque muestra exactamente el texto de su posición${r.malos.length ? ' → ' + JSON.stringify(r.malos.slice(0, 2)) : ''}`);
 }
 
-console.log('\n── 3. Tocar un párrafo pide leer desde ese punto ───────────────');
+console.log('\n── 3. Un doble toque pide leer; un toque simple no ────────────');
 {
   const r = await pagina.evaluate(async () => {
     const lectura = document.getElementById('pdfLectura');
@@ -145,14 +145,22 @@ console.log('\n── 3. Tocar un párrafo pide leer desde ese punto ───�
     let pedido = null;
     const original = window.ttsIrABloque;
     window.ttsIrABloque = (b, d) => { pedido = { b, d }; };
-    objetivo.click();
+    /* Un toque simple NO puede apuntar la lectura: con el cromo siempre
+     * visible, cualquier roce del dedo empezaba a narrar solo. */
+    objetivo.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await new Promise((r2) => setTimeout(r2, 150));
+    const seleccionTrasToque = salida.selectionStart;
+    const pedidoTrasToque = !!pedido;
+    objetivo.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
     await new Promise((r2) => setTimeout(r2, 300));
     window.ttsIrABloque = original;
-    return { ini, seleccion: salida.selectionStart, pedido };
+    return { ini, seleccion: salida.selectionStart, pedido, seleccionTrasToque, pedidoTrasToque };
   });
   comprobar(!!r, 'hay párrafos donde tocar');
+  comprobar(!!r && r.pedidoTrasToque === false && r.seleccionTrasToque !== r.ini,
+    'un toque simple no pide leer en voz alta');
   comprobar(!!r && Math.abs(r.seleccion - r.ini) <= 2,
-    `tocar el párrafo apunta la lectura a su posición (pidió ${r?.seleccion}, el párrafo empieza en ${r?.ini})`);
+    `el doble toque apunta la lectura a su posición (pidió ${r?.seleccion}, el párrafo empieza en ${r?.ini})`);
 }
 
 console.log('\n── 4. El texto sigue a la voz (camino real del reproductor) ────');

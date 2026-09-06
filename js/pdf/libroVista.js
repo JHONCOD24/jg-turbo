@@ -129,18 +129,21 @@ export function initLibroVista({ el, estado, api }) {
     });
   }
 
-  /* Tocar un párrafo lo lee en voz alta desde ahí.
+  /* Un doble toque en un párrafo lo lee en voz alta desde ahí.
    *
-   * En modo lectura el texto no es editable, así que el toque simple está
-   * libre: es el gesto más corto posible y el que ya usan los lectores con
-   * voz. Se ignora si la persona estaba seleccionando texto, para no
+   * En modo lectura el texto no es editable, así que el doble toque está
+   * libre y ya es el gesto que usa el textarea para lo mismo. NO se usa el
+   * toque simple: desde que el cromo del teléfono es siempre visible
+   * (v2.44), cualquier roce accidental del dedo empezaba a narrar solo —
+   * el mismo dolor que v2.41 tapó cuando el cromo se escondía. Para leer
+   * a propósito también está el botón «Leer desde aquí» del reproductor.
+   * Se ignora si la persona estaba seleccionando texto, para no
    * secuestrar el copiar y pegar. */
   if (el.lectura) {
-    el.lectura.addEventListener('click', (ev) => {
-      /* Si este toque fue el que devolvió los controles apartados, se queda
-       * en eso. Leer en voz alta desde un párrafo que la persona ni siquiera
-       * podía ver bien es sorprendente, y es justo lo que hacía: el gesto de
-       * «volver» y el de «lee desde aquí» son el mismo toque. */
+    el.lectura.addEventListener('dblclick', (ev) => {
+      /* Si este toque fue el que pasó de página con un deslizamiento, se
+       * queda en eso: no se lee en voz alta desde un párrafo que la
+       * persona ni siquiera estaba mirando. */
       if (consumirToqueDeCromo()) return;
       const bloque = ev.target.closest('[data-ini]');
       if (!bloque || !el.lectura.contains(bloque)) return;
