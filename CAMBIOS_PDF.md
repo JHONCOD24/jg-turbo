@@ -48,9 +48,21 @@ y OCR de dos páginas en 3 s. Arranque: 924 KB, sin módulos PDF hasta abrir
 su pestaña. Capturas revisadas de lectura, Texto y Apariencia en móvil y
 escritorio dentro de `.playwright-cli/pdf-menus/` (artefactos locales).
 
-Entrega: `JG_JS_V=v89`, shell `v89`. Despliegue pendiente hasta registrar
-el resultado debajo. La prueba automatizada no sustituye una comprobación
-en el teléfono físico del usuario.
+Entrega publicada: `JG_JS_V=v89`, shell `v89`, despliegue
+`dpl_EBscQ3vHJfKvPbiCmDRKJ8iU2Dpx` READY y alias
+`https://jg-turbo.vercel.app`. Una publicación para toda la tanda.
+Los 30 archivos del frontend y módulos PDF coinciden por SHA-256;
+`/api/health` responde 200. PWA comprobada en navegador: service worker
+activado, sin actualización esperando, caché única `jg-turbo-shell-v89`
+con HTML v2.49.0 y JavaScript cargado `v89` tras recargar.
+
+Trece suites de navegador pasaron contra el dominio real: menús 209,
+móvil 43, geometría 118, scroll 39, pantalla móvil 58, fidelidad 11,
+integración 28, unir/deshacer 18, pestañas 30, arranque 10, lectura móvil
+32, recorrido integral 116 y páginas 5. El recorrido integral usa respuestas
+simuladas para sus casos de error: no acredita calidad del proveedor de voz
+o traducción. La prueba automatizada no sustituye una comprobación en el
+teléfono físico del usuario.
 
 ## 2026-09-06 · v2.48.0 · Transcripción fiel verificable y lectura editorial móvil
 

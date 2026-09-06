@@ -2,6 +2,12 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+PDF v2.49.0 agrupa las acciones de texto en un desplegable y conserva la
+tipografía Literata. Contenido desplaza solo su lista; Apariencia queda por
+encima del fondo y admite los controles. Abrir las hojas no vuelve a paginar
+el libro. Cabecera horizontal compacta y espacio de lectura sin líneas tapadas.
+Detalle de pruebas y publicación: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 PDF v2.40.0 incorpora páginas de lectura, restauración por carácter y corrección
 con decisiones persistentes. Detalle: [verificación](docs/pdf-v2.40-verificacion.md).
 

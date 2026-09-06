@@ -11,6 +11,21 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.49.0, 2026-09-06
+
+Menús superiores compactos, hojas accesibles sin desenfoque bloqueante,
+Contenido sin desplazar sus ancestros y paginación estable al abrir opciones.
+Publicado una vez como `dpl_EBscQ3vHJfKvPbiCmDRKJ8iU2Dpx` (READY),
+alias `https://jg-turbo.vercel.app`, desde copia limpia de los archivos
+vigentes del repositorio aplanado. Se cotejaron los 124 archivos seleccionados
+antes de subirlos; no se incluyeron ejemplos privados ni archivos de entorno.
+
+Verificación: 30/30 SHA-256 idénticos contra el dominio, `/api/health` 200,
+13 suites de navegador completas sin fallos (incluidas las 209 comprobaciones
+nuevas de menús). PWA activada con shell `v89`, HTML cacheado v2.49.0 y JS
+`v89` cargado tras recargar. No se probó un teléfono físico. Detalle y recuentos:
+[CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación v2.47.0, 2026-09-06
 
 Leer bien sin friegas: editar no tumba Unir ni la corrección, Unir avisa

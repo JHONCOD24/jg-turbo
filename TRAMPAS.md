@@ -1,5 +1,13 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Git puede escapar los nombres con tildes al enumerar archivos
+
+**Síntoma (preparación de v2.49):** la copia temporal intentó copiar una ruta
+entre comillas con escapes octales. **Causa:** `git ls-files` usa `core.quotepath`
+y el filtro no reconoció `ejemplos/`. **Regla:** usar `git -c core.quotepath=false
+ls-files`, detener la copia ante errores y comparar hashes de todos los archivos
+seleccionados antes de publicar. Se verificaron los 124 archivos antes del deploy.
+
 ## Una hoja puede estar visible y no recibir ningún toque
 
 **Síntoma (v2.48):** Apariencia borrosa e inutilizable. **Causa:** la hoja tenía
