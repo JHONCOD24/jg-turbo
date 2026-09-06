@@ -185,6 +185,38 @@ decisión como del usuario (`source:'user'`), no como «pendiente»: la
 reconstrucción vuelve a resolver los pendientes y los habría unido otra vez en
 el mismo instante.
 
+## Un selector con identificador le gana a `hidden`
+
+**Síntoma (producción, 2026-09-05):** en Micrófono, Archivo, YouTube y Traducir
+aparecía **además** el contenido del panel de PDF. «Todos los apartados tienen
+lo mismo», lo reportó el usuario.
+
+**Causa:** al arreglar el hueco negro del panel PDF se añadió
+
+```css
+body:not(.jg-leyendo) #panelPdf{ display:flex }
+```
+
+Ese selector lleva un **identificador**, así que gana a `.panel{display:none}` y
+al `display:none` que el navegador aplica por el atributo `hidden`. El panel se
+dibujaba **siempre**, activo o no: 627 px de contenido ajeno en cada pestaña.
+
+**Reglas:**
+
+1. Una regla de `display` sobre un panel va acotada a su estado visible
+   (`.active`), nunca al elemento a secas.
+2. `hidden` debe ganar siempre. Hay una red de seguridad:
+   `.panel[hidden], [hidden]{display:none !important}`. No quitarla.
+3. **Probar la pestaña que NO se tocó.** Todas las suites miraban el panel de
+   PDF y ninguna comprobaba que los demás siguieran limpios. Lo vigila ahora
+   `verificar_pestanas.mjs`, en escritorio y en teléfono.
+
+**Y una consecuencia que enseña algo:** este fallo **tapaba otro**. Los 58-83 px
+de hueco muerto al final de la pestaña Archivo no se veían porque el panel de
+PDF, dibujado de más, los rellenaba. Al corregir lo primero apareció lo
+segundo. Un fallo que «compensa» a otro no es una casualidad rara: es lo que
+pasa cuando nadie mide.
+
 ## Desplegar en cada mejora suelta cuesta horas y no aporta nada
 
 **Síntoma (2026-09-05):** un solo encargo salieron **siete despliegues**. Cada
