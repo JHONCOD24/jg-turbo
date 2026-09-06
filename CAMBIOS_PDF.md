@@ -3,6 +3,13 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.51.0 · Panel de voz plegable sin apagar la lectura
+
+Las herramientas de voz (modelo Fish Audio, velocidad) se ocultan con **Ocultar**
+o volviendo a pulsar **Voz**. La narración sigue. En el teléfono queda un mini
+reproductor para pausar o reabrir ajustes. En escritorio, **Ocultar ajustes**
+pliega modelo y velocidad. Ver [CAMBIOS_UX.md](CAMBIOS_UX.md).
+
 ## 2026-09-06 · v2.50.0 · Volver a extraer un PDF borrado lo devuelve a la biblioteca
 
 Síntoma medido con «El Placeo Eres Tú»: se sube, el texto se extrae, el lector

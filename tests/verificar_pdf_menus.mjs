@@ -99,8 +99,14 @@ try {
     check(`${width}: menús no cambian el texto`, await page.locator('#pdfOutput').inputValue() === original);
     if (mobile) {
       check(`${width}: líneas fuera de la cabecera`, before.text.top >= before.header.bottom);
-      const limite = await page.locator('#pdfPaginacion').evaluate(e => e.getBoundingClientRect().top);
-      check(`${width}: líneas fuera del reproductor`, before.text.bottom <= limite + 1);
+      /* Paginación y barra del pulgar FLOTAN sobre el texto (modelo editorial).
+         Lo que no puede tapar el libro es el panel de voz cuando está cerrado. */
+      const vozCerrada = await page.evaluate((alto) => {
+        const d = document.querySelector('#pdfDockNav');
+        const r = d.getBoundingClientRect();
+        return d.dataset.abierto === 'no' && (r.top >= alto - 2 || getComputedStyle(d).visibility === 'hidden');
+      }, 844);
+      check(`${width}: panel de voz cerrado no tapa el texto`, vozCerrada);
       await page.locator('#btnPdfBmVoz').tap();
       await page.locator('#pdfDockNav select').first().tap({ trial: true });
       await page.locator('#btnPdfBmVoz').tap();

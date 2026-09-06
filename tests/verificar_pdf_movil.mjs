@@ -264,6 +264,29 @@ try {
   comprobar('con la voz sonando queda un control de pausa a la vista', conVoz.hay);
   comprobar('ese control también cabe bajo el dedo', conVoz.h >= TACTIL && conVoz.w >= TACTIL,
     `mide ${conVoz.w}×${conVoz.h}`);
+  await tel.evaluate(() => { document.body.classList.remove('jg-inmersivo'); });
+  await despertarCromo(tel);
+  await tel.locator('#btnPdfBmVoz').click();
+  await tel.waitForTimeout(400);
+  const hojaAbierta = await tel.evaluate(() => document.querySelector('#pdfDockNav')?.dataset.abierto === 'si');
+  comprobar('Voz abre las herramientas sin apagar la lectura', hojaAbierta
+    && await tel.evaluate(() => document.body.classList.contains('jg-voz-activa')));
+  await tel.locator('#btnPdfDockOcultar').click();
+  await tel.waitForTimeout(400);
+  const despuesOcultar = await tel.evaluate(() => {
+    const dock = document.querySelector('#pdfDockNav');
+    const mini = document.querySelector('#pdfVozMini');
+    const vis = mini && mini.offsetParent && getComputedStyle(mini).visibility !== 'hidden'
+      && Number(getComputedStyle(mini).opacity) > 0.01;
+    return {
+      abierto: dock?.dataset.abierto,
+      voz: document.body.classList.contains('jg-voz-activa'),
+      mini: !!vis,
+    };
+  });
+  comprobar('Ocultar cierra el panel y deja la voz activa',
+    despuesOcultar.abierto === 'no' && despuesOcultar.voz);
+  comprobar('con el panel cerrado queda el mini reproductor', despuesOcultar.mini);
   await tel.evaluate(() => { document.body.classList.remove('jg-voz-activa', 'jg-inmersivo'); });
 
   /* ── 4c. Pasar página con el dedo ───────────────────────────────────

@@ -21,7 +21,7 @@ function leerApariencia() {
    * haga, en el teléfono manda un tamaño fluido que mantiene la línea en
    * 32-46 caracteres. En cuanto lo mueve, manda ella: alguien con poca
    * vista tiene que poder agrandar aunque la línea quede corta. */
-  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas', tamElegido: false };
+  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas', tamElegido: false, vozDesplegado: true };
   try {
     const crudo = localStorage.getItem('jg_pdf_lectura');
     if (crudo) cfg = { ...cfg, ...JSON.parse(crudo) };
@@ -36,6 +36,8 @@ function guardarApariencia(cfg) {
 
 export function initLibroVista({ el, estado, api }) {
   if (!el || !estado) return;
+  const TELEFONO = '(max-width:640px)';
+  const enTelefono = () => typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(TELEFONO).matches : false;
   const cfg = leerApariencia();
   let lugarAnterior = null;
 
@@ -247,9 +249,15 @@ export function initLibroVista({ el, estado, api }) {
     /* `caracterVisible()` se apoya en `pag.actual`, que aquí ya es la página
      * destino, y su cálculo no depende de dónde vaya la animación: por eso
      * puede anotarse el sitio sin esperar a que el desplazamiento termine. */
+    const targetLeft = Math.round(pag.actual * pag.paso);
     pag.saltando = true;
     clearTimeout(tempoSalto);
-    tempoSalto = setTimeout(() => { pag.saltando = false; }, 420);
+    tempoSalto = setTimeout(() => {
+      pag.saltando = false;
+      if (art && Math.abs(art.scrollLeft - targetLeft) > 1) {
+        art.scrollLeft = targetLeft;
+      }
+    }, 360);
     if (guardar) {
       pag.ancla = caracterVisible();
       if (api.anotarPagina) api.anotarPagina(pag.ancla);
@@ -305,8 +313,7 @@ export function initLibroVista({ el, estado, api }) {
     const huecos = (parseFloat(estiloCol.rowGap) || 0) * visibles.length;
     const bordes = (parseFloat(estiloCol.paddingTop) || 0) + (parseFloat(estiloCol.paddingBottom) || 0);
     let alto = Math.floor(col.clientHeight - bordes - visibles.reduce((n,e) => n + e.getBoundingClientRect().height, 0) - huecos);
-    const ancho = art.clientWidth;
-    if (alto < 80 || ancho < 80) { pag.activo = false; return; }
+    if (alto < 80) { pag.activo = false; return; }
 
     /* La página tiene que caber un número ENTERO de renglones. Si sobra medio,
      * la última línea aparece cortada por la mitad y eso delata al instante
@@ -319,8 +326,13 @@ export function initLibroVista({ el, estado, api }) {
 
     art.style.height = alto + 'px';
     art.style.flex = 'none';
+
+    /* Medir ancho exacto con la altura ya fijada para evitar discrepancias */
+    const ancho = Math.floor(art.clientWidth);
+    if (alto < 80 || ancho < 80) { pag.activo = false; return; }
+
     art.style.columnWidth = ancho + 'px';
-    const hueco = parseFloat(getComputedStyle(art).columnGap) || 44;
+    const hueco = parseFloat(getComputedStyle(art).columnGap) || (enTelefono() ? 28 : 44);
     pag.paso = ancho + hueco;
     pag.activo = true;
     pag.total = Math.max(1, Math.round((art.scrollWidth + hueco) / pag.paso));
@@ -917,27 +929,60 @@ export function initLibroVista({ el, estado, api }) {
      ocultan por CSS. Una sola fuente de verdad; si mañana cambia el
      comportamiento de «Contenido», cambia en un solo sitio.
      ═══════════════════════════════════════════════════════════════════════ */
-  const TELEFONO = '(max-width:640px)';
-  const enTelefono = () => window.matchMedia(TELEFONO).matches;
+  /* TELEFONO y enTelefono definidos al inicio de initLibroVista */
   const $$ = (id) => document.getElementById(id);
 
   const barraMovil = $$('pdfBarraMovil');
   const dock = $$('pdfDockNav');
 
   /* El reproductor completo vive tras el botón «Voz»: solo ocupa pantalla
-     mientras se usa, en vez de robar 198 px permanentes. */
+     mientras se usa, en vez de robar 198 px permanentes. La voz puede
+     seguir sonando con el panel cerrado: eso es lo que pide «aprovechar
+     el espacio». */
   /* `modo`: false = cerrada · true/'si' = reproductor · 'buscar' = buscador. */
   function abrirDock(modo) {
-    if (!dock || !enTelefono()) return;
+    if (!dock) return;
+    if (!enTelefono()) {
+      const abrir = modo === true || modo === 'si';
+      dock.dataset.desplegado = abrir ? 'si' : 'no';
+      cfg.vozDesplegado = abrir;
+      guardarApariencia(cfg);
+      const plegar = $$('btnPdfDockDesplegar');
+      if (plegar) {
+        plegar.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+        plegar.textContent = abrir ? 'Ocultar ajustes' : 'Mostrar ajustes';
+      }
+      return;
+    }
     const valor = modo === 'buscar' ? 'buscar' : (modo ? 'si' : 'no');
     dock.dataset.abierto = valor;
     const btn = $$('btnPdfBmVoz');
-    if (btn) btn.classList.toggle('is-on', valor === 'si');
+    if (btn) {
+      btn.classList.toggle('is-on', valor === 'si');
+      btn.setAttribute('aria-expanded', valor === 'si' ? 'true' : 'false');
+    }
+    /* Al guardar los ajustes, si la voz sigue, se aparta el cromo para
+       devolver el texto. No se detiene la narración. */
+    if (valor === 'no' && document.body.classList.contains('jg-voz-activa')) {
+      inmersivo(true);
+    }
   }
-  if (dock) dock.dataset.abierto = 'no';
+  if (dock) {
+    dock.dataset.abierto = 'no';
+    dock.dataset.desplegado = cfg.vozDesplegado === false ? 'no' : 'si';
+    const plegarIni = $$('btnPdfDockDesplegar');
+    const abiertoIni = dock.dataset.desplegado !== 'no';
+    if (plegarIni) {
+      plegarIni.setAttribute('aria-expanded', abiertoIni ? 'true' : 'false');
+      plegarIni.textContent = abiertoIni ? 'Ocultar ajustes' : 'Mostrar ajustes';
+    }
+  }
 
   const puentes = [
     ['btnPdfBmVoz', () => abrirDock((dock?.dataset.abierto || 'no') !== 'si')],
+    ['btnPdfDockOcultar', () => abrirDock(false)],
+    ['btnPdfDockDesplegar', () => abrirDock(dock?.dataset.desplegado !== 'si')],
+    ['btnPdfVozMiniAjustes', () => { devolverCromo(); abrirDock(true); }],
     ['btnPdfBmApariencia', () => {
       abrirDock(false);
       const b = $$('btnPdfBmApariencia');
@@ -992,6 +1037,7 @@ export function initLibroVista({ el, estado, api }) {
     if (!enTelefono()) return;
     const reintentar = () => {
       if (pag.saltando) { tempoInmersivo = setTimeout(reintentar, 120); return; }
+      if (hayHojaOAbierto()) return;
       inmersivo(true);
     };
     tempoInmersivo = setTimeout(reintentar, 380);
@@ -1152,7 +1198,12 @@ export function initLibroVista({ el, estado, api }) {
     }, { capture: true, passive: true });
   }
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && document.body.classList.contains('jg-inmersivo')) devolverCromo();
+    if (ev.key !== 'Escape') return;
+    if (dock && enTelefono() && (dock.dataset.abierto === 'si' || dock.dataset.abierto === 'buscar')) {
+      abrirDock(false);
+      return;
+    }
+    if (document.body.classList.contains('jg-inmersivo')) devolverCromo();
   });
 
   /* `jg-voz-activa` la mira el CSS para dejar el control de pausa a la vista
@@ -1163,24 +1214,40 @@ export function initLibroVista({ el, estado, api }) {
     const consola = document.querySelector('[data-tts-console="pdf"]');
     const boton = consola && consola.querySelector('[data-tts-action="toggle"]');
     if (!boton) return;
+    const parar = consola.querySelector('[data-tts-action="stop"]');
     const pintar = () => {
       const sonando = boton.getAttribute('aria-pressed') === 'true';
-      document.body.classList.toggle('jg-voz-activa', sonando);
+      const sesion = sonando || (parar && parar.style.display !== 'none');
+      document.body.classList.toggle('jg-voz-activa', sesion);
       const texto = document.getElementById('pdfVozMiniTexto');
-      if (texto && sonando) texto.textContent = 'Leyendo…';
+      const voz = consola.querySelector('[data-tts-voice-select]');
+      const vel = consola.querySelector('[data-tts-rate-value]');
+      const nombre = voz && voz.selectedOptions && voz.selectedOptions[0]
+        ? voz.selectedOptions[0].textContent.trim()
+        : 'Voz';
+      const velocidad = vel ? vel.textContent.trim() : '';
+      const resumen = [nombre, velocidad].filter(Boolean).join(' · ');
+      if (texto) texto.textContent = sonando ? (resumen || 'Leyendo…') : (resumen ? `En pausa · ${resumen}` : 'En pausa');
+      const miniPausa = document.getElementById('btnPdfVozMiniPausa');
+      if (miniPausa) {
+        miniPausa.setAttribute('aria-label', sonando ? 'Pausar la lectura' : 'Seguir leyendo');
+        miniPausa.dataset.estado = sonando ? 'sonando' : 'pausa';
+      }
     };
-    new MutationObserver(pintar).observe(boton, { attributes: true, attributeFilter: ['aria-pressed'] });
+    new MutationObserver(pintar).observe(boton, { attributes: true, attributeFilter: ['aria-pressed', 'class'] });
+    if (parar) new MutationObserver(pintar).observe(parar, { attributes: true, attributeFilter: ['style', 'hidden'] });
+    const voz = consola.querySelector('[data-tts-voice-select]');
+    if (voz) voz.addEventListener('change', pintar);
     pintar();
   }());
 
-  /* El único control que sobrevive al modo inmersivo: parar la voz. */
+  /* Mini reproductor: pausa o reanuda. No abre el panel ni detiene la voz.
+     Para cambiar modelo o velocidad está «Ajustes». */
   const vozMiniPausa = $$('btnPdfVozMiniPausa');
   if (vozMiniPausa) {
     vozMiniPausa.addEventListener('click', () => {
-      devolverCromo();
-      abrirDock(true);
-      const parar = $$('btnPdfAudiolibroStop') || document.querySelector('#pdfDockNav .btn-tts-stop');
-      if (parar) parar.click();
+      const toggle = document.querySelector('#pdfDockNav [data-tts-action="toggle"]');
+      if (toggle) toggle.click();
     });
   }
 

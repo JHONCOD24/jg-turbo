@@ -1,5 +1,19 @@
 # Rediseño de experiencia de usuario y calidad — JG Turbo
 
+## 2026-09-06 · v2.51.0 · Herramientas de voz plegables
+
+La voz y el panel de ajustes (modelo Fish Audio, velocidad, paginación a la vista)
+ya no van atados. Se puede **ocultar el panel y seguir escuchando**.
+
+- En el teléfono, «Voz» abre la hoja. **Ocultar** la cierra sin detener la
+  narración. Queda un mini reproductor (pausa/seguir + Ajustes).
+- En escritorio, **Ocultar ajustes** pliega modelo y velocidad; Escuchar sigue.
+- Escape cierra la hoja de voz. El mini no abre el panel ni pulsa Detener.
+
+Módulos `v92`; shell `jg-turbo-shell-v92`.
+
+
+
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 

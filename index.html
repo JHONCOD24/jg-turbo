@@ -1779,6 +1779,24 @@
     .pdf-dock-nav{padding:12px;border-radius:var(--pdf-r)}
   }
   /* La consola de voz, ya dentro del dock, se funde con él. */
+  .pdf-voz-cab{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    flex:none;padding:2px 2px 8px;
+  }
+  .pdf-voz-cab-titulo{margin:0;font-size:14px;font-weight:700;color:var(--lec-texto, var(--text))}
+  .pdf-voz-cab-ayuda{margin:2px 0 0;font-size:11px;color:var(--lec-suave, var(--muted));line-height:1.35}
+  .pdf-voz-cab-ocultar,.pdf-voz-cab-desplegar{flex:none;min-height:44px}
+  .pdf-voz-cab-desplegar{display:none}
+  @media (min-width:641px){
+    .pdf-voz-cab-ocultar{display:none}
+    .pdf-voz-cab-desplegar{display:inline-flex}
+    #pdfDockNav[data-desplegado="no"] .tts-voice-select,
+    #pdfDockNav[data-desplegado="no"] .tts-rate-control,
+    #pdfDockNav[data-desplegado="no"] .tts-field-label{display:none!important}
+  }
+  @media (max-width:640px){
+    .pdf-voz-cab-desplegar{display:none!important}
+  }
   .pdf-dock-nav .tts-console{margin:0;border:0;background:none;padding:0;gap:6px 7px}
   .pdf-dock-nav .tts-console-play .btn-tts{min-height:44px;padding:8px 14px;font-size:13px;border-radius:12px}
   .pdf-dock-nav .tts-console-play .btn-tts-stop{min-height:44px;border-radius:12px}
@@ -2638,17 +2656,8 @@
     /* Los controles permanecen visibles: esconderlos dejaba su espacio vacío
        o forzaba a repartir las páginas otra vez. */
 
-    /* 4. El único superviviente del modo inmersivo: parar la voz. */
+    /* 4. Mini reproductor: ver reglas de voz activa más abajo. */
     .pdf-voz-mini{display:none}
-    body.jg-leyendo.jg-voz-activa.jg-inmersivo .pdf-voz-mini{
-      display:flex;align-items:center;gap:10px;
-      position:fixed;inset:auto 12px calc(12px + env(safe-area-inset-bottom)) auto;z-index:25;
-      padding:6px 14px 6px 6px;border-radius:999px;
-      background:var(--lec-superficie, var(--surface));
-      border:1px solid var(--lec-linea, var(--line));
-      box-shadow:0 8px 26px -14px rgba(0,0,0,.75);
-      animation:pdfPulidoIn .18s ease;
-    }
     .pdf-vm-btn{
       display:inline-flex;align-items:center;justify-content:center;
       width:44px;height:44px;flex:none;border:0;border-radius:50%;cursor:pointer;
@@ -2661,6 +2670,31 @@
       font-size:12px;font-weight:600;color:var(--lec-suave, var(--muted));
       max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     }
+    .pdf-vm-icono-play{display:none}
+    .pdf-vm-btn[data-estado="pausa"] .pdf-vm-icono-pausa{display:none}
+    .pdf-vm-btn[data-estado="pausa"] .pdf-vm-icono-play{display:block}
+    .pdf-vm-ajustes{
+      flex:none;min-height:36px;padding:0 10px;border:0;border-radius:999px;cursor:pointer;
+      background:transparent;color:var(--lec-acento, var(--cyan));
+      font:inherit;font-size:12px;font-weight:700;
+    }
+    .pdf-vm-ajustes:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:2px}
+
+    /* Mini reproductor con la voz activa y el panel cerrado: no hace falta
+       apagar la lectura para recuperar el texto. */
+    body.jg-leyendo.jg-voz-activa .pdf-voz-mini{
+      display:flex;align-items:center;gap:10px;
+      position:fixed;inset:auto 12px calc(var(--pdf-bm-alto, 64px) + 8px) auto;z-index:25;
+      padding:6px 10px 6px 6px;border-radius:999px;
+      background:var(--lec-superficie, var(--surface));
+      border:1px solid var(--lec-linea, var(--line));
+      box-shadow:0 8px 26px -14px rgba(0,0,0,.75);
+    }
+    body.jg-leyendo.jg-voz-activa.jg-inmersivo .pdf-voz-mini{
+      inset:auto 12px calc(12px + env(safe-area-inset-bottom)) auto;
+    }
+    body.jg-leyendo:has(#pdfDockNav[data-abierto="si"]) .pdf-voz-mini,
+    body.jg-leyendo:has(#pdfDockNav[data-abierto="buscar"]) .pdf-voz-mini{display:none!important}
 
     /* 5. El texto se queda con lo que sobra, y el dock deja de apilar
           cuatro barras: el reproductor entero vive tras el botón Voz. */
@@ -2723,7 +2757,9 @@
       font-size:clamp(15px, min(var(--lec-tam, 19px), 4.5vw), 24px);
       line-height:var(--lec-inter, 1.55);
       max-width:none;
-      padding-inline:clamp(14px, 4.5vw, 30px);
+      padding-inline:0 !important;
+      margin-inline:0 !important;
+      width:100% !important;
       text-align:left;
       overflow-wrap:normal;
       word-break:normal;
@@ -2747,7 +2783,13 @@
          320 px, donde es lo que mantiene la línea en ~32 caracteres. */
       font-size:max(16px, var(--lec-tam, 19px));
     }
-    body.jg-leyendo .pdf-lectura p + p{text-indent:1.25em}
+    body.jg-leyendo .pdf-lectura p{
+      margin:0 0 0.85em !important;
+      text-align:justify;
+      text-justify:inter-word;
+      text-align-last:left;
+    }
+    body.jg-leyendo .pdf-lectura p + p{text-indent:0 !important}
     body.jg-leyendo .pdf-lectura h1,
     body.jg-leyendo .pdf-lectura h2,
     body.jg-leyendo .pdf-lectura h3{font-weight:600;text-align:left;hyphens:none}
@@ -2821,24 +2863,57 @@
      sí recibe toques. Aparece unos segundos al abrir un libro empezado. */
   .pdf-reanudar{
     position:fixed;left:50%;translate:-50% 0;
-    bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;
-    max-width:min(92vw,560px);
+    top:calc(max(8px, env(safe-area-inset-top)) + var(--pdf-cab-alto, 52px) + 8px);
+    bottom:auto;z-index:90;
+    max-width:min(92vw,540px);width:max-content;
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-    margin:0;padding:8px 12px;
-    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent);
-    border:1px solid color-mix(in srgb, var(--lec-acento, var(--cyan)) 34%, transparent);
+    margin:0;padding:8px 14px;
+    background:var(--surface-2, #161c28);
+    background:color-mix(in srgb, var(--surface, #0f141e) 90%, var(--cyan, #06b6d4) 10%);
+    border:1px solid color-mix(in srgb, var(--line, rgba(255,255,255,0.16)) 80%, var(--cyan, #06b6d4) 20%);
     border-radius:12px;
-    font-size:13px;line-height:1.4;
-    box-shadow:0 10px 34px -14px rgba(0,0,0,.8);
+    color:var(--text, #f0f4f8);
+    font-size:13px;line-height:1.4;font-weight:500;
+    box-shadow:0 12px 32px -4px rgba(0,0,0,.7), 0 2px 6px rgba(0,0,0,.4);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
     animation:pdfReanudarEntra .28s ease both;
+    transition:opacity .22s ease, transform .22s ease;
   }
-  body.jg-leyendo .pdf-reanudar{bottom:calc(var(--pdf-bm-alto,64px) + 12px)}
+  body.jg-leyendo .pdf-reanudar{
+    top:calc(max(8px, env(safe-area-inset-top)) + var(--pdf-cab-alto, 52px) + 8px);
+    bottom:auto;
+  }
+  body.jg-leyendo.jg-inmersivo .pdf-reanudar{
+    opacity:0;pointer-events:none;transform:translate(-50%, -8px);
+  }
   .pdf-reanudar[hidden]{display:none !important}
-  .pdf-reanudar-txt{flex:1 1 auto;min-width:0}
-  .pdf-reanudar .mini-btn{flex:0 0 auto;min-height:var(--h-touch)}
-  @keyframes pdfReanudarEntra{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .pdf-reanudar-txt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .pdf-reanudar .mini-btn{
+    flex:0 0 auto;min-height:34px;padding:6px 12px;border-radius:8px;
+    background:var(--cyan, #06b6d4);color:#080c14;border:none;font-weight:600;font-size:12.5px;
+    cursor:pointer;transition:background .15s ease, filter .15s ease;
+  }
+  .pdf-reanudar .mini-btn:hover{filter:brightness(1.15)}
+  .pdf-reanudar-cerrar{
+    flex:none;width:28px;height:28px;padding:0;margin-left:2px;
+    display:flex;align-items:center;justify-content:center;
+    border:none;border-radius:6px;background:transparent;
+    color:var(--muted, #94a3b8);font-size:18px;line-height:1;
+    cursor:pointer;transition:background .15s, color .15s;
+  }
+  .pdf-reanudar-cerrar:hover{
+    background:rgba(255,255,255,0.12);color:#fff;
+  }
+  @keyframes pdfReanudarEntra{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion:reduce){.pdf-reanudar{animation:none}}
-  @media (max-width:640px){ .pdf-reanudar{font-size:12.5px;padding:8px 10px} }
+  @media (max-width:640px){
+    .pdf-reanudar{
+      font-size:12px;padding:7px 10px;gap:8px;
+      max-width:calc(100vw - 20px);
+      top:calc(max(6px, env(safe-area-inset-top)) + var(--pdf-cab-alto, 48px) + 6px);
+    }
+  }
 
   /* Menú ⋯ (Opciones) — pulido visual */
   .pdf-mas-menu{position:relative}
@@ -4904,12 +4979,11 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
   body.jg-leyendo .pdf-herramientas-panel{top:calc(env(safe-area-inset-top) + 54px);right:8px}
   /* El margen vive FUERA del elemento multicolumna. Con padding dentro,
      clientWidth y el ancho real de columna divergían en cada salto. */
-  body.jg-leyendo .pdf-texto-col{padding-inline:clamp(14px,4.5vw,30px)}
-  body.jg-leyendo .pdf-lectura{padding-inline:0}
-  /* Reserva estable: los controles no tapan las primeras/últimas líneas,
-     ni cambian la paginación cuando se muestran o se apartan. */
-  body.jg-leyendo #pdfResultArea{padding-top:calc(env(safe-area-inset-top) + 58px)}
-  body.jg-leyendo .pdf-texto-col{padding-bottom:calc(var(--pdf-bm-alto,64px) + 48px)}
+  body.jg-leyendo .pdf-texto-col{padding-inline:clamp(14px,4.5vw,28px);width:100%;box-sizing:border-box}
+  body.jg-leyendo .pdf-lectura{padding-inline:0!important;margin-inline:0!important;width:100%!important}
+  /* Vista limpia y completa: el cromo flota por encima y se aparta al leer */
+  body.jg-leyendo #pdfResultArea{padding-top:calc(env(safe-area-inset-top) + 54px);padding-bottom:0}
+  body.jg-leyendo .pdf-texto-col{padding-bottom:max(6px,env(safe-area-inset-bottom))}
   #pdfResultArea .pdf-apariencia-hoja{max-height:calc(var(--jg-viewport-alto,100dvh) - env(safe-area-inset-top) - 12px)}
   #pdfResultArea .pdf-doc-ident{overflow:hidden}
   #pdfResultArea .pdf-doc-linea{display:none}
@@ -6220,10 +6294,12 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             <div class="pdf-reanudar" id="pdfReanudar" hidden role="status" aria-live="polite">
               <span class="pdf-reanudar-txt" id="pdfReanudarTxt"></span>
               <button type="button" class="mini-btn" id="btnPdfReanudarInicio">Empezar de cero</button>
+              <button type="button" class="pdf-reanudar-cerrar" id="btnPdfReanudarCerrar" aria-label="Cerrar aviso">×</button>
             </div>
             <div class="pdf-reanudar" id="pdfReanudarCorreccion" hidden role="status" aria-live="polite">
               <span class="pdf-reanudar-txt" id="pdfReanudarCorreccionTxt"></span>
               <button type="button" class="mini-btn" id="btnPdfReanudarCorreccion">Reanudar corrección</button>
+              <button type="button" class="pdf-reanudar-cerrar" id="btnPdfReanudarCorreccionCerrar" aria-label="Cerrar aviso">×</button>
             </div>
 
             <div class="pdf-barra pdf-barra--doc" id="pdfProgresoDoc" role="progressbar" aria-label="Progreso de lectura" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -6458,8 +6534,16 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                   </button>
                 </div>
 
-                <!-- Reproductor: play, avance, voz y velocidad siempre visibles
-                     mientras se lee, como el mini-reproductor de Audible. -->
+                <div class="pdf-voz-cab">
+                  <div class="pdf-voz-cab-textos">
+                    <p class="pdf-voz-cab-titulo">Herramientas de voz</p>
+                    <p class="pdf-voz-cab-ayuda">Ocultar no detiene la lectura.</p>
+                  </div>
+                  <button type="button" class="mini-btn pdf-voz-cab-ocultar" id="btnPdfDockOcultar"
+                          aria-label="Ocultar herramientas de voz. La lectura sigue.">Ocultar</button>
+                  <button type="button" class="mini-btn pdf-voz-cab-desplegar" id="btnPdfDockDesplegar"
+                          aria-expanded="true" aria-controls="pdfTtsAjustes">Ocultar ajustes</button>
+                </div>
                 <div class="tts-console" data-tts-console="pdf" data-tts-source="#pdfOutput">
                   <div class="tts-console-head">
                     <span class="tts-console-title">Leer en voz alta</span>
@@ -6478,7 +6562,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                             title="Leer desde el párrafo que estoy viendo">Desde aquí</button>
                     <span class="tts-console-status" data-tts-status>Lista</span>
                   </div>
-                  <div class="tts-console-row tts-console-opts">
+                  <div class="tts-console-row tts-console-opts" id="pdfTtsAjustes">
                     <div class="tts-field">
                       <span class="tts-field-label">Voz</span>
                       <select class="tts-voice-select" data-tts-voice-select data-tts-voice-compacto aria-label="Voz de lectura"></select>
@@ -6512,7 +6596,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                con una mano. Todo lo demás vive dentro de ellos. En pantallas
                mayores no se pinta: escritorio y tablet siguen con su fila. -->
           <nav class="pdf-barra-movil" id="pdfBarraMovil" aria-label="Acciones de lectura">
-            <button type="button" class="pdf-bm-btn" id="btnPdfBmVoz" aria-label="Escuchar el libro">
+            <button type="button" class="pdf-bm-btn" id="btnPdfBmVoz" aria-label="Mostrar u ocultar herramientas de voz" aria-expanded="false" aria-controls="pdfDockNav">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
               <span>Voz</span>
             </button>
@@ -6543,10 +6627,14 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                resto del cromo se aparte. Sin ello, la lectura inmersiva te
                dejaría sin forma de parar la voz salvo a ciegas. -->
           <div class="pdf-voz-mini" id="pdfVozMini" aria-live="off">
-            <button type="button" class="pdf-vm-btn" id="btnPdfVozMiniPausa" aria-label="Pausar la lectura en voz alta">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+            <button type="button" class="pdf-vm-btn" id="btnPdfVozMiniPausa" aria-label="Pausar la lectura" data-estado="sonando">
+              <svg class="pdf-vm-icono-pausa" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              <svg class="pdf-vm-icono-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="8 5 20 12 8 19"/></svg>
             </button>
             <span class="pdf-vm-texto" id="pdfVozMiniTexto">Leyendo…</span>
+            <button type="button" class="pdf-vm-ajustes" id="btnPdfVozMiniAjustes" aria-label="Mostrar voz, modelo y velocidad">
+              Ajustes
+            </button>
           </div>
         </div>
       </div>
@@ -16548,7 +16636,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v91';
+const JG_JS_V = 'v92';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
