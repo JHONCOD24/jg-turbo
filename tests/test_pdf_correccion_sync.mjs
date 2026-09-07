@@ -10,7 +10,7 @@ import {
   VERSION_CORRECCION_SYNC, VERSION_RECONSTRUCCION, VERSION_TROCEO,
 } from '../js/pdf/manifiesto.js';
 import {
-  validarCopiaCompartir, componerRegistroDocumento,
+  validarCopiaCompartir, componerRegistroDocumento, debeMigrarCorreccion,
 } from '../js/pdf/biblioteca.js';
 import { esSincronizable } from '../js/pdf/sincronizacion.js';
 
@@ -100,6 +100,17 @@ const limite = (id, decision = 'pending', source = 'pdf') => ({
   comprobar(reg.sincronizar === false, 'la marca privada sobrevive al guardado');
   comprobar(esSincronizable(reg) === false, 'lo privado no es sincronizable');
   comprobar(reg.pideFuente?.de === 'tablet', 'el pedido de fuente sobrevive al guardado');
+}
+
+/* ── Migración v101: anunciar la corrección actual ─────────────────── */
+{
+  const base = { id: 'a', titulo: 'A', actualizado: 100, sincronizado: 100 };
+  comprobar(debeMigrarCorreccion(base, { conGeometria: true }) === true, 'libro al día con PDF anuncia su corrección');
+  comprobar(debeMigrarCorreccion(base, { conGeometria: false }) === false, 'sin geometría no hay nada que compartir');
+  comprobar(debeMigrarCorreccion({ ...base, sincronizar: false }, { conGeometria: true }) === false, 'lo privado no se anuncia');
+  comprobar(debeMigrarCorreccion({ ...base, borrado: 150, contenidoActualizado: 100 }, { conGeometria: true }) === false, 'una lápida no se anuncia');
+  comprobar(debeMigrarCorreccion({ ...base, sincronizado: 0 }, { conGeometria: true }) === false, 'lo nunca subido viaja completo de todos modos');
+  comprobar(debeMigrarCorreccion(null, { conGeometria: true }) === false, 'nulo no se anuncia');
 }
 
 console.log(fallos === 0 ? 'TODAS LAS COMPROBACIONES PASARON' : `FALLOS: ${fallos}`);

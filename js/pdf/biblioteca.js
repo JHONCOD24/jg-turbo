@@ -1162,8 +1162,7 @@ export async function guardarManifiestoRecibido(id, correccion) {
   }
 }
 
-/** Solo el manifiesto guardado (para decidir sin abrir el libro). */
-export async function cargarManifiesto(id) {
+/** Solo el manifiesto guardado (para decidir sin abrir el libro). */export async function cargarManifiesto(id) {
   try {
     const fila = await conAlmacenes([CONTENIDO], 'readonly', (c) => esperar(c.get(id)));
     if (!fila) return null;
@@ -1180,6 +1179,59 @@ export async function cargarManifiesto(id) {
     };
   } catch (_) {
     return null;
+  }
+}
+
+/* ── Migración v101: los libros actuales suben su corrección ─────────
+ *
+ * Los libros sincronizados ANTES de esta versión viajaron sin `correccion`:
+ * están «al día» y no se volverían a subir nunca. Esta migración les toca
+ * solo `actualizado` (NO el contenido): la próxima sincronización manda el
+ * paquete ligero con el manifiesto, sin resubir capítulos.
+ *
+ * Solo los aparatos con el PDF (geometría local) tienen algo que compartir;
+ * los que solo recibieron texto no suben nada nuevo.
+ */
+
+/** Pura y con pruebas: ¿este libro debe anunciar su corrección? */
+export function debeMigrarCorreccion(doc, { conGeometria = false } = {}) {
+  if (!doc || typeof doc !== 'object') return false;
+  if (!esSincronizable(doc)) return false;
+  if (estaBorrado(doc)) return false;
+  if (!conGeometria) return false;
+  const sincronizado = Number(doc.sincronizado) || 0;
+  if (!sincronizado) return false; /* nunca se subió: ya viajará completa */
+  return true;
+}
+
+/** Marca los libros actuales para que anuncien su corrección. Devuelve cuántos. */
+export async function marcarMigracionCorreccion() {
+  try {
+    const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
+    const candidatos = (todos || []).filter((d) => esSincronizable(d) && !estaBorrado(d) && Number(d.sincronizado));
+    if (!candidatos.length) return 0;
+    const filas = await conAlmacenes([CONTENIDO], 'readonly', (c) => esperar(c.getAll())).catch(() => []);
+    const conGeo = new Set((filas || [])
+      .filter((f) => f && f.reconstruccion?.atomos?.length)
+      .map((f) => f.id));
+    const ids = candidatos
+      .filter((d) => debeMigrarCorreccion(d, { conGeometria: conGeo.has(d.id) }))
+      .map((d) => d.id);
+    if (!ids.length) return 0;
+    const ahora = Date.now();
+    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      for (const id of ids) {
+        const doc = await esperar(docs.get(id));
+        /* Solo el aviso viaja: el contenido NO se toca (TRAMPAS §5.3). */
+        if (doc && (Number(doc.actualizado) || 0) <= (Number(doc.sincronizado) || 0)) {
+          doc.actualizado = ahora;
+          await esperar(docs.put(doc));
+        }
+      }
+    });
+    return ids.length;
+  } catch (_) {
+    return 0;
   }
 }
 

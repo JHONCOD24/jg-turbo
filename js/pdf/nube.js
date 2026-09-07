@@ -18,6 +18,9 @@ import {
 const CLAVE_LLAVE = 'jg_sync_llave';
 const CLAVE_CURSOR = 'jg_sync_cursor';
 const CLAVE_BIBLIOTECA = 'jg_sync_biblioteca';
+/* Migración v101: los libros que ya estaban sincronizados anuncian su
+ * corrección una sola vez (paquete ligero, sin resubir capítulos). */
+const CLAVE_MIG_CORRECCION = 'jg_sync_corr_v1';
 
 const leer = (clave) => { try { return localStorage.getItem(clave) || ''; } catch (_) { return ''; } };
 const escribir = (clave, valor) => { try { localStorage.setItem(clave, valor); } catch (_) { /* modo privado */ } };
@@ -104,6 +107,17 @@ export function crearNube({ pedir, biblioteca }) {
     async sincronizar({ alProgresar } = {}) {
       if (!this.estaVinculada()) throw new Error('Este dispositivo no está sincronizando.');
       const avisar = (mensaje) => { if (alProgresar) alProgresar(mensaje); };
+
+      /* Una sola vez por aparato: los libros actuales anuncian su corrección
+       * para que los demás aparatos dejen de pedir el PDF. Es barato (solo el
+       * paquete ligero) y si falla, la próxima vez se reintenta solo. */
+      if (!leer(CLAVE_MIG_CORRECCION)) {
+        try {
+          const n = await biblioteca.marcarMigracionCorreccion();
+          if (n) avisar(`Compartiendo la corrección de ${n} ${n === 1 ? 'libro' : 'libros'}…`);
+        } catch (_) { /* la próxima sincronización lo reintenta */ }
+        escribir(CLAVE_MIG_CORRECCION, '1');
+      }
 
       const cursor = leer(CLAVE_CURSOR);
       avisar('Buscando cambios…');
