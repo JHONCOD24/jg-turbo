@@ -16,6 +16,8 @@ sincronizados solo se cargaban cuando había marca de fuente.
 - Unir sin geometría: el pase automático calla y el manual avisa una vez; los
   errores crípticos se vuelven mensaje accionable.
 - Pruebas: `test_pdf_correccion_sync.mjs` (36).
+- Despliegue dpl_v102 (2026-09-07): `JG_JS_V='v102'`, shell-v102, 5 módulos con
+  igual tamaño local/prod, código nuevo presente, home 200.
 
 ## Entrega 2026-09-07 · corrección portable + compartir sin dar la llave (v101)
 
