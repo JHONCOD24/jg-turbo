@@ -28,13 +28,17 @@
     /* Escala de espaciado (múltiplos de 4) */
     --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
     --space-5:20px; --space-6:24px; --space-8:32px;
-    /* Tipografía fluida */
-    --fs-xs:clamp(10.5px, 0.65vw + 9px, 11.5px);
-    --fs-sm:clamp(11.5px, 0.6vw + 10.5px, 12.5px);
-    --fs-md:clamp(13px, 0.5vw + 12px, 14.5px);
-    --fs-lg:clamp(15px, 0.7vw + 13.5px, 17px);
+    /* Tipografía fluida (Fase C §4.3.1: pisos accesibles) */
+    --fs-xs:clamp(12px, 0.5vw + 11px, 12.5px);
+    --fs-sm:clamp(13px, 0.6vw + 11.5px, 14px);
+    --fs-md:clamp(15px, 0.5vw + 13.5px, 16px);
+    --fs-lg:clamp(16px, 0.7vw + 14.5px, 18px);
     --fs-xl:clamp(18px, 1.6vw + 14px, 22px);
     --fs-2xl:clamp(20px, 3.6vw + 12px, 28px);
+    --h-ctrl:44px;
+    --h-touch:44px;
+    --h-ctrl-lg:52px;
+    --medida-lectura:66ch;
     --t:.18s ease;
     --focus:0 0 0 2px var(--bg), 0 0 0 4px var(--cyan);
     font-family:'Figtree',system-ui,-apple-system,sans-serif;
@@ -76,7 +80,7 @@
     background:linear-gradient(135deg,var(--hot-1),var(--hot-2));box-shadow:0 10px 24px -8px rgba(255,45,85,.6)}
   .logo svg{width:24px;height:24px}
   .brand h1{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:clamp(20px,4vw,26px);letter-spacing:-.02em;line-height:1}
-  .brand h1 b{background:linear-gradient(135deg,var(--hot-1),var(--hot-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand h1 b{color:var(--hot-1)}
   .brand p{color:var(--muted);font-size:12px;margin-top:2px}
   .badge{margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);
     border:1px solid var(--cyan-glow);padding:4px 10px;border-radius:999px;background:rgba(39,225,193,.06)}
@@ -1533,7 +1537,7 @@
   .pdf-opts-cuerpo{padding:14px;display:flex;flex-direction:column;gap:12px}
 
   .pdf-opts{display:grid;gap:10px;margin:0;flex:none;grid-template-columns:1fr 1fr}
-  @media (max-width:560px){.pdf-opts{grid-template-columns:1fr}}
+  @media (max-width:640px){.pdf-opts{grid-template-columns:1fr}}
   .pdf-opts select{
     background:var(--bg-2);border:1px solid var(--line);color:var(--text);font-family:inherit;
     font-size:12.5px;padding:9px 10px;border-radius:var(--pdf-r-sm);cursor:pointer;outline:none;
@@ -2067,7 +2071,7 @@
   #pdfDrop .drop-texto b{display:block;color:var(--text);font-weight:600;font-size:14px;margin-bottom:2px}
   #pdfDrop .fname{color:var(--cyan);font-size:12px;margin-top:8px;font-family:'JetBrains Mono',monospace;word-break:break-all}
   #pdfDrop .drop-action{
-    margin-top:12px;padding:8px 16px;min-height:38px;display:inline-flex;align-items:center;
+    margin-top:12px;padding:10px 20px;min-height:44px;display:inline-flex;align-items:center;
     border-radius:999px;background:var(--surface-2);border:1px solid var(--line);
     color:var(--text);font-size:12px;font-weight:600;
   }
@@ -2332,16 +2336,13 @@
     border-radius:999px;outline:none;
   }
 
-  /* Rejilla de documentos — más aire, más premium */
+  /* Rejilla de documentos — más aire, más premium (Fase D.1: auto-fill minmax(140px, 1fr)) */
   .pdf-rejilla{
     list-style:none;margin:0;padding:0;display:grid;gap:14px;
-    grid-template-columns:repeat(auto-fill,minmax(158px,1fr));
+    grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
   }
-  @media (max-width:480px){
-    .pdf-rejilla{grid-template-columns:repeat(2,1fr);gap:10px}
-  }
-  @media (min-width:900px){
-    .pdf-rejilla{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:16px}
+  @media (max-width:640px){
+    .pdf-rejilla{gap:12px}
   }
   .pdf-libro{
     display:flex;flex-direction:column;background:var(--surface);
@@ -2475,8 +2476,8 @@
   }
   .pdf-pulido-estado[hidden]{display:none !important}
   .pdf-pulido-estado::before{
-    content:'';width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);
-    animation:pdfPulso 1.4s infinite;flex:none;
+    content:'';width:7px;height:7px;border-radius:50%;background:var(--cyan);
+    flex:none;
   }
   .pdf-pulido-estado[data-estado="ok"]{color:#8FE9C8;border-color:rgba(39,225,193,.35);background:rgba(39,225,193,.08)}
   .pdf-pulido-estado[data-estado="ok"]::before{background:#8FE9C8;box-shadow:none;animation:none}
@@ -3090,7 +3091,7 @@
   .pdf-dormir-estado[hidden]{display:none}
   .pdf-dormir-estado::before{
     content:'';width:7px;height:7px;border-radius:50%;flex:none;
-    background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:pdfPulso 1.6s infinite;
+    background:var(--cyan);
   }
 
   /* Índice de capítulos — columna fija en escritorio, drawer elegante en móvil/tablet */
@@ -3265,7 +3266,7 @@
   }
   .pdf-ocr p{color:var(--text);font-size:var(--fs-sm);line-height:1.55;margin:0}
   .pdf-ocr-opts{display:grid;gap:8px;grid-template-columns:1fr 1fr}
-  @media (max-width:560px){.pdf-ocr-opts{grid-template-columns:1fr}}
+  @media (max-width:640px){.pdf-ocr-opts{grid-template-columns:1fr}}
   .pdf-ocr-opts .task-field{min-width:0}
   .pdf-ocr-opts select{
     width:100%;min-height:44px;background:var(--bg-2);border:1px solid var(--line);color:var(--text);
@@ -3332,7 +3333,7 @@
   .yt-sync-voice[data-estado="activo"]{color:var(--cyan);border-color:rgba(39,225,193,.35);background:rgba(39,225,193,.08)}
   .yt-sync-voice[data-estado="cargando"]{color:#FFC79A}
   .yt-sync-voice[data-estado="error"]{color:#FF9D9D;border-color:rgba(255,105,105,.35)}
-  @media (max-width:600px){
+  @media (max-width:640px){
     /* En celular todo se apila y el botón de doblar ocupa el ancho completo. */
     .yt-sync-controls{gap:10px}
     .btn-doblar{width:100%;justify-content:center}
@@ -4182,8 +4183,7 @@
   .trans-run-row .btn-trans-main svg{width:18px;height:18px}
   .trans-editor--result.has-content{border-color:rgba(39,225,193,.48);box-shadow:0 0 0 1px rgba(39,225,193,.08)}
   .trans-listen:not(.has-text){display:none}
-  .prog-bar.is-indeterminate .prog-fill{width:38% !important;animation:progIndeterminado 1.15s ease-in-out infinite}
-  @keyframes progIndeterminado{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+  .prog-bar.is-indeterminate .prog-fill{width:60% !important;opacity:.85;transition:opacity .3s ease}
   @media (min-width:641px){
     .trans-workspace{
       grid-template-columns:minmax(0,1fr) minmax(0,1fr);
@@ -4301,10 +4301,15 @@
      ═══════════════════════════════════════════════════════════════════ */
 
   :root{
-    /* Alturas de control: 3 valores, no 15 */
-    --h-ctrl:40px; --h-touch:44px;
+    /* Alturas de control: 3 valores, no 15 (Fase C) */
+    --h-ctrl:44px; --h-touch:44px; --h-ctrl-lg:52px; --medida-lectura:66ch;
     /* Alto real del encabezado, medido por JS (ver medirChrome) */
     --h-header:56px; --h-tabs:52px;
+  }
+  @media (pointer: coarse){
+    button, [role="button"], input, select, summary, .btn, .mini-btn, .tab, .chip, .pdf-filtro{
+      min-height: var(--h-ctrl, 44px);
+    }
   }
 
   /* ── 1. Cero scroll horizontal, en cualquier parte ───────────────── */
@@ -4736,7 +4741,7 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-apariencia-temas .pdf-tema-opcion.is-on{border-color:var(--lec-acento);color:var(--lec-acento);
   background:color-mix(in srgb,var(--lec-acento) 12%,transparent)}
 .pdf-apariencia-temas .pdf-tema-opcion:focus-visible{outline:2px solid var(--lec-acento);outline-offset:2px}
-@media (min-width:768px){
+@media (min-width:641px){
   .pdf-apariencia-hoja{left:auto;right:16px;bottom:auto;top:64px;width:320px;border-radius:16px;
     border:1px solid var(--lec-linea);max-height:70vh}
 }
@@ -4870,7 +4875,7 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
   .pdf-texto-col{max-width:100%;padding-inline:14px}
   .pdf-cortes-barra{justify-content:center}
 }
-@media (min-width:768px) and (max-width:1023px){
+@media (min-width:641px) and (max-width:1023px){
   .pdf-lectura{max-width:62ch}
   .pdf-texto-col{padding-inline:20px}
 }
@@ -4912,7 +4917,7 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 .pdf-comparar-pie{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
 .pdf-comparar-pie .btn{justify-self:center;min-height:44px}
 .pdf-comparar-pie .btn[aria-pressed="true"]{background:#14755f;color:#fff}
-@media(max-width:700px){
+@media(max-width:640px){
   .pdf-comparar-hoja:not([hidden]){inset:0;border-radius:0;padding:12px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
   .pdf-comparar-cuerpo{grid-template-columns:1fr;overflow:auto}
   .pdf-comparar-lienzo{min-height:48dvh;flex:none}
@@ -5298,7 +5303,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             <b style="color:var(--cyan)" id="pwaInstallTitle">Instalar JG Turbo</b>
             <span id="pwaInstallText"> Como app de escritorio o móvil: se abre sola, sin barra del navegador (como en el teléfono).</span>
           </div>
-          <button type="button" class="btn" id="btnPwaInstall" style="background:linear-gradient(135deg,var(--cyan),#11b89c);border:0;color:#062b25;font-weight:700;">Instalar app</button>
+          <button type="button" class="btn" id="btnPwaInstall" style="background-color:var(--cyan);background:linear-gradient(135deg,var(--cyan),#11b89c);border:0;color:#062b25;font-weight:700;">Instalar app</button>
         </div>
 
         <div class="drop" id="drop" role="button" tabindex="0" aria-label="Elegir un archivo de audio">
@@ -6049,7 +6054,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           </div>
 
           <div class="pdf-nube-llave" id="pdfNubeLlaveCaja" hidden role="alertdialog" aria-labelledby="pdfNubeLlaveTitulo">
-            <h5 id="pdfNubeLlaveTitulo">Tu llave de respaldo</h5>
+            <h4 id="pdfNubeLlaveTitulo">Tu llave de respaldo</h4>
             <p>Guárdala donde guardas cosas importantes. Solo la necesitas si pierdes
                <b>todos</b> tus aparatos a la vez.</p>
             <code class="pdf-nube-llave-texto" id="pdfNubeLlaveTexto"></code>
@@ -6943,7 +6948,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     </div>
     <div class="modal-footer" style="justify-content: flex-end;">
       <button class="btn ghost" id="btnImprovePreviewCancel" style="max-width:140px; padding: 8px 16px;">Descartar</button>
-      <button class="btn" id="btnImprovePreviewAccept" style="max-width:220px; padding: 10px 20px; background: linear-gradient(135deg, var(--cyan), #11b89c); border: 0; color: #062b25; font-weight: 700; box-shadow: 0 4px 15px -4px var(--cyan-glow);">Usar esta versión</button>
+      <button class="btn" id="btnImprovePreviewAccept" style="max-width:220px; padding: 10px 20px; background-color:var(--cyan); background: linear-gradient(135deg, var(--cyan), #11b89c); border: 0; color: #062b25; font-weight: 700; box-shadow: 0 4px 16px -4px rgba(0,0,0,.5);">Usar esta versión</button>
     </div>
   </div>
 </div>
@@ -7164,7 +7169,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     </div>
     <div class="modal-footer">
       <button class="btn ghost" id="btnSettingsCancel" style="max-width: 100px; padding: 8px 16px;">Cancelar</button>
-      <button class="btn" id="btnSettingsSave" style="max-width: 120px; padding: 8px 20px; background: linear-gradient(135deg, var(--cyan), #11b89c); border: 0; color: #062b25; font-weight: 700; box-shadow: 0 4px 15px -4px var(--cyan-glow);">Guardar</button>
+      <button class="btn" id="btnSettingsSave" style="max-width: 120px; padding: 8px 20px; background-color:var(--cyan); background: linear-gradient(135deg, var(--cyan), #11b89c); border: 0; color: #062b25; font-weight: 700; box-shadow: 0 4px 16px -4px rgba(0,0,0,.5);">Guardar</button>
     </div>
   </div>
 </div>
@@ -7226,7 +7231,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
         justify-content: center;
         font-size: 38px;
         animation: pulse 1.6s infinite ease-in-out;
-        text-shadow: 0 0 20px var(--cyan-glow);
+        text-shadow: none;
       ">✦</div>
     </div>
     
@@ -7236,10 +7241,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
         font-family: 'Bricolage Grotesque', sans-serif;
         font-size: 18px;
         font-weight: 800;
-        background: linear-gradient(135deg, #FFF, var(--muted));
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        color: var(--text);
         letter-spacing: -0.01em;
       " id="loadingOverlayTitle">Puliendo tu texto</h3>
       <p style="
