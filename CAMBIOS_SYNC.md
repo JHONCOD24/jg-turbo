@@ -19,6 +19,12 @@ viajaba; el segundo aparato no podía confiar en lo corregido y pedía el archiv
 - Pruebas: `tests/test_pdf_correccion_sync.mjs` (26). Vecinas en verde salvo
   `test_pdf_interfaz_lectura.mjs` («Escape cierra la hoja»), que ya fallaba con
   `git stash` (heredado, no de esta entrega).
+- Despliegue dpl_v101 (2026-09-07): desde copia limpia (la raíz se atascaba en
+  `.pytest_cache` con EPERM; la copia excluye además `.vercel/python`, `backend`,
+  `tests`, `node_modules` y los WAV fuente de `Fondos Musicales`, que la app no
+  sirve). Verificado contra el dominio: `JG_JS_V='v101'`, `sw.js` shell-v101,
+  4 módulos con igual tamaño local/prod, código nuevo presente, home 200,
+  `/api/health` ok y `/api/sync/estado` 401 (existe y exige llave).
 
 ## Entrega 2026-09-06 · PDF v2.50.0 · resucitar un libro borrado y vuelto a extraer
 
