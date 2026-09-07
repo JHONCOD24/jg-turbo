@@ -11,6 +11,22 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.52.0, 2026-09-06
+
+Revisión del plan de mejoramiento PDF en móvil (fases A–E parciales): F5 deja
+en la pestaña y el libro, carga diferida de exportar/preguntar, toques de 44 px.
+Publicado como `https://jg-turbo-7dw3towxw-jhoncod24s-projects.vercel.app`
+(READY, alias `https://jg-turbo.vercel.app`), desde copia limpia vinculada al
+proyecto `jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`). Inspect:
+`https://vercel.com/jhoncod24s-projects/jg-turbo/4NxYkEwMa1x1iDqBHdVGnNdU4YaC`.
+`dpl_4NxYkEwMa1x1iDqBHdVGnNdU4YaC`.
+
+Verificación contra el dominio: marcador `v2.52.0`, `JG_JS_V=v94`,
+`jg-turbo-shell-v94`, 4/4 SHA-256 idénticos (`index.html`, `sw.js`,
+`pdfController.js`, `extractorPdf.js`), `/api/health` 200 (IA y Groq
+configurados). No es el plan completo: faltan partir el controlador, cachear
+módulos en el SW y adelgazar `index.html`. Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación PDF v2.51.0, 2026-09-06
 
 Lector PDF móvil: texto ordenado continuo con justificación uniforme de izquierda a derecha (eliminados saltos forzados de renglón y sangría desalineada en móvil). Ventana flotante de aviso (.pdf-reanudar) reubicada a la parte superior con diseño sólido oscuro desenfocado y botón de cierre táctil (×). Despliegue https://jg-turbo-40762yg75-jhoncod24s-projects.vercel.app (READY, alias https://jg-turbo.vercel.app). Inspect: https://vercel.com/jhoncod24s-projects/jg-turbo/Eua333ExRduEbNczVyPTmKd9vH7A.

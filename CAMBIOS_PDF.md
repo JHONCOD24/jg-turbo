@@ -24,7 +24,11 @@ archivos, cachear módulos en el service worker y adelgazar `index.html`.
   rejilla de biblioteca fluida, sin halo ni punto parpadeante en estados, y el
   título de la marca deja de ir en degradado.
 
-Entrega: `JG_JS_V=v94`, shell `v94`.
+Entrega: `JG_JS_V=v94`, shell `v94`. Despliegue
+`https://jg-turbo-7dw3towxw-jhoncod24s-projects.vercel.app` READY y alias
+`https://jg-turbo.vercel.app` (`dpl_4NxYkEwMa1x1iDqBHdVGnNdU4YaC`). Verificado
+contra el dominio: marcador v2.52.0, `v94`, shell `v94`, 4/4 SHA-256 idénticos
+(`index.html`, `sw.js`, `pdfController.js`, `extractorPdf.js`), `/api/health` 200.
 
 ## 2026-09-06 · v2.51.0 · Panel de voz plegable sin apagar la lectura
 
