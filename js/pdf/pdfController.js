@@ -416,6 +416,7 @@ export function inicializarLectorPdf(deps = {}) {
   function tarjetaLibro(doc) {
     const item = document.createElement('li');
     item.className = 'pdf-libro';
+    item.dataset.docId = doc.id;
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
     item.setAttribute('aria-label', `Abrir ${doc.titulo || 'documento'}`);
@@ -1296,6 +1297,11 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.masMenu) el.masMenu.open = false;
     cerrarIndice();
     if (el.area) el.area.classList.remove('has-results');
+    try {
+      localStorage.removeItem('jg_pdf_doc_abierto');
+      localStorage.setItem('jg_pdf_vista_activa', 'biblioteca');
+      sessionStorage.removeItem('jg_pdf_en_lector');
+    } catch (_) {}
   }
 
   /** Deja el documento en pantalla, listo para leer desde donde iba. */
@@ -1303,6 +1309,11 @@ export function inicializarLectorPdf(deps = {}) {
     estado.id = id;
     estado.titulo = titulo;
     estado.partes = partes;
+    try {
+      localStorage.setItem('jg_pdf_doc_abierto', id);
+      localStorage.setItem('jg_pdf_vista_activa', 'lector');
+      sessionStorage.setItem('jg_pdf_en_lector', id);
+    } catch (_) {}
     // Fuente inmutable: lo extraído del PDF. La corrección genera una
     // revisión derivada y nunca la reemplaza.
     try {
@@ -1541,6 +1552,11 @@ export function inicializarLectorPdf(deps = {}) {
     let partes = await almacen.cargarContenido(id);
     if (!doc || !partes || !partes.length) {
       avisar('Ese documento ya no está guardado.', 'warn');
+      try {
+        localStorage.removeItem('jg_pdf_doc_abierto');
+        localStorage.setItem('jg_pdf_vista_activa', 'biblioteca');
+        sessionStorage.removeItem('jg_pdf_en_lector');
+      } catch (_) {}
       refrescarInicio();
       return;
     }
@@ -2972,6 +2988,7 @@ export function inicializarLectorPdf(deps = {}) {
 
   async function procesar() {
     if (!estado.archivo || estado.trabajando) return;
+    try { localStorage.setItem('jg_pdf_procesando', '1'); } catch (_) {}
     const rango = leerRango();
     estado.cancelacion = { cancelado: false };
     bloquear(true);
@@ -3035,6 +3052,7 @@ export function inicializarLectorPdf(deps = {}) {
       avisar(mensaje, 'err');
       console.warn('[jg-pdf]', error);
     } finally {
+      try { localStorage.removeItem('jg_pdf_procesando'); } catch (_) {}
       bloquear(false);
       estado.cancelacion = null;
     }
@@ -5094,6 +5112,22 @@ export function inicializarLectorPdf(deps = {}) {
   };
 
   refrescarInicio();
+
+  /* Fase A · Continuidad tras recarga / F5 */
+  try {
+    if (localStorage.getItem('jg_pdf_procesando') === '1') {
+      localStorage.removeItem('jg_pdf_procesando');
+      avisar('La carga anterior no terminó. Puedes volver a elegir el documento.', 'info');
+    }
+    const params = new URLSearchParams(window.location.search);
+    const vistaGuardada = localStorage.getItem('jg_pdf_vista_activa');
+    const docIdGuardado = localStorage.getItem('jg_pdf_doc_abierto');
+    if (vistaGuardada === 'lector' && docIdGuardado && params.get('tab') === 'pdf') {
+      abrirDocumento(docIdGuardado).catch((err) => {
+        console.warn('[jg-pdf] No se pudo restaurar documento en curso:', err);
+      });
+    }
+  } catch (_) {}
 
   return {
     cargarPdfExterno(archivo) {

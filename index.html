@@ -8296,6 +8296,18 @@ function jgActivarPanel(tabActiva, enfocar = false){
     panel.hidden = !activa;
   });
   badge.textContent = badgeText[tabActiva.dataset.tab];
+  /* Fase A · Continuidad: actualizar URL con replaceState y persistir pestaña */
+  try {
+    const tabId = tabActiva.dataset.tab;
+    const url = new URL(window.location.href);
+    if (tabId === 'mic') {
+      url.searchParams.delete('tab');
+    } else {
+      url.searchParams.set('tab', tabId);
+    }
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    localStorage.setItem('jg_tab_activa', tabId);
+  } catch (_) {}
   /* El lector de PDF se descarga la primera vez que se entra en su pestaña,
    * no al abrir la app: son 553 KB que no le sirven a quien viene a dictar. */
   if(tabActiva.dataset.tab === 'pdf' && typeof window.jgAsegurarLectorPdf === 'function'){
@@ -8318,7 +8330,12 @@ function jgMostrarResultadoInline(textarea){
   });
 }
 tabs.forEach((tab, indice) => {
-  tab.addEventListener('click', () => jgActivarPanel(tab));
+  tab.addEventListener('click', () => {
+    if (tab.dataset.tab === 'pdf') {
+      try { localStorage.setItem('jg_pdf_vista_activa', 'biblioteca'); } catch (_) {}
+    }
+    jgActivarPanel(tab);
+  });
   tab.addEventListener('keydown', (evento) => {
     const teclas = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
     if(!teclas.includes(evento.key)) return;
@@ -8331,6 +8348,27 @@ tabs.forEach((tab, indice) => {
     jgActivarPanel(tabs[siguiente], true);
   });
 });
+
+/* Fase A · Restauración de pestaña al arrancar (Continuidad / F5) */
+try {
+  const TABS_VALIDAS = new Set(['mic', 'file', 'yt', 'pdf', 'trans']);
+  const params = new URLSearchParams(window.location.search);
+  const tabUrl = params.get('tab');
+  if (tabUrl && TABS_VALIDAS.has(tabUrl) && tabUrl !== 'mic') {
+    const tabBtn = document.querySelector(`.tab[data-tab="${tabUrl}"]`);
+    if (tabBtn) jgActivarPanel(tabBtn);
+  }
+  window.addEventListener('popstate', () => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const t = p.get('tab') || 'mic';
+      if (TABS_VALIDAS.has(t)) {
+        const b = document.querySelector(`.tab[data-tab="${t}"]`);
+        if (b && !b.classList.contains('active')) jgActivarPanel(b);
+      }
+    } catch (_) {}
+  });
+} catch (_) {}
 
 /* ── 2) Opciones inteligentes ───────────────────────────────────────── */
 const opt = { punt:true, preg:true, code:false, caps:true, auto:true, contexto:true };
@@ -11431,7 +11469,7 @@ function esPwaInstalada(){
 
 function activarTab(tabName){
   const tabBtn = document.querySelector(`.tab[data-tab="${tabName}"]`);
-  if(tabBtn) tabBtn.click();
+  if(tabBtn) jgActivarPanel(tabBtn);
   else {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
     document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === tabName));
