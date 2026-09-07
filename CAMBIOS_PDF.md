@@ -46,6 +46,13 @@ diagnóstico propio.
 Marcadores de entrega: `v2.57.0`, `JG_JS_V=v98`, shell `jg-turbo-shell-v98`
 (misma tanda de despliegue que v2.56.0: un solo deploy para ambas).
 
+Entrega publicada: `dpl_9YRsCt49DVtbQmvWBKZZXGkgEHeE` READY y alias
+`https://jg-turbo.vercel.app` (un solo despliegue para v2.56.0 + v2.57.0,
+desde copia limpia en temp: la raíz tenía un `.pytest_cache` con ACL roto
+que ni Vercel CLI ni `rmdir` podían leer). Verificado contra el dominio real:
+regla del acordeón servida en el HTML, `shell v98` en `sw.js`, `/api/health`
+200 y suite del acordeón 18/18 contra producción.
+
 ## 2026-09-07 · v2.56.0 · Música de fondo para el lector de PDF (plan-pdf-musical)
 
 Lo pedido: implementar al pie de la letra `plan-pdf-musical.md` con música de fondo instrumental offline, mezcla dual con voz Fish TTS, ducking suave y control independiente.
