@@ -1,4 +1,4 @@
-<!-- v2.53.0 · PDF móvil: implementación final consolidada con todas las fases del plan -->
+<!-- v2.54.0 · PDF móvil: dock de voz con acordeón compacto y Desde aquí en icono -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1789,23 +1789,46 @@
   }
   .pdf-voz-cab-titulo{margin:0;font-size:14px;font-weight:700;color:var(--lec-texto, var(--text))}
   .pdf-voz-cab-ayuda{margin:2px 0 0;font-size:11px;color:var(--lec-suave, var(--muted));line-height:1.35}
-  .pdf-voz-cab-ocultar,.pdf-voz-cab-desplegar{flex:none;min-height:44px}
-  .pdf-voz-cab-desplegar{display:none}
+  .pdf-voz-cab-ocultar,.pdf-voz-acordeon{flex:none;min-height:44px}
+  .pdf-voz-acordeon{gap:7px}
+  .pdf-voz-chevron{width:16px;height:16px;flex:none;transition:transform .2s ease}
+  #btnPdfDockDesplegar[aria-expanded="false"] .pdf-voz-chevron{transform:rotate(-90deg)}
+  .pdf-voz-nombre{display:none}
+  .pdf-voz-x{width:15px;height:15px;flex:none}
+  /* Ajustes plegados: la voz y la velocidad se guardan en todas las pantallas.
+     Es lo que devuelve ~50 px al texto en el teléfono. */
+  #pdfDockNav[data-desplegado="no"] .tts-voice-select,
+  #pdfDockNav[data-desplegado="no"] .tts-rate-control,
+  #pdfDockNav[data-desplegado="no"] .tts-field-label{display:none!important}
   @media (min-width:641px){
     .pdf-voz-cab-ocultar{display:none}
-    .pdf-voz-cab-desplegar{display:inline-flex}
-    #pdfDockNav[data-desplegado="no"] .tts-voice-select,
-    #pdfDockNav[data-desplegado="no"] .tts-rate-control,
-    #pdfDockNav[data-desplegado="no"] .tts-field-label{display:none!important}
+    .pdf-voz-acordeon{display:inline-flex}
+    .pdf-voz-cab-textos{display:block}
   }
   @media (max-width:640px){
-    .pdf-voz-cab-desplegar{display:none!important}
+    /* Cabecera acordeón de una sola fila (44 px): flecha + Voz a la
+       izquierda, X a la derecha. El título largo y la ayuda viven en el
+       DOM y en el `title`, pero no gastan filas en 390 px. */
+    .pdf-voz-cab{padding:0 2px 6px;min-height:44px}
+    .pdf-voz-cab-textos{display:none}
+    .pdf-voz-acordeon{display:inline-flex;min-width:44px;padding:8px 12px 8px 10px}
+    .pdf-voz-nombre{display:inline;font-size:13px;font-weight:700}
+    .pdf-voz-acordeon-txt{display:none}
+    .pdf-voz-cab-ocultar{
+      display:inline-flex;margin-left:auto;min-width:44px;min-height:44px;
+      padding:8px 12px;justify-content:center;
+    }
+    .pdf-voz-ocultar-txt{
+      position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+      clip:rect(0,0,0,0);white-space:nowrap;border:0;
+    }
   }
   .pdf-dock-nav .tts-console{margin:0;border:0;background:none;padding:0;gap:6px 7px}
   .pdf-dock-nav .tts-console-play .btn-tts{min-height:44px;padding:8px 14px;font-size:13px;border-radius:12px}
   .pdf-dock-nav .tts-console-play .btn-tts-stop{min-height:44px;border-radius:12px}
   .pdf-dock-nav .tts-voice-select,
   .pdf-dock-nav .tts-rate-control{min-height:40px}
+  .pdf-dock-nav #btnPdfDesdeAqui svg{width:15px;height:15px;flex:none}
   /* En celular y tablet el reproductor se coloca en una rejilla de dos filas
      exactas: arriba la barra de avance con el tiempo, abajo los controles.
      Dejado al ajuste automático se partía en cuatro líneas y el dock se comía
@@ -1814,10 +1837,11 @@
     .pdf-dock-nav .tts-console,
     .pdf-dock-nav .tts-console.tts-con-barra{
       display:grid !important;
-      grid-template-columns:auto auto auto minmax(0,1fr) auto;
+      grid-template-columns:minmax(0,1fr) auto auto auto;
       grid-template-areas:
-        "barra barra barra barra barra"
-        "play  parar mp3   voz   vel";
+        "barra barra barra barra"
+        "play  parar aqui  mp3"
+        "voz   voz   vel   vel";
       align-items:center;gap:6px;overflow:visible;
     }
     .pdf-dock-nav .tts-console > *{min-width:0}
@@ -1836,6 +1860,13 @@
     .pdf-dock-nav .tts-console .btn-tts-download{grid-area:mp3;min-width:44px;padding-inline:9px}
     .pdf-dock-nav .tts-console .btn-tts{grid-area:play;min-width:48px;justify-content:center;padding-inline:12px}
     .pdf-dock-nav .tts-console .btn-tts-stop{grid-area:parar;min-width:44px;padding-inline:10px}
+    /* «Desde aquí» compacto: icono de 44 px en vez de franja de texto a todo
+       lo ancho. El nombre sigue en `aria-label` para el lector de pantalla. */
+    .pdf-dock-nav .tts-console #btnPdfDesdeAqui{
+      grid-area:aqui;min-width:44px;min-height:44px;padding:8px 10px;justify-content:center;
+    }
+    .pdf-dock-nav .tts-console #btnPdfDesdeAqui svg{width:16px;height:16px;flex:none}
+    .pdf-dock-nav .tts-console #btnPdfDesdeAqui .pdf-desde-aqui-txt{font-size:0}
     .pdf-dock-nav .tts-console .tts-voice-select{grid-area:voz;width:100%;min-width:0;max-width:none;font-size:12px;min-height:42px}
     .pdf-dock-nav .tts-console .tts-rate-control{grid-area:vel;min-width:0;gap:5px;padding-inline:7px}
     .pdf-dock-nav .tts-console .tts-rate-range{width:3.6rem;min-width:3rem}
@@ -1864,15 +1895,16 @@
     .pdf-dock-nav .tts-console,
     .pdf-dock-nav .tts-console.tts-con-barra{
       display:grid;
-      grid-template-columns:auto auto auto minmax(12rem,1fr) auto;
+      grid-template-columns:auto auto auto auto minmax(12rem,1fr) auto;
       grid-template-areas:
-        "barra barra barra barra barra"
-        "play  parar mp3   voz   vel";
+        "barra barra barra barra barra barra"
+        "play  parar aqui  mp3   voz   vel";
       align-items:center;gap:8px;
     }
     .pdf-dock-nav .tts-console .tts-transport{grid-area:barra;margin:0}
     .pdf-dock-nav .tts-console .btn-tts{grid-area:play}
     .pdf-dock-nav .tts-console .btn-tts-stop{grid-area:parar}
+    .pdf-dock-nav .tts-console #btnPdfDesdeAqui{grid-area:aqui}
     .pdf-dock-nav .tts-console .btn-tts-download{grid-area:mp3}
     .pdf-dock-nav .tts-console .tts-voice-select{grid-area:voz;width:100%;max-width:none}
     .pdf-dock-nav .tts-console .tts-rate-control{grid-area:vel}
@@ -6540,14 +6572,24 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                 </div>
 
                 <div class="pdf-voz-cab">
+                  <button type="button" class="mini-btn pdf-voz-acordeon" id="btnPdfDockDesplegar"
+                          aria-expanded="true" aria-controls="pdfTtsAjustes"
+                          title="Mostrar u ocultar voz y velocidad. Ocultar no detiene la lectura."
+                          aria-label="Mostrar u ocultar los ajustes de voz">
+                    <svg class="pdf-voz-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                    <span class="pdf-voz-nombre">Voz</span>
+                    <span class="pdf-voz-acordeon-txt">Ocultar ajustes</span>
+                  </button>
                   <div class="pdf-voz-cab-textos">
                     <p class="pdf-voz-cab-titulo">Herramientas de voz</p>
                     <p class="pdf-voz-cab-ayuda">Ocultar no detiene la lectura.</p>
                   </div>
                   <button type="button" class="mini-btn pdf-voz-cab-ocultar" id="btnPdfDockOcultar"
-                          aria-label="Ocultar herramientas de voz. La lectura sigue.">Ocultar</button>
-                  <button type="button" class="mini-btn pdf-voz-cab-desplegar" id="btnPdfDockDesplegar"
-                          aria-expanded="true" aria-controls="pdfTtsAjustes">Ocultar ajustes</button>
+                          aria-label="Ocultar herramientas de voz. La lectura sigue."
+                          title="Ocultar herramientas de voz. La lectura sigue.">
+                    <svg class="pdf-voz-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    <span class="pdf-voz-ocultar-txt">Ocultar</span>
+                  </button>
                 </div>
                 <div class="tts-console" data-tts-console="pdf" data-tts-source="#pdfOutput">
                   <div class="tts-console-head">
@@ -6563,8 +6605,12 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
                       Detener
                     </button>
-                    <button type="button" class="mini-btn" id="btnPdfDesdeAqui"
-                            title="Leer desde el párrafo que estoy viendo">Desde aquí</button>
+                    <button type="button" class="mini-btn pdf-desde-aqui" id="btnPdfDesdeAqui"
+                            title="Leer desde el párrafo que estoy viendo"
+                            aria-label="Leer desde el párrafo que estoy viendo">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>
+                      <span class="pdf-desde-aqui-txt">Desde aquí</span>
+                    </button>
                     <span class="tts-console-status" data-tts-status>Lista</span>
                   </div>
                   <div class="tts-console-row tts-console-opts" id="pdfTtsAjustes">
@@ -16689,7 +16735,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v95';
+const JG_JS_V = 'v96';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

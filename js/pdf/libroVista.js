@@ -940,18 +940,35 @@ export function initLibroVista({ el, estado, api }) {
      seguir sonando con el panel cerrado: eso es lo que pide «aprovechar
      el espacio». */
   /* `modo`: false = cerrada · true/'si' = reproductor · 'buscar' = buscador. */
+  function pintarDesplegado() {
+    /* El botón acordeón lleva icono + etiqueta: se actualiza solo la etiqueta
+     * para no borrar el icono (un `textContent` sobre el botón lo haría). */
+    const plegar = $$('btnPdfDockDesplegar');
+    if (!plegar) return;
+    const abierto = dock.dataset.desplegado !== 'no';
+    plegar.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    const txt = plegar.querySelector('.pdf-voz-acordeon-txt');
+    if (txt) txt.textContent = abierto ? 'Ocultar ajustes' : 'Mostrar ajustes';
+    else plegar.textContent = abierto ? 'Ocultar ajustes' : 'Mostrar ajustes';
+  }
+  function fijarDesplegado(abrir) {
+    if (!dock) return;
+    dock.dataset.desplegado = abrir ? 'si' : 'no';
+    cfg.vozDesplegado = abrir;
+    guardarApariencia(cfg);
+    pintarDesplegado();
+  }
+  /* La flechita del acordeón pliega los ajustes (voz + velocidad) en todas las
+   * pantallas, dentro de la hoja en el teléfono y en flujo en escritorio. Se
+   * recuerda entre sesiones como el resto de la apariencia. */
+  function alternarAjustes() {
+    if (!dock) return;
+    fijarDesplegado(dock.dataset.desplegado === 'no');
+  }
   function abrirDock(modo) {
     if (!dock) return;
-    if (!enTelefono()) {
-      const abrir = modo === true || modo === 'si';
-      dock.dataset.desplegado = abrir ? 'si' : 'no';
-      cfg.vozDesplegado = abrir;
-      guardarApariencia(cfg);
-      const plegar = $$('btnPdfDockDesplegar');
-      if (plegar) {
-        plegar.setAttribute('aria-expanded', abrir ? 'true' : 'false');
-        plegar.textContent = abrir ? 'Ocultar ajustes' : 'Mostrar ajustes';
-      }
+    if (!enTelefono() && (modo === true || modo === 'si' || modo === false || modo === 'no')) {
+      fijarDesplegado(modo === true || modo === 'si');
       return;
     }
     const valor = modo === 'buscar' ? 'buscar' : (modo ? 'si' : 'no');
@@ -970,18 +987,13 @@ export function initLibroVista({ el, estado, api }) {
   if (dock) {
     dock.dataset.abierto = 'no';
     dock.dataset.desplegado = cfg.vozDesplegado === false ? 'no' : 'si';
-    const plegarIni = $$('btnPdfDockDesplegar');
-    const abiertoIni = dock.dataset.desplegado !== 'no';
-    if (plegarIni) {
-      plegarIni.setAttribute('aria-expanded', abiertoIni ? 'true' : 'false');
-      plegarIni.textContent = abiertoIni ? 'Ocultar ajustes' : 'Mostrar ajustes';
-    }
+    pintarDesplegado();
   }
 
   const puentes = [
     ['btnPdfBmVoz', () => abrirDock((dock?.dataset.abierto || 'no') !== 'si')],
     ['btnPdfDockOcultar', () => abrirDock(false)],
-    ['btnPdfDockDesplegar', () => abrirDock(dock?.dataset.desplegado !== 'si')],
+    ['btnPdfDockDesplegar', () => alternarAjustes()],
     ['btnPdfVozMiniAjustes', () => { devolverCromo(); abrirDock(true); }],
     ['btnPdfBmApariencia', () => {
       abrirDock(false);

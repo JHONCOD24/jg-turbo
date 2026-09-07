@@ -3,6 +3,38 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.54.0 · Dock de voz compacto con acordeón en el teléfono
+
+Lo pedido: al abrir Voz en el teléfono, la cabecera «Herramientas de voz» y el
+botón «Desde aquí» se comían el alto a lo ancho y se veían descuadrados.
+
+**Causa medida:** «Desde aquí» (`#btnPdfDesdeAqui`) no tenía área asignada en
+la rejilla del dock, así que caía a una tercera fila a todo lo ancho; la
+cabecera gastaba una fila entera en título + ayuda + «Ocultar».
+
+**Corrección (`index.html`, `js/pdf/libroVista.js`):**
+- Cabecera acordeón de una fila (44 px): flechita + «Voz» a la izquierda, X a
+  la derecha. La flecha pliega voz + velocidad en todas las pantallas y se
+  recuerda (`jg_pdf_lectura.vozDesplegado`); plegado devuelve ~44 px al texto
+  (dock 264 → 220 px en 390 px, medido). El aviso «Ocultar no detiene la
+  lectura» se conserva en el DOM y en el `title`.
+- «Desde aquí» pasa a botón icono de 44 × 44 px con su nombre en `aria-label`;
+  la rejilla móvil queda en 2 filas + ajustes plegables
+  (`barra` / `play·parar·aquí·mp3` / `voz·vel`) y en escritorio en 6 columnas.
+- Se corrigió de paso que en el teléfono el botón de plegar accionaba la hoja
+  en vez de los ajustes (`alternarAjustes()`; antes era inalcanzable porque el
+  botón vivía oculto en móvil). IDs, `dataset.abierto/desplegado` y puentes
+  intactos: las pruebas existentes no se tocaron.
+
+Pruebas en local: `verificar_pdf_movil` 46/46 · `verificar_pdf_geometria` en
+verde (6 pantallas, táctil ≥44 px, sin desbordes ni errores JS) · unitarias
+28 archivos, 1176 OK + 1 fallo preexistente (`test_pdf_interfaz_lectura`:
+«Escape cierra la hoja», comprobado con `git stash` que ya fallaba en `main`
+limpio) · capturas 390 px expandido/plegado sin desbordes. Detector Impeccable:
+sin hallazgos nuevos (solo avisos previos del proyecto).
+
+Marcadores de entrega: `v2.54.0`, `JG_JS_V=v96`, shell `jg-turbo-shell-v96`.
+
 ## 2026-09-07 · v2.53.0 · Implementación final consolidada del plan PDF móvil
 
 Entrega definitiva solicitada por el usuario tras validación interactiva local.
