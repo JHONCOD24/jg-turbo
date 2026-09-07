@@ -958,9 +958,12 @@ export function initLibroVista({ el, estado, api }) {
     guardarApariencia(cfg);
     pintarDesplegado();
   }
-  /* La flechita del acordeón pliega los ajustes (voz + velocidad) en todas las
-   * pantallas, dentro de la hoja en el teléfono y en flujo en escritorio. Se
-   * recuerda entre sesiones como el resto de la apariencia. */
+  /* La flechita del acordeón pliega los ajustes (voz + velocidad + música)
+   * en todas las pantallas, dentro de la hoja en el teléfono. En tablet y
+   * escritorio, además, esconde la consola entera: la paleta queda reducida
+   * a la cabecera con este mismo interruptor (mismo estado `desplegado`,
+   * una sola fuente de verdad). Se recuerda entre sesiones como el resto
+   * de la apariencia. Ocultar no detiene la lectura. */
   function alternarAjustes() {
     if (!dock) return;
     fijarDesplegado(dock.dataset.desplegado === 'no');

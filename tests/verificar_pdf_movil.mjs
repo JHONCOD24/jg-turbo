@@ -18,7 +18,20 @@ import { despertarCromo } from './_cromo.mjs';
 import assert from 'node:assert/strict';
 
 const app = resolve(import.meta.dirname, '..');
-const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
+/* Playwright no es dependencia del proyecto: se busca donde suela estar
+ * (mismo patrón que verificar_pdf_geometria.mjs; la ruta única anterior
+ * dejó de existir y esta verificación quedaba inejecutable). */
+const { chromium } = await (async () => {
+  const candidatos = [
+    resolve(app, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) { /* siguiente */ }
+  }
+  return await import('playwright');
+})();
 const destino = resolve(app, '.playwright-cli/pdf-movil');
 await mkdir(destino, { recursive: true });
 const pdf = join(destino, 'libro.pdf');

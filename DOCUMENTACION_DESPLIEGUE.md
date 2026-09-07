@@ -11,6 +11,27 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.56.0, 2026-09-07
+
+Música de fondo instrumental offline para el lector de PDF (`plan-pdf-musical.md`).
+Dual mixing Web Audio API con GainNode (voz TTS y música independientes), ducking
+automático suave, 8 loops de audio sin costuras en `/audio/musica/*.mp3`, hoja
+inferior táctil `#pdfMusicaHoja`, botón `#btnPdfMusica` en el dock y soporte PWA offline.
+
+Publicado como `https://jg-turbo-cqrrwb687-jhoncod24s-projects.vercel.app`
+(READY, alias `https://jg-turbo.vercel.app`), desde copia limpia vinculada al
+proyecto `jg-turbo` (`prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8`). Inspect:
+`https://vercel.com/jhoncod24s-projects/jg-turbo/8kJeWTr8zsug8vc5csfFzgyowJGX`.
+`dpl_8kJeWTr8zsug8vc5csfFzgyowJGX`.
+
+Verificación en producción contra el dominio:
+- Marcador `v2.56.0`, `JG_JS_V=v98`, `jg-turbo-shell-v98`.
+- `#btnPdfMusica` y `#pdfMusicaHoja` presentes en el HTML servido.
+- `/js/pdf/musicaFondo.js` responde HTTP 200 (17 393 bytes, export `musicaFondo`).
+- Loops MP3 `/audio/musica/*.mp3` responden HTTP 200 con cabecera `audio/mpeg`.
+- `/api/health` HTTP 200 (servidor Vercel listo, IA y Groq configurados).
+- Service worker `sw.js` cachea `/audio/musica/`.
+
 ## Publicación PDF v2.53.0, 2026-09-07
 
 Implementación final consolidada del plan de mejoramiento PDF en móvil,

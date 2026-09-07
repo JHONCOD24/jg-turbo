@@ -4,7 +4,7 @@
  */
 /* v2: sube CACHE_SHELL al desplegar UI nueva para que el rediseño no quede
  * atrapado en el shell viejo. Network-first en HTML/navegación. */
-const CACHE_SHELL = 'jg-turbo-shell-v97';
+const CACHE_SHELL = 'jg-turbo-shell-v98';
 const CACHE_SHARE = 'jg-turbo-share-v1';
 const SHARE_KEY = 'shared-audio';
 
@@ -65,12 +65,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* Módulos, motores y fuentes de /js/ (el lector de PDF pesa 1,7 MB y el de OCR
-   * unos 6 MB cuando se usa): se sirven del caché al instante y se actualizan
-   * por detrás. Así la app abre un PDF sin internet y aun así recibe las
-   * mejoras del siguiente despliegue sin quedarse pegada a una versión vieja.
-   * Solo se guarda lo que de verdad se descargó. */
-  if (req.method === 'GET' && url.pathname.startsWith('/js/')) {
+  /* Módulos, motores y pistas de música (/js/ y /audio/musica/):
+   * se sirven del caché al instante y se actualizan por detrás.
+   * Permite leer y escuchar música de fondo sin conexión. */
+  if (req.method === 'GET' && (url.pathname.startsWith('/js/') || url.pathname.startsWith('/audio/musica/'))) {
     event.respondWith(
       caches.open(CACHE_SHELL).then((cache) =>
         cache.match(req).then((guardado) => {

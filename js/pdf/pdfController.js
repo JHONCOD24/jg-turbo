@@ -40,6 +40,7 @@ import { construirAncla, resolverAncla } from './anclaTexto.js';
 import { limpiarNombreLibro, conseguirCaratula } from './caratula.js';
 import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
+import { musicaFondo, CATALOGO_PISTAS, ANIMOS } from './musicaFondo.js';
 
 /* A partir de aquí el texto se parte para que el editor siga siendo ágil. */
 const LIMITE_PARTE = LIMITE_PARTE_CANONICO;
@@ -161,6 +162,7 @@ export function inicializarLectorPdf(deps = {}) {
     aparTam: $('pdfAparTam'), aparInter: $('pdfAparInter'), aparAncho: $('pdfAparAncho'),
     aparFuente: $('pdfAparFuente'), temaSepia: $('btnPdfTemaSepia'),
     btnApariencia: $('btnPdfApariencia'), aparienciaHoja: $('pdfAparienciaHoja'),
+    btnMusica: $('btnPdfMusica'), musicaHoja: $('pdfMusicaHoja'),
     aparModo: $('pdfAparModo'), textoCol: document.querySelector('.pdf-texto-col'),
     paginacion: $('pdfPaginacion'), pagPrev: $('btnPdfPagPrev'),
     pagNext: $('btnPdfPagNext'), pagPos: $('pdfPagPos'),
@@ -835,15 +837,18 @@ export function inicializarLectorPdf(deps = {}) {
   if (herramientasPanel && barraTexto) herramientasPanel.append(barraTexto);
   /* Las hojas no pertenecen al contenedor que pagina el texto. Dejar allí
      Apariencia disparaba su ResizeObserver al abrirla y al mover cada control. */
-  for (const hoja of [el.aparienciaHoja, el.cortesHoja]) if (hoja) el.resultArea.append(hoja);
+  for (const hoja of [el.aparienciaHoja, el.cortesHoja, el.musicaHoja]) if (hoja) el.resultArea.append(hoja);
   const hayHojaAbierta = () => (!el.indice.hidden) || !!(el.masMenu && el.masMenu.open) || !!herramientas?.open
     || !!(el.aparienciaHoja && !el.aparienciaHoja.hidden)
-    || !!(el.cortesHoja && !el.cortesHoja.hidden);
+    || !!(el.cortesHoja && !el.cortesHoja.hidden)
+    || !!(el.musicaHoja && !el.musicaHoja.hidden);
 
   function cerrarHojasFlotantes() {
     if (el.aparienciaHoja) el.aparienciaHoja.hidden = true;
     if (el.cortesHoja) el.cortesHoja.hidden = true;
+    if (el.musicaHoja) el.musicaHoja.hidden = true;
     el.btnApariencia?.setAttribute('aria-expanded', 'false');
+    el.btnMusica?.setAttribute('aria-expanded', 'false');
     if (herramientas) herramientas.open = false;
     btnHerramientas?.setAttribute('aria-expanded', 'false');
   }
@@ -857,6 +862,7 @@ export function inicializarLectorPdf(deps = {}) {
     hojaModal?.removeAttribute('aria-modal');
     hojaModal = el.aparienciaHoja && !el.aparienciaHoja.hidden ? el.aparienciaHoja
       : el.cortesHoja && !el.cortesHoja.hidden ? el.cortesHoja
+      : el.musicaHoja && !el.musicaHoja.hidden ? el.musicaHoja
       : herramientas?.open ? herramientasPanel
       : el.masMenu?.open ? el.masPanel
       : !el.indice.hidden && innerWidth < 1024 ? el.indice : null;
@@ -897,6 +903,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (!hayHojaAbierta()) { pintarFondoHojas(); return; }
     const origen = hojaOrigen;
     const equivalentes = !el.aparienciaHoja.hidden ? [el.btnApariencia, $('btnPdfBmApariencia')]
+      : (el.musicaHoja && !el.musicaHoja.hidden) ? [el.btnMusica]
       : !el.indice.hidden ? [el.btnIndice, $('btnPdfBmIndice')]
       : [el.btnMas, $('btnPdfBmOpciones')];
     cerrarIndice();
@@ -935,6 +942,11 @@ export function inicializarLectorPdf(deps = {}) {
     } else if (cual === 'apariencia') {
       el.aparienciaHoja.hidden = false;
       el.btnApariencia?.setAttribute('aria-expanded', 'true');
+    } else if (cual === 'musica') {
+      if (el.musicaHoja) {
+        el.musicaHoja.hidden = false;
+        el.btnMusica?.setAttribute('aria-expanded', 'true');
+      }
     } else if (cual === 'cortes') {
       el.cortesHoja.hidden = false;
     } else if (cual === 'herramientas') {
@@ -5004,6 +5016,136 @@ export function inicializarLectorPdf(deps = {}) {
       },
     });
   } catch (_) { libroVista = null; }
+
+  function iniciarMusicaFondoUI() {
+    try {
+      musicaFondo.inicializar();
+    } catch (err) {
+      console.warn('[pdfController] Error inicializando musicaFondo:', err);
+    }
+
+    el.btnMusica?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (el.musicaHoja && !el.musicaHoja.hidden) {
+        cerrarHojas();
+      } else {
+        abrirHoja('musica', el.btnMusica);
+      }
+    });
+
+    const listaPistas = $('pdfMusicaPistasLista');
+    const badge = $('pdfMusicaEstadoBadge');
+    const autoCheck = $('pdfMusicaAuto');
+    const duckingCheck = $('pdfMusicaDucking');
+    const volMusica = $('pdfMusicaVolMusica');
+    const valMusica = $('pdfMusicaValMusica');
+    const volVoz = $('pdfMusicaVolVoz');
+    const valVoz = $('pdfMusicaValVoz');
+
+    function pintarPistas(animo, pistaId) {
+      if (!listaPistas) return;
+      const pistas = CATALOGO_PISTAS.filter((p) => p.animo === animo);
+      listaPistas.innerHTML = pistas.map((p) => {
+        const activa = p.id === pistaId;
+        return `<button type="button" class="pdf-musica-pista-item ${activa ? 'is-active' : ''}" data-pista="${p.id}" role="radio" aria-checked="${activa ? 'true' : 'false'}">
+          <div class="pdf-musica-pista-info">
+            <span class="pdf-musica-pista-nombre">${p.nombre}</span>
+            <span class="pdf-musica-pista-desc">${p.desc}</span>
+          </div>
+          <div class="pdf-musica-pista-meta">
+            <span class="pdf-musica-pista-dur">${p.duracion}</span>
+            <svg class="pdf-musica-pista-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              ${activa ? '<polygon points="5 3 19 12 5 21 5 3"/>' : '<circle cx="12" cy="12" r="3"/>'}
+            </svg>
+          </div>
+        </button>`;
+      }).join('');
+
+      listaPistas.querySelectorAll('[data-pista]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-pista');
+          musicaFondo.setPista(id);
+        });
+      });
+    }
+
+    const animoBtns = document.querySelectorAll('.pdf-musica-animo-btn');
+    animoBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const animo = btn.getAttribute('data-animo');
+        if (animo === 'apagado') {
+          musicaFondo.setActiva(false);
+        } else {
+          musicaFondo.setActiva(true);
+          musicaFondo.setAnimo(animo);
+        }
+      });
+    });
+
+    autoCheck?.addEventListener('change', () => {
+      musicaFondo.setAutomatica(autoCheck.checked);
+    });
+
+    duckingCheck?.addEventListener('change', () => {
+      musicaFondo.setDucking(duckingCheck.checked);
+    });
+
+    volMusica?.addEventListener('input', () => {
+      const v = parseFloat(volMusica.value);
+      if (valMusica) valMusica.textContent = `${Math.round(v * 100)}%`;
+      musicaFondo.setVolumenMusica(v);
+    });
+
+    volVoz?.addEventListener('input', () => {
+      const v = parseFloat(volVoz.value);
+      if (valVoz) valVoz.textContent = `${Math.round(v * 100)}%`;
+      musicaFondo.setVolumenVoz(v);
+    });
+
+    musicaFondo.suscribir((st) => {
+      if (el.btnMusica) {
+        el.btnMusica.classList.toggle('is-playing', st.estado === 'sonando');
+        el.btnMusica.classList.toggle('is-loading', st.estado === 'cargando');
+        el.btnMusica.classList.toggle('is-off', !st.activa || st.estado === 'apagado');
+        const estadoTxt = !st.activa ? 'Apagado' : (st.estado === 'sonando' ? 'Sonando' : (st.estado === 'cargando' ? 'Cargando…' : 'En pausa'));
+        if (badge) badge.textContent = estadoTxt;
+        el.btnMusica.setAttribute('aria-label', `Música de fondo: ${estadoTxt.toLowerCase()}`);
+      }
+
+      animoBtns.forEach((btn) => {
+        const a = btn.getAttribute('data-animo');
+        if (a === 'apagado') {
+          btn.classList.toggle('is-active', !st.activa);
+        } else {
+          btn.classList.toggle('is-active', st.activa && st.animo === a);
+        }
+      });
+
+      if (autoCheck) autoCheck.checked = st.automatica;
+      if (duckingCheck) duckingCheck.checked = st.duckingActivo;
+      if (volMusica) volMusica.value = String(st.volumenMusica);
+      if (valMusica) valMusica.textContent = `${Math.round(st.volumenMusica * 100)}%`;
+      if (volVoz) volVoz.value = String(st.volumenVoz);
+      if (valVoz) valVoz.textContent = `${Math.round(st.volumenVoz * 100)}%`;
+
+      pintarPistas(st.animo, st.pistaId);
+    });
+
+    document.addEventListener('jg-tts-pausar', () => {
+      musicaFondo.pausarLectura();
+    });
+    document.addEventListener('jg-tts-reanudar', () => {
+      musicaFondo.reanudarLectura();
+    });
+    document.addEventListener('jg-tts-detener', () => {
+      musicaFondo.detener({ inmediato: false });
+    });
+
+    musicaFondo.notificarCambio();
+  }
+
+  iniciarMusicaFondoUI();
 
   async function verRecortePagina(lim) {
     // Recorte de la página original mediante PDF.js, cargado bajo demanda.

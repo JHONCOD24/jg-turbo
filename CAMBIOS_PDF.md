@@ -3,6 +3,31 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.56.0 · Música de fondo para el lector de PDF (plan-pdf-musical)
+
+Lo pedido: implementar al pie de la letra `plan-pdf-musical.md` con música de fondo instrumental offline, mezcla dual con voz Fish TTS, ducking suave y control independiente.
+
+**Componentes e implementación (`audio/musica/`, `js/pdf/musicaFondo.js`, `index.html`, `js/pdf/pdfController.js`, `sw.js`):**
+- **8 loops instrumentales integrados (Opción B offline):** 2 pistas por cada uno de los 4 estados de ánimo (*Concentración*, *Relax*, *Noche*, *Lluvia suave*), a 60–90 BPM, cálidas, sin voces ni frecuencias estridentes, con bucle continuo sin cortes en `audio/musica/*.mp3`.
+- **Módulo de audio dual (`js/pdf/musicaFondo.js`):**
+  - Motor con Web Audio API (`AudioContext`, `GainNode` para volumen maestro y ducking) con degradación elegante a `HTMLAudioElement`.
+  - Canales de volumen independientes: Voz (0–100%, predeterminado 100%) y Música (0–100%, predeterminado 20%).
+  - Ducking suave inteligente: atenúa la música automáticamente al hablar la voz de narración (Fish TTS o pool de audio) y la restituye suavemente al terminar la frase.
+  - Ciclo de pausa/reanudación musical: al pausar la lectura, la voz para de inmediato mientras la música baja al 10% y se desvanece durante 5 segundos antes de pausar; al reanudar, la música entra primero con fade-in (500 ms) y luego arranca la voz.
+  - Selección de ánimo automática según la hora del día (mañana: concentración, tarde: relax, noche: noche) o manual fija, persistido en `localStorage` (`jg_musica_*`).
+- **Interfaz y accesibilidad (`index.html`, `js/pdf/pdfController.js`):**
+  - Botón `#btnPdfMusica` en el dock de Escuchar/Voz con icono de nota musical, estados accesibles (`apagado`, `cargando`, `sonando`) y badge activo.
+  - Hoja inferior `#pdfMusicaHoja` integrada al ciclo modal del lector (`hayHojaAbierta`, `cerrarHojasFlotantes`), con chips de ánimo, lista de pistas, sliders táctiles de volumen de voz y música, switch de ducking y toggle de selección automática por hora.
+  - Ocultamiento garantizado al plegar el dock de voz en el acordeón móvil (`data-desplegado="no"`) sin alterar el presupuesto de pantalla ni las áreas de cuadrícula.
+- **Soporte PWA y Offline (`sw.js`):** Caché permanente para `/audio/musica/` permitiendo lectura con música 100% desconectado.
+- **Pruebas y blindaje:**
+  - Suite unitaria `tests/test_pdf_musica.mjs`: 41/41 comprobaciones (catálogo, existencia y peso de MP3s, resolución horaria, volumen, contratos HTML/SW).
+  - Verificación visual y geométrica `tests/verificar_pdf_geometria.mjs`: verde en todos los viewports (móvil pequeño, móvil, tablet, tablet ancha, escritorio, escritorio ancho).
+  - Verificación móvil estricta `tests/verificar_pdf_movil.mjs`: 46/46 comprobaciones (88% pantalla texto en móvil vs ≥62% exigido, controles ≥ 44×44px, barra de pulgar de 4 acciones intacta).
+  - Suites de regresión superadas: `test_pdf_progreso.mjs`, `test_pdf_limpieza.mjs`, `test_pdf_sincronizacion.mjs`, `test_pdf_voz.mjs`, `test_tts_narracion.mjs`.
+
+Marcadores de entrega: `v2.56.0`, `JG_JS_V=v98`, shell `jg-turbo-shell-v98`.
+
 ## 2026-09-07 · v2.55.0 · Mini reproductor flotante, arrastrable y comprimible
 
 Lo pedido: el botón que queda al cerrar Voz (quién narra, velocidad, Ajustes)

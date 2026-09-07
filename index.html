@@ -1,4 +1,4 @@
-<!-- v2.55.0 · PDF móvil: mini reproductor flotante, arrastrable y comprimible -->
+<!-- v2.56.0 · PDF musical: música de fondo instrumental offline, mezcla dual con voz TTS y ducking -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1795,15 +1795,23 @@
   #btnPdfDockDesplegar[aria-expanded="false"] .pdf-voz-chevron{transform:rotate(-90deg)}
   .pdf-voz-nombre{display:none}
   .pdf-voz-x{width:15px;height:15px;flex:none}
-  /* Ajustes plegados: la voz y la velocidad se guardan en todas las pantallas.
-     Es lo que devuelve ~50 px al texto en el teléfono. */
+  /* Ajustes plegados. Teléfono: dentro de la hoja solo se pliegan voz,
+     velocidad y música (~50 px). Tablet y escritorio: la paleta entera se
+     pliega en acordeón — como el botón «Voz» del teléfono esconde la hoja,
+     aquí el mismo interruptor esconde la consola y queda la cabecera con el
+     toggle. Ocultar no detiene la lectura. */
   #pdfDockNav[data-desplegado="no"] .tts-voice-select,
   #pdfDockNav[data-desplegado="no"] .tts-rate-control,
+  #pdfDockNav[data-desplegado="no"] #btnPdfMusica,
   #pdfDockNav[data-desplegado="no"] .tts-field-label{display:none!important}
   @media (min-width:641px){
     .pdf-voz-cab-ocultar{display:none}
     .pdf-voz-acordeon{display:inline-flex}
     .pdf-voz-cab-textos{display:block}
+    #pdfDockNav[data-desplegado="no"] .tts-console{display:none!important}
+    /* Plegada, la cabecera deja de respirar hacia abajo: el dock colapsado
+       queda en una fila delgada. */
+    #pdfDockNav[data-desplegado="no"] .pdf-voz-cab{padding-bottom:2px}
   }
   @media (max-width:640px){
     /* Cabecera acordeón de una sola fila (44 px): flecha + Voz a la
@@ -1841,7 +1849,7 @@
       grid-template-areas:
         "barra barra barra barra"
         "play  parar aqui  mp3"
-        "voz   voz   vel   vel";
+        "voz   voz   vel   musica";
       align-items:center;gap:6px;overflow:visible;
     }
     .pdf-dock-nav .tts-console > *{min-width:0}
@@ -1871,6 +1879,7 @@
     .pdf-dock-nav .tts-console .tts-rate-control{grid-area:vel;min-width:0;gap:5px;padding-inline:7px}
     .pdf-dock-nav .tts-console .tts-rate-range{width:3.6rem;min-width:3rem}
     .pdf-dock-nav .tts-console .tts-rate-value{min-width:2.9rem}
+    .pdf-dock-nav .tts-console #btnPdfMusica{grid-area:musica;min-width:44px;min-height:44px}
     .pdf-dock-nav .tts-console .tts-console-status{display:none !important}
     /* Los textos de los botones se ocultan a la vista pero siguen siendo el
        nombre accesible: quien use lector de pantalla oye «Escuchar», no
@@ -1895,10 +1904,10 @@
     .pdf-dock-nav .tts-console,
     .pdf-dock-nav .tts-console.tts-con-barra{
       display:grid;
-      grid-template-columns:auto auto auto auto minmax(12rem,1fr) auto;
+      grid-template-columns:auto auto auto auto minmax(10rem,1fr) auto auto;
       grid-template-areas:
-        "barra barra barra barra barra barra"
-        "play  parar aqui  mp3   voz   vel";
+        "barra barra barra barra barra barra barra"
+        "play  parar aqui  mp3   voz   vel   musica";
       align-items:center;gap:8px;
     }
     .pdf-dock-nav .tts-console .tts-transport{grid-area:barra;margin:0}
@@ -1908,6 +1917,7 @@
     .pdf-dock-nav .tts-console .btn-tts-download{grid-area:mp3}
     .pdf-dock-nav .tts-console .tts-voice-select{grid-area:voz;width:100%;max-width:none}
     .pdf-dock-nav .tts-console .tts-rate-control{grid-area:vel}
+    .pdf-dock-nav .tts-console #btnPdfMusica{grid-area:musica;min-width:44px;min-height:44px}
     .pdf-dock-nav .tts-console .tts-console-engine,
     .pdf-dock-nav .tts-console .tts-console-status{display:none}
   }
@@ -4788,6 +4798,190 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 @media (min-width:641px){
   .pdf-apariencia-hoja{left:auto;right:16px;bottom:auto;top:64px;width:320px;border-radius:16px;
     border:1px solid var(--lec-linea);max-height:70vh}
+  .pdf-musica-hoja{width:360px}
+}
+
+/* ── Música de fondo en lector PDF ─────────────────────────────────────── */
+.pdf-btn-musica{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-width:44px;min-height:44px;padding:6px 10px;
+  border-radius:10px;font-size:12px;font-weight:600;
+  background:var(--lec-superficie-2, var(--surface-2));
+  color:var(--lec-texto, var(--text));
+  border:1px solid var(--lec-linea, var(--line));
+  cursor:pointer;position:relative;
+}
+.pdf-btn-musica:hover{
+  background:var(--lec-superficie-3, var(--surface-3));
+  border-color:color-mix(in srgb, var(--lec-acento, var(--accent)) 40%, transparent);
+}
+.pdf-btn-musica:focus-visible{
+  outline:2px solid var(--lec-acento, var(--accent));
+  outline-offset:2px;
+}
+.pdf-btn-musica.is-playing{
+  border-color:var(--lec-acento, var(--accent));
+  color:var(--lec-acento, var(--accent));
+  background:color-mix(in srgb, var(--lec-acento, var(--accent)) 12%, transparent);
+}
+.pdf-btn-musica.is-loading{
+  opacity:0.8;
+}
+.pdf-btn-musica .pdf-musica-nota{
+  width:16px;height:16px;flex:none;
+}
+.pdf-btn-musica.is-playing .pdf-musica-nota{
+  animation:pdfMusicaLatido 2s ease-in-out infinite;
+}
+@keyframes pdfMusicaLatido{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.15)}
+}
+@media (prefers-reduced-motion:reduce){
+  .pdf-btn-musica.is-playing .pdf-musica-nota{animation:none}
+}
+.pdf-btn-musica .pdf-musica-txt{
+  white-space:nowrap;
+}
+.pdf-btn-musica .pdf-musica-estado{
+  font-size:10px;font-weight:500;padding:2px 5px;border-radius:6px;
+  background:rgba(255,255,255,.08);color:var(--muted);
+}
+.pdf-btn-musica.is-playing .pdf-musica-estado{
+  background:color-mix(in srgb, var(--lec-acento, var(--accent)) 20%, transparent);
+  color:var(--lec-acento, var(--accent));
+}
+@media (max-width:480px){
+  .pdf-btn-musica .pdf-musica-txt{font-size:0}
+  .pdf-btn-musica .pdf-musica-estado{display:none}
+  .pdf-btn-musica{padding:8px 10px}
+}
+
+/* Hoja de Música de fondo */
+.pdf-musica-hoja .pdf-musica-cuerpo{
+  display:flex;flex-direction:column;gap:18px;padding:12px 0 16px;
+}
+.pdf-musica-seccion{
+  display:flex;flex-direction:column;gap:8px;
+}
+.pdf-musica-seccion-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.pdf-musica-subtit{
+  font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--lec-suave, var(--muted));
+}
+.pdf-musica-animos{
+  display:grid;grid-template-columns:repeat(auto-fit, minmax(95px, 1fr));gap:6px;
+}
+.pdf-musica-animo-btn{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  min-height:44px;padding:8px 8px;border-radius:10px;
+  border:1px solid var(--lec-linea, var(--line));
+  background:var(--lec-superficie-2, var(--surface-2));
+  color:var(--lec-texto, var(--text));
+  font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:border-color .15s, background .15s, color .15s;
+}
+.pdf-musica-animo-btn:hover{
+  background:var(--lec-superficie-3, var(--surface-3));
+  border-color:color-mix(in srgb, var(--lec-acento, var(--accent)) 40%, transparent);
+}
+.pdf-musica-animo-btn:focus-visible{
+  outline:2px solid var(--lec-acento, var(--accent));
+  outline-offset:2px;
+}
+.pdf-musica-animo-btn.is-active{
+  border-color:var(--lec-acento, var(--accent));
+  color:var(--lec-acento, var(--accent));
+  background:color-mix(in srgb, var(--lec-acento, var(--accent)) 12%, transparent);
+}
+.pdf-musica-animo-btn.is-off.is-active{
+  border-color:var(--muted);color:var(--text);
+  background:rgba(255,255,255,.1);
+}
+.pdf-musica-pistas{
+  display:flex;flex-direction:column;gap:6px;
+}
+.pdf-musica-pista-item{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  min-height:46px;padding:10px 14px;border-radius:10px;
+  border:1px solid var(--lec-linea, var(--line));
+  background:var(--lec-superficie-2, var(--surface-2));
+  color:var(--lec-texto, var(--text));
+  font:inherit;text-align:left;cursor:pointer;
+  transition:border-color .15s, background .15s;
+}
+.pdf-musica-pista-item:hover{
+  background:var(--lec-superficie-3, var(--surface-3));
+}
+.pdf-musica-pista-item:focus-visible{
+  outline:2px solid var(--lec-acento, var(--accent));
+  outline-offset:2px;
+}
+.pdf-musica-pista-item.is-active{
+  border-color:var(--lec-acento, var(--accent));
+  background:color-mix(in srgb, var(--lec-acento, var(--accent)) 10%, transparent);
+}
+.pdf-musica-pista-info{
+  display:flex;flex-direction:column;gap:2px;min-width:0;
+}
+.pdf-musica-pista-nombre{
+  font-size:13.5px;font-weight:600;color:var(--lec-texto, var(--text));
+}
+.pdf-musica-pista-desc{
+  font-size:11.5px;color:var(--lec-suave, var(--muted));
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pdf-musica-pista-meta{
+  display:flex;align-items:center;gap:8px;flex:none;
+}
+.pdf-musica-pista-dur{
+  font-size:11px;color:var(--muted);background:rgba(255,255,255,.06);
+  padding:2px 6px;border-radius:6px;
+}
+.pdf-musica-pista-icono{
+  width:16px;height:16px;color:var(--lec-acento, var(--accent));
+}
+
+.pdf-musica-volumenes label{
+  display:flex;flex-direction:column;gap:6px;
+}
+.pdf-musica-slider-txt{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:13px;font-weight:600;color:var(--lec-texto, var(--text));
+}
+.pdf-musica-val{
+  font-size:12px;font-weight:700;color:var(--lec-acento, var(--accent));
+  min-width:3ch;text-align:right;
+}
+.pdf-musica-switch{
+  display:inline-flex;align-items:center;gap:10px;cursor:pointer;
+  font-size:13px;font-weight:600;color:var(--lec-texto, var(--text));
+  min-height:44px;user-select:none;
+}
+.pdf-musica-switch input[type=checkbox]{
+  position:absolute;opacity:0;pointer-events:none;
+}
+.pdf-musica-switch-slider{
+  width:36px;height:22px;border-radius:12px;position:relative;flex:none;
+  background:rgba(255,255,255,.18);transition:background .2s;
+}
+.pdf-musica-switch-slider::before{
+  content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;
+  border-radius:50%;background:#fff;transition:transform .2s;
+}
+.pdf-musica-switch input:checked + .pdf-musica-switch-slider{
+  background:var(--lec-acento, var(--accent));
+}
+.pdf-musica-switch input:checked + .pdf-musica-switch-slider::before{
+  transform:translateX(14px);
+}
+.pdf-musica-switch:focus-within .pdf-musica-switch-slider{
+  box-shadow:0 0 0 2px var(--lec-superficie), 0 0 0 4px var(--lec-acento, var(--accent));
+}
+.pdf-musica-ayuda{
+  font-size:12px;color:var(--lec-suave, var(--muted));margin:0;line-height:1.4;
 }
 .pdf-apariencia-cuerpo{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
 .pdf-apariencia label{display:flex;flex-direction:column;gap:6px;font-size:13px}
@@ -6526,6 +6720,88 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                   </label>
                 </div>
               </div>
+              <div class="pdf-apariencia-hoja pdf-musica-hoja" id="pdfMusicaHoja" hidden role="dialog"
+                   aria-labelledby="pdfMusicaTitulo">
+                <div class="pdf-hoja-cab">
+                  <h4 class="pdf-hoja-titulo" id="pdfMusicaTitulo">Música de fondo</h4>
+                  <button type="button" class="pdf-hoja-cerrar" data-cerrar-hoja="pdfMusicaHoja"
+                          aria-label="Cerrar música de fondo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div class="pdf-musica-cuerpo">
+                  <!-- Fila 1: Ánimos + Automática -->
+                  <div class="pdf-musica-seccion">
+                    <div class="pdf-musica-seccion-head">
+                      <span class="pdf-musica-subtit">Ánimo</span>
+                      <label class="pdf-musica-switch" for="pdfMusicaAuto" title="Elegir automáticamente según la hora">
+                        <input type="checkbox" id="pdfMusicaAuto" checked>
+                        <span class="pdf-musica-switch-slider"></span>
+                        <span class="pdf-musica-switch-txt">Automática</span>
+                      </label>
+                    </div>
+                    <div class="pdf-musica-animos" role="group" aria-label="Seleccionar estado de ánimo">
+                      <button type="button" class="pdf-musica-animo-btn is-off" data-animo="apagado" id="btnPdfMusicaApagado">
+                        <span class="pdf-musica-emoji">⏹</span>
+                        <span>Apagado</span>
+                      </button>
+                      <button type="button" class="pdf-musica-animo-btn is-active" data-animo="concentracion" id="btnPdfMusicaConcentracion">
+                        <span class="pdf-musica-emoji">🎯</span>
+                        <span>Concentración</span>
+                      </button>
+                      <button type="button" class="pdf-musica-animo-btn" data-animo="relax" id="btnPdfMusicaRelax">
+                        <span class="pdf-musica-emoji">🌿</span>
+                        <span>Relax</span>
+                      </button>
+                      <button type="button" class="pdf-musica-animo-btn" data-animo="noche" id="btnPdfMusicaNoche">
+                        <span class="pdf-musica-emoji">🌙</span>
+                        <span>Noche</span>
+                      </button>
+                      <button type="button" class="pdf-musica-animo-btn" data-animo="lluvia" id="btnPdfMusicaLluvia">
+                        <span class="pdf-musica-emoji">🌧️</span>
+                        <span>Lluvia suave</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Fila 2: Lista de pistas del ánimo activo -->
+                  <div class="pdf-musica-seccion">
+                    <span class="pdf-musica-subtit">Pistas del ánimo</span>
+                    <div class="pdf-musica-pistas" id="pdfMusicaPistasLista" role="radiogroup" aria-label="Pistas disponibles">
+                    </div>
+                  </div>
+
+                  <!-- Fila 3: Volúmenes independientes -->
+                  <div class="pdf-musica-seccion pdf-musica-volumenes">
+                    <span class="pdf-musica-subtit">Volumen independiente</span>
+                    <label class="pdf-musica-slider-label" for="pdfMusicaVolVoz">
+                      <span class="pdf-musica-slider-txt">
+                        <span>Voz de lectura</span>
+                        <output id="pdfMusicaValVoz" class="pdf-musica-val">100%</output>
+                      </span>
+                      <input type="range" id="pdfMusicaVolVoz" min="0" max="1" step="0.05" value="1" aria-label="Volumen de la voz">
+                    </label>
+
+                    <label class="pdf-musica-slider-label" for="pdfMusicaVolMusica">
+                      <span class="pdf-musica-slider-txt">
+                        <span>Música de fondo</span>
+                        <output id="pdfMusicaValMusica" class="pdf-musica-val">20%</output>
+                      </span>
+                      <input type="range" id="pdfMusicaVolMusica" min="0" max="1" step="0.05" value="0.2" aria-label="Volumen de la música">
+                    </label>
+                  </div>
+
+                  <!-- Fila 4: Ducking suave -->
+                  <div class="pdf-musica-seccion">
+                    <label class="pdf-musica-switch pdf-musica-ducking-switch" for="pdfMusicaDucking">
+                      <input type="checkbox" id="pdfMusicaDucking" checked>
+                      <span class="pdf-musica-switch-slider"></span>
+                      <span class="pdf-musica-switch-txt">Bajar música cuando habla la voz</span>
+                    </label>
+                    <p class="pdf-musica-ayuda">Atenúa la música automáticamente mientras la voz narra para que nunca compitan.</p>
+                  </div>
+                </div>
+              </div>
               <div class="pdf-cortes-hoja" id="pdfCortesHoja" hidden role="dialog" aria-labelledby="pdfCortesTitulo">
                 <h4 id="pdfCortesTitulo">Revisar cortes</h4>
                 <p class="pdf-cortes-ayuda">Cada corte trae su contexto, su propuesta y su página de origen.</p>
@@ -6586,8 +6862,8 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                 <div class="pdf-voz-cab">
                   <button type="button" class="mini-btn pdf-voz-acordeon" id="btnPdfDockDesplegar"
                           aria-expanded="true" aria-controls="pdfTtsAjustes"
-                          title="Mostrar u ocultar voz y velocidad. Ocultar no detiene la lectura."
-                          aria-label="Mostrar u ocultar los ajustes de voz">
+                          title="Mostrar u ocultar las herramientas de voz. Ocultar no detiene la lectura."
+                          aria-label="Mostrar u ocultar las herramientas de voz">
                     <svg class="pdf-voz-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
                     <span class="pdf-voz-nombre">Voz</span>
                     <span class="pdf-voz-acordeon-txt">Ocultar ajustes</span>
@@ -6637,6 +6913,14 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                         <output class="tts-rate-value" data-tts-rate-value>1.00×</output>
                       </span>
                     </div>
+                    <button type="button" class="mini-btn pdf-btn-musica is-off" id="btnPdfMusica"
+                            aria-expanded="false" aria-controls="pdfMusicaHoja"
+                            title="Música de fondo para lectura"
+                            aria-label="Música de fondo: apagada">
+                      <svg class="pdf-musica-nota" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                      <span class="pdf-musica-txt">Música</span>
+                      <span class="pdf-musica-estado" id="pdfMusicaEstadoBadge">Apagado</span>
+                    </button>
                   </div>
                 </div>
 
@@ -14182,6 +14466,10 @@ function ttsCrearElementoAudio(){
   el.preservesPitch = true;
   el.mozPreservesPitch = true;
   el.webkitPreservesPitch = true;
+  try{
+    const v = localStorage.getItem('jg_musica_voz_volumen');
+    if(v !== null) el.volume = Math.max(0, Math.min(1, parseFloat(v)));
+  }catch(_){}
   return el;
 }
 
@@ -14197,6 +14485,8 @@ function ttsPool(){
   }
   return ttsAudios;
 }
+window.ttsPool = ttsPool;
+window.ttsAudios = ttsAudios;
 
 function ttsElActivo(){ const p = ttsPool(); return p[p.activo]; }
 function ttsElEspera(){ const p = ttsPool(); return p[p.activo === 'a' ? 'b' : 'a']; }
@@ -14268,6 +14558,7 @@ function ttsDetener(){
   }
   ttsSesionMedia(false);
   ttsActualizarUI();
+  try{ document.dispatchEvent(new CustomEvent('jg-tts-detener')); }catch(_){}
 }
 
 function ttsPausar(){
@@ -14280,10 +14571,12 @@ function ttsPausar(){
   ttsState.status = 'paused';
   ttsSesionMedia(true);
   ttsActualizarUI();
+  try{ document.dispatchEvent(new CustomEvent('jg-tts-pausar')); }catch(_){}
 }
 
 function ttsReanudar(){
   if(ttsState.status !== 'paused') return;
+  try{ document.dispatchEvent(new CustomEvent('jg-tts-reanudar')); }catch(_){}
   if(ttsState.engineUsed === 'browser' && ttsSupportedBrowser()){
     ttsState.status = 'playing';
     ttsActualizarUI();
@@ -16750,7 +17043,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v97';
+const JG_JS_V = 'v98';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

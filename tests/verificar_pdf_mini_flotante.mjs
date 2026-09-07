@@ -18,7 +18,21 @@ import { pathToFileURL } from 'node:url';
 import { crearLibro } from './generarPdfPrueba.mjs';
 
 const app = resolve(import.meta.dirname, '..');
-const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
+/* Playwright no es dependencia del proyecto: se busca donde suela estar
+ * (mismo patrón que verificar_pdf_geometria.mjs; la ruta única anterior
+ * dejó de existir y esta verificación quedaba inejecutable). */
+const { chromium } = await (async () => {
+  const candidatos = [
+    resolve(app, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) { /* siguiente */ }
+  }
+  console.error('FALLO: no se encontró Playwright. Instálalo con «npm i -D playwright».');
+  process.exit(1);
+})();
 const destino = resolve(app, '.playwright-cli/pdf-mini');
 await mkdir(destino, { recursive: true });
 const pdf = join(destino, 'libro.pdf');
