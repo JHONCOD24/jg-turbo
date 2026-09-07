@@ -23,7 +23,7 @@ import {
 } from './colaCorreccion.js';
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
-import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource } from './manifiesto.js';
+import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync } from './manifiesto.js';
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
 import { initLibroVista, ordenarDocumentos, paginarDocumentos } from './libroVista.js';
@@ -153,6 +153,7 @@ export function inicializarLectorPdf(deps = {}) {
     nubeEntradaCaja: $('pdfNubeEntradaCaja'), nubeEntrada: $('pdfNubeEntrada'),
     nubeUnir: $('btnPdfNubeUnir'), nubeAviso: $('pdfNubeAviso'),
     nubeLlave: $('btnPdfNubeLlave'), nubeSalir: $('btnPdfNubeSalir'),
+    nubeTraerCopia: $('btnPdfNubeTraerCopia'), nubeArchivoCopia: $('pdfNubeArchivoCopia'),
     nubeLlaveCaja: $('pdfNubeLlaveCaja'), nubeLlaveTexto: $('pdfNubeLlaveTexto'),
     nubeCopiarLlave: $('btnPdfNubeCopiarLlave'), nubeLlaveOk: $('btnPdfNubeLlaveOk'),
     lectura: $('pdfLectura'), vistaLectura: $('pdfVistaLectura'), vistaEditar: $('pdfVistaEditar'),
@@ -509,7 +510,105 @@ export function inicializarLectorPdf(deps = {}) {
       confirmarBorrado(borrar, doc);
     });
 
-    pop.append(reiniciar, buscarTapa, borrar);
+    /* Solo en este aparato: el libro no sale a la nube (ni se pisa desde
+     * ella). Es la forma de tener algo privado sin cuenta ni contraseña. */
+    const privado = document.createElement('button');
+    privado.type = 'button';
+    privado.className = 'mini-btn';
+    const esPrivado = doc.sincronizar === false;
+    privado.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>${esPrivado ? 'Sincronizar' : 'Solo aquí'}</span>`;
+    privado.title = esPrivado
+      ? 'Volver a copiar este libro entre tus aparatos'
+      : 'No copiar este libro a tus otros aparatos';
+    privado.setAttribute('aria-label', privado.title);
+    privado.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      const ok = await almacen.marcarPrivado(doc.id, !esPrivado);
+      if (!ok) { avisar('No se pudo cambiar este libro.', 'warn'); return; }
+      avisar(esPrivado
+        ? `«${doc.titulo}» vuelve a copiarse entre tus aparatos.`
+        : `«${doc.titulo}» queda solo en este aparato.`, 'info', { efimero: true });
+      pintarBiblioteca();
+      sincronizarAhora({ silencioso: true });
+    });
+
+    /* Compartir copia: descarga un archivo para pasarlo por donde sea. Quien
+     * lo abre lo lee sin necesitar tu llave ni tu nube. */
+    const compartir = document.createElement('button');
+    compartir.type = 'button';
+    compartir.className = 'mini-btn';
+    compartir.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg><span>Compartir copia</span>';
+    compartir.title = 'Descargar este libro en un archivo para pasarlo a alguien';
+    compartir.setAttribute('aria-label', `Compartir una copia de ${doc.titulo || 'este documento'}`);
+    compartir.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      await descargarCopiaLibro(doc.id);
+    });
+
+    /* Pedir contenido: este aparato avisa al que tiene el original para que
+     * lo mande completo la próxima vez que sincronice. */
+    if (doc.sincronizar !== false && !doc.tieneArchivo) {
+      const pedir = document.createElement('button');
+      pedir.type = 'button';
+      pedir.className = 'mini-btn';
+      pedir.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Pedir contenido</span>';
+      pedir.title = 'Pedirle a tu otro aparato que mande este libro completo';
+      pedir.setAttribute('aria-label', `Pedir el contenido completo de ${doc.titulo || 'este documento'}`);
+      pedir.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.open = false;
+        if (!nube?.estaVinculada?.()) {
+          avisar('Primero conecta este aparato a tu nube con «Conectar otro aparato».', 'warn');
+          return;
+        }
+        const ok = await almacen.pedirReenvio(doc.id, nombreEquipoSync());
+        if (!ok) { avisar('No se pudo enviar el pedido.', 'warn'); return; }
+        avisar('Pedido enviado. Abre JG Turbo en tu otro aparato para que lo mande.', 'info');
+        sincronizarAhora({ silencioso: true });
+      });
+      pop.append(pedir);
+    }
+
+    /* Reenviar: otro aparato pidió este libro completo. */
+    if (doc.pideFuente) {
+      const reenviar = document.createElement('button');
+      reenviar.type = 'button';
+      reenviar.className = 'mini-btn';
+      reenviar.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg><span>Reenviar ahora</span>';
+      reenviar.title = `${doc.pideFuente.de || 'Tu otro aparato'} pidió este libro completo`;
+      reenviar.setAttribute('aria-label', `Reenviar ${doc.titulo || 'este documento'} completo`);
+      reenviar.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.open = false;
+        avisar(`Enviando «${doc.titulo}» completo…`, 'info');
+        const ok = await almacen.forzarReenvio(doc.id);
+        if (!ok) { avisar('No se pudo preparar el envío.', 'warn'); return; }
+        await sincronizarAhora();
+      });
+      pop.append(reenviar);
+    }
+
+    /* Compartir con PDF: igual que la copia, pero incluye el original para
+     * que el otro aparato pueda reprocesar y usar OCR. Solo si pesa lo
+     * razonable para una descarga (se avisa antes). */
+    if (doc.tieneArchivo) {
+      const conPdf = document.createElement('button');
+      conPdf.type = 'button';
+      conPdf.className = 'mini-btn';
+      conPdf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Compartir con PDF</span>';
+      conPdf.title = 'Descargar el libro junto con su PDF original';
+      conPdf.setAttribute('aria-label', `Compartir ${doc.titulo || 'este documento'} con su PDF`);
+      conPdf.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.open = false;
+        await descargarCopiaLibro(doc.id, { conPdf: true });
+      });
+      pop.append(conPdf);
+    }
+
+    pop.append(reiniciar, buscarTapa, privado, compartir, borrar);
     menu.append(summary, pop);
     item.appendChild(menu);
 
@@ -589,9 +688,67 @@ export function inicializarLectorPdf(deps = {}) {
     return item;
   }
 
+  /* ── Copias para compartir (sin dar la llave a nadie) ──────────── */
+
+  function nombreEquipoSync() {
+    try {
+      const ua = navigator.userAgent || '';
+      if (/iPhone|iPad/i.test(ua)) return 'tu iPhone o iPad';
+      if (/Android/i.test(ua)) return 'tu celular Android';
+      if (/Macintosh/i.test(ua)) return 'tu Mac';
+      if (/Windows/i.test(ua)) return 'tu Windows';
+    } catch (_) { /* sin agente se vive */ }
+    return 'tu otro aparato';
+  }
+
+  function nombreArchivoCopia(titulo) {
+    const base = String(titulo || 'libro').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '').slice(0, 60);
+    return `${base || 'libro'}.jgtcopia.json`;
+  }
+
+  async function descargarCopiaLibro(id, { conPdf = false } = {}) {
+    try {
+      avisar('Preparando la copia…', 'info');
+      const copia = await almacen.exportarCopia(id, { conPdf });
+      const texto = JSON.stringify(copia);
+      const mb = texto.length / 1048576;
+      const url = URL.createObjectURL(new Blob([texto], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombreArchivoCopia(copia.titulo);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      avisar(conPdf
+        ? `Copia con PDF lista (${mb.toFixed(1)} MB). Pásala al otro aparato e impórtala desde Opciones de la nube.`
+        : 'Copia lista. Pásala al otro aparato e impórtala desde Opciones de la nube.', 'ok');
+    } catch (error) {
+      avisar(error?.message || 'No se pudo crear la copia.', 'warn');
+    }
+  }
+
+  async function importarCopiaArchivo(archivo) {
+    if (!archivo) return;
+    try {
+      avisar('Leyendo la copia…', 'info');
+      const texto = await archivo.text();
+      const objeto = JSON.parse(texto);
+      const resultado = await almacen.importarCopia(objeto);
+      await pintarBiblioteca();
+      refrescarInicio();
+      avisar(resultado.omitido
+        ? `«${resultado.titulo}» ya estaba aquí más nuevo: se conservó lo local.`
+        : `«${resultado.titulo}» quedó guardado solo en este aparato.`, 'ok');
+    } catch (error) {
+      avisar(error?.message || 'Ese archivo no se pudo importar.', 'error');
+    }
+  }
+
   /** Borrar pide confirmación en el propio botón: nada de ventanas modales. */
-  function confirmarBorrado(boton, doc) {
-    if (boton.dataset.confirmando === '1') {
+  function confirmarBorrado(boton, doc) {    if (boton.dataset.confirmando === '1') {
       clearTimeout(Number(boton.dataset.temporizador));
       almacen.borrarDocumento(doc.id).then(() => {
         if (estado.id === doc.id) cerrarDocumento();
@@ -1536,6 +1693,32 @@ export function inicializarLectorPdf(deps = {}) {
     if (plan.accion === 'needs_source' || (!archivo && plan.accion !== 'reconstruir')) {
       const reconstruido = reconstruirPartesGuardadas(partes);
       if (!reconstruido.texto.trim()) return { needsSource: true, partes, capitulos: doc.capitulos || [] };
+      /* Antes de pedir el PDF: si la sincronización trajo el manifiesto con
+       * sus decisiones y es de la versión actual, se confía en lo corregido.
+       * Es el caso de la tablet que abre lo que el celular ya corrigió: el
+       * texto guardado ya es el bueno y no hay que reextraer nada. */
+      try {
+        const sinc = await almacen.cargarManifiesto(doc.id);
+        if (sinc && !sinc.conGeometria) {
+          const decision = confiarEnCorreccionSync(doc, {
+            v: 1,
+            pendientes: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
+            ver: sinc.ver || {},
+            manifiesto: sinc.manifiesto,
+          });
+          if (decision.confiar) {
+            return {
+              partes,
+              capitulos: doc.capitulos || reconstruido.capitulos,
+              progreso: doc.progreso,
+              bloques: [],
+              correccionConfiable: true,
+              pendientes: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
+              limites: sinc.manifiesto,
+            };
+          }
+        }
+      } catch (_) { /* si no se pudo comprobar, se pide como antes */ }
       return {
         partes,
         capitulos: doc.capitulos || reconstruido.capitulos,
@@ -1583,13 +1766,33 @@ export function inicializarLectorPdf(deps = {}) {
       const rehecho = await rehacerTroceo(doc, partes);
       if (rehecho?.needsSource) {
         needsSourceActual = true;
-        avisar('Necesita reimportar el PDF o una revisión manual de los límites pendientes.', 'warn');
+        avisar('Para reprocesar este libro hace falta el PDF original. Leer y escuchar funcionan con el texto guardado.', 'warn');
         await almacen.marcarTroceo(id, VERSION_TROCEO, {
           partes: rehecho.partes || partes,
           capitulos: rehecho.capitulos || capitulos,
           progreso,
           needsSource: true,
         });
+      } else if (rehecho?.correccionConfiable) {
+        /* Llegó corregido del otro aparato: se adopta su versión y sus
+         * pendientes, y no se vuelve a pedir el PDF por esto. */
+        needsSourceActual = false;
+        partes = rehecho.partes;
+        capitulos = rehecho.capitulos;
+        progreso = rehecho.progreso;
+        try {
+          estado.limites = expandirManifiesto(rehecho.limites || []);
+        } catch (_) { /* los límites se cargan al abrir como siempre */ }
+        await almacen.marcarTroceo(id, VERSION_TROCEO, {
+          versionReconstruccion: VERSION_RECONSTRUCCION,
+          pendientesLimites: Number(rehecho.pendientes) || 0,
+          needsSource: false,
+        });
+        if (Number(rehecho.pendientes) > 0) {
+          avisar(`Llegó corregido de tu otro aparato con ${rehecho.pendientes} cortes por revisar. Puedes revisarlos aquí; el PDF no hace falta.`, 'info', { efimero: true });
+        } else {
+          avisar('Llegó corregido de tu otro aparato: no necesitas subir el PDF.', 'info', { efimero: true });
+        }
       } else if (rehecho) {
         needsSourceActual = false;
         if (rehecho.capaNueva) {
@@ -1634,6 +1837,33 @@ export function inicializarLectorPdf(deps = {}) {
       estado.calidadPorPagina = reconstruccionGuardada.calidadPorPagina || [];
       estado.estadoFidelidad = reconstruccionGuardada.estadoFidelidad || null;
       estado.omisiones = reconstruccionGuardada.omisiones || [];
+    } else if (needsSourceActual && !estado.limites.length) {
+      /* Sin geometría pero con manifiesto sincronizado y vigente, los límites
+       * se cargan igual para revisar: el PDF solo haría falta para
+       * reprocesar, no para leer ni revisar. */
+      try {
+        const sinc = await almacen.cargarManifiesto(id);
+        if (sinc && !sinc.conGeometria) {
+          const decision = confiarEnCorreccionSync(doc, {
+            v: 1,
+            pendientes: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
+            ver: sinc.ver || {},
+            manifiesto: sinc.manifiesto,
+          });
+          if (decision.confiar) {
+            estado.limites = expandirManifiesto(sinc.manifiesto || []);
+            estado.needsSource = false;
+            needsSourceActual = false;
+            try {
+              await almacen.marcarTroceo(id, VERSION_TROCEO, {
+                versionReconstruccion: VERSION_RECONSTRUCCION,
+                pendientesLimites: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
+                needsSource: false,
+              });
+            } catch (_) { /* el aviso ya es correcto aunque no se anote */ }
+          }
+        }
+      } catch (_) { /* se mantiene el aviso anterior */ }
     }
     await montarDocumento({
       id: doc.id,
@@ -4803,6 +5033,17 @@ export function inicializarLectorPdf(deps = {}) {
       avisoNube(mensaje, 'ok');
       /* Arriba también, para quien pulsó arriba. */
       if (desdeCabecera && !silencioso) avisar(mensaje, 'ok', { efimero: true });
+      /* Pedidos de reenvío: se anuncian donde está la persona, con la acción
+       * al lado (en la ficha ⋯ del libro). */
+      const pedidos = Array.isArray(resultado.pedidos) ? resultado.pedidos : [];
+      if (pedidos.length && !silencioso) {
+        const primero = pedidos[0];
+        const mas = pedidos.length > 1 ? ` (+${pedidos.length - 1} más)` : '';
+        const avisoPedido = `${primero.de} pide «${primero.titulo}» completo${mas}. Abre su ficha ⋯ y pulsa Reenviar.`;
+        avisoNube(`${mensaje} ${avisoPedido}`, 'ok');
+        avisar(avisoPedido, 'info');
+      }
+      await pintarBiblioteca();
       return resultado;
     } catch (error) {
       const fallo = error?.message || 'No se pudo sincronizar.';
@@ -4867,6 +5108,15 @@ export function inicializarLectorPdf(deps = {}) {
     }
   });
   if (el.nubeLlaveOk) el.nubeLlaveOk.addEventListener('click', () => { el.nubeLlaveCaja.hidden = true; });
+  if (el.nubeTraerCopia) el.nubeTraerCopia.addEventListener('click', () => {
+    if (el.nubeArchivoCopia) el.nubeArchivoCopia.click();
+    else avisoNube('Actualiza la app para traer copias de archivo.', 'error');
+  });
+  if (el.nubeArchivoCopia) el.nubeArchivoCopia.addEventListener('change', async (e) => {
+    const archivo = e.target?.files?.[0] || null;
+    e.target.value = '';
+    await importarCopiaArchivo(archivo);
+  });
   if (el.nubeSalir) el.nubeSalir.addEventListener('click', () => {
     nube.desconectar();
     cerrarPase();

@@ -15,6 +15,7 @@
  */
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
 import { esSincronizable, estaBorrado } from './sincronizacion.js';
+import { paqueteCorreccionSync, correccionSyncValida } from './manifiesto.js';
 
 const BASE = 'jg-turbo-pdf';
 /* Versión 5: compatibilidad hacia adelante. Encontramos dispositivos cuya base
@@ -923,10 +924,15 @@ export async function marcarTroceo(id, version, cambios = null) {
       }
       doc.versionTroceo = version;
       if (cambios?.versionReconstruccion != null) doc.versionReconstruccion = cambios.versionReconstruccion;
+      /* Solo un valor explícito cambia la marca de fuente: omitirla la deja
+       * como está (así los flujos viejos no la borran sin querer). */
+      if (cambios && 'needsSource' in cambios) {
+        if (cambios.needsSource) doc.needsSource = true;
+        else delete doc.needsSource;
+      }
       if (cambios?.fuenteRevision) doc.fuenteRevision = String(cambios.fuenteRevision);
       if (cambios?.revisionLectura) doc.revisionLectura = String(cambios.revisionLectura);
       if (cambios?.pendientesLimites != null) doc.pendientesLimites = cambios.pendientesLimites;
-      if (cambios?.needsSource) doc.needsSource = true;
       if (cambios?.reconstruccion) {
         doc.listoParaLectura = cambios.reconstruccion.listoParaLectura;
         doc.pendientesLimites = cambios.reconstruccion.pendientes;
@@ -1018,6 +1024,22 @@ export async function paqueteParaSubir(id, { conPortada = false } = {}) {
       if (mini) paquete.datos.portadaMini = mini;
     } catch (_) { /* sin carátula se vive: queda la inicial */ }
   }
+  /* La corrección portable: el manifiesto con sus decisiones viaja en el
+   * paquete ligero para que el otro aparato confíe en lo corregido sin pedir
+   * el PDF. Es lo mejor posible: si falla la lectura, el paquete sale igual
+   * que antes (sin corrección) y nada se rompe. */
+  try {
+    const fila = await conAlmacenes([CONTENIDO], 'readonly', (c) => esperar(c.get(id)));
+    const manifiesto = fila?.manifiesto || fila?.reconstruccion?.manifiesto || null;
+    if (Array.isArray(manifiesto) && manifiesto.length) {
+      paquete.datos.correccion = paqueteCorreccionSync(manifiesto, {
+        pendientesLimites: doc.pendientesLimites,
+        versionReconstruccion: doc.versionReconstruccion,
+        versionTroceo: doc.versionTroceo,
+        versionFidelidad: doc.versionFidelidad,
+      });
+    }
+  } catch (_) { /* sin manifiesto se vive: el otro aparato pide como antes */ }
   return paquete;
 }
 
@@ -1070,6 +1092,10 @@ export async function importarDeSincronizacion(documento) {
   const meta = { ...(datos?.meta || {}) };
   /* Un paquete vivo no puede reaplicar una lápida que viajara pegada al meta. */
   delete meta.borrado;
+  /* Si el otro aparato ya no pide la fuente, aquí tampoco: si no, el aviso
+   * rebotaría de un lado al otro sin fin. */
+  const pideFuente = meta.pideFuente && typeof meta.pideFuente === 'object' ? meta.pideFuente : null;
+  if (!pideFuente) delete meta.pideFuente;
   /* La carátula viaja como texto dentro de `datos` porque la sincronización
    * solo mueve JSON. Al llegar se vuelve imagen y se guarda con el libro:
    * así la biblioteca se ve igual en el celular, la tablet y el escritorio. */
@@ -1083,7 +1109,78 @@ export async function importarDeSincronizacion(documento) {
   });
   /* Lo que llegó con carátula no necesita reenviarla: ya la tienen los dos. */
   if (portada) await marcarPortadaSincronizada(id, actualizado);
+  /* Limpieza explícita: `guardarDocumento` mezcla con lo previo, así que un
+   * pedido ya atendido sobreviviría. Sin esto, el aviso rebotaría sin fin. */
+  if (!pideFuente) {
+    try {
+      await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+        const doc = await esperar(docs.get(id));
+        if (doc && doc.pideFuente) {
+          delete doc.pideFuente;
+          await esperar(docs.put(doc));
+        }
+      });
+    } catch (_) { /* si no se pudo limpiar, se limpia la próxima vez */ }
+  }
+  /* La corrección que trae el paquete se guarda aparte, sin pisar la
+   * geometría local: si este aparato tiene el PDF (átomos), lo suyo manda;
+   * si no, el manifiesto recibido es lo único que evita pedir el archivo. */
+  try {
+    const correccion = datos?.correccion || null;
+    if (correccionSyncValida(correccion)) {
+      await guardarManifiestoRecibido(id, correccion);
+    }
+  } catch (_) { /* sin manifiesto se vive: se pide como antes */ }
   return true;
+}
+
+/**
+ * Guarda el manifiesto que llegó por sincronización o por copia-archivo.
+ * Nunca pisa una reconstrucción local con geometría: lo local con PDF manda.
+ * Devuelve 'guardado' | 'conservado' (ya había algo mejor) | 'ignorado'.
+ */
+export async function guardarManifiestoRecibido(id, correccion) {
+  if (!id || !correccionSyncValida(correccion)) return 'ignorado';
+  try {
+    return await conAlmacenes([CONTENIDO], 'readwrite', async (contenido) => {
+      const previo = (await esperar(contenido.get(id))) || { id };
+      /* Con geometría local no hace falta nada de fuera: lo hecho con el PDF
+       * en este aparato manda. Sin ella, lo que llega es más nuevo (solo se
+       * importa cuando la nube gana), así que reemplaza. */
+      if (previo.reconstruccion?.atomos?.length) return 'conservado';
+      await esperar(contenido.put({
+        ...previo,
+        id,
+        manifiesto: correccion.manifiesto,
+        correccionSync: { v: correccion.v, pendientes: correccion.pendientes, ver: correccion.ver || {} },
+        pendientesCorreccion: Number(correccion.pendientes) || 0,
+      }));
+      return 'guardado';
+    });
+  } catch (_) {
+    return 'ignorado';
+  }
+}
+
+/** Solo el manifiesto guardado (para decidir sin abrir el libro). */
+export async function cargarManifiesto(id) {
+  try {
+    const fila = await conAlmacenes([CONTENIDO], 'readonly', (c) => esperar(c.get(id)));
+    if (!fila) return null;
+    const manifiesto = fila.manifiesto || fila.reconstruccion?.manifiesto || null;
+    if (!Array.isArray(manifiesto) || !manifiesto.length) return null;
+    return {
+      manifiesto,
+      pendientes: Number(fila.pendientesCorreccion),
+      ver: fila.correccionSync?.ver || {
+        rec: fila.reconstruccion?.versionReconstruccion,
+        tro: fila.reconstruccion?.versionTroceo,
+      },
+      conGeometria: Boolean(fila.reconstruccion?.atomos?.length),
+    };
+  } catch (_) {
+    return null;
+  }
 }
 
 /** Guarda los capítulos que llegaron de otro dispositivo. */
@@ -1139,4 +1236,215 @@ export async function marcarSincronizado(id, marca) {
   } catch (_) {
     return false;
   }
+}
+
+/* ── Privacidad por libro + reenvío + copias para compartir ──────────
+ *
+ * Tres necesidades sin servidor nuevo:
+ * 1. «Este libro no sale de este aparato» → `sincronizar: false`, que el
+ *    resto del código ya respeta (no se exporta, no se sube, no se pisa).
+ * 2. «Mi otro aparato pide el contenido completo» → señal `pideFuente` que
+ *    viaja en el paquete ligero, y `forzarReenvio` que manda todo de nuevo.
+ * 3. «Pasarle un libro a alguien sin darle mi llave» → archivo de copia que
+ *    entra como copia local (tampoco se sincroniza).
+ */
+
+/** `privado=true`: el libro no sale de este aparato. `false`: vuelve a la nube. */
+export async function marcarPrivado(id, privado) {
+  if (!id) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc) return false;
+      const ahora = Date.now();
+      if (privado) {
+        doc.sincronizar = false;
+        /* Al día a propósito: lo privado no tiene nada pendiente con la nube. */
+        doc.sincronizado = doc.actualizado || ahora;
+      } else {
+        delete doc.sincronizar;
+        /* Al volver, se manda el contenido entero: el otro lado puede llevar
+         * meses sin ver este libro. */
+        doc.actualizado = ahora;
+        doc.contenidoActualizado = ahora;
+      }
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Manda el contenido entero la próxima vez: capítulos + corrección. */
+export async function forzarReenvio(id) {
+  if (!id) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc || !esSincronizable(doc)) return false;
+      const ahora = Date.now();
+      doc.actualizado = ahora;
+      doc.contenidoActualizado = ahora;
+      /* El pedido queda atendido: no debe viajar de vuelta. */
+      delete doc.pideFuente;
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+/** «Desde este aparato pido que me manden el libro completo». Solo viaja el aviso. */
+export async function pedirReenvio(id, de) {
+  if (!id) return false;
+  try {
+    return await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      const doc = await esperar(docs.get(id));
+      if (!doc || !esSincronizable(doc)) return false;
+      doc.pideFuente = { de: String(de || 'otro aparato').slice(0, 80), cuando: Date.now() };
+      /* Solo el aviso viaja: el contenido NO se toca (TRAMPAS §5.3). */
+      doc.actualizado = Date.now();
+      await esperar(docs.put(doc));
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Valida un archivo de copia antes de tocar la biblioteca. Pura y con pruebas. */
+export function validarCopiaCompartir(obj) {
+  if (!obj || typeof obj !== 'object') return { ok: false, motivo: 'archivo_vacio' };
+  if (obj.app !== 'jg-turbo-copia') return { ok: false, motivo: 'no_es_copia_jg' };
+  if (obj.v !== 1) return { ok: false, motivo: 'version_no_soportada' };
+  if (!obj.meta || typeof obj.meta.id !== 'string' || !obj.meta.id) {
+    return { ok: false, motivo: 'sin_identificador' };
+  }
+  if (!Array.isArray(obj.partes) || !obj.partes.length) {
+    return { ok: false, motivo: 'sin_contenido' };
+  }
+  for (const p of obj.partes) {
+    if (!p || typeof p.texto !== 'string') return { ok: false, motivo: 'capitulo_roto' };
+  }
+  return { ok: true, motivo: 'ok' };
+}
+
+/**
+ * Empaqueta un libro para pasarlo por archivo (cable, WhatsApp, Drive…).
+ * Con `conPdf: true` incluye el PDF original para que el otro aparato pueda
+ * reprocesar y usar OCR; pesa lo que pese el PDF y se avisa antes.
+ */
+export async function exportarCopia(id, { conPdf = false } = {}) {
+  const doc = await cargarDocumento(id);
+  if (!doc) throw new Error('Ese documento ya no está guardado.');
+  const partes = await partesParaSubir(id);
+  if (!partes.length) throw new Error('Ese libro aún no tiene texto para compartir.');
+  const copia = {
+    app: 'jg-turbo-copia',
+    v: 1,
+    exportadoEn: Date.now(),
+    titulo: doc.titulo || doc.nombreArchivo || 'Documento',
+    meta: {
+      id: doc.id,
+      titulo: doc.titulo,
+      nombreArchivo: doc.nombreArchivo,
+      idioma: doc.idioma,
+      totalPaginas: doc.totalPaginas,
+      capitulos: doc.capitulos,
+      titulosPartes: doc.titulosPartes,
+      caracteres: doc.caracteres,
+      progreso: doc.progreso,
+      estado: doc.estado,
+      versionReconstruccion: doc.versionReconstruccion,
+      versionTroceo: doc.versionTroceo,
+      pendientesLimites: doc.pendientesLimites,
+    },
+    partes: partes.map((p) => ({
+      indice: p.indice, titulo: p.titulo, texto: p.texto, traduccion: p.traduccion, pulido: p.pulido,
+      pagina: p.pagina, atomStart: p.atomStart, atomEnd: p.atomEnd,
+      boundaryIds: p.boundaryIds, continuation: p.continuation,
+      anclaInicio: p.anclaInicio, anclaFin: p.anclaFin,
+    })),
+    correccion: null,
+    portadaMini: null,
+    pdfDatos: null,
+  };
+  try {
+    const fila = await conAlmacenes([CONTENIDO], 'readonly', (c) => esperar(c.get(id)));
+    const manifiesto = fila?.manifiesto || fila?.reconstruccion?.manifiesto || null;
+    if (Array.isArray(manifiesto) && manifiesto.length) {
+      copia.correccion = paqueteCorreccionSync(manifiesto, {
+        pendientesLimites: doc.pendientesLimites,
+        versionReconstruccion: doc.versionReconstruccion,
+        versionTroceo: doc.versionTroceo,
+        versionFidelidad: doc.versionFidelidad,
+      });
+    }
+  } catch (_) { /* la copia viaja igual, sin corrección portable */ }
+  try {
+    const archivos = await conAlmacenes([ARCHIVOS], 'readonly', (a) => esperar(a.get(id)));
+    if (archivos?.portada) copia.portadaMini = await blobADataURL(archivos.portada);
+    if (conPdf && archivos?.pdf) copia.pdfDatos = await blobADataURL(archivos.pdf);
+  } catch (_) { /* sin archivos se vive */ }
+  return copia;
+}
+
+/**
+ * Trae una copia-archivo como libro local que NO se sincroniza: quien la
+ * recibe puede leerla sin tener la llave de nadie. Si el libro ya existe y
+ * lo local es más nuevo, se conserva lo local.
+ */
+export async function importarCopia(obj) {
+  const valido = validarCopiaCompartir(obj);
+  if (!valido.ok) {
+    const mensajes = {
+      archivo_vacio: 'Ese archivo está vacío.',
+      no_es_copia_jg: 'Ese archivo no es una copia de JG Turbo.',
+      version_no_soportada: 'Esa copia es de otra versión y no se puede abrir.',
+      sin_identificador: 'Esa copia no trae identificador.',
+      sin_contenido: 'Esa copia no trae texto.',
+      capitulo_roto: 'Esa copia trae un capítulo dañado.',
+    };
+    throw new Error(mensajes[valido.motivo] || 'Esa copia no se puede importar.');
+  }
+  const id = obj.meta.id;
+  const previo = await cargarDocumento(id);
+  if (previo && Number(previo.actualizado) > Number(obj.exportadoEn)) {
+    return { id, titulo: previo.titulo, omitido: true };
+  }
+  const ahora = Date.now();
+  const portada = await dataURLABlob(obj.portadaMini || null).catch(() => null);
+  const pdf = await dataURLABlob(obj.pdfDatos || null).catch(() => null);
+  await guardarDocumento({
+    meta: {
+      ...obj.meta, id,
+      actualizado: ahora,
+      contenidoActualizado: ahora,
+      sincronizado: ahora,
+      /* Local a propósito: la copia no toca la nube de nadie. */
+      sincronizar: false,
+      tieneArchivo: Boolean(pdf || obj.meta.tieneArchivo),
+      needsSource: false,
+    },
+    partes: obj.partes.map((p) => ({
+      titulo: p.titulo || 'Parte', texto: p.texto || '', pagina: p.pagina || 1,
+      atomStart: p.atomStart || null, atomEnd: p.atomEnd || null,
+      boundaryIds: Array.isArray(p.boundaryIds) ? p.boundaryIds : [],
+      continuation: Boolean(p.continuation),
+      anclaInicio: p.anclaInicio || null, anclaFin: p.anclaFin || null,
+    })),
+    ...(portada ? { portada } : {}),
+    ...(pdf ? { pdf } : {}),
+  });
+  for (const [i, p] of obj.partes.entries()) {
+    const indice = Number.isInteger(p.indice) ? p.indice : i;
+    if (p.traduccion) await guardarTraduccion(id, 'es', indice, p.traduccion, { marcar: false });
+    if (p.pulido) await guardarPulido(id, indice, p.pulido, { marcar: false });
+  }
+  if (correccionSyncValida(obj.correccion)) {
+    await guardarManifiestoRecibido(id, obj.correccion).catch(() => {});
+  }
+  return { id, titulo: obj.titulo || obj.meta.titulo, omitido: false };
 }

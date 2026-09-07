@@ -99,7 +99,7 @@ export function crearNube({ pedir, biblioteca }) {
 
     /**
      * Sincroniza en las dos direcciones.
-     * @returns {{subidos:number, bajados:number}}
+     * @returns {{subidos:number, bajados:number, reparados:number, caratulas:number, pedidos:{id:string,titulo:string,de:string,cuando:number}[]}}
      */
     async sincronizar({ alProgresar } = {}) {
       if (!this.estaVinculada()) throw new Error('Este dispositivo no está sincronizando.');
@@ -254,6 +254,19 @@ export function crearNube({ pedir, biblioteca }) {
         subidos += 1;
       }
 
+      /* ── Pedidos de reenvío ────────────────────────────────────────────
+       * Si otro aparato pidió el contenido completo (`pideFuente` en su
+       * paquete), se avisa aquí para ofrecer «Reenviar» con un toque. Solo
+       * cuentan los que acaban de llegar y no están borrados. */
+      const pedidos = aplicar
+        .filter((d) => !d.borrado && d.datos?.meta?.pideFuente)
+        .map((d) => ({
+          id: d.id,
+          titulo: d.datos.meta.titulo || d.datos.meta.nombreArchivo || 'documento',
+          de: String(d.datos.meta.pideFuente.de || 'tu otro aparato'),
+          cuando: Number(d.datos.meta.pideFuente.cuando) || 0,
+        }));
+
       if (remoto.cursor) escribir(CLAVE_CURSOR, remoto.cursor);
 
       /* ── Reparar sincronizaciones a medias ─────────────────────────
@@ -270,6 +283,7 @@ export function crearNube({ pedir, biblioteca }) {
         /* Se informa aparte: si solo llegaron carátulas, decir «Todo al día»
          * sería mentir justo cuando el usuario está esperando verlas. */
         caratulas,
+        pedidos,
       };
     },
 

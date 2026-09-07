@@ -130,3 +130,99 @@ export function camposSyncParte(parte = {}) {
 }
 
 export { contarPendientes };
+
+/* ── Corrección portable entre dispositivos ──────────────────────────
+ *
+ * El manifiesto compacto ya trae por cada corte su decisión y los dos
+ * fragmentos (lf/rf): es todo lo que el otro aparato necesita para confiar
+ * en lo corregido sin tener el PDF. Este paquete viaja dentro de
+ * `datos.correccion` (JSON opaco: el servidor lo guarda sin entenderlo, así
+ * que no hace falta migrar la base). La geometría (átomos) NO viaja: pesa
+ * demasiado y para leer, escuchar y revisar no hace falta.
+ */
+export const VERSION_CORRECCION_SYNC = 1;
+/* Techo del paquete: un libro típico trae manifiesto de decenas de KB; con
+ * este techo un libro enorme se trunca con aviso en vez de tumbar la subida. */
+export const MAX_CORRECCION_SYNC_BYTES = 400000;
+
+function tamanoAprox(valor) {
+  try {
+    return JSON.stringify(valor)?.length || 0;
+  } catch (_) {
+    return Infinity;
+  }
+}
+
+/**
+ * Arma el paquete portable a partir del manifiesto compacto guardado.
+ * Prioriza lo decidido por la persona; si hay que truncar, se avisa con
+ * `truncado: true` en vez de fallar en silencio.
+ */
+export function paqueteCorreccionSync(manifiestoCompacto, meta = {}) {
+  const lista = (Array.isArray(manifiestoCompacto) ? manifiestoCompacto : [])
+    .filter((l) => l && (l.id || l.la || l.ra));
+  const esPendiente = (l) => {
+    const d = l.d || l.decision || 'pending';
+    return d === 'pending';
+  };
+  const decididos = lista.filter((l) => !esPendiente(l));
+  const pendientes = lista.filter(esPendiente);
+  const base = {
+    v: VERSION_CORRECCION_SYNC,
+    pendientes: Number(meta.pendientesLimites),
+    ver: {
+      rec: Number(meta.versionReconstruccion) || VERSION_RECONSTRUCCION,
+      tro: Number(meta.versionTroceo) || VERSION_TROCEO,
+      lim: VERSION_LIMITES,
+      fid: Number(meta.versionFidelidad) ?? VERSION_FIDELIDAD,
+    },
+    manifiesto: [],
+    truncado: false,
+  };
+  if (!Number.isFinite(base.pendientes)) {
+    base.pendientes = contarPendientes(expandirManifiesto(lista));
+  }
+  /* Primero lo decidido (es lo que evita repetir trabajo), luego pendientes. */
+  const elegidos = [];
+  for (const grupo of [decididos, pendientes]) {
+    for (const l of grupo) {
+      elegidos.push(l);
+      base.manifiesto = elegidos;
+      if (tamanoAprox(base) > MAX_CORRECCION_SYNC_BYTES) {
+        elegidos.pop();
+        base.manifiesto = elegidos;
+        base.truncado = true;
+        return base;
+      }
+    }
+  }
+  base.manifiesto = elegidos;
+  return base;
+}
+
+/** ¿Este paquete sirve para confiar sin pedir el PDF? */
+export function correccionSyncValida(correccion) {
+  if (!correccion || typeof correccion !== 'object') return false;
+  if (correccion.v !== VERSION_CORRECCION_SYNC) return false;
+  if (!Array.isArray(correccion.manifiesto)) return false;
+  return manifiestoSuficiente(correccion.manifiesto);
+}
+
+/**
+ * Decide si el aparato que NO tiene el PDF puede confiar en la corrección
+ * que llegó por sincronización, en vez de pedir el archivo original.
+ * Pura y con pruebas: aquí no se toca ningún almacén.
+ */
+export function confiarEnCorreccionSync(doc = {}, correccion = null) {
+  if (!correccionSyncValida(correccion)) {
+    return { confiar: false, motivo: 'manifiesto_insuficiente' };
+  }
+  const ver = correccion.ver || {};
+  if (Number(ver.rec || 0) < VERSION_RECONSTRUCCION) {
+    return { confiar: false, motivo: 'version_anterior' };
+  }
+  if (doc && doc.tieneArchivo) {
+    return { confiar: true, motivo: 'con_archivo_local' };
+  }
+  return { confiar: true, motivo: 'correccion_sincronizada' };
+}

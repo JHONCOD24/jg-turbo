@@ -6291,7 +6291,9 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
 
           <div class="pdf-nube-opciones" id="pdfNubeOpciones" hidden>
             <button type="button" class="mini-btn" id="btnPdfNubeLlave">Ver mi llave de respaldo</button>
+            <button type="button" class="mini-btn" id="btnPdfNubeTraerCopia">Traer copia de archivo</button>
             <button type="button" class="mini-btn" id="btnPdfNubeSalir">Desconectar este aparato</button>
+            <input type="file" id="pdfNubeArchivoCopia" accept=".json,application/json" hidden aria-label="Elegir archivo de copia">
           </div>
 
           <div class="pdf-nube-llave" id="pdfNubeLlaveCaja" hidden role="alertdialog" aria-labelledby="pdfNubeLlaveTitulo">
@@ -17053,7 +17055,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v100';
+const JG_JS_V = 'v101';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

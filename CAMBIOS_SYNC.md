@@ -1,5 +1,25 @@
 # Sincronización entre dispositivos · Proyecto B
 
+## Entrega 2026-09-07 · corrección portable + compartir sin dar la llave (v101)
+
+La tablet pedía hacer correcciones y subir el PDF aunque el celular ya lo había
+corregido. Causa: el manifiesto con sus decisiones vivía en IndexedDB pero nunca
+viajaba; el segundo aparato no podía confiar en lo corregido y pedía el archivo.
+
+- Viaja `datos.correccion` (manifiesto compacto + decisiones + versiones, con
+  techo y aviso de truncado) dentro del paquete ligero: sin migrar la base,
+  porque `datos` es JSON opaco. Clientes viejos lo ignoran.
+- Al importar se guarda sin pisar la geometría local; al abrir, si el manifiesto
+  es vigente se confía en él y no se pide el PDF. Mensajes honestos separan
+  «revisar aquí» de «reprocesar con el original».
+- Por libro: «Solo aquí» (no sale a la nube), «Compartir copia» (archivo
+  `.jgtcopia.json` que entra local en el otro aparato, con PDF opcional),
+  «Pedir contenido» y «Reenviar ahora» (señal `pideFuente` sin rebotes).
+- Sin login ni correos: sigue fuera de Ley 1581. Compartir ya no exige la llave.
+- Pruebas: `tests/test_pdf_correccion_sync.mjs` (26). Vecinas en verde salvo
+  `test_pdf_interfaz_lectura.mjs` («Escape cierra la hoja»), que ya fallaba con
+  `git stash` (heredado, no de esta entrega).
+
 ## Entrega 2026-09-06 · PDF v2.50.0 · resucitar un libro borrado y vuelto a extraer
 
 El id de un PDF es nombre + tamaño. Borrar y volver a extraer el mismo archivo
