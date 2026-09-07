@@ -3,6 +3,20 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.58.0 · Corrección de reproducción instantánea de música de fondo y ganancia Web Audio
+
+Lo reportado: la opción de música se visualizaba bien en tablet y móvil, pero no se escuchaba al seleccionar las opciones.
+
+**Causas raíz identificadas y solucionadas:**
+1. **Condición de arranque bloqueada por voz ausente:** `setActiva` y `setAnimo` postergaban la reproducción a `estado: 'pausado'` si la narración Fish TTS no estaba sonando en ese instante exacto (`hayVozSonando`). Al pulsar sobre un ánimo o una pista, el audio nunca arrancaba (`audioPaused: true`, `src: ''`). Corregido: la selección de ánimo o pista activa la reproducción de inmediato (`reproducir({ suave: true })`).
+2. **Doble atenuación de ganancia (volumen inaudible):** al encadenar `createMediaElementSource(audioEl)` con `gainNodo`, si el elemento tenía `audioEl.volume = 0.20` y el `GainNode` aplicaba `0.20`, el volumen efectivo era `0.04` (4%, y con ducking bajaba a 1.4%). Corregido: con Web Audio API activo, el `<audio>` se mantiene al 100% (1.0) y la escala la gobierna exclusivamente el `GainNode`.
+3. **Desbloqueo de AudioContext en interacción táctil:** se asegura `await this.audioCtx.resume()` en cada inicio para que las políticas de autoplay de Chrome/Safari móvil no dejen el contexto en estado suspendido.
+4. **Remoción de crossOrigin innecesario en audio local:** se eliminó `crossOrigin = 'anonymous'` para archivos locales que causaban advertencias en algunos motores móviles.
+5. **Exposición global segura:** `window.musicaFondo` expuesto para diagnóstico e inspección.
+6. **Nueva suite de interacción real:** `tests/verificar_pdf_musica_interaccion.mjs` verifica mediante navegador Headless la selección de ánimos, cambio de pistas en caliente y apagado.
+
+Marcadores de entrega: `v2.58.0`, `JG_JS_V=v99`, shell `jg-turbo-shell-v99`.
+
 ## 2026-09-07 · v2.57.0 · Paleta de voz plegable en tablet y escritorio (acordeón)
 
 Lo pedido: la paleta de herramientas de voz (Fish Audio) ya se mostraba y

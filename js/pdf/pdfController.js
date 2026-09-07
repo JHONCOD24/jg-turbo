@@ -5077,7 +5077,6 @@ export function inicializarLectorPdf(deps = {}) {
         if (animo === 'apagado') {
           musicaFondo.setActiva(false);
         } else {
-          musicaFondo.setActiva(true);
           musicaFondo.setAnimo(animo);
         }
       });

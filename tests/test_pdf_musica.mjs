@@ -78,6 +78,15 @@ comprobar('Ajuste fino de volumen de música a 25%', Math.abs(musicaFondo.volume
 musicaFondo.setDucking(true);
 comprobar('Ducking suave está activo por defecto', musicaFondo.duckingActivo === true);
 
+musicaFondo.setAnimo('relax');
+comprobar('Elegir ánimo activa la música', musicaFondo.activa === true && musicaFondo.animo === 'relax');
+
+musicaFondo.setPista('concentracion_1_pulso_alfa');
+comprobar('Elegir pista activa la música y asigna pista', musicaFondo.activa === true && musicaFondo.pistaId === 'concentracion_1_pulso_alfa');
+
+musicaFondo.setActiva(false);
+comprobar('setActiva(false) apaga la música', musicaFondo.activa === false);
+
 console.log('── 4. Contrato HTML y accesibilidad ──');
 const html = readFileSync(resolve(APP, 'index.html'), 'utf-8');
 

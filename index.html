@@ -1,4 +1,4 @@
-<!-- v2.56.0 · PDF musical: música de fondo instrumental offline, mezcla dual con voz TTS y ducking -->
+<!-- v2.58.0 · PDF musical: corrección de reproducción directa en selección de ánimo/pista y balance de ganancia Web Audio -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -17043,7 +17043,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v98';
+const JG_JS_V = 'v99';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

@@ -182,7 +182,6 @@ class GestorMusicaFondo {
     this.audioEl = new Audio();
     this.audioEl.loop = true;
     this.audioEl.preload = 'auto';
-    this.audioEl.crossOrigin = 'anonymous';
     this.audioEl.volume = this.volumenMusica;
 
     this.audioEl.addEventListener('error', (e) => {
@@ -216,7 +215,10 @@ class GestorMusicaFondo {
     }
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return;
+      if (!AudioContextClass) {
+        if (this.audioEl) this.audioEl.volume = this.volumenMusica;
+        return;
+      }
       this.audioCtx = new AudioContextClass();
       
       this.gainNodo = this.audioCtx.createGain();
@@ -229,9 +231,15 @@ class GestorMusicaFondo {
       this.mediaSourceNodo.connect(this.gainNodo);
       this.gainNodo.connect(this.duckingNodo);
       this.duckingNodo.connect(this.audioCtx.destination);
+      // Con Web Audio activo, el elemento se deja al 100% para que toda
+      // la atenuación la controle el GainNode sin doble reducción.
+      if (this.audioEl) this.audioEl.volume = 1.0;
     } catch (err) {
-      // Fallback a volumen directo del elemento si Web Audio API no permite conectar source
-      console.info('[MusicaFondo] Web Audio directo vía AudioElement:', err.message);
+      console.info('[MusicaFondo] Fallback a HTMLAudioElement directo:', err.message);
+      this.audioCtx = null;
+      this.gainNodo = null;
+      this.duckingNodo = null;
+      if (this.audioEl) this.audioEl.volume = this.volumenMusica;
     }
   }
 
@@ -276,14 +284,17 @@ class GestorMusicaFondo {
   }
 
   async reproducir({ suave = true } = {}) {
-    if (!this.activa) return;
+    if (!this.activa) {
+      this.activa = true;
+      this.guardarPreferencias();
+    }
     this.cancelarTemporizadorPausa();
     this.conectarWebAudio();
 
     const pista = this.pistaActual();
-    if (!pista) return;
+    if (!pista || !this.audioEl) return;
 
-    if (!this.audioEl.src.endsWith(pista.src)) {
+    if (!this.audioEl.src || !this.audioEl.src.endsWith(pista.src)) {
       this.audioEl.src = pista.src;
     }
 
@@ -291,22 +302,23 @@ class GestorMusicaFondo {
     this.notificarCambio();
 
     try {
-      if (suave) {
-        // Entrar con fundido suave
-        if (this.audioCtx && this.gainNodo) {
-          const t = this.audioCtx.currentTime;
-          this.gainNodo.gain.cancelScheduledValues(t);
+      if (this.audioCtx && this.audioCtx.state === 'suspended') {
+        await this.audioCtx.resume().catch(() => {});
+      }
+
+      if (this.audioCtx && this.gainNodo) {
+        if (this.audioEl) this.audioEl.volume = 1.0;
+        const t = this.audioCtx.currentTime;
+        this.gainNodo.gain.cancelScheduledValues(t);
+        if (suave) {
           this.gainNodo.gain.setValueAtTime(0.01, t);
-          this.gainNodo.gain.setTargetAtTime(this.volumenMusica, t, 0.4);
+          this.gainNodo.gain.setTargetAtTime(this.volumenMusica, t, 0.35);
         } else {
-          this.audioEl.volume = 0.05;
+          this.gainNodo.gain.setValueAtTime(this.volumenMusica, t);
         }
-      } else {
-        if (this.audioCtx && this.gainNodo) {
-          this.gainNodo.gain.setValueAtTime(this.volumenMusica, this.audioCtx.currentTime);
-        } else {
-          this.audioEl.volume = this.volumenMusica;
-        }
+      } else if (this.audioEl) {
+        const factor = (this.duckingActivo && this.vozHablando) ? FACTOR_DUCKING : 1.0;
+        this.audioEl.volume = this.volumenMusica * factor;
       }
 
       await this.audioEl.play();
@@ -314,8 +326,7 @@ class GestorMusicaFondo {
       this.actualizarDucking();
       this.notificarCambio();
     } catch (err) {
-      // El navegador pudo bloquear por falta de interacción previa del usuario
-      console.warn('[MusicaFondo] Reproducción diferida:', err.message);
+      console.warn('[MusicaFondo] Reproducción diferida o bloqueada:', err.message);
       this.estado = 'pausado';
       this.notificarCambio();
     }
@@ -341,19 +352,16 @@ class GestorMusicaFondo {
     this.cancelarTemporizadorPausa();
 
     const volDiezPorciento = this.volumenMusica * 0.10;
-    const inicio = Date.now();
     const duracionMs = PAUSA_FUNDIDO_SEG * 1000;
 
     if (this.audioCtx && this.gainNodo) {
       const t = this.audioCtx.currentTime;
       this.gainNodo.gain.cancelScheduledValues(t);
-      // Baja a 10% rápidamente
       this.gainNodo.gain.setTargetAtTime(volDiezPorciento, t, 0.3);
     } else if (this.audioEl) {
       this.audioEl.volume = Math.max(0.01, volDiezPorciento);
     }
 
-    // Tras 5 segundos en 10%, hace fundido final a 0 y pausa el elemento
     this.temporizadorPausa = setTimeout(() => {
       if (this.audioCtx && this.gainNodo) {
         const t2 = this.audioCtx.currentTime;
@@ -388,11 +396,12 @@ class GestorMusicaFondo {
       return;
     }
 
-    // Fundido rápido de salida (700ms)
     if (this.audioCtx && this.gainNodo) {
       const t = this.audioCtx.currentTime;
       this.gainNodo.gain.cancelScheduledValues(t);
       this.gainNodo.gain.setTargetAtTime(0.0001, t, 0.25);
+    } else if (this.audioEl) {
+      this.audioEl.volume = 0.01;
     }
     setTimeout(() => {
       try { this.audioEl.pause(); this.audioEl.currentTime = 0; } catch (_) {}
@@ -408,13 +417,7 @@ class GestorMusicaFondo {
       this.detener({ inmediato: false });
       this.estado = 'apagado';
     } else {
-      // Si la voz está actualmente sonando, arrancar de inmediato
-      const hayVozSonando = typeof window !== 'undefined' && window.ttsState && window.ttsState.status === 'playing';
-      if (hayVozSonando) {
-        this.reproducir({ suave: true });
-      } else {
-        this.estado = 'pausado';
-      }
+      this.reproducir({ suave: true });
     }
     this.notificarCambio();
   }
@@ -423,14 +426,11 @@ class GestorMusicaFondo {
     if (!ANIMOS[animoId]) return;
     this.animo = animoId;
     this.automatica = false;
-    // Seleccionar la primera pista del ánimo
     const pista = CATALOGO_PISTAS.find(p => p.animo === animoId);
     if (pista) this.pistaId = pista.id;
+    this.activa = true;
     this.guardarPreferencias();
-    
-    if (this.activa && this.estado === 'sonando') {
-      this.reproducir({ suave: true });
-    }
+    this.reproducir({ suave: true });
     this.notificarCambio();
   }
 
@@ -440,11 +440,9 @@ class GestorMusicaFondo {
     this.pistaId = pistaId;
     this.animo = pista.animo;
     this.automatica = false;
+    this.activa = true;
     this.guardarPreferencias();
-
-    if (this.activa && this.estado === 'sonando') {
-      this.reproducir({ suave: true });
-    }
+    this.reproducir({ suave: true });
     this.notificarCambio();
   }
 
@@ -455,7 +453,7 @@ class GestorMusicaFondo {
       this.animo = animoAuto;
       const pista = CATALOGO_PISTAS.find(p => p.animo === animoAuto);
       if (pista) this.pistaId = pista.id;
-      if (this.activa && this.estado === 'sonando') {
+      if (this.activa) {
         this.reproducir({ suave: true });
       }
     }
@@ -469,6 +467,7 @@ class GestorMusicaFondo {
     this.guardarPreferencias();
 
     if (this.audioCtx && this.gainNodo) {
+      if (this.audioEl) this.audioEl.volume = 1.0;
       const t = this.audioCtx.currentTime;
       this.gainNodo.gain.cancelScheduledValues(t);
       this.gainNodo.gain.setTargetAtTime(v, t, 0.05);
@@ -539,3 +538,6 @@ class GestorMusicaFondo {
 }
 
 export const musicaFondo = new GestorMusicaFondo();
+if (typeof window !== 'undefined') {
+  window.musicaFondo = musicaFondo;
+}
