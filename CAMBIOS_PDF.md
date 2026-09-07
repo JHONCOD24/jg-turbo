@@ -3,6 +3,49 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.57.0 · Paleta de voz plegable en tablet y escritorio (acordeón)
+
+Lo pedido: la paleta de herramientas de voz (Fish Audio) ya se mostraba y
+ocultaba en el teléfono tras el botón «Voz»; replicar ese comportamiento
+colapsable en tablet y escritorio.
+
+**Cambio (`index.html`, `js/pdf/libroVista.js`):**
+- En `≥641px`, `data-desplegado="no"` ahora esconde la consola completa
+  (Escuchar/Detener, MP3, Desde aquí, voz, velocidad, música) y deja una
+  fila delgada: la cabecera «Herramientas de voz» con el MISMO interruptor
+  del teléfono (`#btnPdfDockDesplegar`), que pasa de «Ocultar ajustes» a
+  «Mostrar ajustes». El dock plegado pierde ≥40 px de alto, devueltos al
+  texto.
+- **Una sola fuente de verdad:** no hay estado nuevo ni JS nuevo; el
+  interruptor que ya existía (v2.54.0) sigue siendo el único que alterna,
+  y la preferencia ya viajaba en la apariencia persistida
+  (`cfg.vozDesplegado`). Solo cambió qué pliega el CSS en pantallas grandes.
+- La navegación de capítulos (Anterior/Siguiente) y el buscador NO se pliegan:
+  no son herramientas de voz y siguen alcanzables con la paleta cerrada.
+- Plegar cambia el alto de la columna de texto y remaqueta las páginas: la
+  garantía la da el ancla que ya conservaba el sitio (TRAMPAS.md
+  §«Con páginas, apartar el cromo remaqueta»), y la prueba nueva lo vigila
+  (no volver a la página 1).
+- Copy del interruptor honrado: «Mostrar u ocultar las herramientas de voz.
+  Ocultar no detiene la lectura.»
+
+**Prueba nueva `tests/verificar_pdf_voz_acordeon.mjs` (18 comprobaciones):**
+nace desplegada en tablet/escritorio, plega la consola entera, interruptor
+tocable ≥44px, dock en fila delgada, despliega de nuevo, la lectura no vuelve
+a la página 1 al plegar, el estado plegado sobrevive a F5, y el teléfono
+conserva su hoja intacta (el acordeón móvil solo pliega voz/velocidad dentro
+de la hoja abierta).
+
+**Batería de la tanda:** acordeón 18/18 · móvil 46/46 · geometría en verde ·
+scroll en verde · mini flotante 7/7 · música 41/41. Hallazgo preexistente (no
+de esta tanda): `verificar_pdf_navegador.mjs` se corta en «Biblioteca y
+continuidad» tras recargar con un libro de 300 páginas (`#tabPdf` no clicable);
+reproducido en HEAD b67d6db sin ningún cambio de esta tanda. Pendiente de
+diagnóstico propio.
+
+Marcadores de entrega: `v2.57.0`, `JG_JS_V=v98`, shell `jg-turbo-shell-v98`
+(misma tanda de despliegue que v2.56.0: un solo deploy para ambas).
+
 ## 2026-09-07 · v2.56.0 · Música de fondo para el lector de PDF (plan-pdf-musical)
 
 Lo pedido: implementar al pie de la letra `plan-pdf-musical.md` con música de fondo instrumental offline, mezcla dual con voz Fish TTS, ducking suave y control independiente.
