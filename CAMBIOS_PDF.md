@@ -3,6 +3,38 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.61.0 · Guía de lectura viva por líneas (enfoque de ~2 líneas) y navegación en tiempo real
+
+Lo solicitado: transformar la guía de lectura para que no resalte palabra por palabra (lo cual provocaba cansancio visual e impedía la concentración del lector al saltar frenéticamente), sino que ilumine con calma y fluidez una ventana de lectura de aproximadamente 2 líneas (~80–130 caracteres) de forma continua y estable mientras suena la voz, avanzando de forma suave al siguiente tramo.
+
+**Implementación y mejoras:**
+1. **Enfoque de lectura concentrada (~2 líneas) sin saltos palabra por palabra:**
+   - Se eliminaron por completo las pastillas y badges que rebotaban palabra a palabra (`.pdf-palabra-capcut`).
+   - Algoritmo de partición inteligente `partirEnLineasLectura(texto)` en `js/pdf/pdfController.js`: divide el texto en tramos naturales de unas 2 líneas (~80–130 caracteres) respetando saltos de párrafo, signos de puntuación fuerte (`. ? ! …`), cláusulas y conectores (` , ; : — – `) y límites de palabras, sin cortar nunca palabras en medio.
+   - Búsqueda binaria instantánea $O(\log n)$ con `tramoEn(tramos, posicion)` para determinar la ventana activa.
+2. **Estabilidad visual absoluta mientras suena el tramo:**
+   - En `marcarFrase`, si la voz se encuentra dentro del tramo activo (`rango[0] === guia.desde`), no se toca el DOM. Esto permite que el ojo repose en la franja iluminada, pueda anticipar la lectura y mantenga la máxima concentración sin parpadeos ni destellos.
+   - En modo lectura (`libroVista.js`), `marcarRango(ini, fin)` envuelve el tramo en `<mark class="pdf-linea-guia pdf-frase-activa">` de forma limpia y directa. Al cambiar de tramo se limpia y normaliza el nodo previo.
+   - Memorización en `guia.ultimoMarcadoVista`: evita llamadas redundantes de repintado a `libroVista.marcarRango` en cada evento de audio mientras la voz avanza dentro de las mismas 2 líneas.
+3. **Diseño visual elegante y legible en todos los temas:**
+   - Estilos en `index.html`: `.pdf-lectura mark`, `.pdf-lectura .pdf-linea-guia`, `.pdf-lectura .pdf-frase-activa` y `.pdf-realce`:
+     - Fondo luminoso suave (`color-mix(in srgb, var(--lec-acento) 17%, transparent)`).
+     - Borde guía lateral izquierdo de acento (`border-left: 3.5px solid var(--lec-acento)`), actuando como marcador de foco editorial.
+     - Esquinas sutilmente redondeadas (`border-radius: 4px 8px 8px 4px`), padding de respiración y sombra ambiental difusa.
+     - Separación y clonación entre saltos de línea con `box-decoration-break: clone` y `-webkit-box-decoration-break: clone`.
+     - Soporte total para personas con sensibilidad al movimiento (`@media (prefers-reduced-motion: reduce)`).
+4. **Conservación íntegra de la navegación en tiempo real:**
+   - Salto de páginas en tiempo real (`#btnPdfPagNext`, `#btnPdfPagPrev`, flechas y swipe horizontal) continúa funcionando sin interrupción.
+   - Salto de capítulos en tiempo real (`#btnPdfNext`, `#btnPdfPrev`, índice `#pdfIndiceLista`).
+   - Cambio de voz en vivo con sincronización inmediata (`jg-tts-cambio-voz`).
+5. **Pruebas y validación:**
+   - `tests/test_pdf_guia_capcut.mjs`: 22/22 pruebas unitarias pasando.
+   - `tests/verificar_pdf_tiempo_real.mjs`: Playwright E2E verificado con 0 errores, comprobando estabilidad durante el tramo y avance fluido al siguiente tramo.
+   - `tests/test_pdf_interfaz_lectura.mjs`: 17/17 comprobaciones de accesibilidad e interfaz aprobadas.
+   - `tests/test_pdf_mejora_apartado.mjs`: 65/65 pruebas de regresión del lector aprobadas.
+
+Marcadores de entrega: `v2.61.0`, `JG_JS_V=v104`, shell `jg-turbo-shell-v104`.
+
 ## 2026-09-07 · v2.60.0 · Guía de lectura dinámica estilo CapCut, navegación de capítulos/páginas y cambio de voz en tiempo real
 
 Lo solicitado: transformar el sombreado translúcido plano del texto en una guía viva y dinámica estilo CapCut, donde la frase activa tiene un tinte sutil de contexto y la palabra que suena en ese milisegundo exacto resalta como un badge/pill de alto contraste con micro-escala (`scale(1.06)`) perfectamente acompasada con la voz; y permitir navegación en tiempo real por capítulos, páginas y selector de voz sin tener que volver a pulsar «Escuchar».

@@ -82,7 +82,7 @@ try {
   }, null, { timeout: 60000 });
   await pagina.waitForTimeout(1200);
 
-  console.log('\n── 1. Guía estilo CapCut (frase activa + palabra activa) ──');
+  console.log('\n── 1. Guía de lectura viva por líneas (~2 líneas de enfoque) ──');
   const resultadoGuia = await pagina.evaluate(async () => {
     const lectura = document.getElementById('pdfLectura');
     const salida = document.getElementById('pdfOutput');
@@ -90,73 +90,98 @@ try {
     const parrafos = lectura ? [...lectura.querySelectorAll('p[data-ini]')] : [];
     if (parrafos.length < 2) return { error: 'sin parrafos suficientes' };
 
-    const bloque = parrafos[1];
-    const ini = Number(bloque.dataset.ini);
-    const fin = Number(bloque.dataset.fin);
-    const textoBloque = texto.slice(ini, fin);
-    const palabras = textoBloque.match(/[\p{L}\p{N}]+/gu) || [];
+    const parrafo1 = parrafos[0];
+    const parrafo2 = parrafos[1];
+    const textoP1 = texto.slice(Number(parrafo1.dataset.ini), Number(parrafo1.dataset.fin));
+    const textoP2 = texto.slice(Number(parrafo2.dataset.ini), Number(parrafo2.dataset.fin));
 
-    // Simular que el TTS está sonando en pdf con la cola del bloque
+    // Simular que el TTS está sonando en pdf con 2 bloques acotados
     window.ttsState = window.ttsState || {};
     window.ttsState.sourceId = 'pdf';
     window.ttsState.status = 'playing';
-    window.ttsState.queue = [{ text: textoBloque }];
-    window.ttsTextosDeCola = () => [textoBloque];
+    window.ttsState.queue = [{ text: textoP1 }, { text: textoP2 }];
+    window.ttsTextosDeCola = () => [textoP1, textoP2];
 
-    // Simular evento jg-tts-avance para la primera palabra
+    // Simular evento jg-tts-avance para el inicio del bloque 0
     document.dispatchEvent(new CustomEvent('jg-tts-avance', {
       detail: {
         sourceId: 'pdf',
         estado: 'playing',
         sonando: true,
-        fraccion: (ini + 6) / Math.max(1, texto.length),
+        fraccion: 0.01,
         bloque: 0,
-        dentroBloque: 0.03,
-        cola: 'tok-capcut-test',
+        dentroBloque: 0.05,
+        cola: 'tok-linea-test-2',
         caracteres: texto.length,
       }
     }));
 
     await new Promise(r => setTimeout(r, 80));
 
-    const mark1 = lectura.querySelector('mark.pdf-frase-activa') || lectura.querySelector('mark');
+    const mark1 = lectura.querySelector('mark.pdf-linea-guia') || lectura.querySelector('mark.pdf-frase-activa') || lectura.querySelector('mark');
     const spanCapcut1 = mark1 ? mark1.querySelector('.pdf-palabra-capcut') : null;
+    const textoMark1 = mark1 ? mark1.textContent.trim() : '';
 
-    // Avanzar dentro del mismo bloque a otra palabra
+    // Avanzar levemente dentro del mismo tramo de ~2 líneas (unas cuantas palabras dentro de bloque 0)
     document.dispatchEvent(new CustomEvent('jg-tts-avance', {
       detail: {
         sourceId: 'pdf',
         estado: 'playing',
         sonando: true,
-        fraccion: (ini + 45) / Math.max(1, texto.length),
+        fraccion: 0.02,
         bloque: 0,
-        dentroBloque: 0.35,
-        cola: 'tok-capcut-test',
+        dentroBloque: 0.12,
+        cola: 'tok-linea-test-2',
         caracteres: texto.length,
       }
     }));
 
     await new Promise(r => setTimeout(r, 80));
 
-    const mark2 = lectura.querySelector('mark.pdf-frase-activa') || lectura.querySelector('mark');
+    const mark2 = lectura.querySelector('mark.pdf-linea-guia') || lectura.querySelector('mark.pdf-frase-activa') || lectura.querySelector('mark');
     const spanCapcut2 = mark2 ? mark2.querySelector('.pdf-palabra-capcut') : null;
+    const textoMark2 = mark2 ? mark2.textContent.trim() : '';
+
+    // Avanzar al bloque 1 (siguiente tramo de lectura)
+    document.dispatchEvent(new CustomEvent('jg-tts-avance', {
+      detail: {
+        sourceId: 'pdf',
+        estado: 'playing',
+        sonando: true,
+        fraccion: 0.15,
+        bloque: 1,
+        dentroBloque: 0.10,
+        cola: 'tok-linea-test-2',
+        caracteres: texto.length,
+      }
+    }));
+
+    await new Promise(r => setTimeout(r, 80));
+
+    const mark3 = lectura.querySelector('mark.pdf-linea-guia') || lectura.querySelector('mark.pdf-frase-activa') || lectura.querySelector('mark');
+    const textoMark3 = mark3 ? mark3.textContent.trim() : '';
 
     return {
       hayMarca: !!mark1,
-      hayPalabraCapcut: !!spanCapcut1,
-      palabraTexto1: spanCapcut1 ? spanCapcut1.textContent.trim() : null,
-      palabraTexto2: spanCapcut2 ? spanCapcut2.textContent.trim() : null,
+      tieneClaseLinea: mark1 ? mark1.classList.contains('pdf-linea-guia') : false,
+      hayPalabraCapcut: !!spanCapcut1 || !!spanCapcut2,
+      textoMark1,
+      textoMark2,
+      textoMark3,
+      longitudMarca: textoMark1.length,
       marcasTotales: lectura.querySelectorAll('mark').length,
       spansTotales: lectura.querySelectorAll('.pdf-palabra-capcut').length,
     };
   });
 
-  comprobar(resultadoGuia.hayMarca, 'se genera el elemento mark.pdf-frase-activa');
-  comprobar(resultadoGuia.hayPalabraCapcut, 'se genera el badge .pdf-palabra-capcut dentro de la frase');
+  comprobar(resultadoGuia.hayMarca, 'se genera el elemento mark para la guía de lectura');
+  comprobar(resultadoGuia.tieneClaseLinea, 'el elemento mark tiene la clase .pdf-linea-guia');
+  comprobar(!resultadoGuia.hayPalabraCapcut, 'NO hay badges .pdf-palabra-capcut (lectura tranquila sin saltos)');
   comprobar(resultadoGuia.marcasTotales === 1, `no hay marcas duplicadas en la vista (${resultadoGuia.marcasTotales})`);
-  comprobar(resultadoGuia.spansTotales === 1, `solo hay exactamente una palabra activa resaltada (${resultadoGuia.spansTotales})`);
-  comprobar(Boolean(resultadoGuia.palabraTexto1), `primera palabra resaltada: "${resultadoGuia.palabraTexto1}"`);
-  comprobar(Boolean(resultadoGuia.palabraTexto2), `segunda palabra resaltada: "${resultadoGuia.palabraTexto2}"`);
+  comprobar(resultadoGuia.spansTotales === 0, `cero spans de palabras que distraigan al lector (${resultadoGuia.spansTotales})`);
+  comprobar(resultadoGuia.longitudMarca >= 30, `la marca cubre una ventana cómoda de ~2 líneas (${resultadoGuia.longitudMarca} caracteres)`);
+  comprobar(resultadoGuia.textoMark1 === resultadoGuia.textoMark2, `la marca permanece estable y tranquila: "${resultadoGuia.textoMark1}" vs "${resultadoGuia.textoMark2}"`);
+  comprobar(Boolean(resultadoGuia.textoMark3) && resultadoGuia.textoMark3 !== resultadoGuia.textoMark1, 'la marca avanza fluidamente al siguiente tramo de ~2 líneas al continuar la narración');
 
   console.log('\n── 2. Navegación de páginas en tiempo real mientras suena la voz ──');
   const navPagina = await pagina.evaluate(async () => {

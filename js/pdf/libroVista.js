@@ -171,11 +171,10 @@ export function initLibroVista({ el, estado, api }) {
   }
 
   let seguimiento = true;
-  /* Marca el tramo [ini, fin) del texto dentro de la vista.
+  /* Marca el tramo [ini, fin) del texto dentro de la vista como guía de lectura (enfoque de ~2 líneas).
    *
-   * Antes se buscaba el fragmento con `indexOf`, que marcaba la primera
-   * aparición de la frase aunque la voz fuera por la quinta. Con las
-   * posiciones del mapa se marca exactamente lo que suena. */
+   * Ilumina de forma calmada y continua la ventana de lectura de unas 2 líneas,
+   * permitiendo leer con anticipación fluida y concentración profunda sin saltos nerviosos. */
   function marcarRango(ini, fin, palabraIni, palabraFin) {
     if (!el.lectura || !(fin > ini)) return null;
     el.lectura.querySelectorAll('mark').forEach((previa) => {
@@ -192,9 +191,6 @@ export function initLibroVista({ el, estado, api }) {
     const hasta = Math.min(fin - base, bloque.textContent.length);
     if (!(hasta > desde)) return null;
 
-    const wDesde = palabraIni != null ? Math.max(desde, palabraIni - base) : desde;
-    const wHasta = palabraFin != null ? Math.min(hasta, palabraFin - base) : desde;
-
     const recorrido = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
     let visto = 0;
     let marca = null;
@@ -207,21 +203,8 @@ export function initLibroVista({ el, estado, api }) {
         const trozos = document.createDocumentFragment();
         if (a > 0) trozos.appendChild(document.createTextNode(nodo.textContent.slice(0, a)));
         marca = document.createElement('mark');
-        marca.className = 'pdf-frase-activa';
-
-        const wa = Math.max(a, wDesde - visto);
-        const wb = Math.min(b, wHasta - visto);
-        if (wb > wa) {
-          if (wa > a) marca.appendChild(document.createTextNode(nodo.textContent.slice(a, wa)));
-          const span = document.createElement('span');
-          span.className = 'pdf-palabra-capcut';
-          span.textContent = nodo.textContent.slice(wa, wb);
-          marca.appendChild(span);
-          if (wb < b) marca.appendChild(document.createTextNode(nodo.textContent.slice(wb, b)));
-        } else {
-          marca.textContent = nodo.textContent.slice(a, b);
-        }
-
+        marca.className = 'pdf-linea-guia pdf-frase-activa';
+        marca.textContent = nodo.textContent.slice(a, b);
         trozos.appendChild(marca);
         if (b < largo) trozos.appendChild(document.createTextNode(nodo.textContent.slice(b)));
         nodo.replaceWith(trozos);
@@ -1244,12 +1227,13 @@ export function initLibroVista({ el, estado, api }) {
     }, { capture: true, passive: true });
   }
   document.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'Escape') return;
-    if (dock && enTelefono() && (dock.dataset.abierto === 'si' || dock.dataset.abierto === 'buscar')) {
-      abrirDock(false);
-      return;
+    if (ev.key === 'Escape') {
+      if (dock && enTelefono() && (dock.dataset.abierto === 'si' || dock.dataset.abierto === 'buscar')) {
+        abrirDock(false);
+        return;
+      }
+      if (document.body.classList.contains('jg-inmersivo')) devolverCromo();
     }
-    if (document.body.classList.contains('jg-inmersivo')) devolverCromo();
   });
 
   /* `jg-voz-activa` la mira el CSS para dejar el control de pausa a la vista

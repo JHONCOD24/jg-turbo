@@ -1,4 +1,4 @@
-<!-- v2.60.0 · Guía de lectura viva estilo CapCut, navegación y cambio de voz en tiempo real -->
+<!-- v2.61.0 · Guía de lectura viva por líneas (ventana de enfoque de 2 líneas) y navegación en tiempo real -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1739,31 +1739,27 @@
     position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;
     color:transparent;user-select:none;
   }
-  /* La frase y palabra que suenan en modo edición (guía dinámica estilo CapCut) */
+  /* La línea/tramo que suena en modo edición (guía concentrada de ~2 líneas) */
   .pdf-realce mark,
+  .pdf-realce .pdf-linea-guia,
   .pdf-realce .pdf-frase-activa{
-    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 16%, transparent);
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 17%, transparent);
     color:transparent !important;
-    border-radius:6px;
-    box-shadow:0 0 0 2px color-mix(in srgb, var(--lec-acento, var(--cyan)) 14%, transparent);
-  }
-  .pdf-realce .pdf-palabra-capcut{
-    display:inline-block;
-    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 55%, transparent);
-    color:transparent !important;
-    border-radius:6px;
-    box-shadow:0 0 0 3px color-mix(in srgb, var(--lec-acento, var(--cyan)) 60%, transparent);
-    transform:scale(1.05);
+    border-left:3.5px solid var(--lec-acento, var(--cyan));
+    border-radius:4px 8px 8px 4px;
+    box-shadow:0 1px 8px -1px color-mix(in srgb, var(--lec-acento, var(--cyan)) 20%, transparent);
+    box-decoration-break:clone;
+    -webkit-box-decoration-break:clone;
   }
   @media (prefers-reduced-motion: no-preference){
     .pdf-realce mark,
-    .pdf-realce .pdf-frase-activa{transition:background-color .18s ease}
-    .pdf-realce .pdf-palabra-capcut{transition:transform .12s ease, background-color .12s ease}
+    .pdf-realce .pdf-linea-guia,
+    .pdf-realce .pdf-frase-activa{transition:background-color .2s ease, border-color .2s ease, box-shadow .2s ease}
   }
   @media (prefers-reduced-motion: reduce){
     .pdf-realce mark,
-    .pdf-realce .pdf-frase-activa,
-    .pdf-realce .pdf-palabra-capcut{transform:none !important; transition:none !important}
+    .pdf-realce .pdf-linea-guia,
+    .pdf-realce .pdf-frase-activa{transform:none !important; transition:none !important}
   }
   .pdf-area.has-results #pdfOutput::placeholder{color:var(--lec-suave, var(--muted-2));opacity:.9}
   @media (max-width:700px){
@@ -4778,38 +4774,24 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-lectura h2,.pdf-lectura h3{line-height:1.3;margin:1.2em 0 .6em}
 .pdf-lectura p{margin:0 0 1em}.pdf-lectura blockquote{border-left:3px solid var(--lec-linea);margin:0 0 1em;padding:.2em 0 .2em 1em;color:var(--lec-suave)}
 .pdf-lectura ul,.pdf-lectura ol{margin:0 0 1em;padding-left:1.4em}.pdf-lectura table{border-collapse:collapse;width:100%;margin:0 0 1em;display:block;overflow-x:auto}
-/* Guía viva de lectura estilo CapCut (resaltado cinético sincronizado con la voz) */
+/* Guía viva de lectura por líneas (ventana de enfoque relajado de ~2 líneas) */
 .pdf-lectura mark,
+.pdf-lectura .pdf-linea-guia,
 .pdf-lectura .pdf-frase-activa{
-  background:color-mix(in srgb,var(--lec-acento,var(--cyan)) 14%,transparent);
-  border-radius:6px;
-  padding:0.12em 0.35em;
-  margin-inline:-0.15em;
+  background:color-mix(in srgb,var(--lec-acento,var(--cyan)) 17%,transparent);
+  border-left:3.5px solid var(--lec-acento,var(--cyan));
+  border-radius:4px 8px 8px 4px;
+  padding:0.16em 0.46em 0.16em 0.52em;
+  margin-inline:-0.2em;
   box-decoration-break:clone;
   -webkit-box-decoration-break:clone;
-  transition:background-color .18s ease;
-}
-.pdf-lectura .pdf-palabra-capcut{
-  display:inline-block;
-  vertical-align:baseline;
-  background:var(--lec-acento,var(--cyan));
-  color:var(--lec-bg,#0B0D12) !important;
-  font-weight:700;
-  padding:0.12em 0.44em;
-  margin:0 0.08em;
-  border-radius:6px;
-  box-shadow:0 2px 12px -2px color-mix(in srgb,var(--lec-acento,var(--cyan)) 55%,transparent);
-  transform:scale(1.06);
-  transform-origin:center baseline;
-  transition:transform .12s cubic-bezier(0.2, 0, 0, 1), background-color .12s ease;
-  letter-spacing:0.01em;
-  box-decoration-break:clone;
-  -webkit-box-decoration-break:clone;
+  box-shadow:0 1px 8px -1px color-mix(in srgb,var(--lec-acento,var(--cyan)) 22%,transparent);
+  transition:background-color .22s ease, border-color .22s ease, box-shadow .22s ease;
 }
 @media (prefers-reduced-motion:reduce){
   .pdf-lectura mark,
-  .pdf-lectura .pdf-frase-activa,
-  .pdf-lectura .pdf-palabra-capcut{
+  .pdf-lectura .pdf-linea-guia,
+  .pdf-lectura .pdf-frase-activa{
     transform:none !important;
     transition:none !important;
   }
@@ -17111,7 +17093,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v103';
+const JG_JS_V = 'v104';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

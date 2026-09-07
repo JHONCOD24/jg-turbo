@@ -1,4 +1,4 @@
-/* Pruebas unitarias de la guía viva estilo CapCut y navegación en tiempo real
+/* Pruebas unitarias de la guía viva por líneas (enfoque ~2 líneas) y navegación en tiempo real
  * Ejecutar: node tests/test_pdf_guia_capcut.mjs
  */
 import assert from 'node:assert';
@@ -19,76 +19,142 @@ const html = readFileSync(resolve(RAIZ, 'index.html'), 'utf-8');
 const ctrl = readFileSync(resolve(RAIZ, 'js/pdf/pdfController.js'), 'utf-8');
 const vista = readFileSync(resolve(RAIZ, 'js/pdf/libroVista.js'), 'utf-8');
 
-console.log('── 1. Reglas CSS y diseño CapCut en index.html ──');
-comprobar(html.includes('.pdf-palabra-capcut'), 'index.html define estilos para .pdf-palabra-capcut');
+console.log('── 1. Reglas CSS y diseño de guía por líneas en index.html ──');
+comprobar(html.includes('.pdf-linea-guia'), 'index.html define estilos para .pdf-linea-guia');
 comprobar(html.includes('.pdf-frase-activa'), 'index.html define estilos para .pdf-frase-activa');
+comprobar(/border-left:\s*3\.5px\s*solid\s*var\(--lec-acento/.test(html), 'el realce incluye borde lateral izquierdo de acento para anclaje visual');
 comprobar(/--lec-acento/.test(html) && /--lec-bg/.test(html), 'los estilos usan las variables del tema del lector (--lec-acento, --lec-bg)');
-comprobar(/transform:\s*scale\(1\.0[56]\)/.test(html), 'el estilo CapCut aplica realce cinético scale a la palabra activa');
-comprobar(/prefers-reduced-motion:\s*reduce[\s\S]*?\.pdf-palabra-capcut[\s\S]*?transform:\s*none/i.test(html),
-  'se respeta prefers-reduced-motion desactivando transformaciones');
+comprobar(!html.includes('.pdf-palabra-capcut'), 'no quedan estilos para .pdf-palabra-capcut (sin saltos palabra por palabra)');
+comprobar(/prefers-reduced-motion:\s*reduce[\s\S]*?\.pdf-linea-guia[\s\S]*?transition:\s*none/i.test(html),
+  'se respeta prefers-reduced-motion desactivando transiciones');
 
-console.log('\n── 2. Funciones de palabras en pdfController.js ──');
-comprobar(ctrl.includes('function partirEnPalabras'), 'pdfController expone partirEnPalabras');
-comprobar(ctrl.includes('function palabraEn'), 'pdfController expone palabraEn');
+console.log('\n── 2. Funciones de tramos de lectura (~2 líneas) en pdfController.js ──');
+comprobar(ctrl.includes('function partirEnLineasLectura'), 'pdfController expone partirEnLineasLectura');
+comprobar(ctrl.includes('function tramoEn'), 'pdfController expone tramoEn');
 
-// Simulación y validación de partirEnPalabras
-function partirEnPalabras(texto) {
-  try {
-    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-      const seg = new Intl.Segmenter('es', { granularity: 'word' });
-      const trozos = [];
-      for (const s of seg.segment(texto)) {
-        if (s.isWordLike) trozos.push([s.index, s.index + s.segment.length]);
-      }
-      if (trozos.length) return trozos;
+// Simulación y validación de partirEnLineasLectura
+function partirEnLineasLectura(texto, { meta = 95, min = 55, max = 135 } = {}) {
+  if (!texto) return [];
+  const tramos = [];
+  const largo = texto.length;
+  let i = 0;
+
+  while (i < largo) {
+    while (i < largo && /\s/.test(texto[i])) i++;
+    if (i >= largo) break;
+
+    const inicio = i;
+    const objetivo = Math.min(largo, inicio + meta);
+    const limite = Math.min(largo, inicio + max);
+
+    if (limite >= largo) {
+      let fin = largo;
+      while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
+      if (fin > inicio) tramos.push([inicio, fin]);
+      break;
     }
-  } catch (_) {}
-  const trozos = [];
-  const re = /[\p{L}\p{N}]+/gu;
-  let m;
-  while ((m = re.exec(texto))) trozos.push([m.index, m.index + m[0].length]);
-  return trozos;
+
+    const salto = texto.indexOf('\n', inicio);
+    if (salto !== -1 && salto <= limite) {
+      let fin = salto;
+      while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
+      if (fin > inicio) {
+        tramos.push([inicio, fin]);
+        i = salto + 1;
+        continue;
+      }
+    }
+
+    let mejorCorte = -1;
+    const ventana = texto.slice(inicio, limite);
+
+    const reFuerte = /[.!?…]+(?=[\s\n]|$)/g;
+    let m;
+    while ((m = reFuerte.exec(ventana)) !== null) {
+      const idx = inicio + m.index + m[0].length;
+      if (idx >= inicio + min && idx <= limite) {
+        mejorCorte = idx;
+      }
+    }
+
+    if (mejorCorte === -1) {
+      const reMedia = /[,;:—–\)\]]+(?=[\s\n]|$)/g;
+      while ((m = reMedia.exec(ventana)) !== null) {
+        const idx = inicio + m.index + m[0].length;
+        if (idx >= inicio + min && idx <= limite) {
+          mejorCorte = idx;
+        }
+      }
+    }
+
+    if (mejorCorte === -1) {
+      let uEspacio = -1;
+      for (let k = limite; k >= inicio + min; k--) {
+        if (/\s/.test(texto[k])) { uEspacio = k; break; }
+      }
+      if (uEspacio !== -1) {
+        mejorCorte = uEspacio;
+      } else {
+        const pEspacio = texto.indexOf(' ', inicio + min);
+        if (pEspacio !== -1 && pEspacio < inicio + max * 1.5) {
+          mejorCorte = pEspacio;
+        } else {
+          mejorCorte = limite;
+        }
+      }
+    }
+
+    let fin = mejorCorte;
+    while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
+    if (fin > inicio) tramos.push([inicio, fin]);
+    i = mejorCorte;
+    while (i < largo && /\s/.test(texto[i])) i++;
+  }
+  return tramos.length ? tramos : [[0, largo]];
 }
 
-function palabraEn(palabras, posicion) {
-  if (!palabras || !palabras.length) return null;
+function tramoEn(tramos, posicion) {
+  if (!tramos || !tramos.length) return null;
   let bajo = 0;
-  let alto = palabras.length - 1;
+  let alto = tramos.length - 1;
   while (bajo <= alto) {
     const medio = (bajo + alto) >> 1;
-    const [ini, fin] = palabras[medio];
+    const [ini, fin] = tramos[medio];
     if (posicion < ini) alto = medio - 1;
     else if (posicion >= fin) bajo = medio + 1;
-    else return palabras[medio];
+    else return tramos[medio];
   }
-  if (alto >= 0 && posicion >= palabras[alto][0] && (bajo >= palabras.length || posicion < palabras[bajo][0])) {
-    return palabras[alto];
+  if (alto >= 0 && posicion >= tramos[alto][0] && (bajo >= tramos.length || posicion < tramos[bajo][0])) {
+    return tramos[alto];
   }
-  const idx = Math.max(0, Math.min(palabras.length - 1, bajo));
-  return palabras[idx] || null;
+  const idx = Math.max(0, Math.min(tramos.length - 1, bajo));
+  return tramos[idx] || null;
 }
 
-const textoPrueba = '¡Hola! Este es un texto con acentos: revolución y 2026.';
-const palabras = partirEnPalabras(textoPrueba);
-comprobar(palabras.length >= 8, `extrae palabras correctamente (${palabras.length} encontradas)`);
+const textoPrueba = 'Muchos años después, frente al pelotón de fusilamiento, el coronel Aureliano Buendía había de recordar aquella tarde remota en que su padre lo llevó a conocer el hielo. Macondo era entonces una aldea de veinte casas de barro y cañabrava.';
+const tramos = partirEnLineasLectura(textoPrueba);
+comprobar(tramos.length >= 2, `divide el texto en ventanas de ~2 líneas (${tramos.length} tramos generados)`);
 
-const palabrasTexto = palabras.map(([i, f]) => textoPrueba.slice(i, f));
-comprobar(palabrasTexto.includes('Hola'), 'incluye "Hola" ignorando signos');
-comprobar(palabrasTexto.includes('revolución'), 'preserva tildes como "revolución"');
-comprobar(palabrasTexto.includes('2026'), 'preserva números como "2026"');
+tramos.forEach(([ini, fin], idx) => {
+  const trozo = textoPrueba.slice(ini, fin);
+  comprobar(trozo.length >= 40 && trozo.length <= 150, `tramo ${idx + 1} longitud adecuada (${trozo.length} caracteres): "${trozo.slice(0, 35)}..."`);
+});
 
-// Probar palabraEn
-const p1 = palabraEn(palabras, textoPrueba.indexOf('revolución') + 2);
-comprobar(p1 && textoPrueba.slice(p1[0], p1[1]) === 'revolución', 'palabraEn ubica la palabra exacta dentro de sus límites');
+// Probar tramoEn
+const t1 = tramoEn(tramos, textoPrueba.indexOf('pelotón'));
+comprobar(t1 && t1[0] <= textoPrueba.indexOf('pelotón') && t1[1] > textoPrueba.indexOf('pelotón'),
+  'tramoEn ubica la ventana correcta que contiene la posición');
 
-const pEspacio = palabraEn(palabras, textoPrueba.indexOf('Este') - 1);
-comprobar(pEspacio != null, 'palabraEn no se descoloca en espacios entre palabras');
+const t2 = tramoEn(tramos, textoPrueba.indexOf('Macondo'));
+comprobar(t2 && t2[0] <= textoPrueba.indexOf('Macondo') && t2[1] > textoPrueba.indexOf('Macondo'),
+  'tramoEn ubica la ventana siguiente sin retrasos');
 
 console.log('\n── 3. Contrato de marcarRango en libroVista.js ──');
 comprobar(vista.includes('function marcarRango(ini, fin, palabraIni, palabraFin)'),
-  'marcarRango acepta rango de frase y rango de palabra');
-comprobar(vista.includes('pdf-palabra-capcut'), 'marcarRango genera la etiqueta pdf-palabra-capcut');
-comprobar(vista.includes('pdf-frase-activa'), 'marcarRango asigna la clase pdf-frase-activa a la frase');
+  'marcarRango mantiene firma compatible');
+comprobar(!vista.includes('pdf-palabra-capcut'), 'marcarRango NO genera etiquetas pdf-palabra-capcut');
+comprobar(vista.includes('pdf-linea-guia'), 'marcarRango asigna la clase pdf-linea-guia');
+comprobar(vista.includes('pdf-frase-activa'), 'marcarRango asigna la clase pdf-frase-activa');
 comprobar(/replaceWith\(document\.createTextNode\(previa\.textContent\)\)/.test(vista),
   'marcarRango limpia marcas previas restaurando el texto limpio');
 
@@ -106,10 +172,10 @@ comprobar(html.includes('window.ttsHablar = ttsHablar'), 'index.html expone wind
 comprobar(html.includes('window.ttsDetener = ttsDetener'), 'index.html expone window.ttsDetener');
 
 console.log('\n── 6. Marcadores de versión consistentes ──');
-comprobar(html.includes('v2.60.0'), 'index.html lleva versión v2.60.0');
+comprobar(html.includes('v2.61.0'), 'index.html lleva versión v2.61.0');
 const sw = readFileSync(resolve(RAIZ, 'sw.js'), 'utf-8');
-comprobar(html.includes("JG_JS_V = 'v103'") && sw.includes("jg-turbo-shell-v103"),
-  'JG_JS_V (v103) y sw.js (shell-v103) están perfectamente sincronizados');
+comprobar(html.includes("JG_JS_V = 'v104'") && sw.includes("jg-turbo-shell-v104"),
+  'JG_JS_V (v104) y sw.js (shell-v104) están perfectamente sincronizados');
 
-console.log(fallos ? `\n❌ ${fallos} FALLO(S)` : '\n✅ Todas las pruebas de la guía CapCut pasaron con éxito.');
+console.log(fallos ? `\n❌ ${fallos} FALLO(S)` : '\n✅ Todas las pruebas de la guía por líneas pasaron con éxito.');
 process.exit(fallos ? 1 : 0);

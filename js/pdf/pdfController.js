@@ -4066,7 +4066,7 @@ export function inicializarLectorPdf(deps = {}) {
    * fiable, no un karaoke palabra por palabra.
    */
   const guia = {
-    texto: null, frases: [], palabras: [], desde: -1, palabraDesde: -1, cola: null, anclas: [], compacto: '', mapa: null,
+    texto: null, frases: [], palabras: [], tramos: [], desde: -1, hasta: -1, palabraDesde: -1, ultimoMarcadoVista: -1, cola: null, anclas: [], compacto: '', mapa: null,
     /* Cuántos bloques tenía la cola cuando se situaron las anclas: si crece,
      * hay que volver a situarlas o la marca barre el capítulo entero. */
     bloques: 0,
@@ -4223,6 +4223,112 @@ export function inicializarLectorPdf(deps = {}) {
     return frases[Math.min(bajo, frases.length - 1)] || null;
   }
 
+  /**
+   * Trocea un texto en ventanas de lectura concentrada de unas 2 líneas (~80-130 caracteres).
+   *
+   * Respeta saltos de párrafo, signos de puntuación fuerte (. ? ! …) y cláusulas
+   * intermedias (, ; : — – ) sin cortar palabras en medio, ofreciendo un campo visual
+   * estable y confortable para el lector.
+   */
+  function partirEnLineasLectura(texto, { meta = 95, min = 55, max = 135 } = {}) {
+    if (!texto) return [];
+    const tramos = [];
+    const largo = texto.length;
+    let i = 0;
+
+    while (i < largo) {
+      while (i < largo && /\s/.test(texto[i])) i++;
+      if (i >= largo) break;
+
+      const inicio = i;
+      const objetivo = Math.min(largo, inicio + meta);
+      const limite = Math.min(largo, inicio + max);
+
+      if (limite >= largo) {
+        let fin = largo;
+        while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
+        if (fin > inicio) tramos.push([inicio, fin]);
+        break;
+      }
+
+      const salto = texto.indexOf('\n', inicio);
+      if (salto !== -1 && salto <= limite) {
+        let fin = salto;
+        while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
+        if (fin > inicio) {
+          tramos.push([inicio, fin]);
+          i = salto + 1;
+          continue;
+        }
+      }
+
+      let mejorCorte = -1;
+      const ventana = texto.slice(inicio, limite);
+
+      const reFuerte = /[.!?…]+(?=[\s\n]|$)/g;
+      let m;
+      while ((m = reFuerte.exec(ventana)) !== null) {
+        const idx = inicio + m.index + m[0].length;
+        if (idx >= inicio + min && idx <= limite) {
+          mejorCorte = idx;
+        }
+      }
+
+      if (mejorCorte === -1) {
+        const reMedia = /[,;:—–\)\]]+(?=[\s\n]|$)/g;
+        while ((m = reMedia.exec(ventana)) !== null) {
+          const idx = inicio + m.index + m[0].length;
+          if (idx >= inicio + min && idx <= limite) {
+            mejorCorte = idx;
+          }
+        }
+      }
+
+      if (mejorCorte === -1) {
+        let uEspacio = -1;
+        for (let k = limite; k >= inicio + min; k--) {
+          if (/\s/.test(texto[k])) { uEspacio = k; break; }
+        }
+        if (uEspacio !== -1) {
+          mejorCorte = uEspacio;
+        } else {
+          const pEspacio = texto.indexOf(' ', inicio + min);
+          if (pEspacio !== -1 && pEspacio < inicio + max * 1.5) {
+            mejorCorte = pEspacio;
+          } else {
+            mejorCorte = limite;
+          }
+        }
+      }
+
+      let fin = mejorCorte;
+      while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
+      if (fin > inicio) tramos.push([inicio, fin]);
+      i = mejorCorte;
+      while (i < largo && /\s/.test(texto[i])) i++;
+    }
+    return tramos.length ? tramos : [[0, largo]];
+  }
+
+  /** Tramo de lectura de ~2 líneas que contiene un punto del texto (búsqueda binaria). */
+  function tramoEn(tramos, posicion) {
+    if (!tramos || !tramos.length) return null;
+    let bajo = 0;
+    let alto = tramos.length - 1;
+    while (bajo <= alto) {
+      const medio = (bajo + alto) >> 1;
+      const [ini, fin] = tramos[medio];
+      if (posicion < ini) alto = medio - 1;
+      else if (posicion >= fin) bajo = medio + 1;
+      else return tramos[medio];
+    }
+    if (alto >= 0 && posicion >= tramos[alto][0] && (bajo >= tramos.length || posicion < tramos[bajo][0])) {
+      return tramos[alto];
+    }
+    const idx = Math.max(0, Math.min(tramos.length - 1, bajo));
+    return tramos[idx] || null;
+  }
+
   /** Corta el texto en palabras respetando límites naturales y símbolos. */
   function partirEnPalabras(texto) {
     try {
@@ -4267,7 +4373,9 @@ export function inicializarLectorPdf(deps = {}) {
 
   function limpiarGuia() {
     guia.desde = -1;
+    guia.hasta = -1;
     guia.palabraDesde = -1;
+    guia.ultimoMarcadoVista = -1;
     guia.cola = null;
     guia.bloques = 0;
     /* Se viene de un cambio de capítulo o de parar la lectura: la próxima
@@ -4294,14 +4402,17 @@ export function inicializarLectorPdf(deps = {}) {
       guia.texto = texto;
       guia.frases = partirEnFrases(texto);
       guia.palabras = partirEnPalabras(texto);
+      guia.tramos = partirEnLineasLectura(texto);
       const compacto = compactar(texto);
       guia.compacto = compacto.texto;
       guia.mapa = compacto.mapa;
       guia.cola = null;          /* el texto cambió: hay que resituar la cola */
       guia.desde = -1;
+      guia.hasta = -1;
       guia.palabraDesde = -1;
+      guia.ultimoMarcadoVista = -1;
     }
-    if (!guia.frases.length) return null;
+    if (!guia.frases.length && !guia.tramos.length) return null;
 
     /* Situar los bloques cuesta un rato en un capítulo largo, así que solo se
      * hace cuando hace falta: al empezar una lectura nueva y **cada vez que la
@@ -4329,13 +4440,13 @@ export function inicializarLectorPdf(deps = {}) {
     const punto = porBloque != null
       ? porBloque
       : Math.max(0, Math.min(texto.length - 1, Math.round((Number(datos.fraccion) || 0) * texto.length)));
-    const rango = fraseEn(guia.frases, punto);
+    const rango = (guia.tramos && guia.tramos.length ? tramoEn(guia.tramos, punto) : null)
+      || fraseEn(guia.frases, punto);
     if (!rango) return null;
-    const palabra = palabraEn(guia.palabras, punto);
 
-    const mismaFrase = rango[0] === guia.desde;
-    const mismaPalabra = palabra && palabra[0] === guia.palabraDesde;
-    if (mismaFrase && mismaPalabra) return el.realce.querySelector('mark');
+    /* Si seguimos dentro de la misma ventana de ~2 líneas, no tocamos el DOM.
+     * Mantiene una concentración visual relajada y sin parpadeos para el lector. */
+    if (rango[0] === guia.desde) return el.realce.querySelector('mark');
 
     /* La guía no vuelve atrás sola.
      *
@@ -4351,24 +4462,13 @@ export function inicializarLectorPdf(deps = {}) {
     }
     guia.saltar = false;
     guia.desde = rango[0];
-    guia.palabraDesde = palabra ? palabra[0] : -1;
+    guia.hasta = rango[1];
 
     /* Se construye con nodos de texto, nunca con innerHTML: el contenido sale
      * de un PDF cualquiera y aquí no puede convertirse en marcado. */
     const marca = document.createElement('mark');
-    marca.className = 'pdf-frase-activa';
-    if (palabra && palabra[0] >= rango[0] && palabra[1] <= rango[1]) {
-      const relIni = palabra[0] - rango[0];
-      const relFin = palabra[1] - rango[0];
-      if (relIni > 0) marca.appendChild(document.createTextNode(texto.slice(rango[0], rango[0] + relIni)));
-      const spanP = document.createElement('span');
-      spanP.className = 'pdf-palabra-capcut';
-      spanP.textContent = texto.slice(rango[0] + relIni, rango[0] + relFin);
-      marca.appendChild(spanP);
-      if (rango[0] + relFin < rango[1]) marca.appendChild(document.createTextNode(texto.slice(rango[0] + relFin, rango[1])));
-    } else {
-      marca.textContent = texto.slice(rango[0], rango[1]);
-    }
+    marca.className = 'pdf-linea-guia pdf-frase-activa';
+    marca.textContent = texto.slice(rango[0], rango[1]);
 
     el.realce.textContent = '';
     el.realce.append(
@@ -4420,13 +4520,17 @@ export function inicializarLectorPdf(deps = {}) {
      * modo edición, sobre el textarea y su capa gemela, como siempre. */
     if (enModoLectura()) {
       if (libroVista && libroVista.marcarRango && guia.desde >= 0) {
-        const rango = fraseEn(guia.frases, guia.desde);
-        const puntoVoz = exacto != null ? exacto : guia.desde;
-        const palabra = palabraEn(guia.palabras, puntoVoz);
-        const pintada = rango
-          ? libroVista.marcarRango(rango[0], rango[1], palabra ? palabra[0] : null, palabra ? palabra[1] : null)
-          : null;
-        if (pintada) libroVista.desplazarA(pintada);
+        if (guia.desde !== guia.ultimoMarcadoVista) {
+          const rango = (guia.tramos && guia.tramos.length ? tramoEn(guia.tramos, guia.desde) : null)
+            || fraseEn(guia.frases, guia.desde);
+          const pintada = rango
+            ? libroVista.marcarRango(rango[0], rango[1])
+            : null;
+          if (pintada) {
+            libroVista.desplazarA(pintada);
+            guia.ultimoMarcadoVista = guia.desde;
+          }
+        }
       }
       return;
     }
@@ -5566,6 +5670,7 @@ export function inicializarLectorPdf(deps = {}) {
 
     anotarPosicion({ caracter: desde });
     guia.saltar = true;               /* salto pedido por la persona */
+    guia.ultimoMarcadoVista = -1;
 
     const destino = forzarNuevo ? null : bloqueDeCaracter(desde);
     if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
