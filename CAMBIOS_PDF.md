@@ -3,6 +3,29 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-06 · v2.52.0 · Recargar deja en el libro, toques más grandes, carga más liviana
+
+Trabajo del plan de mejoramiento PDF en móvil (`worktree-pdf-movil`), publicado
+para revisión. No es el plan entero: faltan partir `pdfController.js` en varios
+archivos, cachear módulos en el service worker y adelgazar `index.html`.
+
+**Qué sí entra:**
+- **Fase A.** Recargar (F5) o volver a la pestaña PDF deja en la misma pestaña
+  y, si había un libro abierto, en ese libro. La pestaña viaja en la dirección
+  (`?tab=pdf`, con `replaceState`) y de respaldo en `jg_tab_activa`. El libro
+  abierto vive en `jg_pdf_doc_abierto` / `jg_pdf_vista_activa`. Si la extracción
+  se cortó a medias, avisa y no deja la pantalla a medias.
+- **Fase B (parcial).** El módulo del lector se empieza a bajar al tocar la
+  pestaña (antes de soltar el dedo). Exportar y preguntar al documento cargan
+  `exportar.js` y `busqueda.js` solo cuando se usan. Entre página y página de
+  extracción se cede el hilo para que la interfaz no se congele.
+- **Fases C–E (parcial).** Piso de texto 12 px, controles táctiles a 44 px,
+  `--h-ctrl-lg: 52px`, columna de lectura `66ch`, menos breakpoints (640 / 1023),
+  rejilla de biblioteca fluida, sin halo ni punto parpadeante en estados, y el
+  título de la marca deja de ir en degradado.
+
+Entrega: `JG_JS_V=v94`, shell `v94`.
+
 ## 2026-09-06 · v2.51.0 · Panel de voz plegable sin apagar la lectura
 
 Las herramientas de voz (modelo Fish Audio, velocidad) se ocultan con **Ocultar**

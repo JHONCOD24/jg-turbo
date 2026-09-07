@@ -55,6 +55,13 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_tts_engine` (neural / browser)
 - `jg_pdf_unir` (`normal` | `documento`): cuanto unir palabras partidas. Por
   defecto `normal`; `documento` ignora los diccionarios y solo usa el libro.
+- `jg_tab_activa` (mic | file | yt | pdf | trans): última pestaña, respaldo de F5
+  si la dirección no trae `?tab=`.
+- `jg_pdf_vista_activa` (`biblioteca` | `lector`): si al recargar hay que volver
+  al libro o a la lista.
+- `jg_pdf_doc_abierto`: id del documento que estaba en el lector.
+- `jg_pdf_procesando` (`1` o ausente): marca temporal si se recarga a mitad de
+  extraer un PDF; se borra al terminar o al avisar.
 - `jg_config_bundle` (snapshot JSON versionado)
 - `jg_glossary_seeded` (flag: ya se sembró glosario por defecto)
 

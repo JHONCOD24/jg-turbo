@@ -5127,10 +5127,9 @@ export function inicializarLectorPdf(deps = {}) {
       localStorage.removeItem('jg_pdf_procesando');
       avisar('La carga anterior no terminó. Puedes volver a elegir el documento.', 'info');
     }
-    const params = new URLSearchParams(window.location.search);
     const vistaGuardada = localStorage.getItem('jg_pdf_vista_activa');
     const docIdGuardado = localStorage.getItem('jg_pdf_doc_abierto');
-    if (vistaGuardada === 'lector' && docIdGuardado && params.get('tab') === 'pdf') {
+    if (vistaGuardada === 'lector' && docIdGuardado) {
       abrirDocumento(docIdGuardado).catch((err) => {
         console.warn('[jg-pdf] No se pudo restaurar documento en curso:', err);
       });

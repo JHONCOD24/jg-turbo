@@ -2,6 +2,10 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+PDF v2.52.0: recargar deja en la pestaña y el libro; toques de 44 px; exportar
+y preguntar se cargan bajo demanda. Plan de móvil aún incompleto. Detalle:
+[CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 PDF v2.50.0: volver a extraer un PDF que se había borrado (mismo archivo, mismo
 id) lo devuelve a la biblioteca y a la nube. Antes el texto se extraía y la
 lápida de borrado lo ocultaba. Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
