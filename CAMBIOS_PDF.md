@@ -34,6 +34,12 @@ limpio) · capturas 390 px expandido/plegado sin desbordes. Detector Impeccable:
 sin hallazgos nuevos (solo avisos previos del proyecto).
 
 Marcadores de entrega: `v2.54.0`, `JG_JS_V=v96`, shell `jg-turbo-shell-v96`.
+Despliegue `https://jg-turbo-390u7c0hx-jhoncod24s-projects.vercel.app` READY y
+alias `https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador
+v2.54.0, shell v96, `alternarAjustes` en el `libroVista.js` servido,
+`/api/health` ok y `verificar_pdf_movil` 46/46 contra producción. Despliegue
+desde copia limpia en el temporal (la raíz sigue abortando por
+`.pytest_cache`).
 
 ## 2026-09-07 · v2.53.0 · Implementación final consolidada del plan PDF móvil
 
