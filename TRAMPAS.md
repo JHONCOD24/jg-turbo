@@ -179,8 +179,20 @@ significa nada. **Regla:** para que algo se estire, **todos** los contenedores
 entre él y la ventana deben ser flexibles. Comprobarlo recorriendo la cadena
 con `getComputedStyle`, no leyendo la regla de un solo elemento.
 
-## Un `import()` al arrancar no es carga diferida
+## Capturar el puntero al tocar rompe los botones que hay debajo
 
+**Síntoma (v2.55, desarrollo):** el botón «Ajustes» del mini reproductor
+dejaba de abrir la paleta de voz. **Causa:** el contenedor tomaba la captura
+del puntero (`setPointerCapture`) en `pointerdown` para poder arrastrarlo. Con
+la captura activa, el `pointerup` de un toque se redirige al contenedor y el
+`click` cae en el ancestro común (el contenedor), nunca en el botón: el gesto
+para mover se comía el toque para abrir. La prueba lo cazó porque pulsa el
+botón de verdad en vez de llamar a la función. **Regla:** la captura se toma
+SOLO al superar el umbral de arrastre, nunca al primer contacto; los toques
+conservan su objetivo. Y un arrastrable con botones dentro se prueba pulsando
+los botones, no solo arrastrando.
+
+## Un `import()` al arrancar no es carga diferida
 **Síntoma (auditado 2026-09-05):** la app tardaba en abrir. **Causa:** el lector
 de PDF se traía con `import()` dinámico —y un comentario decía que por eso
 «quien no use esta pestaña no paga ese peso»— pero la llamada estaba en el

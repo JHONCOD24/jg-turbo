@@ -28,6 +28,11 @@ persistencia y retorno al punto tras recargar) · `verificar_pdf_movil` 46/46 ·
 `verificar_pdf_geometria` en verde · capturas 390 px. Detector Impeccable: 0
 errores (129 avisos previos del proyecto).
 
+Blindaje contra desmejoras: el guion quedó como prueba permanente
+(`tests/verificar_pdf_mini_flotante.mjs`, obligatoria al tocar el mini según
+`Agents.md`) y la lección de la captura del puntero en `TRAMPAS.md`
+(§«Capturar el puntero al tocar rompe los botones que hay debajo»).
+
 Marcadores de entrega: `v2.55.0`, `JG_JS_V=v97`, shell `jg-turbo-shell-v97`.
 Despliegue `https://jg-turbo-5yoz2mwen-jhoncod24s-projects.vercel.app` READY y
 alias `https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador

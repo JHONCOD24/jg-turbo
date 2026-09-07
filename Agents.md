@@ -154,6 +154,7 @@ se cortó.
 | `node tests/verificar_pdf_scroll.mjs` | Que la biblioteca **se pueda desplazar** con nueve libros, y que las otras pestañas y el lector conserven su modelo de scroll | 39 |
 | `node tests/verificar_pdf_navegador.mjs` | Recorrido funcional completo del lector | 116 |
 | `node tests/verificar_pdf_movil.mjs` | **Obligatoria al tocar el lector en móvil**: reparto real de la pantalla, alcance del pulgar hoja por hoja, y que tablet y escritorio NO cambien | 27 |
+| `node tests/verificar_pdf_mini_flotante.mjs` | **Obligatoria al tocar el mini reproductor**: círculo comprimido, expandir, Ajustes sin apagar la voz, arrastre táctil sin robar toques y punto recordado tras recargar | 7 |
 | `node tests/verificar_pdf_unir_palabras.mjs` | «Unir palabras» sobre una palabra partida de verdad, con su Deshacer | 18 |
 | `node tests/verificar_arranque_ligero.mjs` | **Obligatoria al tocar lo que se carga al arrancar**: que el lector de PDF no viaje con quien solo abre la app | 7 |
 | `node tests/verificar_movil_pantalla.mjs` | **Obligatoria al tocar alturas, scroll o zona segura**: quién desplaza, que se llegue al final del contenido y que no sobre hueco, en 5 pestañas × 4 teléfonos | 62 |
