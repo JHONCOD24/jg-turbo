@@ -4066,7 +4066,7 @@ export function inicializarLectorPdf(deps = {}) {
    * fiable, no un karaoke palabra por palabra.
    */
   const guia = {
-    texto: null, frases: [], desde: -1, cola: null, anclas: [], compacto: '', mapa: null,
+    texto: null, frases: [], palabras: [], desde: -1, palabraDesde: -1, cola: null, anclas: [], compacto: '', mapa: null,
     /* Cuántos bloques tenía la cola cuando se situaron las anclas: si crece,
      * hay que volver a situarlas o la marca barre el capítulo entero. */
     bloques: 0,
@@ -4223,8 +4223,51 @@ export function inicializarLectorPdf(deps = {}) {
     return frases[Math.min(bajo, frases.length - 1)] || null;
   }
 
+  /** Corta el texto en palabras respetando límites naturales y símbolos. */
+  function partirEnPalabras(texto) {
+    try {
+      if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+        const seg = new Intl.Segmenter('es', { granularity: 'word' });
+        const trozos = [];
+        for (const s of seg.segment(texto)) {
+          if (s.isWordLike) {
+            trozos.push([s.index, s.index + s.segment.length]);
+          }
+        }
+        if (trozos.length) return trozos;
+      }
+    } catch (_) {}
+    const trozos = [];
+    const re = /[\p{L}\p{N}]+/gu;
+    let m;
+    while ((m = re.exec(texto))) {
+      trozos.push([m.index, m.index + m[0].length]);
+    }
+    return trozos;
+  }
+
+  /** Palabra que contiene un punto del texto o la más cercana anterior (búsqueda binaria). */
+  function palabraEn(palabras, posicion) {
+    if (!palabras || !palabras.length) return null;
+    let bajo = 0;
+    let alto = palabras.length - 1;
+    while (bajo <= alto) {
+      const medio = (bajo + alto) >> 1;
+      const [ini, fin] = palabras[medio];
+      if (posicion < ini) alto = medio - 1;
+      else if (posicion >= fin) bajo = medio + 1;
+      else return palabras[medio];
+    }
+    if (alto >= 0 && posicion >= palabras[alto][0] && (bajo >= palabras.length || posicion < palabras[bajo][0])) {
+      return palabras[alto];
+    }
+    const idx = Math.max(0, Math.min(palabras.length - 1, bajo));
+    return palabras[idx] || null;
+  }
+
   function limpiarGuia() {
     guia.desde = -1;
+    guia.palabraDesde = -1;
     guia.cola = null;
     guia.bloques = 0;
     /* Se viene de un cambio de capítulo o de parar la lectura: la próxima
@@ -4237,6 +4280,7 @@ export function inicializarLectorPdf(deps = {}) {
   /* La barra de posición del reproductor avisa de sus saltos: son
    * intencionados y la guía sí puede retroceder con ellos. */
   document.addEventListener('jg-tts-salto', () => { guia.saltar = true; });
+  document.addEventListener('jg-tts-cambio-voz', () => { guia.saltar = true; });
 
   function sincronizarRealce() {
     if (el.realce) el.realce.scrollTop = el.salida.scrollTop;
@@ -4249,11 +4293,13 @@ export function inicializarLectorPdf(deps = {}) {
     if (guia.texto !== texto) {
       guia.texto = texto;
       guia.frases = partirEnFrases(texto);
+      guia.palabras = partirEnPalabras(texto);
       const compacto = compactar(texto);
       guia.compacto = compacto.texto;
       guia.mapa = compacto.mapa;
       guia.cola = null;          /* el texto cambió: hay que resituar la cola */
       guia.desde = -1;
+      guia.palabraDesde = -1;
     }
     if (!guia.frases.length) return null;
 
@@ -4285,7 +4331,11 @@ export function inicializarLectorPdf(deps = {}) {
       : Math.max(0, Math.min(texto.length - 1, Math.round((Number(datos.fraccion) || 0) * texto.length)));
     const rango = fraseEn(guia.frases, punto);
     if (!rango) return null;
-    if (rango[0] === guia.desde) return el.realce.querySelector('mark');
+    const palabra = palabraEn(guia.palabras, punto);
+
+    const mismaFrase = rango[0] === guia.desde;
+    const mismaPalabra = palabra && palabra[0] === guia.palabraDesde;
+    if (mismaFrase && mismaPalabra) return el.realce.querySelector('mark');
 
     /* La guía no vuelve atrás sola.
      *
@@ -4301,11 +4351,25 @@ export function inicializarLectorPdf(deps = {}) {
     }
     guia.saltar = false;
     guia.desde = rango[0];
+    guia.palabraDesde = palabra ? palabra[0] : -1;
 
     /* Se construye con nodos de texto, nunca con innerHTML: el contenido sale
      * de un PDF cualquiera y aquí no puede convertirse en marcado. */
     const marca = document.createElement('mark');
-    marca.textContent = texto.slice(rango[0], rango[1]);
+    marca.className = 'pdf-frase-activa';
+    if (palabra && palabra[0] >= rango[0] && palabra[1] <= rango[1]) {
+      const relIni = palabra[0] - rango[0];
+      const relFin = palabra[1] - rango[0];
+      if (relIni > 0) marca.appendChild(document.createTextNode(texto.slice(rango[0], rango[0] + relIni)));
+      const spanP = document.createElement('span');
+      spanP.className = 'pdf-palabra-capcut';
+      spanP.textContent = texto.slice(rango[0] + relIni, rango[0] + relFin);
+      marca.appendChild(spanP);
+      if (rango[0] + relFin < rango[1]) marca.appendChild(document.createTextNode(texto.slice(rango[0] + relFin, rango[1])));
+    } else {
+      marca.textContent = texto.slice(rango[0], rango[1]);
+    }
+
     el.realce.textContent = '';
     el.realce.append(
       document.createTextNode(texto.slice(0, rango[0])),
@@ -4357,7 +4421,11 @@ export function inicializarLectorPdf(deps = {}) {
     if (enModoLectura()) {
       if (libroVista && libroVista.marcarRango && guia.desde >= 0) {
         const rango = fraseEn(guia.frases, guia.desde);
-        const pintada = rango ? libroVista.marcarRango(rango[0], rango[1]) : null;
+        const puntoVoz = exacto != null ? exacto : guia.desde;
+        const palabra = palabraEn(guia.palabras, puntoVoz);
+        const pintada = rango
+          ? libroVista.marcarRango(rango[0], rango[1], palabra ? palabra[0] : null, palabra ? palabra[1] : null)
+          : null;
         if (pintada) libroVista.desplazarA(pintada);
       }
       return;
@@ -5280,6 +5348,7 @@ export function inicializarLectorPdf(deps = {}) {
         verRecorte: (lim) => { try { verRecortePagina(lim); } catch (_) {} },
         vincularArchivo: async (archivo) => { await vincularPdfOriginal(archivo); },
         leerDesdeCaracter: (caracter) => { try { leerDesdeCaracter(caracter); } catch (_) {} },
+        onCambioPaginaUsuario: (caracter) => { try { if (ttsSonandoAqui()) leerDesdeCaracter(caracter, { forzarNuevo: true }); } catch (_) {} },
         actualizarFondoHojas: () => { try { pintarFondoHojas(); } catch (_) {} },
         abrirHoja,
         cerrarHoja: () => cerrarHojas(),
@@ -5486,7 +5555,7 @@ export function inicializarLectorPdf(deps = {}) {
    * se selecciona del punto al final y se pulsa Escuchar: el motor lee la
    * selección, y `guia.desdeCaracter` permite seguir resaltando.
    */
-  function leerDesdeCaracter(caracter) {
+  function leerDesdeCaracter(caracter, { forzarNuevo = false } = {}) {
     if (!hayDocumento()) return;
     const texto = el.salida.value || '';
     if (!texto) return;
@@ -5498,7 +5567,7 @@ export function inicializarLectorPdf(deps = {}) {
     anotarPosicion({ caracter: desde });
     guia.saltar = true;               /* salto pedido por la persona */
 
-    const destino = bloqueDeCaracter(desde);
+    const destino = forzarNuevo ? null : bloqueDeCaracter(desde);
     if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
       window.ttsIrABloque(destino.bloque, destino.dentro);
       avisar('Leyendo desde aquí.', 'info', { efimero: true });
@@ -5506,9 +5575,23 @@ export function inicializarLectorPdf(deps = {}) {
     }
     guia.desdeCaracter = desde;
     try { el.salida.setSelectionRange(desde, texto.length); } catch (_) { /* textarea oculto */ }
+
+    if (typeof window.ttsHablar === 'function') {
+      const trozo = texto.slice(desde);
+      window.ttsHablar(trozo, { sourceId: 'pdf', langHint: 'es' });
+      avisar('Leyendo desde aquí.', 'info', { efimero: true });
+      return;
+    }
+
     const boton = document.querySelector('[data-tts-console="pdf"] [data-tts-action="toggle"]');
-    if (boton) boton.click();
-    else avisar('Pulsa Escuchar para leer desde aquí.', 'info', { efimero: true });
+    if (ttsSonandoAqui()) {
+      const parar = document.querySelector('[data-tts-console="pdf"] [data-tts-action="stop"]');
+      if (parar) parar.click();
+      setTimeout(() => { if (boton) boton.click(); }, 60);
+    } else {
+      if (boton) boton.click();
+      else avisar('Pulsa Escuchar para leer desde aquí.', 'info', { efimero: true });
+    }
   }
 
   /* Mismo gesto, para quien usa teclado o lector de pantalla: lee desde el
@@ -5531,6 +5614,12 @@ export function inicializarLectorPdf(deps = {}) {
       } else if (libroVista && el.salida) {
         const cfg2 = JSON.parse(localStorage.getItem('jg_pdf_lectura') || '{}');
         el.salida.hidden = cfg2.modo === 'lectura' && !!el.lectura;
+      }
+      if (ttsSonandoAqui()) {
+        const punto = (opts && opts.seleccionar && opts.seleccionar.desde) != null
+          ? opts.seleccionar.desde
+          : (caracterVisible() || 0);
+        leerDesdeCaracter(punto, { forzarNuevo: true });
       }
     } catch (_) {}
     return r;

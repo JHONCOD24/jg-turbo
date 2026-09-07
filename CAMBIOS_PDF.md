@@ -3,6 +3,37 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.60.0 · Guía de lectura dinámica estilo CapCut, navegación de capítulos/páginas y cambio de voz en tiempo real
+
+Lo solicitado: transformar el sombreado translúcido plano del texto en una guía viva y dinámica estilo CapCut, donde la frase activa tiene un tinte sutil de contexto y la palabra que suena en ese milisegundo exacto resalta como un badge/pill de alto contraste con micro-escala (`scale(1.06)`) perfectamente acompasada con la voz; y permitir navegación en tiempo real por capítulos, páginas y selector de voz sin tener que volver a pulsar «Escuchar».
+
+**Implementación y arquitectura:**
+1. **Guía viva estilo CapCut (`.pdf-palabra-capcut` y `.pdf-frase-activa`):**
+   - Se descartó el bloque plano estático. Ahora `marcarRango` en `libroVista.js` genera un elemento `<mark class="pdf-frase-activa">` y localiza la palabra en curso insertando `<span class="pdf-palabra-capcut">`.
+   - Estilos en `index.html`: fondo con `--lec-acento`, texto con `--lec-bg`, bordes redondeados (6px), micro-sombra suave y `transform: scale(1.06)` centrado en la línea base para no perturbar las cajas geométricas del texto paginado.
+   - Espejo completo para modo edición (`.pdf-realce .pdf-palabra-capcut` y `.pdf-realce .pdf-frase-activa`).
+   - Accesibilidad: soporte estricto de `@media (prefers-reduced-motion: reduce)` anulando cualquier escala o transición.
+2. **Segmentación y búsqueda binaria de palabras en tiempo real:**
+   - En `js/pdf/pdfController.js`: funciones `partirEnPalabras(texto)` con `Intl.Segmenter` y fallback regex unicode `[\p{L}\p{N}]+`, y `palabraEn(palabras, posicion)` mediante búsqueda binaria $O(\log n)$.
+   - En cada latido de `jg-tts-avance`, se calcula la palabra exacta según `dentroBloque` y se actualiza la posición cinéticamente sin regenerar el árbol DOM innecesariamente.
+3. **Navegación de páginas en tiempo real mientras suena la voz:**
+   - En `js/pdf/libroVista.js`: `irAPagina` recibe la opción `{ deUsuario: true }` cuando la persona hace clic en `#btnPdfPagNext`/`#btnPdfPagPrev`, pulsa flechas del teclado o desliza con el dedo (swipe horizontal).
+   - `libroVista` emite `api.onCambioPaginaUsuario(caracterVisible())`, y `pdfController` arranca la locución de la nueva página instantáneamente (`leerDesdeCaracter(char, { forzarNuevo: true })`).
+4. **Navegación de capítulos en tiempo real:**
+   - Al cambiar de capítulo (con `#btnPdfNext`, `#btnPdfPrev` o cualquier ítem del índice `#pdfIndiceLista`), `mostrarParte` detecta si el TTS está reproduciendo en el lector y continúa la locución de la nueva sección desde el primer carácter visible sin detener la experiencia auditiva.
+5. **Cambio de voz en caliente y sincronización de guía:**
+   - `ttsCambiarVozEnVivo` emite el evento global `jg-tts-cambio-voz`.
+   - `pdfController` escucha `jg-tts-cambio-voz` y marca `guia.saltar = true`, reanudando el audio y sincronizando la guía CapCut de inmediato.
+   - En `index.html`, `ttsGuardarConfigVoz` delega a `ttsCambiarVozEnVivo` y se exponen `window.ttsHablar`, `window.ttsDetener`, `window.ttsPausar`, `window.ttsReanudar` y `window.ttsCambiarVozEnVivo`.
+6. **Batería de pruebas automatizadas en verde:**
+   - `tests/test_pdf_guia_capcut.mjs`: 22 pruebas unitarias pasando al 100%.
+   - `tests/verificar_pdf_tiempo_real.mjs`: 5 suites Playwright verificando guía CapCut, salto de página, salto de capítulo y cambio de voz en vivo con 0 errores de consola.
+   - `tests/verificar_pdf_lector_integracion.mjs`: integración general sin fallos.
+   - `tests/verificar_pdf_geometria.mjs`: geometría sin desbordes en 6 viewports.
+   - `tests/verificar_pdf_movil.mjs`: 46 comprobaciones móviles aprobadas.
+
+Marcadores de entrega: `v2.60.0`, `JG_JS_V=v103`, shell `jg-turbo-shell-v103`.
+
 ## 2026-09-07 · v2.59.0 · Biblioteca musical real de estudio (11 pistas), selección aleatoria por ánimo y fundido cruzado (crossfade)
 
 Lo solicitado: reemplazar los loops sintéticos por los 11 archivos WAV reales aportados por el usuario en `Fondos Musicales/`, distribuirlos adecuadamente en las 4 categorías (*Concentración*, *Relax*, *Noche*, *Lluvia suave*), habilitar reproducción aleatoria continua y combinarlos suavemente con fundidos cruzados.

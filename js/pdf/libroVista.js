@@ -176,10 +176,12 @@ export function initLibroVista({ el, estado, api }) {
    * Antes se buscaba el fragmento con `indexOf`, que marcaba la primera
    * aparición de la frase aunque la voz fuera por la quinta. Con las
    * posiciones del mapa se marca exactamente lo que suena. */
-  function marcarRango(ini, fin) {
+  function marcarRango(ini, fin, palabraIni, palabraFin) {
     if (!el.lectura || !(fin > ini)) return null;
-    const previa = el.lectura.querySelector('mark');
-    if (previa) previa.replaceWith(document.createTextNode(previa.textContent));
+    el.lectura.querySelectorAll('mark').forEach((previa) => {
+      previa.replaceWith(document.createTextNode(previa.textContent));
+    });
+    try { el.lectura.normalize(); } catch (_) {}
 
     const bloque = [...el.lectura.querySelectorAll('[data-ini]')].reverse()
       .find((b) => Number(b.dataset.ini) <= ini && Number(b.dataset.fin) > ini);
@@ -189,6 +191,9 @@ export function initLibroVista({ el, estado, api }) {
     const desde = ini - base;
     const hasta = Math.min(fin - base, bloque.textContent.length);
     if (!(hasta > desde)) return null;
+
+    const wDesde = palabraIni != null ? Math.max(desde, palabraIni - base) : desde;
+    const wHasta = palabraFin != null ? Math.min(hasta, palabraFin - base) : desde;
 
     const recorrido = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
     let visto = 0;
@@ -202,7 +207,21 @@ export function initLibroVista({ el, estado, api }) {
         const trozos = document.createDocumentFragment();
         if (a > 0) trozos.appendChild(document.createTextNode(nodo.textContent.slice(0, a)));
         marca = document.createElement('mark');
-        marca.textContent = nodo.textContent.slice(a, b);
+        marca.className = 'pdf-frase-activa';
+
+        const wa = Math.max(a, wDesde - visto);
+        const wb = Math.min(b, wHasta - visto);
+        if (wb > wa) {
+          if (wa > a) marca.appendChild(document.createTextNode(nodo.textContent.slice(a, wa)));
+          const span = document.createElement('span');
+          span.className = 'pdf-palabra-capcut';
+          span.textContent = nodo.textContent.slice(wa, wb);
+          marca.appendChild(span);
+          if (wb < b) marca.appendChild(document.createTextNode(nodo.textContent.slice(wb, b)));
+        } else {
+          marca.textContent = nodo.textContent.slice(a, b);
+        }
+
         trozos.appendChild(marca);
         if (b < largo) trozos.appendChild(document.createTextNode(nodo.textContent.slice(b)));
         nodo.replaceWith(trozos);
@@ -236,10 +255,12 @@ export function initLibroVista({ el, estado, api }) {
     if (el.pagNext) el.pagNext.disabled = pag.actual >= pag.total - 1;
   }
 
-  function irAPagina(n, { suave = true, guardar = true } = {}) {
+  function irAPagina(n, { suave = true, guardar = true, deUsuario = false } = {}) {
     const art = el.lectura;
     if (!art || !pag.activo || !pag.paso) return;
-    pag.actual = Math.max(0, Math.min(pag.total - 1, Math.round(Number(n) || 0)));
+    const destinoPag = Math.max(0, Math.min(pag.total - 1, Math.round(Number(n) || 0)));
+    const cambioPag = destinoPag !== pag.actual;
+    pag.actual = destinoPag;
     art.scrollTo({
       left: pag.actual * pag.paso,
       behavior: suave && !prefiereMenosMovimiento() ? 'smooth' : 'auto',
@@ -261,6 +282,9 @@ export function initLibroVista({ el, estado, api }) {
     if (guardar) {
       pag.ancla = caracterVisible();
       if (api.anotarPagina) api.anotarPagina(pag.ancla);
+    }
+    if (deUsuario && cambioPag && api.onCambioPaginaUsuario) {
+      try { api.onCambioPaginaUsuario(caracterVisible()); } catch (_) {}
     }
   }
 
@@ -388,17 +412,16 @@ export function initLibroVista({ el, estado, api }) {
     return bloques.reverse().find((b) => Number(b.dataset.ini) <= caracter) || bloques[bloques.length - 1];
   }
 
-  if (el.pagPrev) el.pagPrev.addEventListener('click', () => irAPagina(pag.actual - 1));
-  if (el.pagNext) el.pagNext.addEventListener('click', () => irAPagina(pag.actual + 1));
+  if (el.pagPrev) el.pagPrev.addEventListener('click', () => irAPagina(pag.actual - 1, { deUsuario: true }));
+  if (el.pagNext) el.pagNext.addEventListener('click', () => irAPagina(pag.actual + 1, { deUsuario: true }));
 
   /* Con el teclado, las flechas pasan página cuando el foco está en el texto. */
   if (el.lectura) {
     el.lectura.addEventListener('keydown', (ev) => {
       if (!pag.activo) return;
-      if (ev.key === 'ArrowRight' || ev.key === 'PageDown') { ev.preventDefault(); irAPagina(pag.actual + 1); }
-      if (ev.key === 'ArrowLeft' || ev.key === 'PageUp') { ev.preventDefault(); irAPagina(pag.actual - 1); }
+      if (ev.key === 'ArrowRight' || ev.key === 'PageDown') { ev.preventDefault(); irAPagina(pag.actual + 1, { deUsuario: true }); }
+      if (ev.key === 'ArrowLeft' || ev.key === 'PageUp') { ev.preventDefault(); irAPagina(pag.actual - 1, { deUsuario: true }); }
     });
-
   }
 
   /* Girar el teléfono o abrir el teclado cambia el hueco: se vuelve a repartir
@@ -1169,7 +1192,7 @@ export function initLibroVista({ el, estado, api }) {
       if (sel && String(sel).trim().length > 1 && Date.now() - ultimaSeleccion < 800) return;
       /* Este gesto no es «lee desde aquí»: se consume el click que viene. */
       marcarToqueConsumido();
-      irAPagina(pag.actual + (avance < 0 ? 1 : -1));
+      irAPagina(pag.actual + (avance < 0 ? 1 : -1), { deUsuario: true });
     }, { passive: true });
     el.lectura.addEventListener('pointercancel', () => { gesto = null; }, { passive: true });
   }
