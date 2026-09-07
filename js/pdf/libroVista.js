@@ -1242,7 +1242,9 @@ export function initLibroVista({ el, estado, api }) {
       if (texto) texto.textContent = sonando ? (resumen || 'Leyendo…') : (resumen ? `En pausa · ${resumen}` : 'En pausa');
       const miniPausa = document.getElementById('btnPdfVozMiniPausa');
       if (miniPausa) {
-        miniPausa.setAttribute('aria-label', sonando ? 'Pausar la lectura' : 'Seguir leyendo');
+        /* Comprimido, el control expande en vez de pausar: el nombre lo dice. */
+        const colapsado = document.getElementById('pdfVozMini')?.dataset.mini === 'no';
+        miniPausa.setAttribute('aria-label', colapsado ? 'Mostrar controles de voz' : (sonando ? 'Pausar la lectura' : 'Seguir leyendo'));
         miniPausa.dataset.estado = sonando ? 'sonando' : 'pausa';
       }
     };
@@ -1253,11 +1255,131 @@ export function initLibroVista({ el, estado, api }) {
     pintar();
   }());
 
-  /* Mini reproductor: pausa o reanuda. No abre el panel ni detiene la voz.
-     Para cambiar modelo o velocidad está «Ajustes». */
+  /* Mini reproductor flotante: se arrastra con el dedo a cualquier sitio y
+   * se comprime a un círculo. Un toque sobre el control lo expande (quién
+   * narra, velocidad, Ajustes); un toque sobre el texto lo vuelve a comprimir.
+   * Arrastrar (más de ~10 px) mueve sin disparar toques: así el gesto y el
+   * toque no se roban entre sí. Posición y estado se recuerdan en
+   * `jg_pdf_mini`. */
+  const vozMini = $$('pdfVozMini');
+  let miniGuardado = null;
+  try { miniGuardado = JSON.parse(localStorage.getItem('jg_pdf_mini') || 'null'); } catch (_) {}
+  const UMBRAL_ARRASTRE = 10;
+  function guardarMini() {
+    try {
+      localStorage.setItem('jg_pdf_mini', JSON.stringify({
+        x: miniGuardado?.x ?? null, y: miniGuardado?.y ?? null,
+        abierto: vozMini?.dataset.mini === 'si',
+      }));
+    } catch (_) {}
+  }
+  /* Encierra el punto dentro de la ventana, con margen del notch. Sin caja
+   * visible (voz apagada) no hay nada que medir: se guarda el punto crudo. */
+  function limitarMini(x, y) {
+    const w = vozMini?.offsetWidth || 48;
+    const h = vozMini?.offsetHeight || 48;
+    const margen = 8;
+    return {
+      x: Math.max(margen, Math.min(Math.round(x), window.innerWidth - w - margen)),
+      y: Math.max(margen, Math.min(Math.round(y), window.innerHeight - h - margen)),
+    };
+  }
+  function aplicarMini() {
+    if (!vozMini) return;
+    vozMini.dataset.mini = miniGuardado?.abierto ? 'si' : 'no';
+    if (miniGuardado?.x != null && miniGuardado?.y != null && enTelefono()) {
+      const p = limitarMini(miniGuardado.x, miniGuardado.y);
+      vozMini.dataset.movido = 'si';
+      vozMini.style.left = p.x + 'px';
+      vozMini.style.top = p.y + 'px';
+      vozMini.style.right = 'auto';
+      vozMini.style.bottom = 'auto';
+    }
+    const control = $$('btnPdfVozMiniPausa');
+    if (control) {
+      const colapsado = vozMini.dataset.mini === 'no';
+      /* El estado (pausa/play) lo sigue pintando `seguirEstadoDeVoz`; aquí
+       * solo se ajusta el nombre cuando se comprime, para no mentir. */
+      if (colapsado) control.setAttribute('aria-label', 'Mostrar controles de voz');
+    }
+  }
+  function fijarMiniAbierto(abrir) {
+    if (!vozMini) return;
+    vozMini.dataset.mini = abrir ? 'si' : 'no';
+    guardarMini();
+    const control = $$('btnPdfVozMiniPausa');
+    if (control && !abrir) control.setAttribute('aria-label', 'Mostrar controles de voz');
+  }
+  if (vozMini) {
+    let arrastre = null;
+    let arrastreSuprimeToque = 0;
+    vozMini.addEventListener('pointerdown', (ev) => {
+      if (!enTelefono()) return;
+      arrastre = { x: ev.clientX, y: ev.clientY, moviendo: false,
+        izq: vozMini.offsetLeft, sup: vozMini.offsetTop, id: ev.pointerId };
+    });
+    vozMini.addEventListener('pointermove', (ev) => {
+      if (!arrastre) return;
+      const dx = ev.clientX - arrastre.x;
+      const dy = ev.clientY - arrastre.y;
+      if (!arrastre.moviendo && Math.hypot(dx, dy) < UMBRAL_ARRASTRE) return;
+      if (!arrastre.moviendo) {
+        /* La captura se toma SOLO al arrastrar: tomarla en `pointerdown`
+         * redirigía también el `pointerup` de un toque al contenedor y el
+         * `click` caía fuera del botón (Ajustes dejaba de abrir la paleta). */
+        arrastre.moviendo = true;
+        try { vozMini.setPointerCapture(arrastre.id); } catch (_) {}
+      }
+      /* La pastilla es `fixed`: su offsetParent es la ventana, así que
+       * offsetLeft/Top son coordenadas de pantalla directas. */
+      const p = limitarMini(arrastre.izq + dx, arrastre.sup + dy);
+      vozMini.dataset.movido = 'si';
+      vozMini.style.left = p.x + 'px';
+      vozMini.style.top = p.y + 'px';
+      vozMini.style.right = 'auto';
+      vozMini.style.bottom = 'auto';
+    });
+    const terminarArrastre = (ev) => {
+      if (!arrastre) return;
+      const movia = arrastre.moviendo;
+      /* Se guarda el punto final para que al volver siga donde quedó. */
+      if (movia) {
+        const r = vozMini.getBoundingClientRect();
+        miniGuardado = { ...(miniGuardado || {}), x: Math.round(r.left), y: Math.round(r.top) };
+        guardarMini();
+        /* El navegador dispara `click` tras soltar aunque haya sido un
+         * arrastre: se marca para tragárselo abajo sin romper el foco. */
+        arrastreSuprimeToque = Date.now();
+      } else if (ev.type === 'pointerup' && !ev.target.closest('button')) {
+        /* Toque sobre el fondo o el texto: comprime o expande. Los botones
+         * atienden su propio `click` y no se tocan aquí. */
+        fijarMiniAbierto(vozMini.dataset.mini !== 'si');
+      }
+      arrastre = null;
+    };
+    vozMini.addEventListener('pointerup', terminarArrastre);
+    vozMini.addEventListener('pointercancel', () => { arrastre = null; });
+    vozMini.addEventListener('click', (ev) => {
+      if (Date.now() - arrastreSuprimeToque < 500) {
+        ev.stopPropagation();
+        ev.preventDefault();
+      }
+    }, true);
+    aplicarMini();
+    /* Girar o cambiar la barra del navegador puede dejar el punto guardado
+     * fuera de la ventana: se vuelve a encerrar sin perderlo. */
+    window.addEventListener('resize', () => {
+      if (vozMini.dataset.movido === 'si' && miniGuardado?.x != null) aplicarMini();
+    });
+  }
+
+  /* Mini reproductor: expandido pausa o reanuda; comprimido expande. No abre
+   * el panel ni detiene la voz. Para cambiar modelo o velocidad está
+   * «Ajustes». */
   const vozMiniPausa = $$('btnPdfVozMiniPausa');
   if (vozMiniPausa) {
     vozMiniPausa.addEventListener('click', () => {
+      if (vozMini && vozMini.dataset.mini === 'no') { fijarMiniAbierto(true); return; }
       const toggle = document.querySelector('#pdfDockNav [data-tts-action="toggle"]');
       if (toggle) toggle.click();
     });

@@ -1,4 +1,4 @@
-<!-- v2.54.0 · PDF móvil: dock de voz con acordeón compacto y Desde aquí en icono -->
+<!-- v2.55.0 · PDF móvil: mini reproductor flotante, arrastrable y comprimible -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -2722,7 +2722,19 @@
       background:var(--lec-superficie, var(--surface));
       border:1px solid var(--lec-linea, var(--line));
       box-shadow:0 8px 26px -14px rgba(0,0,0,.75);
+      /* Flotante y movible: el dedo lo arrastra a cualquier sitio, así que el
+         gesto táctil lo gestiona el JS y no el scroll. */
+      touch-action:none;user-select:none;-webkit-user-select:none;
     }
+    /* Comprimido: un círculo con el control. Un toque lo expande (quién
+       narra, velocidad, Ajustes); arrastrarlo lo mueve sin disparar toques. */
+    body.jg-leyendo.jg-voz-activa .pdf-voz-mini[data-mini="no"]{
+      width:48px;height:48px;padding:6px;gap:0;justify-content:center;border-radius:50%;
+    }
+    body.jg-leyendo.jg-voz-activa .pdf-voz-mini[data-mini="no"] .pdf-vm-texto,
+    body.jg-leyendo.jg-voz-activa .pdf-voz-mini[data-mini="no"] .pdf-vm-ajustes{display:none}
+    /* Una vez movido a mano, mandan las coordenadas del JS, no la esquina. */
+    body.jg-leyendo.jg-voz-activa .pdf-voz-mini[data-movido="si"]{right:auto;bottom:auto}
     body.jg-leyendo.jg-voz-activa.jg-inmersivo .pdf-voz-mini{
       inset:auto 12px calc(12px + env(safe-area-inset-bottom)) auto;
     }
@@ -6676,8 +6688,11 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
 
           <!-- Mientras la voz suena, esto queda SIEMPRE a la vista aunque el
                resto del cromo se aparte. Sin ello, la lectura inmersiva te
-               dejaría sin forma de parar la voz salvo a ciegas. -->
-          <div class="pdf-voz-mini" id="pdfVozMini" aria-live="off">
+               dejaría sin forma de parar la voz salvo a ciegas. Es flotante:
+               se arrastra con el dedo a cualquier sitio, y un toque lo
+               comprime o lo expande. -->
+          <div class="pdf-voz-mini" id="pdfVozMini" aria-live="off" data-mini="no"
+               title="Arrastra para mover · toca para mostrar quién narra y los ajustes">
             <button type="button" class="pdf-vm-btn" id="btnPdfVozMiniPausa" aria-label="Pausar la lectura" data-estado="sonando">
               <svg class="pdf-vm-icono-pausa" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
               <svg class="pdf-vm-icono-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="8 5 20 12 8 19"/></svg>
@@ -16735,7 +16750,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v96';
+const JG_JS_V = 'v97';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

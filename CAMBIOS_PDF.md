@@ -3,6 +3,33 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.55.0 · Mini reproductor flotante, arrastrable y comprimible
+
+Lo pedido: el botón que queda al cerrar Voz (quién narra, velocidad, Ajustes)
+ocupaba mucho en el teléfono; que se pueda mover con el dedo y comprimir.
+
+**Corrección (`index.html`, `js/pdf/libroVista.js`):**
+- El mini arranca comprimido: un círculo de 48 px con el control. Un toque lo
+  expande (quién narra · velocidad · Ajustes); un toque sobre el texto lo vuelve
+  a comprimir. Expandido, el control pausa/reanuda como antes.
+- Se arrastra con el dedo a cualquier parte de la pantalla (Pointer Events,
+  umbral ~10 px para no robar toques, encerrado en la ventana con margen del
+  notch). Posición y estado se recuerdan en `jg_pdf_mini`.
+- Hallazgo al verificar: tomar la captura del puntero en `pointerdown`
+  redirigía el `click` al contenedor y Ajustes dejaba de abrir la paleta. La
+  captura se toma solo al superar el umbral de arrastre; los toques conservan
+  su objetivo. Etiqueta del control según estado («Mostrar controles de voz»
+  comprimido, Pausar/Seguir expandido).
+- IDs, `jg-voz-activa` y puentes intactos; en escritorio no existe el mini.
+
+Pruebas en local: guion del mini 7/7 (círculo, expandir, Ajustes abre paleta
+con voz activa, arrastre táctil real sin disparar toques, dentro de pantalla,
+persistencia y retorno al punto tras recargar) · `verificar_pdf_movil` 46/46 ·
+`verificar_pdf_geometria` en verde · capturas 390 px. Detector Impeccable: 0
+errores (129 avisos previos del proyecto).
+
+Marcadores de entrega: `v2.55.0`, `JG_JS_V=v97`, shell `jg-turbo-shell-v97`.
+
 ## 2026-09-07 · v2.54.0 · Dock de voz compacto con acordeón en el teléfono
 
 Lo pedido: al abrir Voz en el teléfono, la cabecera «Herramientas de voz» y el
