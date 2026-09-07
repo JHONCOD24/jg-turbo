@@ -153,7 +153,8 @@ se cortó.
 | `node tests/verificar_pdf_geometria.mjs` | Desbordes, toques ≥44px (los <44px fallan) y solapes en móvil/tablet/escritorio | 54 |
 | `node tests/verificar_pdf_scroll.mjs` | Que la biblioteca **se pueda desplazar** con nueve libros, y que las otras pestañas y el lector conserven su modelo de scroll | 39 |
 | `node tests/verificar_pdf_navegador.mjs` | Recorrido funcional completo del lector | 116 |
-| `node tests/verificar_pdf_movil.mjs` | **Obligatoria al tocar el lector en móvil**: reparto real de la pantalla, alcance del pulgar hoja por hoja, y que tablet y escritorio NO cambien | 27 |
+| `node tests/verificar_pdf_movil.mjs` | **Obligatoria al tocar el lector en móvil**: reparto real de la pantalla, alcance del pulgar hoja por hoja, y que tablet y escritorio NO cambien | 46 |
+| `node tests/verificar_pdf_voz_acordeon.mjs` | **Obligatoria al tocar el dock/acordeón de voz**: paleta plegable en tablet/escritorio, lectura sin saltos al plegar, estado tras F5 y hoja del teléfono intacta | 18 |
 | `node tests/verificar_pdf_mini_flotante.mjs` | **Obligatoria al tocar el mini reproductor**: círculo comprimido, expandir, Ajustes sin apagar la voz, arrastre táctil sin robar toques y punto recordado tras recargar | 7 |
 | `node tests/verificar_pdf_unir_palabras.mjs` | «Unir palabras» sobre una palabra partida de verdad, con su Deshacer | 18 |
 | `node tests/verificar_arranque_ligero.mjs` | **Obligatoria al tocar lo que se carga al arrancar**: que el lector de PDF no viaje con quien solo abre la app | 7 |
@@ -337,7 +338,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v92`** (herramientas de voz plegables, v2.51.0). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v98`** (música de fondo v2.56.0 + paleta de voz plegable en tablet/escritorio v2.57.0). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 
