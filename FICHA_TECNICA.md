@@ -2,6 +2,10 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+PDF v2.53.0: versión final consolidada del plan PDF móvil. Continuidad F5,
+carga diferida, toques ≥44 px, pisos accesibles ≥12 px y diseño limpio.
+Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 PDF v2.52.0: recargar deja en la pestaña y el libro; toques de 44 px; exportar
 y preguntar se cargan bajo demanda. Plan de móvil aún incompleto. Detalle:
 [CAMBIOS_PDF.md](CAMBIOS_PDF.md).

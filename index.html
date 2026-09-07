@@ -1,4 +1,4 @@
-<!-- v2.52.0 · PDF: F5 deja en la pestaña/libro, carga más liviana y toques ≥44 px -->
+<!-- v2.53.0 · PDF móvil: implementación final consolidada con todas las fases del plan -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -8333,6 +8333,9 @@ function jgMostrarResultadoInline(textarea){
 }
 tabs.forEach((tab, indice) => {
   tab.addEventListener('click', () => {
+    if (tab.dataset.tab === 'pdf') {
+      try { localStorage.setItem('jg_pdf_vista_activa', 'biblioteca'); } catch (_) {}
+    }
     jgActivarPanel(tab);
   });
   /* Fase B · Precarga por intención (§4.2.1): descargar módulo en pointerdown antes del click */
@@ -16686,7 +16689,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v94';
+const JG_JS_V = 'v95';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

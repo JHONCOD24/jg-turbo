@@ -11,6 +11,12 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.53.0, 2026-09-07
+
+Implementación final consolidada del plan de mejoramiento PDF en móvil,
+promovida de worktree-pdf-movil a main. Fases A, B, C, D y E integradas.
+Marcador v2.53.0, JG_JS_V=v95, jg-turbo-shell-v95.
+
 ## Publicación PDF v2.52.0, 2026-09-06
 
 Revisión del plan de mejoramiento PDF en móvil (fases A–E parciales): F5 deja

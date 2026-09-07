@@ -3,6 +3,25 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.53.0 · Implementación final consolidada del plan PDF móvil
+
+Entrega definitiva solicitada por el usuario tras validación interactiva local.
+Se consolida la rama `worktree-pdf-movil` en `main` como versión de producción.
+
+**Detalle de la consolidación:**
+- **Fase A (Continuidad F5 y navegación):** F5 mantiene exactamente la pestaña y
+  el documento en lectura; hacer clic explícito en la pestaña "PDF" abre la
+  biblioteca limpia. Restauración condicionada a `?tab=pdf`.
+- **Fase B (Fluidez y carga bajo demanda):** Arranque ligero en 0 KB para PDF,
+  precarga por intención en pointerdown, `scheduler.yield()` en la extracción y
+  carga diferida (`import()`) para exportar y buscar.
+- **Fases C, D y E (Responsive, táctil y visual):** Pisos tipográficos accesibles
+  (`--fs-xs: 12px`, `--fs-sm: 13px`, `--fs-md: 15px`), controles táctiles unificados
+  a 44 px (`--h-ctrl: 44px`, `--h-ctrl-lg: 52px`), rejilla fluida auto-fill,
+  eliminación de degradados en textos, sin halos ni puntos parpadeantes.
+- Verificación: 10 suites en verde (arranque 10, recarga 33, pestañas 30, móvil 46).
+- Marcadores: `v2.53.0`, `JG_JS_V=v95`, shell `jg-turbo-shell-v95`.
+
 ## 2026-09-06 · v2.52.0 · Recargar deja en el libro, toques más grandes, carga más liviana
 
 Trabajo del plan de mejoramiento PDF en móvil (`worktree-pdf-movil`), publicado
