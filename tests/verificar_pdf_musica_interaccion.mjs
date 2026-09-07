@@ -80,7 +80,7 @@ const resultados = await page.evaluate(async () => {
   };
 
   // 4. Cambiar de pista dentro del ánimo
-  const btnPista2 = document.querySelector('[data-pista="concentracion_2_flujo_continuo"]');
+  const btnPista2 = document.querySelector('[data-pista="concentracion_hypnotic_pulse"]');
   btnPista2?.click();
   await new Promise(r => setTimeout(r, 600));
 

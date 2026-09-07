@@ -1,0 +1,101 @@
+[
+  {
+    "id": "concentracion_deep_work_flow",
+    "animo": "concentracion",
+    "nombre": "Deep Work Flow",
+    "duracion": "2:25",
+    "duracionSeg": 145.98,
+    "desc": "Pulso ambiental armónico para entrar en estado de flujo profundo",
+    "src": "/audio/musica/concentracion_deep_work_flow.mp3"
+  },
+  {
+    "id": "concentracion_hypnotic_pulse",
+    "animo": "concentracion",
+    "nombre": "Hypnotic Pulse",
+    "duracion": "2:23",
+    "duracionSeg": 143.26,
+    "desc": "Ritmo envolvente y constante que estimula la concentración activa",
+    "src": "/audio/musica/concentracion_hypnotic_pulse.mp3"
+  },
+  {
+    "id": "concentracion_resonant_mind",
+    "animo": "concentracion",
+    "nombre": "Resonant Mind",
+    "duracion": "2:53",
+    "duracionSeg": 173.27,
+    "desc": "Resonancia acústica suave para estudio intensivo y retención",
+    "src": "/audio/musica/concentracion_resonant_mind.mp3"
+  },
+  {
+    "id": "relax_felt_and_cello",
+    "animo": "relax",
+    "nombre": "Felt & Cello",
+    "duracion": "2:59",
+    "duracionSeg": 179.43,
+    "desc": "Piano acústico aterciopelado y violonchelo cálido y reflexivo",
+    "src": "/audio/musica/relax_felt_and_cello.mp3"
+  },
+  {
+    "id": "relax_quiet_pages",
+    "animo": "relax",
+    "nombre": "Quiet Pages",
+    "duracion": "3:00",
+    "duracionSeg": 180.37,
+    "desc": "Atmósfera sosegada ideal para lectura de novelas y ensayos",
+    "src": "/audio/musica/relax_quiet_pages.mp3"
+  },
+  {
+    "id": "relax_reading_space",
+    "animo": "relax",
+    "nombre": "Reading Space",
+    "duracion": "2:24",
+    "duracionSeg": 144.43,
+    "desc": "Espacio sonoro abierto y luminoso para despejar la mente",
+    "src": "/audio/musica/relax_reading_space.mp3"
+  },
+  {
+    "id": "relax_still_waters_spa",
+    "animo": "relax",
+    "nombre": "Still Waters Spa",
+    "duracion": "2:51",
+    "duracionSeg": 171.57,
+    "desc": "Acordes armónicos cristalinos y relajación profunda antiestrés",
+    "src": "/audio/musica/relax_still_waters_spa.mp3"
+  },
+  {
+    "id": "noche_late_hours",
+    "animo": "noche",
+    "nombre": "Late Hours",
+    "duracion": "2:51",
+    "duracionSeg": 171.11,
+    "desc": "Tonos aterciopelados y descanso visual para leer en la noche",
+    "src": "/audio/musica/noche_late_hours.mp3"
+  },
+  {
+    "id": "noche_slow_waves",
+    "animo": "noche",
+    "nombre": "Slow Waves",
+    "duracion": "2:56",
+    "duracionSeg": 176.06,
+    "desc": "Ondas lentas y frecuencias bajas para inducir el reposo",
+    "src": "/audio/musica/noche_slow_waves.mp3"
+  },
+  {
+    "id": "lluvia_gentle_window_rain",
+    "animo": "lluvia",
+    "nombre": "Gentle Window Rain",
+    "duracion": "2:35",
+    "duracionSeg": 155.16,
+    "desc": "Lluvia constante y apacible golpeando suavemente el cristal",
+    "src": "/audio/musica/lluvia_gentle_window_rain.mp3"
+  },
+  {
+    "id": "lluvia_rain_and_felt_piano",
+    "animo": "lluvia",
+    "nombre": "Rain & Felt Piano",
+    "duracion": "3:00",
+    "duracionSeg": 180.49,
+    "desc": "Fusión reconfortante de gotas de lluvia y piano suave",
+    "src": "/audio/musica/lluvia_rain_and_felt_piano.mp3"
+  }
+]

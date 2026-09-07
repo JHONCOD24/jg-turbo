@@ -5037,6 +5037,7 @@ export function inicializarLectorPdf(deps = {}) {
     const listaPistas = $('pdfMusicaPistasLista');
     const badge = $('pdfMusicaEstadoBadge');
     const autoCheck = $('pdfMusicaAuto');
+    const aleatCheck = $('pdfMusicaAleatoria');
     const duckingCheck = $('pdfMusicaDucking');
     const volMusica = $('pdfMusicaVolMusica');
     const valMusica = $('pdfMusicaValMusica');
@@ -5086,6 +5087,10 @@ export function inicializarLectorPdf(deps = {}) {
       musicaFondo.setAutomatica(autoCheck.checked);
     });
 
+    aleatCheck?.addEventListener('change', () => {
+      musicaFondo.setAleatoria(aleatCheck.checked);
+    });
+
     duckingCheck?.addEventListener('change', () => {
       musicaFondo.setDucking(duckingCheck.checked);
     });
@@ -5122,6 +5127,7 @@ export function inicializarLectorPdf(deps = {}) {
       });
 
       if (autoCheck) autoCheck.checked = st.automatica;
+      if (aleatCheck) aleatCheck.checked = st.aleatoria;
       if (duckingCheck) duckingCheck.checked = st.duckingActivo;
       if (volMusica) volMusica.value = String(st.volumenMusica);
       if (valMusica) valMusica.textContent = `${Math.round(st.volumenMusica * 100)}%`;

@@ -1,83 +1,146 @@
 /* JG Turbo · Música de fondo para el módulo PDF
  *
  * Mezclador de audio web local-first para lectura concentrada.
- * Permite escuchar loops instrumentales libres de derechos mientras la voz
+ * Permite escuchar música instrumental de estudio en alta calidad mientras la voz
  * neural narra el texto, con volumen independiente, ducking automático
- * («bajar música cuando habla la voz»), fundidos suaves al pausar/reanudar
- * y persistencia sin conexión.
+ * («bajar música cuando habla la voz»), fundidos suaves al pausar/reanudar,
+ * reproducción aleatoria continua por categoría con fundido cruzado (crossfade)
+ * de estudio y persistencia sin conexión.
  */
 
 export const ANIMOS = {
-  concentracion: { id: 'concentracion', label: 'Concentración', emoji: '🎯', desc: 'Enfoque y claridad mental (68-72 BPM)' },
-  relax: { id: 'relax', label: 'Relax', emoji: '🌿', desc: 'Calma, meditación y lectura pausada (60-65 BPM)' },
-  noche: { id: 'noche', label: 'Noche', emoji: '🌙', desc: 'Tonos graves cálidos para no cansar la vista' },
-  lluvia: { id: 'lluvia', label: 'Lluvia suave', emoji: '🌧️', desc: 'Sonido ambiental continuo de lluvia y brisa' },
+  concentracion: {
+    id: 'concentracion',
+    label: 'Concentración',
+    emoji: '🎯',
+    desc: 'Enfoque y claridad mental (Deep Work Flow, Hypnotic Pulse, Resonant Mind)',
+  },
+  relax: {
+    id: 'relax',
+    label: 'Relax',
+    emoji: '🌿',
+    desc: 'Calma y lectura pausada (Felt & Cello, Quiet Pages, Reading Space, Still Waters Spa)',
+  },
+  noche: {
+    id: 'noche',
+    label: 'Noche',
+    emoji: '🌙',
+    desc: 'Tonos graves y reposo nocturno (Late Hours, Slow Waves)',
+  },
+  lluvia: {
+    id: 'lluvia',
+    label: 'Lluvia suave',
+    emoji: '🌧️',
+    desc: 'Ambiente reconfortante de lluvia y piano (Gentle Window Rain, Rain & Felt Piano)',
+  },
 };
 
 export const CATALOGO_PISTAS = [
+  // ── Concentración (3 pistas) ──
   {
-    id: 'concentracion_1_pulso_alfa',
+    id: 'concentracion_deep_work_flow',
     animo: 'concentracion',
-    nombre: 'Pulso Alfa',
-    duracion: '14s loop',
-    desc: 'Lo-Fi ambiental con armónicos alfa binaurales para concentración profunda',
-    src: '/audio/musica/concentracion_1_pulso_alfa.mp3',
+    nombre: 'Deep Work Flow',
+    duracion: '2:25',
+    duracionSeg: 145.98,
+    desc: 'Pulso ambiental armónico para entrar en estado de flujo profundo',
+    src: '/audio/musica/concentracion_deep_work_flow.mp3',
   },
   {
-    id: 'concentracion_2_flujo_continuo',
+    id: 'concentracion_hypnotic_pulse',
     animo: 'concentracion',
-    nombre: 'Flujo Continuo',
-    duracion: '13s loop',
-    desc: 'Pad atmosférico cálido de estudio con resonancia envolvente',
-    src: '/audio/musica/concentracion_2_flujo_continuo.mp3',
+    nombre: 'Hypnotic Pulse',
+    duracion: '2:23',
+    duracionSeg: 143.26,
+    desc: 'Ritmo envolvente y constante que estimula la concentración activa',
+    src: '/audio/musica/concentracion_hypnotic_pulse.mp3',
   },
   {
-    id: 'relax_1_ondas_de_calma',
+    id: 'concentracion_resonant_mind',
+    animo: 'concentracion',
+    nombre: 'Resonant Mind',
+    duracion: '2:53',
+    duracionSeg: 173.27,
+    desc: 'Resonancia acústica suave para estudio intensivo y retención',
+    src: '/audio/musica/concentracion_resonant_mind.mp3',
+  },
+
+  // ── Relax (4 pistas) ──
+  {
+    id: 'relax_felt_and_cello',
     animo: 'relax',
-    nombre: 'Ondas de Calma',
-    duracion: '16s loop',
-    desc: 'Acordes celestiales suaves a 60 BPM con reverberación espaciosa',
-    src: '/audio/musica/relax_1_ondas_de_calma.mp3',
+    nombre: 'Felt & Cello',
+    duracion: '2:59',
+    duracionSeg: 179.43,
+    desc: 'Piano acústico aterciopelado y violonchelo cálido y reflexivo',
+    src: '/audio/musica/relax_felt_and_cello.mp3',
   },
   {
-    id: 'relax_2_serenidad_acustica',
+    id: 'relax_quiet_pages',
     animo: 'relax',
-    nombre: 'Serenidad Acústica',
-    duracion: '15s loop',
-    desc: 'Campanas armónicas tenues y calidez acústica',
-    src: '/audio/musica/relax_2_serenidad_acustica.mp3',
+    nombre: 'Quiet Pages',
+    duracion: '3:00',
+    duracionSeg: 180.37,
+    desc: 'Atmósfera sosegada ideal para lectura de novelas y ensayos',
+    src: '/audio/musica/relax_quiet_pages.mp3',
   },
   {
-    id: 'noche_1_penumbra_serena',
+    id: 'relax_reading_space',
+    animo: 'relax',
+    nombre: 'Reading Space',
+    duracion: '2:24',
+    duracionSeg: 144.43,
+    desc: 'Espacio sonoro abierto y luminoso para despejar la mente',
+    src: '/audio/musica/relax_reading_space.mp3',
+  },
+  {
+    id: 'relax_still_waters_spa',
+    animo: 'relax',
+    nombre: 'Still Waters Spa',
+    duracion: '2:51',
+    duracionSeg: 171.57,
+    desc: 'Acordes armónicos cristalinos y relajación profunda antiestrés',
+    src: '/audio/musica/relax_still_waters_spa.mp3',
+  },
+
+  // ── Noche (2 pistas) ──
+  {
+    id: 'noche_late_hours',
     animo: 'noche',
-    nombre: 'Penumbra Serena',
-    duracion: '16s loop',
-    desc: 'Sub-bass profundo con filtro cálido; cero brillos molestos a oscuras',
-    src: '/audio/musica/noche_1_penumbra_serena.mp3',
+    nombre: 'Late Hours',
+    duracion: '2:51',
+    duracionSeg: 171.11,
+    desc: 'Tonos aterciopelados y descanso visual para leer en la noche',
+    src: '/audio/musica/noche_late_hours.mp3',
   },
   {
-    id: 'noche_2_nebulosa_estelar',
+    id: 'noche_slow_waves',
     animo: 'noche',
-    nombre: 'Nebulosa Estelar',
-    duracion: '16s loop',
-    desc: 'Textura hipnagógica para lectura antes de dormir',
-    src: '/audio/musica/noche_2_nebulosa_estelar.mp3',
+    nombre: 'Slow Waves',
+    duracion: '2:56',
+    duracionSeg: 176.06,
+    desc: 'Ondas lentas y frecuencias bajas para inducir el reposo',
+    src: '/audio/musica/noche_slow_waves.mp3',
+  },
+
+  // ── Lluvia suave (2 pistas) ──
+  {
+    id: 'lluvia_gentle_window_rain',
+    animo: 'lluvia',
+    nombre: 'Gentle Window Rain',
+    duracion: '2:35',
+    duracionSeg: 155.16,
+    desc: 'Lluvia constante y apacible golpeando suavemente el cristal',
+    src: '/audio/musica/lluvia_gentle_window_rain.mp3',
   },
   {
-    id: 'lluvia_1_lluvia_ventana',
+    id: 'lluvia_rain_and_felt_piano',
     animo: 'lluvia',
-    nombre: 'Lluvia en la Ventana',
-    duracion: '12s loop',
-    desc: 'Lluvia constante contra el cristal con filtrado acústico suave',
-    src: '/audio/musica/lluvia_1_lluvia_ventana.mp3',
-  },
-  {
-    id: 'lluvia_2_brisa_y_gotas',
-    animo: 'lluvia',
-    nombre: 'Brisa y Gotas',
-    duracion: '12s loop',
-    desc: 'Lluvia tenue de bosque con brisa pacífica',
-    src: '/audio/musica/lluvia_2_brisa_y_gotas.mp3',
+    nombre: 'Rain & Felt Piano',
+    duracion: '3:00',
+    duracionSeg: 180.49,
+    desc: 'Fusión reconfortante de gotas de lluvia y piano suave',
+    src: '/audio/musica/lluvia_rain_and_felt_piano.mp3',
   },
 ];
 
@@ -93,24 +156,40 @@ export function resolverAnimoSegunHora(fecha = new Date()) {
 const FACTOR_DUCKING = 0.35;
 /* Tiempo de fundido al pausar lectura (5 segundos según el plan) */
 const PAUSA_FUNDIDO_SEG = 5.0;
+/* Duración de transición con fundido cruzado entre pistas (segundos) */
+const CROSSFADE_SEG = 3.5;
 
 class GestorMusicaFondo {
   constructor() {
     this.audioCtx = null;
-    this.gainNodo = null;
     this.duckingNodo = null;
-    this.audioEl = null;
-    this.mediaSourceNodo = null;
-    
+
+    // Arquitectura de doble canal para fundidos cruzados sin cortes (crossfade)
+    this.canalA = {
+      id: 'A',
+      audio: null,
+      gain: null,
+      source: null,
+    };
+    this.canalB = {
+      id: 'B',
+      audio: null,
+      gain: null,
+      source: null,
+    };
+    this.canalActivo = 'A';
+    this.estaTransicionando = false;
+
     // Estado interno
     this.activa = false;
     this.automatica = true;
+    this.aleatoria = true; // Por defecto aleatorio continuo por categoría
     this.animo = 'concentracion';
-    this.pistaId = 'concentracion_1_pulso_alfa';
-    this.volumenMusica = 0.20; // 20% por defecto según plan
+    this.pistaId = 'concentracion_deep_work_flow';
+    this.volumenMusica = 0.20; // 20% por defecto
     this.volumenVoz = 1.00;    // 100% por defecto
     this.duckingActivo = true;
-    
+
     this.estado = 'apagado'; // 'apagado' | 'cargando' | 'sonando' | 'pausado'
     this.vozHablando = false;
     this.temporizadorPausa = null;
@@ -118,9 +197,17 @@ class GestorMusicaFondo {
     this.suscriptores = new Set();
   }
 
+  get audioEl() {
+    return this.canalActivo === 'A' ? this.canalA.audio : this.canalB.audio;
+  }
+
+  get gainNodo() {
+    return this.canalActivo === 'A' ? this.canalA.gain : this.canalB.gain;
+  }
+
   inicializar() {
     this.cargarPreferencias();
-    this.prepararElementoAudio();
+    this.prepararCanales();
     this.vincularEventosTTS();
     this.aplicarVolumenVoz();
   }
@@ -133,6 +220,9 @@ class GestorMusicaFondo {
       const auto = localStorage.getItem('jg_musica_automatica');
       if (auto !== null) this.automatica = auto === 'true';
 
+      const aleat = localStorage.getItem('jg_musica_aleatoria');
+      if (aleat !== null) this.aleatoria = aleat === 'true';
+
       const animoGuardado = localStorage.getItem('jg_musica_animo');
       if (animoGuardado && ANIMOS[animoGuardado]) {
         this.animo = animoGuardado;
@@ -141,10 +231,10 @@ class GestorMusicaFondo {
       }
 
       const pistaGuardada = localStorage.getItem('jg_musica_pista');
-      if (pistaGuardada && CATALOGO_PISTAS.some(p => p.id === pistaGuardada)) {
+      if (pistaGuardada && CATALOGO_PISTAS.some((p) => p.id === pistaGuardada)) {
         this.pistaId = pistaGuardada;
       } else {
-        const primera = CATALOGO_PISTAS.find(p => p.animo === this.animo);
+        const primera = CATALOGO_PISTAS.find((p) => p.animo === this.animo);
         if (primera) this.pistaId = primera.id;
       }
 
@@ -169,6 +259,7 @@ class GestorMusicaFondo {
     try {
       localStorage.setItem('jg_musica_activa', String(this.activa));
       localStorage.setItem('jg_musica_automatica', String(this.automatica));
+      localStorage.setItem('jg_musica_aleatoria', String(this.aleatoria));
       localStorage.setItem('jg_musica_animo', this.animo);
       localStorage.setItem('jg_musica_pista', this.pistaId);
       localStorage.setItem('jg_musica_volumen', String(this.volumenMusica));
@@ -177,33 +268,62 @@ class GestorMusicaFondo {
     } catch (_) {}
   }
 
-  prepararElementoAudio() {
-    if (this.audioEl) return;
-    this.audioEl = new Audio();
-    this.audioEl.loop = true;
-    this.audioEl.preload = 'auto';
-    this.audioEl.volume = this.volumenMusica;
+  configurarElementoAudio(canal) {
+    const el = new Audio();
+    el.loop = false; // El bucle se maneja inteligentemente con crossfade continuo
+    el.preload = 'auto';
+    el.volume = this.volumenMusica;
 
-    this.audioEl.addEventListener('error', (e) => {
-      console.warn('[MusicaFondo] Error cargando pista de audio:', e);
-      this.estado = 'apagado';
-      this.notificarCambio();
-      this.mostrarAvisoError('Sin conexión para esa pista, sigue la voz');
+    el.addEventListener('error', (e) => {
+      console.warn(`[MusicaFondo] Error cargando pista en canal ${canal.id}:`, e);
+      if (this.canalActivo === canal.id) {
+        this.estado = 'apagado';
+        this.notificarCambio();
+        this.mostrarAvisoError('Sin conexión para esa pista, sigue la voz');
+      }
     });
 
-    this.audioEl.addEventListener('playing', () => {
-      if (this.activa) {
+    el.addEventListener('playing', () => {
+      if (this.activa && this.canalActivo === canal.id) {
         this.estado = 'sonando';
         this.notificarCambio();
       }
     });
 
-    this.audioEl.addEventListener('waiting', () => {
-      if (this.activa && this.estado === 'sonando') {
+    el.addEventListener('waiting', () => {
+      if (this.activa && this.canalActivo === canal.id && this.estado === 'sonando') {
         this.estado = 'cargando';
         this.notificarCambio();
       }
     });
+
+    // Detección anticipada de fin de pista para crossfade suave (4 segundos antes)
+    el.addEventListener('timeupdate', () => {
+      if (
+        this.activa &&
+        this.estado === 'sonando' &&
+        this.canalActivo === canal.id &&
+        !this.estaTransicionando &&
+        el.duration > 10 &&
+        el.duration - el.currentTime <= 4.0
+      ) {
+        this.transicionarSiguiente();
+      }
+    });
+
+    // Fallback si timeupdate no alcanzó a disparar
+    el.addEventListener('ended', () => {
+      if (this.activa && this.canalActivo === canal.id && !this.estaTransicionando) {
+        this.transicionarSiguiente();
+      }
+    });
+
+    canal.audio = el;
+  }
+
+  prepararCanales() {
+    if (!this.canalA.audio) this.configurarElementoAudio(this.canalA);
+    if (!this.canalB.audio) this.configurarElementoAudio(this.canalB);
   }
 
   conectarWebAudio() {
@@ -216,35 +336,53 @@ class GestorMusicaFondo {
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) {
-        if (this.audioEl) this.audioEl.volume = this.volumenMusica;
+        this.aplicarVolumenElementoDirecto();
         return;
       }
       this.audioCtx = new AudioContextClass();
-      
-      this.gainNodo = this.audioCtx.createGain();
-      this.gainNodo.gain.setValueAtTime(this.volumenMusica, this.audioCtx.currentTime);
 
+      // Master Ducking Node que alimenta la salida final
       this.duckingNodo = this.audioCtx.createGain();
       this.duckingNodo.gain.setValueAtTime(1.0, this.audioCtx.currentTime);
-
-      this.mediaSourceNodo = this.audioCtx.createMediaElementSource(this.audioEl);
-      this.mediaSourceNodo.connect(this.gainNodo);
-      this.gainNodo.connect(this.duckingNodo);
       this.duckingNodo.connect(this.audioCtx.destination);
-      // Con Web Audio activo, el elemento se deja al 100% para que toda
-      // la atenuación la controle el GainNode sin doble reducción.
-      if (this.audioEl) this.audioEl.volume = 1.0;
+
+      // Conexión Canal A
+      this.canalA.gain = this.audioCtx.createGain();
+      this.canalA.gain.gain.setValueAtTime(this.canalActivo === 'A' ? this.volumenMusica : 0.0001, this.audioCtx.currentTime);
+      this.canalA.source = this.audioCtx.createMediaElementSource(this.canalA.audio);
+      this.canalA.source.connect(this.canalA.gain);
+      this.canalA.gain.connect(this.duckingNodo);
+      this.canalA.audio.volume = 1.0;
+
+      // Conexión Canal B
+      this.canalB.gain = this.audioCtx.createGain();
+      this.canalB.gain.gain.setValueAtTime(this.canalActivo === 'B' ? this.volumenMusica : 0.0001, this.audioCtx.currentTime);
+      this.canalB.source = this.audioCtx.createMediaElementSource(this.canalB.audio);
+      this.canalB.source.connect(this.canalB.gain);
+      this.canalB.gain.connect(this.duckingNodo);
+      this.canalB.audio.volume = 1.0;
     } catch (err) {
-      console.info('[MusicaFondo] Fallback a HTMLAudioElement directo:', err.message);
+      console.info('[MusicaFondo] Fallback a audio directo sin Web Audio nodes:', err.message);
       this.audioCtx = null;
-      this.gainNodo = null;
       this.duckingNodo = null;
-      if (this.audioEl) this.audioEl.volume = this.volumenMusica;
+      this.canalA.gain = null;
+      this.canalB.gain = null;
+      this.aplicarVolumenElementoDirecto();
+    }
+  }
+
+  aplicarVolumenElementoDirecto() {
+    const factor = this.duckingActivo && this.vozHablando ? FACTOR_DUCKING : 1.0;
+    const vol = this.volumenMusica * factor;
+    if (this.canalA.audio) {
+      this.canalA.audio.volume = this.canalActivo === 'A' ? vol : 0.001;
+    }
+    if (this.canalB.audio) {
+      this.canalB.audio.volume = this.canalActivo === 'B' ? vol : 0.001;
     }
   }
 
   vincularEventosTTS() {
-    // Escuchar progreso y estado del TTS para aplicar ducking y coordinación
     document.addEventListener('jg-tts-avance', (ev) => {
       const d = ev && ev.detail;
       if (!d) return;
@@ -258,29 +396,69 @@ class GestorMusicaFondo {
       }
     });
 
-    // Manejar cuando la pestaña o el dispositivo interrumpe el audio
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.activa && this.estado === 'sonando') {
-        // En segundo plano la música sigue si la voz sigue sonando
+        // En segundo plano la música sigue activa
       }
     });
   }
 
   actualizarDucking() {
     if (!this.activa || this.estado !== 'sonando') return;
-    const factor = (this.duckingActivo && this.vozHablando) ? FACTOR_DUCKING : 1.0;
-    
+    const factor = this.duckingActivo && this.vozHablando ? FACTOR_DUCKING : 1.0;
+
     if (this.audioCtx && this.duckingNodo) {
       const t = this.audioCtx.currentTime;
       this.duckingNodo.gain.cancelScheduledValues(t);
       this.duckingNodo.gain.setTargetAtTime(factor, t, 0.25);
-    } else if (this.audioEl) {
-      this.audioEl.volume = this.volumenMusica * factor;
+    } else {
+      this.aplicarVolumenElementoDirecto();
     }
   }
 
   pistaActual() {
-    return CATALOGO_PISTAS.find(p => p.id === this.pistaId) || CATALOGO_PISTAS[0];
+    return CATALOGO_PISTAS.find((p) => p.id === this.pistaId) || CATALOGO_PISTAS[0];
+  }
+
+  /**
+   * Obtiene la siguiente pista aleatoria dentro del ánimo actual
+   * (evitando repetir la misma de inmediato si hay más de 1 pista).
+   */
+  obtenerSiguienteAleatoria() {
+    const animoActual = this.automatica ? resolverAnimoSegunHora() : this.animo;
+    const pistas = CATALOGO_PISTAS.filter((p) => p.animo === animoActual);
+    if (!pistas.length) return CATALOGO_PISTAS[0];
+
+    // Excluir la pista actual para evitar repetir la misma de forma consecutiva
+    const candidatas = pistas.length > 1
+      ? pistas.filter((p) => p.id !== this.pistaId)
+      : pistas;
+
+    const elegida = candidatas[Math.floor(Math.random() * candidatas.length)];
+    return elegida || pistas[0];
+  }
+
+  /**
+   * Transición automática a la siguiente pista:
+   * Si 'aleatoria' es true, elige otra canción del ánimo con fundido cruzado.
+   * Si 'aleatoria' es false, repite la misma pista también con fundido cruzado sin cortes.
+   */
+  transicionarSiguiente() {
+    if (this.estaTransicionando || !this.activa) return;
+    this.estaTransicionando = true;
+
+    let siguientePista = null;
+    if (this.aleatoria) {
+      siguientePista = this.obtenerSiguienteAleatoria();
+    } else {
+      siguientePista = this.pistaActual();
+    }
+
+    if (siguientePista) {
+      this.reproducirPista(siguientePista, { suave: true, fundidoCruzado: true });
+    } else {
+      this.estaTransicionando = false;
+    }
   }
 
   async reproducir({ suave = true } = {}) {
@@ -288,16 +466,91 @@ class GestorMusicaFondo {
       this.activa = true;
       this.guardarPreferencias();
     }
+    const pista = this.pistaActual();
+    await this.reproducirPista(pista, { suave, fundidoCruzado: false });
+  }
+
+  /**
+   * Reproduce una pista con soporte para:
+   * - Inicio directo con fundido de entrada suave
+   * - Transición con fundido cruzado (crossfade) de 3.5 segundos entre canal A y canal B
+   */
+  async reproducirPista(pista, { suave = true, fundidoCruzado = false } = {}) {
+    if (!pista) return;
+    this.activa = true;
     this.cancelarTemporizadorPausa();
     this.conectarWebAudio();
 
-    const pista = this.pistaActual();
-    if (!pista || !this.audioEl) return;
+    if (fundidoCruzado && this.audioCtx && this.canalA.gain && this.canalB.gain) {
+      // ── Fundido cruzado de estudio entre canales ──
+      const saliente = this.canalActivo === 'A' ? this.canalA : this.canalB;
+      const entrante = this.canalActivo === 'A' ? this.canalB : this.canalA;
 
-    if (!this.audioEl.src || !this.audioEl.src.endsWith(pista.src)) {
-      this.audioEl.src = pista.src;
+      try {
+        if (this.audioCtx.state === 'suspended') {
+          await this.audioCtx.resume().catch(() => {});
+        }
+
+        entrante.audio.src = pista.src;
+        entrante.audio.currentTime = 0;
+        await entrante.audio.play();
+
+        const t = this.audioCtx.currentTime;
+        // Canal entrante sube de 0 a volumenMusica
+        entrante.gain.gain.cancelScheduledValues(t);
+        entrante.gain.gain.setValueAtTime(0.0001, t);
+        entrante.gain.gain.linearRampToValueAtTime(this.volumenMusica, t + CROSSFADE_SEG);
+
+        // Canal saliente baja a 0
+        saliente.gain.gain.cancelScheduledValues(t);
+        saliente.gain.gain.setValueAtTime(this.volumenMusica, t);
+        saliente.gain.gain.linearRampToValueAtTime(0.0001, t + CROSSFADE_SEG);
+
+        setTimeout(() => {
+          try {
+            saliente.audio.pause();
+            saliente.audio.currentTime = 0;
+          } catch (_) {}
+          this.canalActivo = entrante.id;
+          this.pistaId = pista.id;
+          this.animo = pista.animo;
+          this.estaTransicionando = false;
+          this.guardarPreferencias();
+          this.notificarCambio();
+        }, Math.round((CROSSFADE_SEG + 0.1) * 1000));
+
+        this.estado = 'sonando';
+        this.pistaId = pista.id;
+        this.animo = pista.animo;
+        this.notificarCambio();
+        return;
+      } catch (err) {
+        console.warn('[MusicaFondo] Fallback en fundido cruzado:', err.message);
+        this.estaTransicionando = false;
+        // Si falla el crossfade simultáneo, continúa al inicio normal abajo
+      }
     }
 
+    // ── Inicio o cambio directo en el canal activo ──
+    this.estaTransicionando = false;
+    const canal = this.canalActivo === 'A' ? this.canalA : this.canalB;
+    const otroCanal = this.canalActivo === 'A' ? this.canalB : this.canalA;
+
+    // Detener otro canal si estaba sonando
+    try {
+      if (otroCanal.audio) {
+        otroCanal.audio.pause();
+        otroCanal.audio.currentTime = 0;
+      }
+    } catch (_) {}
+
+    if (!canal.audio) return;
+    if (!canal.audio.src || !canal.audio.src.endsWith(pista.src)) {
+      canal.audio.src = pista.src;
+    }
+
+    this.pistaId = pista.id;
+    this.animo = pista.animo;
     this.estado = 'cargando';
     this.notificarCambio();
 
@@ -306,24 +559,24 @@ class GestorMusicaFondo {
         await this.audioCtx.resume().catch(() => {});
       }
 
-      if (this.audioCtx && this.gainNodo) {
-        if (this.audioEl) this.audioEl.volume = 1.0;
+      if (this.audioCtx && canal.gain) {
+        canal.audio.volume = 1.0;
         const t = this.audioCtx.currentTime;
-        this.gainNodo.gain.cancelScheduledValues(t);
+        canal.gain.gain.cancelScheduledValues(t);
         if (suave) {
-          this.gainNodo.gain.setValueAtTime(0.01, t);
-          this.gainNodo.gain.setTargetAtTime(this.volumenMusica, t, 0.35);
+          canal.gain.gain.setValueAtTime(0.01, t);
+          canal.gain.gain.setTargetAtTime(this.volumenMusica, t, 0.35);
         } else {
-          this.gainNodo.gain.setValueAtTime(this.volumenMusica, t);
+          canal.gain.gain.setValueAtTime(this.volumenMusica, t);
         }
-      } else if (this.audioEl) {
-        const factor = (this.duckingActivo && this.vozHablando) ? FACTOR_DUCKING : 1.0;
-        this.audioEl.volume = this.volumenMusica * factor;
+      } else {
+        this.aplicarVolumenElementoDirecto();
       }
 
-      await this.audioEl.play();
+      await canal.audio.play();
       this.estado = 'sonando';
       this.actualizarDucking();
+      this.guardarPreferencias();
       this.notificarCambio();
     } catch (err) {
       console.warn('[MusicaFondo] Reproducción diferida o bloqueada:', err.message);
@@ -353,22 +606,23 @@ class GestorMusicaFondo {
 
     const volDiezPorciento = this.volumenMusica * 0.10;
     const duracionMs = PAUSA_FUNDIDO_SEG * 1000;
+    const canal = this.canalActivo === 'A' ? this.canalA : this.canalB;
 
-    if (this.audioCtx && this.gainNodo) {
+    if (this.audioCtx && canal.gain) {
       const t = this.audioCtx.currentTime;
-      this.gainNodo.gain.cancelScheduledValues(t);
-      this.gainNodo.gain.setTargetAtTime(volDiezPorciento, t, 0.3);
-    } else if (this.audioEl) {
-      this.audioEl.volume = Math.max(0.01, volDiezPorciento);
+      canal.gain.gain.cancelScheduledValues(t);
+      canal.gain.gain.setTargetAtTime(volDiezPorciento, t, 0.3);
+    } else if (canal.audio) {
+      canal.audio.volume = Math.max(0.01, volDiezPorciento);
     }
 
     this.temporizadorPausa = setTimeout(() => {
-      if (this.audioCtx && this.gainNodo) {
+      if (this.audioCtx && canal.gain) {
         const t2 = this.audioCtx.currentTime;
-        this.gainNodo.gain.setTargetAtTime(0.0001, t2, 0.5);
+        canal.gain.gain.setTargetAtTime(0.0001, t2, 0.5);
       }
       setTimeout(() => {
-        try { this.audioEl.pause(); } catch (_) {}
+        try { canal.audio.pause(); } catch (_) {}
         this.estado = 'pausado';
         this.notificarCambio();
       }, 600);
@@ -387,25 +641,34 @@ class GestorMusicaFondo {
 
   detener({ inmediato = false } = {}) {
     this.cancelarTemporizadorPausa();
-    if (!this.audioEl) return;
+    const canal = this.canalActivo === 'A' ? this.canalA : this.canalB;
+    const otro = this.canalActivo === 'A' ? this.canalB : this.canalA;
 
     if (inmediato) {
-      try { this.audioEl.pause(); this.audioEl.currentTime = 0; } catch (_) {}
+      try {
+        if (canal.audio) { canal.audio.pause(); canal.audio.currentTime = 0; }
+        if (otro.audio) { otro.audio.pause(); otro.audio.currentTime = 0; }
+      } catch (_) {}
       this.estado = this.activa ? 'pausado' : 'apagado';
+      this.estaTransicionando = false;
       this.notificarCambio();
       return;
     }
 
-    if (this.audioCtx && this.gainNodo) {
+    if (this.audioCtx && canal.gain) {
       const t = this.audioCtx.currentTime;
-      this.gainNodo.gain.cancelScheduledValues(t);
-      this.gainNodo.gain.setTargetAtTime(0.0001, t, 0.25);
-    } else if (this.audioEl) {
-      this.audioEl.volume = 0.01;
+      canal.gain.gain.cancelScheduledValues(t);
+      canal.gain.gain.setTargetAtTime(0.0001, t, 0.25);
+    } else if (canal.audio) {
+      canal.audio.volume = 0.01;
     }
     setTimeout(() => {
-      try { this.audioEl.pause(); this.audioEl.currentTime = 0; } catch (_) {}
+      try {
+        if (canal.audio) { canal.audio.pause(); canal.audio.currentTime = 0; }
+        if (otro.audio) { otro.audio.pause(); otro.audio.currentTime = 0; }
+      } catch (_) {}
       this.estado = this.activa ? 'pausado' : 'apagado';
+      this.estaTransicionando = false;
       this.notificarCambio();
     }, 700);
   }
@@ -426,23 +689,33 @@ class GestorMusicaFondo {
     if (!ANIMOS[animoId]) return;
     this.animo = animoId;
     this.automatica = false;
-    const pista = CATALOGO_PISTAS.find(p => p.animo === animoId);
-    if (pista) this.pistaId = pista.id;
     this.activa = true;
+
+    // Si está en modo aleatorio, seleccionar una pista al azar del ánimo
+    let pista = null;
+    if (this.aleatoria) {
+      const pistas = CATALOGO_PISTAS.filter((p) => p.animo === animoId);
+      pista = pistas[Math.floor(Math.random() * pistas.length)];
+    }
+    if (!pista) {
+      pista = CATALOGO_PISTAS.find((p) => p.animo === animoId);
+    }
+
+    if (pista) this.pistaId = pista.id;
     this.guardarPreferencias();
-    this.reproducir({ suave: true });
+    this.reproducirPista(pista, { suave: true, fundidoCruzado: false });
     this.notificarCambio();
   }
 
   setPista(pistaId) {
-    const pista = CATALOGO_PISTAS.find(p => p.id === pistaId);
+    const pista = CATALOGO_PISTAS.find((p) => p.id === pistaId);
     if (!pista) return;
     this.pistaId = pistaId;
     this.animo = pista.animo;
     this.automatica = false;
     this.activa = true;
     this.guardarPreferencias();
-    this.reproducir({ suave: true });
+    this.reproducirPista(pista, { suave: true, fundidoCruzado: false });
     this.notificarCambio();
   }
 
@@ -451,12 +724,25 @@ class GestorMusicaFondo {
     if (this.automatica) {
       const animoAuto = resolverAnimoSegunHora();
       this.animo = animoAuto;
-      const pista = CATALOGO_PISTAS.find(p => p.animo === animoAuto);
+      let pista = null;
+      if (this.aleatoria) {
+        const pistas = CATALOGO_PISTAS.filter((p) => p.animo === animoAuto);
+        pista = pistas[Math.floor(Math.random() * pistas.length)];
+      }
+      if (!pista) {
+        pista = CATALOGO_PISTAS.find((p) => p.animo === animoAuto);
+      }
       if (pista) this.pistaId = pista.id;
       if (this.activa) {
-        this.reproducir({ suave: true });
+        this.reproducirPista(pista, { suave: true, fundidoCruzado: false });
       }
     }
+    this.guardarPreferencias();
+    this.notificarCambio();
+  }
+
+  setAleatoria(activa) {
+    this.aleatoria = !!activa;
     this.guardarPreferencias();
     this.notificarCambio();
   }
@@ -466,14 +752,14 @@ class GestorMusicaFondo {
     this.volumenMusica = v;
     this.guardarPreferencias();
 
-    if (this.audioCtx && this.gainNodo) {
-      if (this.audioEl) this.audioEl.volume = 1.0;
+    const canal = this.canalActivo === 'A' ? this.canalA : this.canalB;
+    if (this.audioCtx && canal.gain) {
+      if (canal.audio) canal.audio.volume = 1.0;
       const t = this.audioCtx.currentTime;
-      this.gainNodo.gain.cancelScheduledValues(t);
-      this.gainNodo.gain.setTargetAtTime(v, t, 0.05);
-    } else if (this.audioEl) {
-      const factor = (this.duckingActivo && this.vozHablando) ? FACTOR_DUCKING : 1.0;
-      this.audioEl.volume = v * factor;
+      canal.gain.gain.cancelScheduledValues(t);
+      canal.gain.gain.setTargetAtTime(v, t, 0.05);
+    } else {
+      this.aplicarVolumenElementoDirecto();
     }
     this.notificarCambio();
   }
@@ -523,6 +809,7 @@ class GestorMusicaFondo {
     const estadoActual = {
       activa: this.activa,
       automatica: this.automatica,
+      aleatoria: this.aleatoria,
       animo: this.animo,
       pistaId: this.pistaId,
       pista: this.pistaActual(),

@@ -4865,7 +4865,10 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
   display:flex;flex-direction:column;gap:8px;
 }
 .pdf-musica-seccion-head{
-  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
+}
+.pdf-musica-head-switches{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
 .pdf-musica-subtit{
   font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
@@ -6734,11 +6737,18 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                   <div class="pdf-musica-seccion">
                     <div class="pdf-musica-seccion-head">
                       <span class="pdf-musica-subtit">Ánimo</span>
-                      <label class="pdf-musica-switch" for="pdfMusicaAuto" title="Elegir automáticamente según la hora">
-                        <input type="checkbox" id="pdfMusicaAuto" checked>
-                        <span class="pdf-musica-switch-slider"></span>
-                        <span class="pdf-musica-switch-txt">Automática</span>
-                      </label>
+                      <div class="pdf-musica-head-switches">
+                        <label class="pdf-musica-switch" for="pdfMusicaAuto" title="Elegir automáticamente según la hora">
+                          <input type="checkbox" id="pdfMusicaAuto" checked>
+                          <span class="pdf-musica-switch-slider"></span>
+                          <span class="pdf-musica-switch-txt">Automática</span>
+                        </label>
+                        <label class="pdf-musica-switch" for="pdfMusicaAleatoria" title="Reproducción aleatoria continua con fundido cruzado">
+                          <input type="checkbox" id="pdfMusicaAleatoria" checked>
+                          <span class="pdf-musica-switch-slider"></span>
+                          <span class="pdf-musica-switch-txt">Aleatorio</span>
+                        </label>
+                      </div>
                     </div>
                     <div class="pdf-musica-animos" role="group" aria-label="Seleccionar estado de ánimo">
                       <button type="button" class="pdf-musica-animo-btn is-off" data-animo="apagado" id="btnPdfMusicaApagado">
@@ -17043,7 +17053,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v99';
+const JG_JS_V = 'v100';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

@@ -23,12 +23,12 @@ function comprobar(mensaje, condicion) {
   console.log(`OK: ${mensaje}`);
 }
 
-console.log('── 1. Catálogo y archivos de audio ──');
+console.log('── 1. Catálogo y archivos de audio de estudio ──');
 comprobar('Los 4 ánimos requeridos están definidos',
   ANIMOS.concentracion && ANIMOS.relax && ANIMOS.noche && ANIMOS.lluvia);
 
-comprobar('Hay exactamente 8 pistas en el catálogo (2 por cada ánimo)',
-  CATALOGO_PISTAS.length === 8);
+comprobar('Hay exactamente 11 pistas en el catálogo (3 concentración, 4 relax, 2 noche, 2 lluvia)',
+  CATALOGO_PISTAS.length === 11);
 
 for (const animoId of Object.keys(ANIMOS)) {
   const pistasDelAnimo = CATALOGO_PISTAS.filter(p => p.animo === animoId);
@@ -39,7 +39,7 @@ for (const pista of CATALOGO_PISTAS) {
   const rutaFisica = resolve(APP, pista.src.replace(/^\//, ''));
   comprobar(`Existe el archivo físico de audio: ${pista.src}`, existsSync(rutaFisica));
   const st = statSync(rutaFisica);
-  comprobar(`El archivo ${pista.id}.mp3 tiene peso válido (> 50 KB): ${Math.round(st.size / 1024)} KB`, st.size > 50000);
+  comprobar(`El archivo ${pista.id}.mp3 tiene peso válido (> 1 MB): ${Math.round(st.size / (1024 * 1024) * 100) / 100} MB`, st.size > 1000000);
 }
 
 console.log('── 2. Resolución de ánimo según hora del día ──');
@@ -55,7 +55,7 @@ comprobar('A las 23:15 corresponde noche', resolverAnimoSegunHora(horaNoche) ===
 const horaMadrugada = new Date(2026, 8, 7, 3, 0, 0);
 comprobar('A las 03:00 corresponde noche', resolverAnimoSegunHora(horaMadrugada) === 'noche');
 
-console.log('── 3. Estado, valores por defecto y límites ──');
+console.log('── 3. Estado, valores por defecto, aleatoriedad y límites ──');
 // Reset preferences
 musicaFondo.setActiva(false);
 comprobar('Estado inicial apagado', musicaFondo.activa === false);
@@ -78,11 +78,17 @@ comprobar('Ajuste fino de volumen de música a 25%', Math.abs(musicaFondo.volume
 musicaFondo.setDucking(true);
 comprobar('Ducking suave está activo por defecto', musicaFondo.duckingActivo === true);
 
-musicaFondo.setAnimo('relax');
-comprobar('Elegir ánimo activa la música', musicaFondo.activa === true && musicaFondo.animo === 'relax');
+musicaFondo.setAleatoria(true);
+comprobar('Modo aleatorio activable', musicaFondo.aleatoria === true);
 
-musicaFondo.setPista('concentracion_1_pulso_alfa');
-comprobar('Elegir pista activa la música y asigna pista', musicaFondo.activa === true && musicaFondo.pistaId === 'concentracion_1_pulso_alfa');
+const siguienteAleatoria = musicaFondo.obtenerSiguienteAleatoria();
+comprobar('obtenerSiguienteAleatoria devuelve una pista válida del catálogo', siguienteAleatoria && siguienteAleatoria.id && siguienteAleatoria.src);
+
+musicaFondo.setAnimo('relax');
+comprobar('Elegir ánimo activa la música y selecciona pista de relax', musicaFondo.activa === true && musicaFondo.animo === 'relax' && musicaFondo.pistaActual().animo === 'relax');
+
+musicaFondo.setPista('concentracion_deep_work_flow');
+comprobar('Elegir pista activa la música y asigna pista específica', musicaFondo.activa === true && musicaFondo.pistaId === 'concentracion_deep_work_flow');
 
 musicaFondo.setActiva(false);
 comprobar('setActiva(false) apaga la música', musicaFondo.activa === false);
@@ -93,6 +99,7 @@ const html = readFileSync(resolve(APP, 'index.html'), 'utf-8');
 comprobar('index.html contiene el botón #btnPdfMusica', html.includes('id="btnPdfMusica"'));
 comprobar('index.html contiene la hoja inferior #pdfMusicaHoja', html.includes('id="pdfMusicaHoja"'));
 comprobar('index.html contiene el toggle #pdfMusicaAuto', html.includes('id="pdfMusicaAuto"'));
+comprobar('index.html contiene el toggle #pdfMusicaAleatoria', html.includes('id="pdfMusicaAleatoria"'));
 comprobar('index.html contiene el slider #pdfMusicaVolVoz', html.includes('id="pdfMusicaVolVoz"'));
 comprobar('index.html contiene el slider #pdfMusicaVolMusica', html.includes('id="pdfMusicaVolMusica"'));
 comprobar('index.html contiene el switch de ducking #pdfMusicaDucking', html.includes('id="pdfMusicaDucking"'));

@@ -33,6 +33,7 @@ backend/temp/
 *.tmp
 *.wav
 *.mp3
+!audio/musica/*.mp3
 *.webm
 
 # Binarios pesados y logs locales (no van a Git/Vercel)

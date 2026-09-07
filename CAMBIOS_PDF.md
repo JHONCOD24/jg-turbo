@@ -3,6 +3,29 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-07 · v2.59.0 · Biblioteca musical real de estudio (11 pistas), selección aleatoria por ánimo y fundido cruzado (crossfade)
+
+Lo solicitado: reemplazar los loops sintéticos por los 11 archivos WAV reales aportados por el usuario en `Fondos Musicales/`, distribuirlos adecuadamente en las 4 categorías (*Concentración*, *Relax*, *Noche*, *Lluvia suave*), habilitar reproducción aleatoria continua y combinarlos suavemente con fundidos cruzados.
+
+**Implementación y arquitectura:**
+1. **Conversión y optimización de audio:** Se codificaron los 11 archivos WAV (originales ~340 MB) a MP3 a 160 kbps CBR (44.1 kHz estéreo) mediante FFmpeg con fundido de entrada de 1.5s y salida de 2.0s. El peso total del catálogo se redujo a solo 34.75 MB (~3.1 MB por pista), permitiendo carga instantánea y almacenamiento en caché PWA.
+2. **Categorización de las 11 pistas:**
+   - **Concentración (3 pistas):** `Deep Work Flow` (2:25), `Hypnotic Pulse` (2:23), `Resonant Mind` (2:53).
+   - **Relax (4 pistas):** `Felt & Cello` (2:59), `Quiet Pages` (3:00), `Reading Space` (2:24), `Still Waters Spa` (2:51).
+   - **Noche (2 pistas):** `Late Hours` (2:51), `Slow Waves` (2:56).
+   - **Lluvia suave (2 pistas):** `Gentle Window Rain` (2:35), `Rain & Felt Piano` (3:00).
+3. **Selección aleatoria continua:** Al seleccionar un ánimo o en modo automático, el sistema selecciona una pista al azar dentro de esa categoría. Al terminar una pista (o anticipadamente a 4 segundos del final), selecciona otra pista del mismo ánimo sin repetir la misma consecutivamente.
+4. **Fundido cruzado de estudio (Crossfade 3.5s):** Arquitectura Web Audio de doble canal (`canalA` y `canalB`) con nodos de ganancia independientes conectados a un `DuckingNode` maestro común. Cuando una pista termina, el canal entrante sube de volumen progresivamente mientras el canal saliente desciende a cero, produciendo una transición acústica continua sin baches de silencio.
+5. **Control en UI:** Interruptor táctil accesible «Aleatorio» (`#pdfMusicaAleatoria`) en `#pdfMusicaHoja` junto a «Automática», activo por defecto.
+6. **Batería de pruebas verificada:**
+   - `tests/test_pdf_musica.mjs`: 53/53 comprobaciones en verde.
+   - `tests/verificar_pdf_musica_interaccion.mjs`: Interacción en navegador real (arranque, cambio de pista y apagado) OK.
+   - `tests/test_pdf_musica_crossfade.mjs`: Transición en paralelo de canales A y B verificada en Playwright.
+   - `tests/verificar_pdf_geometria.mjs`: Geometría en orden en 6 viewports.
+   - `tests/verificar_pdf_movil.mjs`: 46/46 comprobaciones OK.
+
+Marcadores de entrega: `v2.59.0`, `JG_JS_V=v100`, shell `jg-turbo-shell-v100`.
+
 ## 2026-09-07 · v2.58.0 · Corrección de reproducción instantánea de música de fondo y ganancia Web Audio
 
 Lo reportado: la opción de música se visualizaba bien en tablet y móvil, pero no se escuchaba al seleccionar las opciones.
