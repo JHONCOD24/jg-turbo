@@ -774,6 +774,14 @@ export function initLibroVista({ el, estado, api }) {
     uniendo = true;
     pintarUnir(0);
     try {
+      /* Sin la geometría del PDF (libro que llegó por sincronización) se puede
+       * decidir con el diccionario pero no aplicar: el pase automático se calla
+       * y el manual lo dice una vez, sin avisos en cada capítulo. */
+      if (!estado.atomos?.length) {
+        pintarUnir(candidatos.length);
+        if (explicito) api.avisar?.('Sin el PDF original en este aparato no se pueden aplicar uniones. Resuélvelas donde está el PDF o tráelo con Compartir con PDF.', 'info');
+        return 0;
+      }
       const { cargarLexico, decidirPorLexico } = await import('./lexico.js');
       /* En modo prudente ni se descargan: solo vale lo que el libro demuestra. */
       if (modoUnir() !== 'documento') {

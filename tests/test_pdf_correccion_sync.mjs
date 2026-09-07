@@ -7,6 +7,7 @@
  */
 import {
   paqueteCorreccionSync, correccionSyncValida, confiarEnCorreccionSync,
+  estadoRevisionCortes,
   VERSION_CORRECCION_SYNC, VERSION_RECONSTRUCCION, VERSION_TROCEO,
 } from '../js/pdf/manifiesto.js';
 import {
@@ -100,6 +101,18 @@ const limite = (id, decision = 'pending', source = 'pdf') => ({
   comprobar(reg.sincronizar === false, 'la marca privada sobrevive al guardado');
   comprobar(esSincronizable(reg) === false, 'lo privado no es sincronizable');
   comprobar(reg.pideFuente?.de === 'tablet', 'el pedido de fuente sobrevive al guardado');
+}
+
+/* ── Puerta de «ya revisado» ────────────────────────────────────────── */
+{
+  const expandida = [
+    { id: 'l1', decision: 'join', source: 'user' },
+    { id: 'l2', decision: 'space', source: 'ai' },
+  ];
+  comprobar(estadoRevisionCortes(expandida) === 'revisado', 'sin pendientes es revisado');
+  comprobar(estadoRevisionCortes([...expandida, { id: 'l3', decision: 'pending' }]) === 'pendientes', 'con un pendiente no se promete nada');
+  comprobar(estadoRevisionCortes([]) === 'desconocido', 'sin límites no se promete nada');
+  comprobar(estadoRevisionCortes(null) === 'desconocido', 'nulo no se promete nada');
 }
 
 /* ── Migración v101: anunciar la corrección actual ─────────────────── */

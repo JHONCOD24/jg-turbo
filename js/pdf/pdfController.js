@@ -23,7 +23,7 @@ import {
 } from './colaCorreccion.js';
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
-import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync } from './manifiesto.js';
+import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync, estadoRevisionCortes } from './manifiesto.js';
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
 import { initLibroVista, ordenarDocumentos, paginarDocumentos } from './libroVista.js';
@@ -1837,30 +1837,33 @@ export function inicializarLectorPdf(deps = {}) {
       estado.calidadPorPagina = reconstruccionGuardada.calidadPorPagina || [];
       estado.estadoFidelidad = reconstruccionGuardada.estadoFidelidad || null;
       estado.omisiones = reconstruccionGuardada.omisiones || [];
-    } else if (needsSourceActual && !estado.limites.length) {
-      /* Sin geometría pero con manifiesto sincronizado y vigente, los límites
-       * se cargan igual para revisar: el PDF solo haría falta para
-       * reprocesar, no para leer ni revisar. */
+    } else if (!estado.limites.length) {
+      /* Sin geometría pero con manifiesto sincronizado, los límites se cargan
+       * igual: los conteos y la hoja de cortes dicen la verdad aunque el PDF
+       * esté en otro aparato. Solo se levanta la marca de fuente cuando el
+       * manifiesto es vigente (confiarEnCorreccionSync). */
       try {
         const sinc = await almacen.cargarManifiesto(id);
-        if (sinc && !sinc.conGeometria) {
-          const decision = confiarEnCorreccionSync(doc, {
-            v: 1,
-            pendientes: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
-            ver: sinc.ver || {},
-            manifiesto: sinc.manifiesto,
-          });
-          if (decision.confiar) {
-            estado.limites = expandirManifiesto(sinc.manifiesto || []);
-            estado.needsSource = false;
-            needsSourceActual = false;
-            try {
-              await almacen.marcarTroceo(id, VERSION_TROCEO, {
-                versionReconstruccion: VERSION_RECONSTRUCCION,
-                pendientesLimites: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
-                needsSource: false,
-              });
-            } catch (_) { /* el aviso ya es correcto aunque no se anote */ }
+        if (sinc && !sinc.conGeometria && Array.isArray(sinc.manifiesto) && sinc.manifiesto.length) {
+          estado.limites = expandirManifiesto(sinc.manifiesto || []);
+          if (needsSourceActual) {
+            const decision = confiarEnCorreccionSync(doc, {
+              v: 1,
+              pendientes: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
+              ver: sinc.ver || {},
+              manifiesto: sinc.manifiesto,
+            });
+            if (decision.confiar) {
+              estado.needsSource = false;
+              needsSourceActual = false;
+              try {
+                await almacen.marcarTroceo(id, VERSION_TROCEO, {
+                  versionReconstruccion: VERSION_RECONSTRUCCION,
+                  pendientesLimites: Number.isFinite(sinc.pendientes) ? sinc.pendientes : 0,
+                  needsSource: false,
+                });
+              } catch (_) { /* el aviso ya es correcto aunque no se anote */ }
+            }
           }
         }
       } catch (_) { /* se mantiene el aviso anterior */ }
@@ -2574,6 +2577,12 @@ export function inicializarLectorPdf(deps = {}) {
     }
     if (estado.correccionProgreso.ejecutando) return;
     const documentoSolicitado = estado.id;
+    /* Si ya se sabe que no hay cortes pendientes, no hay nada que preparar:
+     * pedir el PDF aquí era el aviso fantasma al abrir libros ya revisados. */
+    if (estadoRevisionCortes(estado.limites) === 'revisado') {
+      if (!automatica) avisar('Este libro ya está revisado: no hay palabras partidas pendientes.', 'info');
+      return;
+    }
     try { await prepararFuenteCorreccion(); }
     catch (error) {
       /* Igual que la falta de IA: el arranque automático al abrir es
@@ -5153,7 +5162,14 @@ export function inicializarLectorPdf(deps = {}) {
     const docId = estado.id;
     const archivo = await almacen.cargarArchivo(docId);
     if (!archivo) {
-      avisar('Para revisar palabras partidas, vincula el PDF original desde Opciones.', 'warn');
+      /* Sin el archivo aquí hay dos caminos de verdad, no uno: resolver donde
+       * está el PDF, o traerlo (vincularlo a mano o importarlo con Compartir
+       * con PDF). El mensaje los nombra para no dejar a la persona sin salida. */
+      if ((estado.limites || []).length) {
+        avisar('Los cortes de este libro se resuelven donde está su PDF original. O desde ese aparato: ficha ⋯ → Compartir con PDF. Vincular el PDF desde Opciones también sirve.', 'warn');
+      } else {
+        avisar('Para revisar palabras partidas, vincula el PDF original desde Opciones.', 'warn');
+      }
       return;
     }
     mostrarPulidoEstado('Preparando los cortes del PDF…', '');
@@ -5172,7 +5188,11 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   async function reconstruirTrasDecision({ duranteCorreccion = false } = {}) {
-    if (!estado.atomos?.length) throw new Error('Falta la geometría del PDF original.');
+    if (!estado.atomos?.length) {
+      throw new Error((estado.limites || []).length
+        ? 'Sin el PDF original en este aparato no se puede aplicar. Resuélvelo donde está el PDF o tráelo con Compartir con PDF.'
+        : 'Falta la geometría del PDF original.');
+    }
     const docId = estado.id;
     const atomosFuente = estado.fragmentosFuente?.length ? estado.fragmentosFuente : estado.atomos;
     const resultado = reconstruirDesdeAtomos(atomosFuente, {

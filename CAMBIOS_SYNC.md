@@ -1,5 +1,22 @@
 # Sincronización entre dispositivos · Proyecto B
 
+## Entrega 2026-09-07 · aviso fantasma del PDF al revisar (v102)
+
+En pruebas seguía saliendo «Para revisar palabras partidas, vincula el PDF
+original desde Opciones» en libros ya revisados. Causa: al abrir, la corrección
+automática pedía la geometría sin mirar si había pendientes; y los límites
+sincronizados solo se cargaban cuando había marca de fuente.
+
+- Los límites sincronizados se hidratan siempre al abrir (conteos y hoja de
+  cortes dicen la verdad sin el PDF).
+- Puerta `estadoRevisionCortes`: sin pendientes no se prepara nada; en manual
+  dice «ya está revisado», en automático calla.
+- Sin archivo, el mensaje nombra los dos caminos reales (resolver donde está
+  el PDF, o traerlo con Compartir con PDF / vincularlo).
+- Unir sin geometría: el pase automático calla y el manual avisa una vez; los
+  errores crípticos se vuelven mensaje accionable.
+- Pruebas: `test_pdf_correccion_sync.mjs` (36).
+
 ## Entrega 2026-09-07 · corrección portable + compartir sin dar la llave (v101)
 
 La tablet pedía hacer correcciones y subir el PDF aunque el celular ya lo había

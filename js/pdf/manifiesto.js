@@ -209,6 +209,18 @@ export function correccionSyncValida(correccion) {
 }
 
 /**
+ * Estado de revisión a partir de los límites cargados (ya expandidos).
+ * 'revisado' solo cuando SE SABE que no hay pendientes; 'desconocido' cuando
+ * no hay límites cargados (libro viejo sin manifiesto): ahí no se puede
+ * prometer nada y se sigue el camino de antes.
+ * Pura y con pruebas.
+ */
+export function estadoRevisionCortes(limitesExpandidos) {
+  if (!Array.isArray(limitesExpandidos) || !limitesExpandidos.length) return 'desconocido';
+  return contarPendientes(limitesExpandidos) === 0 ? 'revisado' : 'pendientes';
+}
+
+/**
  * Decide si el aparato que NO tiene el PDF puede confiar en la corrección
  * que llegó por sincronización, en vez de pedir el archivo original.
  * Pura y con pruebas: aquí no se toca ningún almacén.
