@@ -8336,6 +8336,15 @@ tabs.forEach((tab, indice) => {
     }
     jgActivarPanel(tab);
   });
+  /* Fase B · Precarga por intención (§4.2.1): descargar módulo en pointerdown antes del click */
+  tab.addEventListener('pointerdown', () => {
+    if (tab.dataset.tab === 'pdf' && typeof window.jgAsegurarLectorPdf === 'function') {
+      window.jgAsegurarLectorPdf();
+    }
+    if (tab.dataset.tab === 'yt' && typeof window.jgAsegurarYoutube === 'function') {
+      window.jgAsegurarYoutube();
+    }
+  }, { passive: true });
   tab.addEventListener('keydown', (evento) => {
     const teclas = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
     if(!teclas.includes(evento.key)) return;

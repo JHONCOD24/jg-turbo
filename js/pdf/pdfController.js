@@ -30,8 +30,7 @@ import { initLibroVista, ordenarDocumentos, paginarDocumentos } from './libroVis
 import { prepararParaVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
 import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto } from './auditoria.js';
-import { construirIndice, buscarRelevantes } from './busqueda.js';
-import { construirDocx, construirHtmlImpresion, construirMarkdown } from './exportar.js';
+/* Fase B (§4.2.2): busqueda.js y exportar.js se cargan bajo demanda */
 import { crearTraductor, necesitaTraduccion } from './traduccion.js';
 import {
   progresoInicial, avanzarProgreso, calcularPorcentaje, estadoDeLectura,
@@ -3353,8 +3352,9 @@ export function inicializarLectorPdf(deps = {}) {
     return estado.partes.map((p, i) => ({ titulo: p.titulo, texto: p.texto }));
   }
 
-  function exportarDocx() {
+  async function exportarDocx() {
     try {
+      const { construirDocx } = await import('./exportar.js');
       // Usar estructura real de títulos/listas/tablas y versión aprobada
       descargar(nombreArchivo('docx'),
         construirDocx(estado.titulo || 'Documento', partesParaExportar({ usarAprobado: true })),
@@ -3365,8 +3365,9 @@ export function inicializarLectorPdf(deps = {}) {
       console.warn('[jg-pdf] docx', error);
     }
   }
-  function exportarDocxOriginal() {
+  async function exportarDocxOriginal() {
     try {
+      const { construirDocx } = await import('./exportar.js');
       descargar(nombreArchivo('original.docx'),
         construirDocx(estado.titulo || 'Documento (original)', partesParaExportarOriginal()),
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -3374,30 +3375,36 @@ export function inicializarLectorPdf(deps = {}) {
     } catch (e) { avisar('No se pudo crear el original.', 'err'); }
   }
 
-  function exportarMarkdown() {
-    descargar(nombreArchivo('md'),
-      construirMarkdown(estado.titulo || 'Documento', partesParaExportar({ usarAprobado: true })),
-      'text/markdown;charset=utf-8');
-    avisar('Markdown descargado (aprobado).', 'ok');
+  async function exportarMarkdown() {
+    try {
+      const { construirMarkdown } = await import('./exportar.js');
+      descargar(nombreArchivo('md'),
+        construirMarkdown(estado.titulo || 'Documento', partesParaExportar({ usarAprobado: true })),
+        'text/markdown;charset=utf-8');
+      avisar('Markdown descargado (aprobado).', 'ok');
+    } catch (e) { avisar('No se pudo crear el Markdown.', 'err'); }
   }
 
-  function exportarPdf() {
-    const html = construirHtmlImpresion(estado.titulo || 'Documento', partesParaExportar({ usarAprobado: true }));
-    const ventana = window.open('', '_blank');
-    if (!ventana) {
-      avisar(
-        'El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes de esta página ' +
-        'y vuelve a pulsar «PDF limpio».', 'warn');
-      return;
-    }
-    ventana.document.write(html);
-    ventana.document.close();
-    avisar('Se abrió la vista de impresión (aprobado). Original disponible en exportación TXT original.', 'info');
+  async function exportarPdf() {
+    try {
+      const { construirHtmlImpresion } = await import('./exportar.js');
+      const html = construirHtmlImpresion(estado.titulo || 'Documento', partesParaExportar({ usarAprobado: true }));
+      const ventana = window.open('', '_blank');
+      if (!ventana) {
+        avisar(
+          'El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes de esta página ' +
+          'y vuelve a pulsar «PDF limpio».', 'warn');
+        return;
+      }
+      ventana.document.write(html);
+      ventana.document.close();
+      avisar('Se abrió la vista de impresión (aprobado). Original disponible en exportación TXT original.', 'info');
+    } catch (e) { avisar('No se pudo crear la vista de impresión.', 'err'); }
   }
 
   /* ── Preguntar al documento ──────────────────────────────────────── */
 
-  function contextoPara(pregunta) {
+  async function contextoPara(pregunta) {
     const completo = textoCompleto();
     if (completo.length <= LIMITE_CONTEXTO_IA) return completo;
 
@@ -3406,6 +3413,7 @@ export function inicializarLectorPdf(deps = {}) {
       bloques.push({ id: i, texto: completo.slice(i, i + TAM_BLOQUE_BUSQUEDA) });
     }
     const cuantos = Math.max(1, Math.floor(LIMITE_CONTEXTO_IA / TAM_BLOQUE_BUSQUEDA));
+    const { construirIndice, buscarRelevantes } = await import('./busqueda.js');
     const elegidos = buscarRelevantes(construirIndice(bloques), pregunta, { maximo: cuantos });
     if (!elegidos.length) return completo.slice(0, LIMITE_CONTEXTO_IA);
 
@@ -3437,7 +3445,7 @@ export function inicializarLectorPdf(deps = {}) {
 
     guardarEdicionActual();
     const contexto = modo === 'pregunta'
-      ? contextoPara(textoPregunta)
+      ? await contextoPara(textoPregunta)
       : el.salida.value.slice(0, LIMITE_CONTEXTO_IA);
     if (!contexto.trim()) { responder('No hay texto sobre el que preguntar.', 'error'); return; }
 

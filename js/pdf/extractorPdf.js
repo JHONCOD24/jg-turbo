@@ -204,7 +204,10 @@ export async function extraerPaginas(doc, opciones = {}) {
 
     hechas += 1;
     if (alProgresar) alProgresar(hechas, cuantas);
-    if (hechas % PAGINAS_POR_TANDA === 0) {
+    /* Fase B · Ceder el hilo entre páginas (§4.2.5) */
+    if (typeof globalThis.scheduler?.yield === 'function') {
+      await globalThis.scheduler.yield();
+    } else {
       await new Promise((listo) => setTimeout(listo, 0));
     }
   }
