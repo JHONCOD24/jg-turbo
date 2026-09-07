@@ -62,3 +62,6 @@ mobile-options.png
 # Worktrees aislados de agentes
 .worktrees/
 
+
+node_modules/
+
