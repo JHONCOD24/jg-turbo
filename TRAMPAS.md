@@ -947,3 +947,17 @@ función o el selector, no la línea—, corrección, pruebas, deploy), desplega
 el dominio real.
 Y di también **qué no pudiste comprobar** — por ejemplo, si algo necesita dos dispositivos, o si la
 voz «suena bien», que ninguna prueba mide.
+
+### 9.6 Un directorio con el ACL roto tumba el despliegue desde la raíz
+
+**Síntoma (2026-09-07):** `npx vercel --prod` muere en el arranque con
+`EPERM: operation not permitted, scandir ...\.pytest_cache`, aunque
+`.vercelignore` lo liste: el CLI recorre el árbol ANTES de aplicar los
+filtros. **Causa:** el directorio quedó con permisos ilegibles (ni
+`Get-Acl`, ni `icacls /reset`, ni `rmdir` podían tocarlo) — probablemente
+creado por otro proceso con otra identidad. **Regla:** si la raíz tiene un
+directorio así, no pelear: desplegar desde una copia limpia en el temporal
+(`robocopy /XD .git node_modules .pytest_cache .playwright-cli ...` más
+`.vercel/project.json` para conservar el link). Es el mismo flujo que ya
+usó la v2.46.0. El `.pytest_cache` de esta raíz sigue ahí: bórralo con
+permisos de administrador cuando puedas.
