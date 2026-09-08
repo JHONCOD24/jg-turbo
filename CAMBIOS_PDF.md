@@ -5,6 +5,16 @@
 
 ## 2026-09-08 · v2.66.0 · Sincronía voz-texto definitiva (`JG_JS_V=v112`, shell-v112)
 
+> Despliegue `dpl_eeu5tx9rn` (READY): `https://jg-turbo-eeu5tx9rn-jhoncod24s-projects.vercel.app`
+> con alias `https://jg-turbo.vercel.app`. El v112 se comparte con la tanda de
+> emparejamiento sync (un solo despliegue; el marcador HTML nombra esa tanda,
+> lo de voz se verifica por módulos). Verificado contra el dominio:
+> HTML 200 con `v2.66.0` + `JG_JS_V='v112'`, `sw.js` shell-v112,
+> `guiaAnclas.js` servido byte a byte igual al local (con
+> `situarBloquesDetallado`/`posicionPorTiempo`/`tiempoPorPosicion`),
+> `pdfController.js` con `textoFijado`/`lecturaVozActiva`/`anclasFirmes`,
+> `/api/health` 200 y `verificar_pdf_movil` 46/46 contra producción.
+
 Lo reportado: escuchando un libro, la voz avanzaba y el texto se quedaba
 atrás, cada vez más; y al adelantar/atrasar página o saltar de capítulo, voz
 y texto quedaban en sitios distintos.
