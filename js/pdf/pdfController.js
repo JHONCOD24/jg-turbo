@@ -24,6 +24,7 @@ import {
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
 import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync, estadoRevisionCortes } from './manifiesto.js';
+import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndice, ANCHO_INDICE_DEF } from './panelIndice.js';
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
 import { initLibroVista, ordenarDocumentos, paginarDocumentos } from './libroVista.js';
@@ -91,6 +92,7 @@ export function inicializarLectorPdf(deps = {}) {
     actualizarBiblioLabel: $('pdfActualizarBiblioLabel'),
     barraDoc: $('pdfProgresoDoc'), barraRelleno: $('pdfProgresoRelleno'),
     btnIndice: $('btnPdfIndice'), indice: $('pdfIndice'), indiceLista: $('pdfIndiceLista'),
+    indiceColapsar: $('btnPdfIndiceColapsar'),
     navbar: $('pdfNavbar'), prev: $('btnPdfPrev'), next: $('btnPdfNext'), navPos: $('pdfNavPos'),
     buscar: $('pdfSearch'), buscarPrev: $('btnPdfSearchPrev'), buscarNext: $('btnPdfSearchNext'),
     buscarInfo: $('pdfSearchInfo'),
@@ -899,6 +901,8 @@ export function inicializarLectorPdf(deps = {}) {
       const titulo = document.createElement('span');
       titulo.className = 'pdf-cap-titulo';
       titulo.textContent = parte.titulo;
+      /* Con el panel angosto el título se corta: el completo vive en el tooltip. */
+      titulo.title = parte.titulo || '';
 
       const datos = document.createElement('span');
       datos.className = 'pdf-cap-datos';
@@ -960,6 +964,140 @@ export function inicializarLectorPdf(deps = {}) {
   function cerrarIndice() {
     el.indice.hidden = true;
     el.btnIndice.setAttribute('aria-expanded', 'false');
+    actualizarRailIndice();
+  }
+
+  /* ── Contenido redimensionable (tablet horizontal y escritorio) ────
+   *
+   * El lector ya reparte las páginas conservando el sitio cuando cambia el
+   * hueco (ResizeObserver + medirPaginas con ancla), así que jalar el divisor
+   * no pierde la página: es como girar la tablet. En el teléfono no existe
+   * (allí el Contenido es hoja inferior y el CSS lo esconde).
+   */
+  const cuerpoLector = () => el.resultArea?.querySelector('.pdf-lector-cuerpo');
+
+  /* El ancho vigente en píxeles: manda sobre lo guardado mientras se arrastra. */
+  let anchoIndiceVigente = leerAnchoIndice();
+
+  function aplicarAnchoIndice(px, { guardar = false } = {}) {
+    const ancho = limitarAnchoIndice(px);
+    anchoIndiceVigente = ancho;
+    try {
+      cuerpoLector()?.style.setProperty('--pdf-indice-ancho', `${ancho}px`);
+      if (el.indice) {
+        el.indice.dataset.ancho = modoAnchoIndice(ancho);
+        const divisor = document.getElementById('pdfIndiceDivisor');
+        if (divisor) {
+          divisor.setAttribute('aria-valuenow', String(ancho));
+          divisor.setAttribute('aria-valuetext', `${ancho} píxeles`);
+        }
+      }
+    } catch (_) { /* sin DOM no hay nada que pintar */ }
+    if (guardar) guardarAnchoIndice(ancho);
+    return ancho;
+  }
+
+  function actualizarRailIndice() {
+    try {
+      const rail = document.getElementById('btnPdfIndiceRail');
+      if (!rail) return;
+      const escritorio = window.matchMedia?.('(min-width:1024px)').matches;
+      rail.classList.toggle('mostrar', Boolean(escritorio && el.indice?.hidden));
+    } catch (_) { /* sin ventana no hay riel */ }
+  }
+
+  function montarDivisorIndice() {
+    if (!el.indice || document.getElementById('pdfIndiceDivisor')) return;
+    const divisor = document.createElement('div');
+    divisor.className = 'pdf-indice-divisor';
+    divisor.id = 'pdfIndiceDivisor';
+    divisor.setAttribute('role', 'separator');
+    divisor.setAttribute('aria-orientation', 'vertical');
+    divisor.setAttribute('aria-label', 'Ajustar el ancho del contenido');
+    divisor.tabIndex = 0;
+    divisor.setAttribute('aria-valuemin', '200');
+    divisor.setAttribute('aria-valuemax', '520');
+    const linea = document.createElement('span');
+    linea.className = 'pdf-indice-divisor-linea';
+    linea.setAttribute('aria-hidden', 'true');
+    divisor.appendChild(linea);
+    el.indice.appendChild(divisor);
+    /* Colapsar vive en la barra del panel (botón de 44px); aquí solo se
+     * escucha. El botón no arrastra: su toque es suyo, no del divisor. */
+    el.indiceColapsar?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    el.indiceColapsar?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cerrarIndice();
+      actualizarRailIndice();
+      document.getElementById('btnPdfIndiceRail')?.focus({ preventScroll: true });
+    });
+
+    /* Arrastre con cursor o dedo. La captura del puntero se toma SOLO al
+     * superar el umbral: un toque quieto no roba nada (TRAMPAS §captura). */
+    let arrastre = null;
+    let turnoPintura = 0;
+    divisor.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      arrastre = { x0: e.clientX, ancho0: anchoIndiceVigente, activo: false, id: e.pointerId };
+    });
+    divisor.addEventListener('pointermove', (e) => {
+      if (!arrastre || e.pointerId !== arrastre.id) return;
+      const dx = e.clientX - arrastre.x0;
+      if (!arrastre.activo) {
+        if (Math.abs(dx) <= 6) return;
+        arrastre.activo = true;
+        try { divisor.setPointerCapture(e.pointerId); } catch (_) { /* sin captura se sigue igual */ }
+        divisor.dataset.arrastrando = 'si';
+      }
+      cancelAnimationFrame(turnoPintura);
+      const base = arrastre.ancho0;
+      turnoPintura = requestAnimationFrame(() => aplicarAnchoIndice(base + dx));
+    });
+    const terminarArrastre = (e) => {
+      if (!arrastre || (e && e.pointerId !== arrastre.id)) return;
+      const terminoArrastrando = arrastre.activo;
+      arrastre = null;
+      delete divisor.dataset.arrastrando;
+      cancelAnimationFrame(turnoPintura);
+      /* Solo se guarda al soltar lo que quedó vigente en pantalla. */
+      if (terminoArrastrando) guardarAnchoIndice(anchoIndiceVigente);
+    };
+    divisor.addEventListener('pointerup', terminarArrastre);
+    divisor.addEventListener('pointercancel', () => terminarArrastre(null));
+    /* Teclado: el divisor es operable sin cursor. */
+    divisor.addEventListener('keydown', (e) => {
+      const paso = e.shiftKey ? 48 : 16;
+      const actual = anchoIndiceVigente;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); aplicarAnchoIndice(actual - paso, { guardar: true }); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); aplicarAnchoIndice(actual + paso, { guardar: true }); }
+      else if (e.key === 'Home') { e.preventDefault(); aplicarAnchoIndice(ANCHO_INDICE_DEF, { guardar: true }); }
+    });
+
+    /* Riel para volver a abrir cuando se colapsó (en escritorio el botón de
+     * Contenido de la cabecera está oculto). */
+    if (!document.getElementById('btnPdfIndiceRail')) {
+      const rail = document.createElement('button');
+      rail.type = 'button';
+      rail.className = 'pdf-indice-rail';
+      rail.id = 'btnPdfIndiceRail';
+      rail.setAttribute('aria-label', 'Mostrar el contenido');
+      rail.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg><span>Contenido</span>';
+      rail.addEventListener('click', () => {
+        abrirHoja('indice', rail);
+        actualizarRailIndice();
+      });
+      document.body.appendChild(rail);
+    }
+    /* El riel sigue al panel vaya por donde vaya (Escape, fondo, historial):
+     * se observa el atributo en vez de cazar cada camino. */
+    try {
+      new MutationObserver(actualizarRailIndice)
+        .observe(el.indice, { attributes: true, attributeFilter: ['hidden'] });
+      window.matchMedia?.('(min-width:1024px)').addEventListener?.('change', actualizarRailIndice);
+    } catch (_) { /* sin observadores se actualiza al abrir/cerrar a mano */ }
+    aplicarAnchoIndice(leerAnchoIndice());
+    actualizarRailIndice();
   }
 
   /* ── Hojas del lector y botón «atrás» ─────────────────────────────
@@ -1089,6 +1227,7 @@ export function inicializarLectorPdf(deps = {}) {
       pintarIndice();
       el.indice.hidden = false;
       el.btnIndice.setAttribute('aria-expanded', 'true');
+      actualizarRailIndice();
       /* Que el capítulo actual quede a la vista sin tener que buscarlo. */
       const actual = el.indiceLista.querySelector('[aria-current="true"]');
       if (actual) {
@@ -4158,6 +4297,36 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   /**
+   * Garantiza que el mapa y las anclas de la guía estén listos para hacer
+   * búsquedas y saltos instantáneos (evita retrasos y recalcula perezosamente si la cola creció).
+   */
+  function asegurarGuiaSincronizada() {
+    const texto = el.salida ? el.salida.value : '';
+    if (!texto) return;
+    if (guia.texto !== texto || !guia.mapa || !guia.mapa.length) {
+      guia.texto = texto;
+      guia.frases = partirEnFrases(texto);
+      guia.palabras = partirEnPalabras(texto);
+      guia.tramos = partirEnLineasLectura(texto);
+      const compacto = compactar(texto);
+      guia.compacto = compacto.texto;
+      guia.mapa = compacto.mapa;
+      guia.cola = null;
+      guia.desde = -1;
+      guia.hasta = -1;
+      guia.palabraDesde = -1;
+      guia.ultimoMarcadoVista = -1;
+    }
+    let textos = [];
+    try { textos = (window.ttsTextosDeCola && window.ttsTextosDeCola()) || []; } catch (_) { textos = []; }
+    if ((!guia.anclas || !guia.anclas.length || textos.length !== guia.bloques) && textos.length) {
+      guia.cola = (window.ttsState && window.ttsState.queue) || guia.cola;
+      guia.bloques = textos.length;
+      guia.anclas = situarBloques(textos);
+    }
+  }
+
+  /**
    * Camino inverso de `posicionDeVoz`: de un punto del texto al bloque de
    * audio que lo contiene.
    *
@@ -4166,6 +4335,7 @@ export function inicializarLectorPdf(deps = {}) {
    * Devuelve null si la guía todavía no está situada (no hay lectura en curso).
    */
   function bloqueDeCaracter(caracter) {
+    asegurarGuiaSincronizada();
     const anclas = guia.anclas;
     if (!anclas || !anclas.length || !guia.mapa || !guia.mapa.length) return null;
     /* Las anclas están en el texto compacto; el carácter viene del texto real. */
@@ -5302,7 +5472,10 @@ export function inicializarLectorPdf(deps = {}) {
     nube.desconectar();
     cerrarPase();
     el.nubeOpciones.hidden = true;
-    pintarNube();
+  pintarNube();
+
+  /* Divisor del Contenido lateral: una sola vez (el panel es estático). */
+  try { montarDivisorIndice(); } catch (_) { /* sin divisor se vive igual */ }
     avisoNube('Este aparato dejó de sincronizar. Tus libros siguen aquí.', 'ok');
   });
 
@@ -5455,7 +5628,13 @@ export function inicializarLectorPdf(deps = {}) {
         verRecorte: (lim) => { try { verRecortePagina(lim); } catch (_) {} },
         vincularArchivo: async (archivo) => { await vincularPdfOriginal(archivo); },
         leerDesdeCaracter: (caracter) => { try { leerDesdeCaracter(caracter); } catch (_) {} },
-        onCambioPaginaUsuario: (caracter) => { try { if (ttsSonandoAqui()) leerDesdeCaracter(caracter, { forzarNuevo: true }); } catch (_) {} },
+        onCambioPaginaUsuario: (caracter) => {
+          try {
+            if (ttsSonandoAqui()) {
+              leerDesdeCaracter(caracter, { forzarNuevo: false });
+            }
+          } catch (_) {}
+        },
         actualizarFondoHojas: () => { try { pintarFondoHojas(); } catch (_) {} },
         abrirHoja,
         cerrarHoja: () => cerrarHojas(),
@@ -5675,9 +5854,22 @@ export function inicializarLectorPdf(deps = {}) {
     guia.saltar = true;               /* salto pedido por la persona */
     guia.ultimoMarcadoVista = -1;
 
-    const destino = forzarNuevo ? null : bloqueDeCaracter(desde);
+    const usaNavegador = typeof window !== 'undefined' && window.ttsState?.engineUsed === 'browser';
+    const destino = (forzarNuevo || usaNavegador) ? null : bloqueDeCaracter(desde);
     if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
       window.ttsIrABloque(destino.bloque, destino.dentro);
+      /* Iluminar de inmediato la ventana de lectura en la vista libro para fluidez instantánea */
+      if (enModoLectura() && libroVista && typeof libroVista.marcarRango === 'function') {
+        const tramo = (guia.tramos && guia.tramos.length ? tramoEn(guia.tramos, desde) : null)
+          || (guia.frases && guia.frases.length ? fraseEn(guia.frases, desde) : null)
+          || [desde, Math.min(texto.length, desde + 80)];
+        if (tramo) {
+          guia.desde = tramo[0];
+          guia.hasta = tramo[1];
+          guia.ultimoMarcadoVista = tramo[0];
+          libroVista.marcarRango(tramo[0], tramo[1]);
+        }
+      }
       avisar('Leyendo desde aquí.', 'info', { efimero: true });
       return;
     }

@@ -185,10 +185,16 @@ try {
 
   console.log('\n── 2. Navegación de páginas en tiempo real mientras suena la voz ──');
   const navPagina = await pagina.evaluate(async () => {
-    let ttsLlamadoCon = null;
+    let ttsIrABloqueLlamado = null;
+    let ttsHablarLlamado = null;
+    const originalIrABloque = window.ttsIrABloque;
     const originalHablar = window.ttsHablar;
+
+    window.ttsIrABloque = (b, d) => {
+      ttsIrABloqueLlamado = { bloque: b, dentro: d };
+    };
     window.ttsHablar = (txt, opts) => {
-      ttsLlamadoCon = { txt: txt.slice(0, 50), opts };
+      ttsHablarLlamado = { txt: txt.slice(0, 50), opts };
       return true;
     };
 
@@ -201,15 +207,23 @@ try {
       await new Promise(r => setTimeout(r, 120));
     }
 
+    // Verificar estilo iluminado del mark
+    const mark = document.querySelector('.pdf-lectura mark');
+    const markStyle = mark ? window.getComputedStyle(mark) : null;
+    const color = markStyle ? markStyle.color : null;
+
+    window.ttsIrABloque = originalIrABloque;
     window.ttsHablar = originalHablar;
     return {
-      hablarLlamado: !!ttsLlamadoCon,
-      sourceId: ttsLlamadoCon ? ttsLlamadoCon.opts.sourceId : null,
+      sincronizado: !!(ttsIrABloqueLlamado || ttsHablarLlamado),
+      usaSeekInstantaneo: !!ttsIrABloqueLlamado,
+      letraIluminada: !!(color && color !== 'rgb(0, 0, 0)'),
     };
   });
 
-  comprobar(navPagina.hablarLlamado, 'cambiar de página manualmente inicia la lectura de la nueva página en tiempo real');
-  comprobar(navPagina.sourceId === 'pdf', 'el sourceId se mantiene en pdf');
+  comprobar(navPagina.sincronizado, 'cambiar de página manualmente sincroniza la voz al texto de inmediato');
+  comprobar(navPagina.usaSeekInstantaneo, 'utiliza ttsIrABloque para salto instantáneo a 0 ms sin esperar peticiones de red');
+  comprobar(navPagina.letraIluminada, 'la letra de la guía de lectura se ilumina con color de alto contraste');
 
   console.log('\n── 3. Navegación de capítulos en tiempo real mientras suena la voz ──');
   const navCapitulo = await pagina.evaluate(async () => {

@@ -1,4 +1,4 @@
-<!-- v2.61.0 · Guía de lectura viva por líneas (ventana de enfoque de 2 líneas) y navegación en tiempo real -->
+<!-- v2.62.0 · Letra iluminada en guía de lectura y sincronización fluida instantánea de voz y páginas -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1439,6 +1439,7 @@
     --pdf-r-sm:12px;   /* radio de controles pequeños */
     --pdf-gap:16px;    /* aire entre zonas */
     --pdf-pad:16px;    /* padding interno de las cajas */
+    --pdf-indice-ancho:220px; /* ancho del Contenido lateral (el lector lo ajusta) */
     padding:16px;height:100%;display:flex;flex-direction:column;gap:var(--pdf-gap);
     overflow-y:auto;min-height:0;flex:1;
   }
@@ -1583,16 +1584,24 @@
      dos capas del editor. Antes había dos pares fijos (19px/1.7 y
      17.5px/1.75) y un clamp móvil que el estilo inline se saltaba: quien
      elegía 16px en el teléfono acababa con menos de los 17px mínimos. */
-  :root{ --lec-tam:19px; --lec-inter:1.7 }
+  :root{
+    --lec-tam:19px; --lec-inter:1.7;
+    --lec-guia-texto:#FFFFFF;
+    --lec-guia-glow:0 0 10px color-mix(in srgb, var(--lec-acento, var(--cyan)) 70%, transparent), 0 0 1.5px rgba(255,255,255,.95);
+  }
   #pdfResultArea[data-tema="papel"]{
     --lec-bg:var(--lec-papel); --lec-texto:#1A1A1A; --lec-suave:#5C5750;
     --lec-linea:rgba(0,0,0,.12); --lec-acento:#0F766E;
     --lec-superficie:#EFE8DA; --lec-superficie-2:#E5DCCB;
+    --lec-guia-texto:#0B0F19;
+    --lec-guia-glow:0 0 1px rgba(0,0,0,.22);
   }
   #pdfResultArea[data-tema="noche"]{
     --lec-bg:var(--lec-noche); --lec-texto:#E9EDF6; --lec-suave:#9098AC;
     --lec-linea:rgba(255,255,255,.08); --lec-acento:#27E1C1;
     --lec-superficie:var(--surface); --lec-superficie-2:var(--surface-2);
+    --lec-guia-texto:#FFFFFF;
+    --lec-guia-glow:0 0 10px color-mix(in srgb, var(--lec-acento, var(--cyan)) 75%, transparent), 0 0 1.5px rgba(255,255,255,.95);
   }
 
   /* ── El tema del lector viste también sus controles ────────────────
@@ -3183,6 +3192,66 @@
     }
     .pdf-btn-indice{display:none !important}
   }
+  /* Contenido redimensionable (solo tablet horizontal y escritorio): el
+     divisor se jala con el cursor o el dedo, y el ancho lo decide el lector.
+     En el teléfono no existe: allí el Contenido es hoja inferior. */
+  .pdf-indice-divisor{display:none}
+  .pdf-indice-rail{display:none}
+  .pdf-indice-barra{display:none}
+  @media (min-width:1024px){
+    /* Barra propia del panel: título + colapso a tamaño de dedo. */
+    .pdf-indice-barra{
+      display:flex;align-items:center;justify-content:space-between;gap:8px;
+      position:sticky;top:0;z-index:3;background:var(--surface);
+      padding:6px 6px 6px 14px;border-bottom:1px solid var(--line);
+      border-radius:var(--pdf-r) var(--pdf-r) 0 0;
+    }
+    .pdf-indice-barra-titulo{
+      font-family:'Bricolage Grotesque',sans-serif;font-size:14.5px;font-weight:800;
+      color:var(--text);letter-spacing:-.01em;
+    }
+    .pdf-indice-colapsar{
+      width:44px;height:44px;flex:none;border-radius:12px;cursor:pointer;
+      border:0;background:none;color:var(--muted);
+      display:grid;place-items:center;
+    }
+    .pdf-indice-colapsar svg{width:18px;height:18px}
+    .pdf-indice-colapsar:hover{background:var(--surface-2);color:var(--text)}
+    .pdf-indice-colapsar:focus-visible{outline:none;box-shadow:var(--focus)}
+    body.jg-leyendo .pdf-indice:not([hidden]) .pdf-indice-divisor{
+      display:block;position:absolute;top:0;bottom:0;right:-9px;width:18px;
+      padding:0;border:0;background:none;cursor:ew-resize;touch-action:none;z-index:5;
+    }
+    .pdf-indice-divisor-linea{
+      position:absolute;top:10px;bottom:10px;left:50%;width:4px;border-radius:999px;
+      transform:translateX(-50%);background:var(--line);transition:background-color .15s;
+    }
+    .pdf-indice-divisor:hover .pdf-indice-divisor-linea,
+    .pdf-indice-divisor[data-arrastrando="si"] .pdf-indice-divisor-linea{background:var(--cyan)}
+    .pdf-indice-divisor:focus-visible{outline:none}
+    .pdf-indice-divisor:focus-visible .pdf-indice-divisor-linea{background:var(--cyan);box-shadow:var(--focus)}
+    /* Riel para volver a abrir cuando se colapsó. */
+    body.jg-leyendo .pdf-indice-rail.mostrar{
+      display:inline-flex;align-items:center;gap:8px;position:fixed;left:0;top:38%;
+      z-index:60;min-height:48px;padding:10px 14px 10px 10px;cursor:pointer;
+      border:1px solid var(--line);border-left:0;border-radius:0 14px 14px 0;
+      background:var(--surface-2);color:var(--text);font-family:inherit;font-size:13px;font-weight:600;
+      box-shadow:8px 8px 28px rgba(0,0,0,.45);
+    }
+    .pdf-indice-rail.mostrar svg{width:16px;height:16px;color:var(--cyan)}
+    .pdf-indice-rail.mostrar:hover{border-color:var(--cyan-glow)}
+    .pdf-indice-rail.mostrar:focus-visible{outline:none;box-shadow:var(--focus)}
+    /* Panel ancho: los títulos se despliegan en varias líneas en vez de
+       cortarse a la mitad. */
+    .pdf-indice[data-ancho="ancho"] .pdf-cap{align-items:flex-start}
+    .pdf-indice[data-ancho="ancho"] .pdf-cap-marca{margin-top:2px}
+    .pdf-indice[data-ancho="ancho"] .pdf-cap-titulo{
+      white-space:normal;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
+    }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .pdf-indice-divisor-linea{transition:none}
+  }
   .pdf-indice[hidden]{display:none}
   .pdf-indice-lista{list-style:none;margin:0;padding:6px}
   .pdf-cap{
@@ -4765,7 +4834,7 @@
 </style>
 <style id="pdf-libro-v39">
 /* v2.39 · Lector tipo libro (encapsulado en el apartado PDF) */
-#pdfResultArea[data-tema="sepia"]{--lec-bg:#F3E9D2;--lec-texto:#3B2F23;--lec-suave:#746552;--lec-linea:rgba(59,47,35,.16);--lec-acento:#8A5A17;--lec-superficie:#EADFC6;--lec-superficie-2:#E0D2B4}
+#pdfResultArea[data-tema="sepia"]{--lec-bg:#F3E9D2;--lec-texto:#3B2F23;--lec-suave:#746552;--lec-linea:rgba(59,47,35,.16);--lec-acento:#8A5A17;--lec-superficie:#EADFC6;--lec-superficie-2:#E0D2B4;--lec-guia-texto:#1F1308;--lec-guia-glow:0 0 1px rgba(35,22,8,.20)}
 body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf{background:#F3E9D2}
 .pdf-lectura{max-width:64ch;margin-inline:auto;width:100%;font-size:var(--lec-tam,19px);line-height:var(--lec-inter,1.7);text-align:left;overflow-wrap:anywhere;word-break:break-word}
 .pdf-lectura[data-ancho="52"]{max-width:52ch}.pdf-lectura[data-ancho="76"]{max-width:76ch}
@@ -4774,10 +4843,13 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-lectura h2,.pdf-lectura h3{line-height:1.3;margin:1.2em 0 .6em}
 .pdf-lectura p{margin:0 0 1em}.pdf-lectura blockquote{border-left:3px solid var(--lec-linea);margin:0 0 1em;padding:.2em 0 .2em 1em;color:var(--lec-suave)}
 .pdf-lectura ul,.pdf-lectura ol{margin:0 0 1em;padding-left:1.4em}.pdf-lectura table{border-collapse:collapse;width:100%;margin:0 0 1em;display:block;overflow-x:auto}
-/* Guía viva de lectura por líneas (ventana de enfoque relajado de ~2 líneas) */
+/* Guía viva de lectura por líneas (ventana de enfoque relajado de ~2 líneas con letra iluminada) */
 .pdf-lectura mark,
 .pdf-lectura .pdf-linea-guia,
 .pdf-lectura .pdf-frase-activa{
+  color:var(--lec-guia-texto, #FFFFFF) !important;
+  font-weight:600;
+  text-shadow:var(--lec-guia-glow, none);
   background:color-mix(in srgb,var(--lec-acento,var(--cyan)) 17%,transparent);
   border-left:3.5px solid var(--lec-acento,var(--cyan));
   border-radius:4px 8px 8px 4px;
@@ -4786,7 +4858,14 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
   box-decoration-break:clone;
   -webkit-box-decoration-break:clone;
   box-shadow:0 1px 8px -1px color-mix(in srgb,var(--lec-acento,var(--cyan)) 22%,transparent);
-  transition:background-color .22s ease, border-color .22s ease, box-shadow .22s ease;
+  transition:background-color .22s ease, border-color .22s ease, box-shadow .22s ease, color .22s ease, text-shadow .22s ease;
+}
+.pdf-lectura mark *,
+.pdf-lectura .pdf-linea-guia *,
+.pdf-lectura .pdf-frase-activa *{
+  color:inherit !important;
+  text-shadow:inherit !important;
+  font-weight:inherit !important;
 }
 @media (prefers-reduced-motion:reduce){
   .pdf-lectura mark,
@@ -5095,7 +5174,7 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 .pdf-cortes-hoja:not([hidden]){position:fixed;inset:10% max(16px,calc((100vw - 720px)/2));z-index:110;max-height:80dvh;overflow:auto;background:var(--lec-bg);padding:20px;border:1px solid var(--lec-linea);border-radius:16px}
 @media(min-width:1024px){
   body.jg-leyendo .pdf-lector-cuerpo{grid-template-columns:minmax(0,1fr);gap:28px}
-  body.jg-leyendo .pdf-lector-cuerpo:has(.pdf-indice:not([hidden])){grid-template-columns:220px minmax(0,1fr)}
+  body.jg-leyendo .pdf-lector-cuerpo:has(.pdf-indice:not([hidden])){grid-template-columns:var(--pdf-indice-ancho,220px) minmax(0,1fr)}
   body.jg-leyendo .pdf-texto-col{padding-inline:24px}
 }
 /* Este bloque repartía la cabecera en DOS columnas, y como va después del
@@ -6658,6 +6737,12 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
 
           <div class="pdf-lector-cuerpo">
             <nav class="pdf-indice" id="pdfIndice" hidden aria-label="Capítulos del documento">
+              <div class="pdf-indice-barra">
+                <span class="pdf-indice-barra-titulo">Contenido</span>
+                <button type="button" class="pdf-indice-colapsar" id="btnPdfIndiceColapsar" aria-label="Ocultar el contenido" title="Ocultar el contenido">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+              </div>
               <div class="pdf-hoja-cab">
                 <h4 class="pdf-hoja-titulo">Contenido</h4>
                 <button type="button" class="pdf-hoja-cerrar" data-cerrar-hoja="pdfIndice" aria-label="Cerrar el contenido">
@@ -17093,7 +17178,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v104';
+const JG_JS_V = 'v105';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

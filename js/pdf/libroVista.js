@@ -440,6 +440,7 @@ export function initLibroVista({ el, estado, api }) {
     /* Con páginas no se desplaza: se pasa a la página donde suena la frase, y
      * solo si no es la que ya se está viendo. */
     if (pag.activo) {
+      if (pag.saltando) return;
       const destino = paginaDe(elemento);
       if (destino !== pag.actual) irAPagina(destino);
       return;

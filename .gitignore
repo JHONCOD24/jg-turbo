@@ -66,4 +66,6 @@ mobile-options.png
 
 node_modules/
 output/
+ejemplos/*.pdf
+ejemplos/_*.txt
 

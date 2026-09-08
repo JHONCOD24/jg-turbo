@@ -24,6 +24,8 @@ comprobar(html.includes('.pdf-linea-guia'), 'index.html define estilos para .pdf
 comprobar(html.includes('.pdf-frase-activa'), 'index.html define estilos para .pdf-frase-activa');
 comprobar(/border-left:\s*3\.5px\s*solid\s*var\(--lec-acento/.test(html), 'el realce incluye borde lateral izquierdo de acento para anclaje visual');
 comprobar(/--lec-acento/.test(html) && /--lec-bg/.test(html), 'los estilos usan las variables del tema del lector (--lec-acento, --lec-bg)');
+comprobar(/--lec-guia-texto/.test(html) && /--lec-guia-glow/.test(html), 'se definen variables de letra iluminada (--lec-guia-texto, --lec-guia-glow)');
+comprobar(/color:\s*var\(--lec-guia-texto/.test(html) && /text-shadow:\s*var\(--lec-guia-glow/.test(html), 'la guía aplica color iluminado y halo luminoso de alto contraste a la letra');
 comprobar(!html.includes('.pdf-palabra-capcut'), 'no quedan estilos para .pdf-palabra-capcut (sin saltos palabra por palabra)');
 comprobar(/prefers-reduced-motion:\s*reduce[\s\S]*?\.pdf-linea-guia[\s\S]*?transition:\s*none/i.test(html),
   'se respeta prefers-reduced-motion desactivando transiciones');
@@ -162,8 +164,11 @@ console.log('\n── 4. Navegación de páginas y capítulos en tiempo real ─
 comprobar(vista.includes('deUsuario = false'), 'irAPagina reconoce navegación iniciada por el usuario (deUsuario)');
 comprobar(vista.includes('api.onCambioPaginaUsuario'), 'irAPagina invoca api.onCambioPaginaUsuario');
 comprobar(ctrl.includes('onCambioPaginaUsuario'), 'pdfController conecta onCambioPaginaUsuario');
-comprobar(/forzarNuevo:\s*true/.test(ctrl), 'el cambio de página y capítulo solicita forzarNuevo al reproductor');
-comprobar(ctrl.includes('window.ttsHablar'), 'pdfController utiliza window.ttsHablar para inicio inmediato');
+comprobar(/forzarNuevo:\s*false/.test(ctrl), 'el cambio de página usa forzarNuevo: false para seek instantáneo sin lag de red');
+comprobar(/forzarNuevo:\s*true/.test(ctrl), 'el cambio de capítulo conserva forzarNuevo: true para nueva síntesis');
+comprobar(ctrl.includes('asegurarGuiaSincronizada'), 'pdfController prepara perezosamente las anclas con asegurarGuiaSincronizada');
+comprobar(ctrl.includes('window.ttsIrABloque'), 'pdfController utiliza window.ttsIrABloque para sincronización inmediata');
+comprobar(vista.includes('if (pag.saltando) return;'), 'libroVista protege el desplazamiento mientras el usuario pasa páginas');
 
 console.log('\n── 5. Cambio de voz en vivo y eventos ──');
 comprobar(html.includes('jg-tts-cambio-voz'), 'index.html dispara jg-tts-cambio-voz al cambiar de voz');
@@ -172,10 +177,10 @@ comprobar(html.includes('window.ttsHablar = ttsHablar'), 'index.html expone wind
 comprobar(html.includes('window.ttsDetener = ttsDetener'), 'index.html expone window.ttsDetener');
 
 console.log('\n── 6. Marcadores de versión consistentes ──');
-comprobar(html.includes('v2.61.0'), 'index.html lleva versión v2.61.0');
+comprobar(html.includes('v2.62.0'), 'index.html lleva versión v2.62.0');
 const sw = readFileSync(resolve(RAIZ, 'sw.js'), 'utf-8');
-comprobar(html.includes("JG_JS_V = 'v104'") && sw.includes("jg-turbo-shell-v104"),
-  'JG_JS_V (v104) y sw.js (shell-v104) están perfectamente sincronizados');
+comprobar(html.includes("JG_JS_V = 'v105'") && sw.includes("jg-turbo-shell-v105"),
+  'JG_JS_V (v105) y sw.js (shell-v105) están perfectamente sincronizados');
 
 console.log(fallos ? `\n❌ ${fallos} FALLO(S)` : '\n✅ Todas las pruebas de la guía por líneas pasaron con éxito.');
 process.exit(fallos ? 1 : 0);
