@@ -17,6 +17,7 @@ repetición temprana y el bloque se barría en menos sitio del real.
 - Re-medido: anclas exactas 5/5, retraso máximo 41 caracteres, cero muestras a
   más de un tramo. Pruebas: `test_pdf_guia_anclas.mjs` (10, incluye el caso del
   estribillo) y `verificar_pdf_guia_tiempo.mjs` (regresión con voz sintética).
+- Despliegue dpl_v108: `JG_JS_V='v108'`, shell-v108, módulos con igual tamaño local/prod, home 200.
 
 ## 2026-09-08 · Contenido lateral redimensionable (tablet y escritorio)
 
