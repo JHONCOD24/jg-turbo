@@ -19,6 +19,9 @@ con el cursor al ancho deseado y poder desplegarlo/colapsarlo.
 - Pruebas: `test_pdf_panel_indice.mjs` (12), `verificar_pdf_indice_panel.mjs`
   (10: arrastre, persistencia, teclado, colapso, riel), geometría (6 anchos en
   verde), móvil (46).
+- Despliegue dpl_v106: `JG_JS_V='v106'`, shell-v106, 6 módulos con igual tamaño
+  local/prod, home 200. Ojo: falló primero por bundle (artefactos locales de
+  `output/`); la copia limpia también excluye `output/` y `.playwright-cli`.
 
 ## 2026-09-07 · v2.61.0 · Guía de lectura viva por líneas (enfoque de ~2 líneas) y navegación en tiempo real
 
