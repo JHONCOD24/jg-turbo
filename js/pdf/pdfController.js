@@ -5371,8 +5371,10 @@ export function inicializarLectorPdf(deps = {}) {
       paginas: estado.paginasFuente || [], lang: estado.idioma,
       origen: estado.estadoFidelidad?.origen || 'texto',
       limitesPrevios: estado.limites,
+      ancho: estado.paginasFuente?.[0]?.ancho || 595,
+      alto: estado.paginasFuente?.[0]?.alto || 842,
     });
-    if (!invarianteLetras(estado.atomos, resultado.texto, resultado.limites)
+    if (!invarianteLetras(resultado.atomos, resultado.texto, resultado.limites)
         || resultado.estadoFidelidad?.integridad?.valido === false) {
       throw new Error('No se pudo conservar el texto del PDF.');
     }
@@ -5414,6 +5416,7 @@ export function inicializarLectorPdf(deps = {}) {
     estado.limites = resultado.limites;
     estado.offsetDeAtomo = resultado.offsetDeAtomo;
     estado.pendientesLimites = resultado.pendientes;
+    estado.atomos = resultado.atomos || [];
     estado.fragmentosFuente = resultado.fragmentosFuente || resultado.atomosTodos || [];
     estado.transformaciones = resultado.transformaciones || [];
     estado.estructura = resultado.estructura || [];

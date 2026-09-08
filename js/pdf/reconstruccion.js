@@ -348,10 +348,13 @@ export function reconstruirDesdeAtomos(atomos, opciones = {}) {
   for (const a of incluidos) {
     if (vistoPag.has(a.page)) continue;
     vistoPag.add(a.page);
+    const meta = listaPaginas.find((p) => p.numero === a.page) || {};
     posicionesPagina.push({
       numero: a.page,
       posicion: offset2.get(a.id) || 0,
       atomId: a.id,
+      alto: meta.alto || opciones.alto || 842,
+      ancho: meta.ancho || opciones.ancho || ancho,
     });
   }
   const posicionDePagina = new Map(posicionesPagina.map((p) => [p.numero, p.posicion]));

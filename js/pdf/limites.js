@@ -449,6 +449,9 @@ export function aplicarDecisionUsuario(limite, action) {
   if (!limite || !ACCIONES.has(action)) return false;
   limite.decision = action;
   limite.source = 'user';
+  if (action === 'join' && (limite.originalSeparator === 'hyphen' || limite.originalSeparator === 'soft-hyphen' || /[\u002D\u2010\u2011\u2012]$/.test(limite.leftFragment || ''))) {
+    limite.quitarGuion = true;
+  }
   return true;
 }
 

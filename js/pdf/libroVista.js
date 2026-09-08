@@ -835,7 +835,11 @@ export function initLibroVista({ el, estado, api }) {
           const vivo = vivos.get(id);
           if (vivo) Object.assign(vivo, copia);
         }
-        api.avisar?.(error?.message || 'No se pudieron unir las palabras.', 'warn');
+        if (explicito) {
+          api.avisar?.(error?.message || 'No se pudieron unir las palabras.', 'warn');
+        } else {
+          console.warn('[PDF] No se pudieron unir palabras en el pase automático:', error?.message);
+        }
         return 0;
       }
       unidosUltimaVez = antes;
