@@ -3,6 +3,59 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-08 · v2.66.0 · Sincronía voz-texto definitiva (`JG_JS_V=v112`, shell-v112)
+
+Lo reportado: escuchando un libro, la voz avanzaba y el texto se quedaba
+atrás, cada vez más; y al adelantar/atrasar página o saltar de capítulo, voz
+y texto quedaban en sitios distintos.
+
+**Causa medida (tres patas, todas en la guía):**
+
+1. La voz no lee el texto visible, sino una copia transformada (sin `[12]`,
+   con `EE. UU.` → `Estados Unidos`, `Dr.` → `doctor`, URLs → `enlace web`).
+   Cada bloque de voz mide 10-30 letras distinto que su tramo visible, y el
+   cursor de anclaje avanzaba con la longitud de voz: tras ~20 bloques la
+   deriva sumaba cientos de letras, la ventana de búsqueda (+220) ya no
+   contenía el sitio real y las anclas fallaban en cascada.
+2. Dentro de cada bloque (hasta 900 letras) la guía suponía ritmo parejo por
+   letra, pero la voz se detiene en comas y puntos: 1-2 líneas de error por
+   bloque.
+3. Dos caminos rompían lo anterior: arrancar el audiolibro conservaba un
+   `desdeCaracter` viejo de un «leer desde aquí» (toda la lectura quedaba
+   corrida), y el pulido que llegaba a mitad de lectura reemplazaba el texto
+   bajo la voz (la cola seguía sonando lo anterior).
+
+**Corrección (`js/pdf/guiaAnclas.js`, `js/pdf/pdfController.js`):**
+
+- Anclaje: aguja de 64 letras (única en libros reales), ventana −80/+600 que
+  absorbe la deriva, hasta 6 ocurrencias con la mejor continuación (ventana
+  240, umbrales 0.55/0.45) y avance mínimo del 60 % del bloque previo (los
+  estribillos quedan descartados). Nueva `situarBloquesDetallado` que dice
+  qué anclas se situaron buscando (`firmes`) y cuáles se interpolaron;
+  `rellenarAnclas` reparte el hueco según el largo de cada bloque.
+- Tiempo de habla: cada letra cuesta según la puntuación que le sigue
+  (coma 8, punto 19, párrafo 27, letra 1). `posicionDeVoz` convierte fracción
+  de tiempo → posición con esos costos, y `bloqueDeCaracter` hace el camino
+  inverso para que `ttsIrABloque` pida segundos, no letras.
+- Sesión: al arrancar se fija el texto que se mandó a hablar (`textoFijado`)
+  y `desdeCaracter = -1`; la guía ancla contra él aunque el cuadro cambie
+  después. `volcarPulido` no toca el texto con voz activa (el pulido entra al
+  cambiar de capítulo). Saltar a un bloque interpolado ya no aproxima:
+  reinicia exacto desde la frase.
+
+**Comprobado**
+
+- Nuevo `tests/test_pdf_guia_sincronia.mjs` (15): 20 bloques con referencias
+  y abreviaturas anclan con error 0 (tolerancia 60), deriva de ~300 letras
+  sin un null, reparto ponderado, ida y vuelta tiempo↔posición, firmes.
+- Regresión: 34 archivos `test_pdf_*` (1.276 OK, 0 fallos), `test_tts_*` en
+  verde, `verificar_pdf_guia_tiempo.mjs` (0/69 muestras con retraso, máx 34
+  letras) y `verificar_pdf_tiempo_real.mjs` (guía, salto de página, salto de
+  capítulo, cambio de voz, 0 errores JS) en verde.
+- Límite honesto: el servidor devuelve MP3 sin marcas por palabra, así que la
+  posición dentro de un bloque es estimada (error menor a ~2 líneas). Entre
+  bloques y en cada salto, la posición es exacta.
+
 ## 2026-09-08 · v109 · Letra nítida sin destello borroso y anclaje secuencial contiguo
 
 1. **Destello de letra (nitidez máxima):**

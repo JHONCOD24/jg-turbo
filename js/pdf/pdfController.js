@@ -25,7 +25,7 @@ import {
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
 import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync, estadoRevisionCortes } from './manifiesto.js';
-import { compactarTexto, situarBloquesTexto, rellenarAnclas } from './guiaAnclas.js';
+import { compactarTexto, situarBloquesTexto, situarBloquesDetallado, rellenarAnclas, construirCostos, acumularCostos, posicionPorTiempo, tiempoPorPosicion } from './guiaAnclas.js';
 import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndice, ANCHO_INDICE_DEF } from './panelIndice.js';
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
@@ -3005,6 +3005,10 @@ export function inicializarLectorPdf(deps = {}) {
 
   function volcarPulido(indice) {
     if (indice !== estado.parteActual || estado.vista !== 'original' || !estado.pulidoActivo) return;
+    /* Con voz activa no se cambia el texto bajo la lectura: la cola suena lo
+     * anterior y la guía lo sigue (textoFijado). El pulido entra al cambiar
+     * de capítulo o al reiniciar, donde `textoDeParte` ya lo devuelve. */
+    if (lecturaVozActiva()) return;
     // Si hay texto aprobado/revisadoSeguro para este capítulo, preferirlo
     const progAprobado = estado.textoAprobadoPorBloque.get(`cap_${indice}`);
     if (progAprobado) {
@@ -3730,6 +3734,14 @@ export function inicializarLectorPdf(deps = {}) {
     const capaActual = await esperarCapa(estado.parteActual);
     const textoBruto = capaActual || textoDeParte(estado.parteActual);
     if (!textoBruto.trim()) return;
+    /* La guía sigue ESTE texto aunque el cuadro cambie después: la cola que
+     * se genera abajo suena esto. También se olvida cualquier "leer desde
+     * aquí" anterior: una lectura nueva del capítulo arranca desde el
+     * principio, y anclarla con el desplazamiento viejo la corría entera. */
+    guia.textoFijado = textoBruto;
+    guia.desdeCaracter = -1;
+    guia.saltar = true;
+    guia.ultimoMarcadoVista = -1;
     // En español monolingüe, respetar voz regional (no forzar multilingüe); solo usar multi si preferencia o contenido lo pide
     const langVoz = estado.vista === 'es' ? 'es' : idiomaActual();
     // unidades de narración estructuradas: títulos con pausa mayor, tablas con indicación temporal
@@ -4267,14 +4279,17 @@ export function inicializarLectorPdf(deps = {}) {
 
     anotarPosicion({ caracter: desde });
 
-    /* Si ya hay voz sonando en este capítulo, se salta ahí al instante. */
+    /* Si ya hay voz sonando en este capítulo, se salta ahí al instante cuando
+     * el bloque está situado de verdad; si el bloque se interpoló, el salto
+     * instantáneo aproximaría y es mejor reiniciar exacto desde la frase. */
     const destino = bloqueDeCaracter(desde);
-    if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
+    if (destino && destino.firme && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
       guia.saltar = true;   /* salto pedido por la persona: puede ir hacia atrás */
       window.ttsIrABloque(destino.bloque, destino.dentro);
       avisar('Leyendo desde aquí.', 'info');
       return;
     }
+    if (ttsSonandoAqui()) { leerDesdeCaracter(desde); return; }
     /* Si no había voz, se marca el punto y se ofrece empezar. */
     irAPosicion(desde);
     avisar('Marcado. Pulsa Escuchar para leer desde aquí.', 'info');
@@ -4298,6 +4313,26 @@ export function inicializarLectorPdf(deps = {}) {
   function ttsSonandoAqui() {
     const s = (typeof window !== 'undefined' && window.ttsState) || null;
     return !!s && s.sourceId === 'pdf' && s.status === 'playing';
+  }
+
+  /* La voz puede estar sonando o cargando el siguiente bloque (entre
+   * capítulos el estado pasa por `loading`/`buffering` sin dejar de ser la
+   * misma lectura). Para cuidar la sincronía hay que contar todo ese rato. */
+  function lecturaVozActiva() {
+    try {
+      if (deps.audiolibro && typeof deps.audiolibro.estaActivo === 'function'
+        && deps.audiolibro.estaActivo()) return true;
+    } catch (_) { /* sin adaptador no hay audiolibro */ }
+    return ttsSonandoAqui();
+  }
+
+  /* El texto que la guía debe seguir: con voz activa es el que se mandó a
+   * hablar (fijado al arrancar), no el del cuadro. El cuadro puede cambiar
+   * después (llega el pulido, se edita) y la cola sigue sonando lo anterior:
+   * re-anclar contra lo nuevo sería situar la voz en un texto que no lee. */
+  function textoParaGuia() {
+    if (lecturaVozActiva() && guia.textoFijado) return guia.textoFijado;
+    return el.salida ? el.salida.value : '';
   }
 
   /* ── Guía visual: la frase que suena, resaltada ────────────────────
@@ -4324,6 +4359,17 @@ export function inicializarLectorPdf(deps = {}) {
      * Sirve para saber que un audio más corto que el capítulo NO es una
      * selección suelta, sino este capítulo empezado más abajo. */
     desdeCaracter: -1,
+    /* Texto visible que se mandó a hablar (fijado al arrancar la lectura).
+     * La guía ancla contra él mientras la voz suena, aunque el cuadro cambie
+     * después. Se renueva en cada arranque; con voz apagada no se usa. */
+    textoFijado: null,
+    /* Costo de habla acumulado por posición compacta (ver guiaAnclas.js):
+     * convierte fracción de tiempo en posición y al revés, con pausas. */
+    costosAcum: null,
+    /* Qué anclas se situaron buscando de verdad (true) y cuáles se
+     * interpolaron (false). Saltar a un bloque interpolado es aproximar:
+     * en ese caso se reinicia exacto en vez de buscar por tiempo. */
+    anclasFirmes: [],
   };
 
   /**
@@ -4349,10 +4395,16 @@ export function inicializarLectorPdf(deps = {}) {
       if (idx >= 0) inicioCompacto = idx;
     }
     guia.largosBloques = lista.map((b) => b.length);
-    return rellenarAnclas(situarBloquesTexto(guia.compacto, lista, inicioCompacto), guia.compacto.length);
+    const detalle = situarBloquesDetallado(guia.compacto, lista, inicioCompacto);
+    guia.anclasFirmes = detalle.firmes;
+    return rellenarAnclas(detalle.anclas, guia.compacto.length, guia.largosBloques);
   }
 
-  /** Punto del texto visible donde va la voz ahora mismo. */
+  /** Punto del texto visible donde va la voz ahora mismo.
+   *
+   * El `dentroBloque` que manda el motor es fracción de TIEMPO, no de
+   * letras: se convierte a posición con los costos de habla (las pausas
+   * pesan), no con una regla de tres sobre las letras. */
   function posicionDeVoz(datos) {
     const anclas = guia.anclas;
     if (!anclas.length || !guia.mapa || !guia.mapa.length) return null;
@@ -4360,9 +4412,32 @@ export function inicializarLectorPdf(deps = {}) {
     const inicio = anclas[i];
     const fin = i + 1 < anclas.length ? anclas[i + 1] : Math.min(guia.compacto.length, inicio + (guia.largosBloques?.[i] || 600));
     const dentro = Math.max(0, Math.min(1, Number(datos.dentroBloque) || 0));
-    const enCompacto = Math.round(inicio + (fin - inicio) * dentro);
+    const enCompacto = (guia.costosAcum && guia.costosAcum.length)
+      ? posicionPorTiempo(guia.costosAcum, inicio, fin, dentro)
+      : Math.round(inicio + (fin - inicio) * dentro);
     const acotado = Math.max(0, Math.min(guia.mapa.length - 1, enCompacto));
     return guia.mapa[acotado];
+  }
+
+  /* Reconstruye el índice de la guía sobre un texto (frases, tramos,
+   * compacto, mapa y costos). Es el único sitio que lo hace: así el mapa y
+   * los costos nunca se desincronizan entre sí. */
+  function reconstruirGuia(texto) {
+    guia.texto = texto;
+    guia.frases = partirEnFrases(texto);
+    guia.palabras = partirEnPalabras(texto);
+    guia.tramos = partirEnLineasLectura(texto);
+    const compacto = compactar(texto);
+    guia.compacto = compacto.texto;
+    guia.mapa = compacto.mapa;
+    try {
+      guia.costosAcum = acumularCostos(construirCostos(texto, compacto.mapa));
+    } catch (_) { guia.costosAcum = null; }
+    guia.cola = null;
+    guia.desde = -1;
+    guia.hasta = -1;
+    guia.palabraDesde = -1;
+    guia.ultimoMarcadoVista = -1;
   }
 
   /**
@@ -4370,21 +4445,10 @@ export function inicializarLectorPdf(deps = {}) {
    * búsquedas y saltos instantáneos (evita retrasos y recalcula perezosamente si la cola creció).
    */
   function asegurarGuiaSincronizada() {
-    const texto = el.salida ? el.salida.value : '';
+    const texto = textoParaGuia();
     if (!texto) return;
     if (guia.texto !== texto || !guia.mapa || !guia.mapa.length) {
-      guia.texto = texto;
-      guia.frases = partirEnFrases(texto);
-      guia.palabras = partirEnPalabras(texto);
-      guia.tramos = partirEnLineasLectura(texto);
-      const compacto = compactar(texto);
-      guia.compacto = compacto.texto;
-      guia.mapa = compacto.mapa;
-      guia.cola = null;
-      guia.desde = -1;
-      guia.hasta = -1;
-      guia.palabraDesde = -1;
-      guia.ultimoMarcadoVista = -1;
+      reconstruirGuia(texto);
     }
     let textos = [];
     try { textos = (window.ttsTextosDeCola && window.ttsTextosDeCola()) || []; } catch (_) { textos = []; }
@@ -4401,6 +4465,10 @@ export function inicializarLectorPdf(deps = {}) {
    *
    * `guia.anclas` dice en qué carácter empieza cada bloque de la cola. Con eso
    * basta para saber a qué bloque saltar y en qué proporción de él caemos.
+   * El `dentro` que devuelve es fracción de TIEMPO (lo que `ttsIrABloque`
+   * espera: el motor razona en segundos), convertido con los costos de habla.
+   * `firme` dice si ese bloque se situó buscando de verdad: si se interpoló,
+   * el salto instantáneo aproximaría y es mejor reiniciar exacto.
    * Devuelve null si la guía todavía no está situada (no hay lectura en curso).
    */
   function bloqueDeCaracter(caracter) {
@@ -4423,8 +4491,11 @@ export function inicializarLectorPdf(deps = {}) {
     while (i + 1 < anclas.length && anclas[i + 1] <= enCompacto) i += 1;
     const inicio = anclas[i];
     const fin = i + 1 < anclas.length ? anclas[i + 1] : guia.compacto.length;
-    const dentro = fin > inicio ? (enCompacto - inicio) / (fin - inicio) : 0;
-    return { bloque: i, dentro: Math.max(0, Math.min(1, dentro)) };
+    const dentro = (guia.costosAcum && guia.costosAcum.length)
+      ? tiempoPorPosicion(guia.costosAcum, inicio, fin, enCompacto)
+      : (fin > inicio ? (enCompacto - inicio) / (fin - inicio) : 0);
+    const firme = !guia.anclasFirmes || guia.anclasFirmes[i] !== false;
+    return { bloque: i, dentro: Math.max(0, Math.min(1, dentro)), firme };
   }
 
   /** Corta el texto en frases. Intl.Segmenter respeta abreviaturas («Sr.»). */
@@ -4649,21 +4720,10 @@ export function inicializarLectorPdf(deps = {}) {
 
   function marcarFrase(datos) {
     if (!el.realce) return null;
-    const texto = el.salida.value;
+    const texto = textoParaGuia();
     if (!texto) { limpiarGuia(); return null; }
     if (guia.texto !== texto) {
-      guia.texto = texto;
-      guia.frases = partirEnFrases(texto);
-      guia.palabras = partirEnPalabras(texto);
-      guia.tramos = partirEnLineasLectura(texto);
-      const compacto = compactar(texto);
-      guia.compacto = compacto.texto;
-      guia.mapa = compacto.mapa;
-      guia.cola = null;          /* el texto cambió: hay que resituar la cola */
-      guia.desde = -1;
-      guia.hasta = -1;
-      guia.palabraDesde = -1;
-      guia.ultimoMarcadoVista = -1;
+      reconstruirGuia(texto);
     }
     if (!guia.frases.length && !guia.tramos.length) return null;
 
@@ -4761,7 +4821,7 @@ export function inicializarLectorPdf(deps = {}) {
      * corresponde con el texto de la pantalla. Pero una lectura pedida con
      * «leer desde aquí» también es más corta que el capítulo y SÍ corresponde:
      * `guia.desdeCaracter` las distingue. */
-    const largo = el.salida.value.length;
+    const largo = textoParaGuia().length;
     const empezadaMasAbajo = guia.desdeCaracter >= 0;
     const parcial = !empezadaMasAbajo && datos.caracteres > 0 && largo > 0 && datos.caracteres < largo * 0.7;
     const marca = parcial ? null : marcarFrase(datos);
@@ -4828,8 +4888,13 @@ export function inicializarLectorPdf(deps = {}) {
     anotarPosicion({ caracter });
     guia.saltar = true;     /* salto pedido por la persona */
     const destino = bloqueDeCaracter(caracter);
-    if (destino && typeof window.ttsIrABloque === 'function' && ttsSonandoAqui()) {
+    if (destino && destino.firme && typeof window.ttsIrABloque === 'function' && ttsSonandoAqui()) {
       window.ttsIrABloque(destino.bloque, destino.dentro);
+      detalle.atendido = true;
+      return;
+    }
+    if (ttsSonandoAqui() && typeof window.ttsHablar === 'function') {
+      leerDesdeCaracter(caracter);
       detalle.atendido = true;
       return;
     }
@@ -5343,17 +5408,25 @@ export function inicializarLectorPdf(deps = {}) {
       generador.make();
       el.nubeQr.innerHTML = generador.createImgTag(6, 0);
       const img = el.nubeQr.querySelector('img');
-      if (img) img.alt = 'Código para escanear con la cámara del celular';
+      if (img) {
+        img.alt = 'Código para escanear con la cámara del celular';
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        img.style.display = 'block';
+      }
+      el.nubeQr.hidden = false;
     } catch (error) {
       /* Sin QR se puede seguir: los seis dígitos hacen el mismo trabajo. */
       console.warn('[jg-sync] no se pudo dibujar el código', error);
-      el.nubeQr.hidden = true;
+      el.nubeQr.innerHTML = `<a href="${enlace}" target="_blank" style="font-size:12px;color:var(--cyan);word-break:break-all;padding:8px;display:block;">Abrir enlace de vinculación</a>`;
+      el.nubeQr.hidden = false;
     }
   }
 
   /**
    * El botón único: enciende la sincronización (si hace falta) y muestra el
-   * pase para el otro aparato. Dos pasos que antes eran del usuario.
+   * pase para el otro aparato de inmediato (código de 6 dígitos + QR).
+   * La subida de libros ocurre en segundo plano para no demorar el código.
    */
   async function mostrarPase() {
     if (!nube) return;
@@ -5362,20 +5435,38 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.nube && el.nube.tagName === 'DETAILS') el.nube.open = true;
     try {
       await conBotonOcupado(el.nubeConectar, el.nubeConectarLabel, 'Preparando…', async () => {
-        if (!nube.estaVinculada()) {
-          const datos = await nube.activar();
-          /* La llave se guarda sola; se enseña solo si la persona la pide. */
-          if (el.nubeLlaveTexto) el.nubeLlaveTexto.textContent = datos.llave;
+        let pase = null;
+        try {
+          if (!nube.estaVinculada()) {
+            const datos = await nube.activar();
+            if (el.nubeLlaveTexto) el.nubeLlaveTexto.textContent = datos.llave;
+          }
+          pase = await nube.pedirCodigo();
+        } catch (err) {
+          // Auto-healing si la llave previa en localStorage ya no es válida en Supabase (401)
+          const msg = String(err?.message || '').toLowerCase();
+          if (msg.includes('llave') || msg.includes('401') || msg.includes('vincular') || msg.includes('autoriz')) {
+            console.warn('[jg-sync] Llave previa rechazada o inválida, recreando biblioteca...', err);
+            nube.desconectar();
+            const datos = await nube.activar();
+            if (el.nubeLlaveTexto) el.nubeLlaveTexto.textContent = datos.llave;
+            pase = await nube.pedirCodigo();
+          } else {
+            throw err;
+          }
         }
-        await sincronizarAhora({ silencioso: true });
-        const pase = await nube.pedirCodigo();
-        const codigo = String(pase.codigo || '');
+
+        const codigo = String(pase?.codigo || '');
+        if (!codigo) throw new Error('No se pudo generar el código de emparejamiento.');
+
         el.nubeDigitos.textContent = codigo.replace(/(\d{3})(\d{3})/, '$1 $2');
-        enlaceDelPase = `${location.origin}/?unir=${codigo}`;
-        el.nubeQr.hidden = false;
-        await pintarQr(enlaceDelPase);
+        enlaceDelPase = `${location.origin}/?tab=pdf&unir=${codigo}`;
         el.nubePase.hidden = false;
+        el.nubeQr.hidden = false;
         el.nubeCompartir.hidden = !navigator.share;
+
+        // Renderizar el código QR de inmediato (sin esperar a que suban libros)
+        await pintarQr(enlaceDelPase);
 
         clearInterval(temporizadorCodigo);
         let restan = (pase.minutos || 10) * 60;
@@ -5393,10 +5484,17 @@ export function inicializarLectorPdf(deps = {}) {
         };
         cuenta();
         temporizadorCodigo = setInterval(cuenta, 1000);
+
+        // La subida de libros ocurre en segundo plano con avisos en vivo,
+        // sin bloquear la aparición instantánea del código de 6 dígitos ni del QR
+        sincronizarAhora({ silencioso: false }).catch((e) => {
+          console.warn('[jg-sync] Sincronización en segundo plano tras pedir pase:', e);
+        });
       });
       await pintarNube();
       avisoNube('');
     } catch (error) {
+      console.error('[jg-sync] Error al mostrar pase:', error);
       avisoNube(error?.message || 'No se pudo preparar la conexión.', 'error');
     }
   }
@@ -5570,18 +5668,24 @@ export function inicializarLectorPdf(deps = {}) {
     try {
       const parametros = new URLSearchParams(location.search);
       const codigo = (parametros.get('unir') || '').replace(/\D/g, '');
-      if (codigo.length === 6 && nube && !nube.estaVinculada()) {
+      if (codigo.length === 6 && nube) {
         /* Se llega por el QR del otro aparato: la caja de la nube va plegada
          * y aquí los avisos tienen que verse. */
         if (el.nube && el.nube.tagName === 'DETAILS') el.nube.open = true;
-        await unirDispositivo(codigo);
+        avisar('Vinculando con tu otro aparato…', 'info');
+        const exito = await unirDispositivo(codigo);
+        if (exito) {
+          avisar('✓ ¡Aparato emparejado! Tus libros ya están disponibles.', 'ok', { efimero: true });
+        }
         const limpia = new URL(location.href);
         limpia.searchParams.delete('unir');
         history.replaceState({}, '', limpia.pathname + limpia.search + limpia.hash);
       } else if (nube && nube.estaVinculada()) {
         sincronizarAhora({ silencioso: true });
       }
-    } catch (_) { /* llegar por enlace es un extra, no puede romper la app */ }
+    } catch (e) {
+      console.warn('[jg-sync] Error al procesar enlace ?unir:', e);
+    }
   })();
 
   // Vista de libro v2.39 (lectura HTML, apariencia, cortes, biblioteca).
@@ -5939,7 +6043,7 @@ export function inicializarLectorPdf(deps = {}) {
 
     const usaNavegador = typeof window !== 'undefined' && window.ttsState?.engineUsed === 'browser';
     const destino = (forzarNuevo || usaNavegador) ? null : bloqueDeCaracter(desde);
-    if (destino && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
+    if (destino && destino.firme && ttsSonandoAqui() && typeof window.ttsIrABloque === 'function') {
       window.ttsIrABloque(destino.bloque, destino.dentro);
       /* Iluminar de inmediato la ventana de lectura en la vista libro para fluidez instantánea */
       if (enModoLectura() && libroVista && typeof libroVista.marcarRango === 'function') {
@@ -5957,6 +6061,9 @@ export function inicializarLectorPdf(deps = {}) {
       return;
     }
     guia.desdeCaracter = desde;
+    /* La guía sigue este texto aunque el cuadro cambie después (pulido que
+     * llega, edición): la cola nueva suena esto, no lo que haya luego. */
+    guia.textoFijado = texto;
     try { el.salida.setSelectionRange(desde, texto.length); } catch (_) { /* textarea oculto */ }
     precargarSiguienteCapitulo();
 

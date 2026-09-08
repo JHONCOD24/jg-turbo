@@ -1,4 +1,4 @@
-<!-- v2.65.0 · PWA instalable con iconos 192/512 y modal de descarga/instalación -->
+<!-- v2.66.0 · Emparejamiento instantáneo de dispositivos (QR + código de 6 dígitos) y auto-unión -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -12464,8 +12464,15 @@ function registrarServiceWorker(){
 
   const params = new URLSearchParams(location.search);
   const tab = params.get('tab');
+  const codigoUnir = (params.get('unir') || '').replace(/\D/g, '');
+  const tieneUnir = codigoUnir.length === 6;
   const TABS_VALIDAS = new Set(['mic','file','yt','pdf','trans']);
-  if(TABS_VALIDAS.has(tab) || params.get('shared') === '1' || params.get('open') === 'file'){
+  if(tieneUnir){
+    setTimeout(() => {
+      activarTab('pdf');
+      if(typeof asegurarLectorPdf === 'function') asegurarLectorPdf();
+    }, 0);
+  }else if(TABS_VALIDAS.has(tab) || params.get('shared') === '1' || params.get('open') === 'file'){
     // Diferir un frame para que los tabs estén cableados
     setTimeout(() => activarTab(TABS_VALIDAS.has(tab) ? tab : 'file'), 0);
   }
@@ -17418,7 +17425,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v111';
+const JG_JS_V = 'v112';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
@@ -17530,7 +17537,10 @@ function asegurarLectorPdf(){
 if (typeof window !== 'undefined') window.jgAsegurarLectorPdf = asegurarLectorPdf;
 /* Si la app abre directamente en PDF (enlace compartido, `?tab=pdf`, `?unir=`
  * o la pestaña recordada), el lector hace falta ya. */
-if (document.querySelector('#panelPdf.active')) asegurarLectorPdf();
+const _paramsInit = new URLSearchParams(location.search);
+if (document.querySelector('#panelPdf.active') || _paramsInit.get('tab') === 'pdf' || (_paramsInit.get('unir') || '').replace(/\D/g, '').length === 6) {
+  asegurarLectorPdf();
+}
 
 document.getElementById('btnPdfCopy')?.addEventListener('click', ()=>
   copiarTexto(pdfOutput, document.getElementById('pdfCopyLabel'), document.getElementById('btnPdfCopy')));

@@ -799,6 +799,27 @@ duplicado.
 incluido una vez o en una sola omisión, y su texto tiene que coincidir con la
 fuente inmutable antes de validar la transcripción.
 
+### 6.10 La voz habla una copia transformada del texto visible
+
+**Ocurrió** (2026-09-08): la guía atrasaba varias líneas detrás de la voz, con
+retraso creciente, y los saltos de página/capítulo dejaban voz y texto en
+sitios distintos.
+
+**Causa:** la guía compactaba el texto visible crudo, pero la cola de voz está
+doblemente transformada (`prepararParaVoz` + `ttsNormalizarTextoNarracion`:
+quita `[12]`, expande `EE. UU.`/`Dr.`/`pág.`, mete comas). Cada bloque medía
+10-30 letras distinto que su tramo visible y el cursor avanzaba con la longitud
+de voz: tras ~20 bloques la deriva sacaba el sitio real de la ventana (+220) y
+las anclas fallaban en cascada. Además la interpolación suponía ritmo parejo
+por letra (la voz hace pausas en los signos), arrancar conservaba un
+`desdeCaracter` viejo, y el pulido reemplazaba el texto bajo la voz.
+
+**Regla:** quien sitúe audio en texto debe buscar la copia transformada dentro
+del visible con aguja larga, ventana que absorba la deriva y avance mínimo
+(estribillos); convertir tiempo↔posición con costos de habla, no lineal; fijar
+el texto guía al arrancar y no reemplazar visible con voz activa; y solo saltar
+por tiempo a bloques situados de verdad (si se interpoló, reiniciar exacto).
+
 ---
 
 ## 7. Caché y despliegue
