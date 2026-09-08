@@ -3,6 +3,21 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-08 · Guía a la par de la voz (anclaje verificado)
+
+Lo reportado: escuchando con la guía, la voz iba 2-3 líneas por delante y la
+página saltaba tarde. Medido con TTS falso de ritmo constante: la guía avanzaba
+al ~30% de la voz con retraso creciente hasta 566 caracteres. Causa: si el
+arranque de un bloque se repetía antes (estribillos), el ancla caía en la
+repetición temprana y el bloque se barría en menos sitio del real.
+
+- `js/pdf/guiaAnclas.js` (nuevo, puro y con pruebas): además de buscar el
+  arranque, comprueba que el bloque CONTINÚA ahí (puntaje ≥0.6) y exige avance
+  mínimo (mitad del bloque previo). `pdfController` delega en él.
+- Re-medido: anclas exactas 5/5, retraso máximo 41 caracteres, cero muestras a
+  más de un tramo. Pruebas: `test_pdf_guia_anclas.mjs` (10, incluye el caso del
+  estribillo) y `verificar_pdf_guia_tiempo.mjs` (regresión con voz sintética).
+
 ## 2026-09-08 · Contenido lateral redimensionable (tablet y escritorio)
 
 Lo solicitado: en lectura horizontal el panel de Contenido cortaba los títulos

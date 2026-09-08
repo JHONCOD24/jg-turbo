@@ -24,6 +24,7 @@ import {
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
 import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync, estadoRevisionCortes } from './manifiesto.js';
+import { compactarTexto, situarBloquesTexto, rellenarAnclas } from './guiaAnclas.js';
 import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndice, ANCHO_INDICE_DEF } from './panelIndice.js';
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
@@ -4240,60 +4241,15 @@ export function inicializarLectorPdf(deps = {}) {
    * final de los párrafos, separa términos en inglés—, así que buscarlo tal
    * cual no encuentra nada. Comparando solo letras y números, sí encaja.
    */
-  const TILDES = /[\u0300-\u036f]/g;   /* marcas de tilde, ya separadas por NFD */
+  /** Idem: vive en guiaAnclas.js para poder probarse sin navegador. */
   function compactar(texto) {
-    const letras = [];
-    const posiciones = [];
-    /* Se recorre carácter a carácter —y no sobre el texto ya normalizado—
-     * porque descomponer tildes cambia las longitudes y descuadraría el mapa
-     * que devuelve las posiciones al texto original. */
-    for (let i = 0; i < texto.length; i += 1) {
-      const suelto = texto[i].normalize('NFD').replace(TILDES, '').toLowerCase();
-      const c = suelto.charAt(0);
-      if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
-        letras.push(c);
-        posiciones.push(i);
-      }
-    }
-    return { texto: letras.join(''), mapa: posiciones };
+    return compactarTexto(texto);
   }
 
-  /**
-   * Dónde empieza, en el texto de la pantalla, cada bloque de audio.
-   *
-   * Se busca solo el arranque de cada bloque (unas decenas de letras): si el
-   * motor reescribió algo por dentro, el comienzo casi siempre sigue igual.
-   * Un bloque que no se encuentre queda a null y luego se rellena repartiendo
-   * el hueco entre sus vecinos, así que un fallo suelto no descoloca la guía.
-   */
+  /** Idem: anclaje verificado (continuacion + avance minimo) en guiaAnclas.js. */
   function situarBloques(textos) {
-    const anclas = new Array(textos.length).fill(null);
-    let desde = 0;
-    textos.forEach((bruto, i) => {
-      const aguja = compactar(String(bruto || '')).texto.slice(0, 48);
-      if (aguja.length < 6) return;
-      let donde = guia.compacto.indexOf(aguja, desde);
-      /* Si no aparece hacia delante puede ser un bloque reescrito: se prueba
-       * con menos letras antes de rendirse. */
-      if (donde === -1 && aguja.length > 16) donde = guia.compacto.indexOf(aguja.slice(0, 16), desde);
-      if (donde === -1) return;
-      anclas[i] = donde;
-      desde = donde + Math.max(1, Math.floor(aguja.length / 2));
-    });
-
-    /* Relleno de los huecos: reparto proporcional entre anclas conocidas. */
-    let previo = 0;
-    for (let i = 0; i < anclas.length; i += 1) {
-      if (anclas[i] != null) { previo = anclas[i]; continue; }
-      let siguiente = guia.compacto.length;
-      let j = i + 1;
-      while (j < anclas.length && anclas[j] == null) j += 1;
-      if (j < anclas.length) siguiente = anclas[j];
-      const huecos = j - i + 1;
-      anclas[i] = Math.round(previo + ((siguiente - previo) * (1 / huecos)));
-      previo = anclas[i];
-    }
-    return anclas;
+    const lista = (textos || []).map((bruto) => compactarTexto(String(bruto || '')).texto);
+    return rellenarAnclas(situarBloquesTexto(guia.compacto, lista), guia.compacto.length);
   }
 
   /** Punto del texto visible donde va la voz ahora mismo. */
@@ -4572,6 +4528,20 @@ export function inicializarLectorPdf(deps = {}) {
    * intencionados y la guía sí puede retroceder con ellos. */
   document.addEventListener('jg-tts-salto', () => { guia.saltar = true; });
   document.addEventListener('jg-tts-cambio-voz', () => { guia.saltar = true; });
+
+  /* Ventana de medición para pruebas: expone dónde cree la guía que va la
+   * voz, sin tocar el DOM. Precedente: window.ttsTextosDeCola. */
+  try {
+    if (typeof window !== 'undefined' && !window.jgGuiaDebug) {
+      window.jgGuiaDebug = () => ({
+        desde: guia.desde,
+        hasta: guia.hasta,
+        bloques: guia.bloques,
+        anclas: Array.isArray(guia.anclas) ? guia.anclas.slice() : [],
+        textoLen: (guia.texto || '').length,
+      });
+    }
+  } catch (_) { /* en pruebas sin ventana no existe */ }
 
   function sincronizarRealce() {
     if (el.realce) el.realce.scrollTop = el.salida.scrollTop;
