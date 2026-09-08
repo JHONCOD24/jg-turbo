@@ -3,6 +3,23 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-08 · Contenido lateral redimensionable (tablet y escritorio)
+
+Lo solicitado: en lectura horizontal el panel de Contenido cortaba los títulos
+a la mitad y no se podía leer el capítulo completo; se quería jalar el menú
+con el cursor al ancho deseado y poder desplegarlo/colapsarlo.
+
+- Divisor arrastrable con cursor o dedo (solo ≥1024px; el móvil sigue con hoja
+  inferior intacta): 200–520px, con teclado (flechas, Home) y persistencia en
+  `jg_pdf_indice_ancho`. La posición de lectura se conserva (el lector ya
+  reparte conservando el ancla).
+- Desde 300px los títulos se despliegan en varias líneas; siempre con tooltip
+  del título completo.
+- Barra del panel con colapso (botón 44px) + riel lateral para reabrir.
+- Pruebas: `test_pdf_panel_indice.mjs` (12), `verificar_pdf_indice_panel.mjs`
+  (10: arrastre, persistencia, teclado, colapso, riel), geometría (6 anchos en
+  verde), móvil (46).
+
 ## 2026-09-07 · v2.61.0 · Guía de lectura viva por líneas (enfoque de ~2 líneas) y navegación en tiempo real
 
 Lo solicitado: transformar la guía de lectura para que no resalte palabra por palabra (lo cual provocaba cansancio visual e impedía la concentración del lector al saltar frenéticamente), sino que ilumine con calma y fluidez una ventana de lectura de aproximadamente 2 líneas (~80–130 caracteres) de forma continua y estable mientras suena la voz, avanzando de forma suave al siguiente tramo.

@@ -1032,39 +1032,52 @@ export function inicializarLectorPdf(deps = {}) {
       document.getElementById('btnPdfIndiceRail')?.focus({ preventScroll: true });
     });
 
-    /* Arrastre con cursor o dedo. La captura del puntero se toma SOLO al
-     * superar el umbral: un toque quieto no roba nada (TRAMPAS §captura). */
+    /* Arrastre con cursor o dedo. Los movimientos se escuchan en el documento
+     * entero: el cursor sale de la tira de 16px antes de superar el umbral y
+     * si solo escuchara la tira, el arrastre moriría al salir. No se usa
+     * captura del puntero: no hace falta y así ningún toque se roba. */
     let arrastre = null;
     let turnoPintura = 0;
+    let clicTrasArrastre = false;
     divisor.addEventListener('pointerdown', (e) => {
       if (e.target.closest('button')) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       arrastre = { x0: e.clientX, ancho0: anchoIndiceVigente, activo: false, id: e.pointerId };
     });
-    divisor.addEventListener('pointermove', (e) => {
+    document.addEventListener('pointermove', (e) => {
       if (!arrastre || e.pointerId !== arrastre.id) return;
       const dx = e.clientX - arrastre.x0;
       if (!arrastre.activo) {
         if (Math.abs(dx) <= 6) return;
         arrastre.activo = true;
-        try { divisor.setPointerCapture(e.pointerId); } catch (_) { /* sin captura se sigue igual */ }
         divisor.dataset.arrastrando = 'si';
       }
       cancelAnimationFrame(turnoPintura);
       const base = arrastre.ancho0;
       turnoPintura = requestAnimationFrame(() => aplicarAnchoIndice(base + dx));
-    });
+    }, { passive: true });
     const terminarArrastre = (e) => {
       if (!arrastre || (e && e.pointerId !== arrastre.id)) return;
       const terminoArrastrando = arrastre.activo;
       arrastre = null;
       delete divisor.dataset.arrastrando;
       cancelAnimationFrame(turnoPintura);
-      /* Solo se guarda al soltar lo que quedó vigente en pantalla. */
-      if (terminoArrastrando) guardarAnchoIndice(anchoIndiceVigente);
+      /* Solo se guarda al soltar lo que quedó vigente en pantalla. Y el clic
+       * que cae donde se soltó no navega: era el final del arrastre. */
+      if (terminoArrastrando) {
+        guardarAnchoIndice(anchoIndiceVigente);
+        clicTrasArrastre = true;
+        setTimeout(() => { clicTrasArrastre = false; }, 120);
+      }
     };
-    divisor.addEventListener('pointerup', terminarArrastre);
-    divisor.addEventListener('pointercancel', () => terminarArrastre(null));
+    document.addEventListener('pointerup', terminarArrastre);
+    document.addEventListener('pointercancel', () => terminarArrastre(null));
+    document.addEventListener('click', (e) => {
+      if (!clicTrasArrastre) return;
+      clicTrasArrastre = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
     /* Teclado: el divisor es operable sin cursor. */
     divisor.addEventListener('keydown', (e) => {
       const paso = e.shiftKey ? 48 : 16;
@@ -5472,14 +5485,14 @@ export function inicializarLectorPdf(deps = {}) {
     nube.desconectar();
     cerrarPase();
     el.nubeOpciones.hidden = true;
-  pintarNube();
-
-  /* Divisor del Contenido lateral: una sola vez (el panel es estático). */
-  try { montarDivisorIndice(); } catch (_) { /* sin divisor se vive igual */ }
+    pintarNube();
     avisoNube('Este aparato dejó de sincronizar. Tus libros siguen aquí.', 'ok');
   });
 
   pintarNube();
+
+  /* Divisor del Contenido lateral: una sola vez (el panel es estático). */
+  try { montarDivisorIndice(); } catch (_) { /* sin divisor se vive igual */ }
 
   /* Si se llegó escaneando el código (…/?unir=123456), se conecta solo: la
    * persona no tiene que escribir nada ni entender qué es un código. */

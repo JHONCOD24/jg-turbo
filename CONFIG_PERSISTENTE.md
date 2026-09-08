@@ -60,6 +60,7 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_pdf_vista_activa` (`biblioteca` | `lector`): si al recargar hay que volver
   al libro o a la lista.
 - `jg_pdf_doc_abierto`: id del documento que estaba en el lector.
+- `jg_pdf_indice_ancho`: ancho en px del Contenido lateral (tablet/escritorio).
 - `jg_pdf_procesando` (`1` o ausente): marca temporal si se recarga a mitad de
   extraer un PDF; se borra al terminar o al avisar.
 - `jg_config_bundle` (snapshot JSON versionado)

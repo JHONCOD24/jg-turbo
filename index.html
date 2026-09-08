@@ -3219,7 +3219,7 @@
     .pdf-indice-colapsar:hover{background:var(--surface-2);color:var(--text)}
     .pdf-indice-colapsar:focus-visible{outline:none;box-shadow:var(--focus)}
     body.jg-leyendo .pdf-indice:not([hidden]) .pdf-indice-divisor{
-      display:block;position:absolute;top:0;bottom:0;right:-9px;width:18px;
+      display:block;position:absolute;top:0;bottom:0;right:0;width:16px;
       padding:0;border:0;background:none;cursor:ew-resize;touch-action:none;z-index:5;
     }
     .pdf-indice-divisor-linea{
@@ -3241,6 +3241,9 @@
     .pdf-indice-rail.mostrar svg{width:16px;height:16px;color:var(--cyan)}
     .pdf-indice-rail.mostrar:hover{border-color:var(--cyan-glow)}
     .pdf-indice-rail.mostrar:focus-visible{outline:none;box-shadow:var(--focus)}
+    /* El divisor vive sobre el borde derecho: la lista le deja aire para
+       que ningún título quede debajo. */
+    .pdf-indice .pdf-indice-lista{padding-right:22px}
     /* Panel ancho: los títulos se despliegan en varias líneas en vez de
        cortarse a la mitad. */
     .pdf-indice[data-ancho="ancho"] .pdf-cap{align-items:flex-start}
@@ -17178,7 +17181,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v105';
+const JG_JS_V = 'v106';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
