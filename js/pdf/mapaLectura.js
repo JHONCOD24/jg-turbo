@@ -8,6 +8,7 @@
  *
  * Módulo puro: no toca el DOM ni el almacenamiento, así se prueba en Node.
  */
+import { situarFiguras } from './figurasPdf.js';
 
 export function escapar(texto) {
   return String(texto ?? '')
@@ -79,14 +80,62 @@ function atributos(b) {
   return ` data-ini="${b.ini}" data-fin="${b.fin}"`;
 }
 
-/** El HTML de la vista de lectura, con las posiciones puestas. */
-export function construirLectura(texto) {
+/**
+ * El HTML de una figura del libro.
+ *
+ * No lleva pie: el pie de la figura ya viaja en el texto del libro y ponerlo
+ * dos veces lo haría leer dos veces en voz alta. El `data-fig` permite abrirla
+ * a pantalla completa, y `data-ini`/`data-fin` la dejan fuera de la lectura en
+ * voz (es una imagen, no hay nada que leer).
+ */
+function htmlDeFigura(f) {
+  /* Las medidas van como atributos del HTML —no como `aspect-ratio` de CSS—
+   * por dos razones: el navegador reserva el hueco exacto antes de dibujar la
+   * imagen (si no, el reparto en páginas se calcula con la figura valiendo
+   * cero y luego salta), y con `width`/`height` en auto puede encoger a lo
+   * ancho cuando el alto no cabe. Con `aspect-ratio` en el estilo, una figura
+   * alta se aplastaba contra el alto máximo. */
+  const medidas = f.ancho && f.alto ? ` width="${f.ancho}" height="${f.alto}"` : '';
+  const pag = Number(f.pagina) || 0;
+  return `<figure class="lec-figura" data-fig="${f.indice}" data-pagina="${pag}">`
+    + `<img src="${escapar(f.url)}" alt="${escapar('Figura del libro' + (pag ? ', página ' + pag : ''))}"`
+    + `${medidas} decoding="async">`
+    + '</figure>';
+}
+
+/**
+ * El HTML de la vista de lectura, con las posiciones puestas.
+ *
+ * @param {string} texto
+ * @param {Array} [figuras] gráficos del libro, ya con su `url` de imagen
+ */
+export function construirLectura(texto, figuras) {
   const bloques = bloquesDeTexto(texto);
   if (!bloques.length) return '<p></p>';
+
+  /* Cada figura se coloca junto al bloque donde estaba en el PDF. */
+  const antes = new Map();     /* índice de bloque -> figuras que van delante */
+  const despues = new Map();   /* índice de bloque -> figuras que van detrás */
+  for (const f of situarFiguras(texto, figuras || [])) {
+    if (!f.url) continue;
+    let k = bloques.findIndex((b) => f.posicion >= b.ini && f.posicion <= b.fin);
+    if (k === -1) k = bloques.findIndex((b) => b.ini > f.posicion);
+    if (k === -1) k = bloques.length - 1;
+    const donde = f.anclaDespues ? antes : despues;
+    if (!donde.has(k)) donde.set(k, []);
+    donde.get(k).push(f);
+  }
+  const volcar = (mapa, k) => {
+    for (const f of mapa.get(k) || []) html.push(htmlDeFigura(f));
+  };
+
   const html = [];
-  for (const b of bloques) {
+  for (let i = 0; i < bloques.length; i += 1) {
+    const b = bloques[i];
+    volcar(antes, i);
     if (b.tipo === 'h3') {
       html.push(`<h3${atributos(b)}>${escapar(b.texto.replace(/^#{1,3}\s+/, ''))}</h3>`);
+      volcar(despues, i);
       continue;
     }
     if (b.tipo === 'ul' || b.tipo === 'ol') {
@@ -94,10 +143,12 @@ export function construirLectura(texto) {
       const items = lineasConPosicion(b)
         .map((l) => `<li${atributos(l)}>${escapar(l.texto.replace(marca, ''))}</li>`).join('');
       html.push(`<${b.tipo}${atributos(b)}>${items}</${b.tipo}>`);
+      volcar(despues, i);
       continue;
     }
     if (b.tipo === 'blockquote') {
       html.push(`<blockquote${atributos(b)}>${escapar(b.texto.replace(/^>\s?/gm, ''))}</blockquote>`);
+      volcar(despues, i);
       continue;
     }
     if (b.tipo === 'table') {
@@ -107,6 +158,7 @@ export function construirLectura(texto) {
         return `<tr${atributos(l)}>${celdas}</tr>`;
       }).join('');
       html.push(`<table${atributos(b)}>${filas}</table>`);
+      volcar(despues, i);
       continue;
     }
     /* En prosa editorial los renglones fluyen de forma continua:
@@ -114,6 +166,7 @@ export function construirLectura(texto) {
      * rompa el justificado y desarticule las líneas en el teléfono. */
     const contenidoParrafo = escapar(b.texto).replace(/\r?\n/g, ' ');
     html.push(`<p${atributos(b)}>${contenidoParrafo}</p>`);
+    volcar(despues, i);
   }
   return html.join('');
 }

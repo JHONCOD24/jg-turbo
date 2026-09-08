@@ -177,10 +177,10 @@ comprobar(html.includes('window.ttsHablar = ttsHablar'), 'index.html expone wind
 comprobar(html.includes('window.ttsDetener = ttsDetener'), 'index.html expone window.ttsDetener');
 
 console.log('\n── 6. Marcadores de versión consistentes ──');
-comprobar(html.includes('v2.63.0'), 'index.html lleva versión v2.63.0');
+comprobar(html.includes('v2.64.0'), 'index.html lleva versión v2.64.0');
 const sw = readFileSync(resolve(RAIZ, 'sw.js'), 'utf-8');
-comprobar(html.includes("JG_JS_V = 'v109'") && sw.includes("jg-turbo-shell-v109"),
-  'JG_JS_V (v109) y sw.js (shell-v109) están perfectamente sincronizados');
+comprobar(html.includes("JG_JS_V = 'v110'") && sw.includes("jg-turbo-shell-v110"),
+  'JG_JS_V (v110) y sw.js (shell-v110) están perfectamente sincronizados');
 
 console.log(fallos ? `\n❌ ${fallos} FALLO(S)` : '\n✅ Todas las pruebas de la guía por líneas pasaron con éxito.');
 process.exit(fallos ? 1 : 0);

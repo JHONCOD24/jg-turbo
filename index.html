@@ -1,4 +1,4 @@
-<!-- v2.62.0 · Letra iluminada en guía de lectura y sincronización fluida instantánea de voz y páginas -->
+<!-- v2.64.0 · Anchura responsive en móvil y lectura continua en scroll -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -5189,7 +5189,7 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
   body.jg-leyendo .pdf-doc-acciones .mini-btn{padding-inline:10px}
   body.jg-leyendo .pdf-doc-ref{font-size:12px}
   body.jg-leyendo .pdf-doc-linea{gap:4px}
-  body.jg-leyendo .pdf-texto-col{padding-inline:10px}
+  body.jg-leyendo .pdf-texto-col:not([data-ancho]){padding-inline:10px}
 }
 
 .pdf-paginacion{
@@ -5227,7 +5227,11 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
      muerto: el estilo inline de aplicarApariencia lo pisaba; ahora la
      métrica viaja en variables y esto sí aplica.) */
   .pdf-lectura{font-size:max(17px,var(--lec-tam,19px))}
-  .pdf-texto-col{max-width:100%;padding-inline:14px}
+  .pdf-texto-col{max-width:100%;padding-inline:clamp(14px,4.5vw,24px)}
+  .pdf-texto-col[data-ancho="52"],
+  body.jg-leyendo:has(#pdfLectura[data-ancho="52"]) .pdf-texto-col{padding-inline:clamp(28px,9vw,46px)}
+  .pdf-texto-col[data-ancho="76"],
+  body.jg-leyendo:has(#pdfLectura[data-ancho="76"]) .pdf-texto-col{padding-inline:clamp(6px,1.8vw,10px)}
   .pdf-cortes-barra{justify-content:center}
 }
 @media (min-width:641px) and (max-width:1023px){
@@ -5338,8 +5342,15 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     padding:max(4px,env(safe-area-inset-top)) 10px 4px;z-index:22}
   body.jg-leyendo .pdf-herramientas-panel{top:calc(env(safe-area-inset-top) + 54px);right:8px}
   /* El margen vive FUERA del elemento multicolumna. Con padding dentro,
-     clientWidth y el ancho real de columna divergían en cada salto. */
-  body.jg-leyendo .pdf-texto-col{padding-inline:clamp(14px,4.5vw,28px);width:100%;box-sizing:border-box}
+     clientWidth y el ancho real de columna divergían en cada salto.
+     Anchura del texto en móvil según selección (Estrecha 52, Normal 64, Ancha 76): */
+  body.jg-leyendo .pdf-texto-col,
+  body.jg-leyendo .pdf-texto-col[data-ancho="64"],
+  body.jg-leyendo:has(#pdfLectura[data-ancho="64"]) .pdf-texto-col{padding-inline:clamp(14px,4.5vw,24px);width:100%;box-sizing:border-box}
+  body.jg-leyendo .pdf-texto-col[data-ancho="52"],
+  body.jg-leyendo:has(#pdfLectura[data-ancho="52"]) .pdf-texto-col{padding-inline:clamp(28px,9vw,46px)!important}
+  body.jg-leyendo .pdf-texto-col[data-ancho="76"],
+  body.jg-leyendo:has(#pdfLectura[data-ancho="76"]) .pdf-texto-col{padding-inline:clamp(6px,1.8vw,10px)!important}
   body.jg-leyendo .pdf-lectura{padding-inline:0!important;margin-inline:0!important;width:100%!important}
   /* Vista limpia y completa: el cromo flota por encima y se aparta al leer */
   body.jg-leyendo #pdfResultArea{padding-top:calc(env(safe-area-inset-top) + 54px);padding-bottom:0}
@@ -5348,6 +5359,56 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
   #pdfResultArea .pdf-doc-ident{overflow:hidden}
   #pdfResultArea .pdf-doc-linea{display:none}
 }
+
+  /* ── Figuras del libro (gráficos sacados del PDF) ──────────────────
+     El texto y los gráficos son el mismo libro: la figura va donde estaba
+     en el original, ocupa el ancho de la columna y nunca se parte entre
+     páginas. Al tocarla se abre grande. */
+  #pdfResultArea .lec-figura{
+    margin:1.1em 0;padding:0;text-align:center;
+    break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid;
+  }
+  #pdfResultArea .lec-figura img{
+    display:block;margin:0 auto;max-width:100%;width:auto;height:auto;
+    /* El alto de la página del lector lo pone medirPaginas(). Con ancho y
+       alto en `auto`, si una figura alta no cabe encoge a lo ancho y NO se
+       deforma; fijar cualquiera de los dos la aplastaría. */
+    max-height:var(--lec-figura-alto,60vh);
+    border-radius:10px;background:#fff;cursor:zoom-in;
+    box-shadow:0 1px 3px rgba(0,0,0,.16),0 6px 18px rgba(0,0,0,.10);
+  }
+  body[data-lectura-tema="noche"] #pdfResultArea .lec-figura img{
+    box-shadow:0 1px 3px rgba(0,0,0,.5),0 6px 20px rgba(0,0,0,.35);
+  }
+  @media (prefers-reduced-motion:no-preference){
+    #pdfResultArea .lec-figura img{transition:transform .18s ease}
+    #pdfResultArea .lec-figura img:hover{transform:scale(1.012)}
+  }
+
+  /* Visor a pantalla completa */
+  .lec-visor{
+    position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:10px;
+    background:rgba(8,10,14,.94);padding:max(12px,env(safe-area-inset-top)) 12px
+      calc(12px + env(safe-area-inset-bottom));
+  }
+  .lec-visor[hidden]{display:none}
+  .lec-visor__marco{
+    max-width:100%;max-height:82vh;overflow:auto;-webkit-overflow-scrolling:touch;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .lec-visor__marco img{
+    max-width:100%;max-height:82vh;width:auto;height:auto;
+    background:#fff;border-radius:8px;object-fit:contain;
+  }
+  .lec-visor__cerrar{
+    position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;
+    width:44px;height:44px;border-radius:50%;border:0;cursor:pointer;
+    background:rgba(255,255,255,.14);color:#fff;font-size:19px;line-height:1;
+  }
+  .lec-visor__cerrar:hover{background:rgba(255,255,255,.26)}
+  .lec-visor__pie{margin:0;color:rgba(255,255,255,.72);font-size:13px}
+  body.jg-visor-abierto{overflow:hidden}
 @media(prefers-reduced-motion:reduce){
   #pdfResultArea .pdf-hoja-fondo,#pdfResultArea .pdf-doc-top,
   #pdfResultArea .pdf-modo-barra,#pdfResultArea .pdf-barra-movil{animation:none;transition:none}
@@ -15374,6 +15435,18 @@ function ttsFinLectura(){
     jgAudiolibro.activo = false;
     if(typeof jgAudiolibro.alTerminar === 'function') jgAudiolibro.alTerminar();
   }
+  // En modo scroll de PDF, la lectura continúa de corrido al capítulo siguiente
+  if(typeof window.jgPdfContinuarLectura === 'function' && ttsState.sourceId === 'pdf'){
+    try {
+      if(window.jgPdfContinuarLectura()){
+        ttsPararElementos();
+        return;
+      }
+    } catch(err){
+      console.warn('[jg-pdf-continuar]', err);
+    }
+  }
+  const sourceTerminado = ttsState.sourceId;
   ttsPararElementos();
   ttsState.status = 'idle';
   ttsState.idx = ttsState.queue.length;
@@ -15382,6 +15455,7 @@ function ttsFinLectura(){
   ttsState.sourceId = null;
   ttsSesionMedia(false);
   ttsActualizarUI();
+  try{ document.dispatchEvent(new CustomEvent('jg-tts-fin', { detail: { sourceId: sourceTerminado || 'pdf' } })); }catch(_){}
 }
 
 /* ── Avanzar y retroceder (como en un reproductor de video) ─────────────── */
@@ -15472,9 +15546,29 @@ function ttsHablarBrowserDesde(startIdx, token){
   const speakNext = ()=>{
     if(token !== ttsState._speakToken) return;
     if(ttsState.idx >= ttsState.queue.length){
+      if(jgAudiolibro.activo && jgAudiolibro.sourceId === ttsState.sourceId &&
+         typeof jgAudiolibro.siguiente === 'function'){
+        let proximo = null;
+        try{ proximo = jgAudiolibro.siguiente(); }catch(_){}
+        if(proximo && proximo.texto){
+          ttsHablar(proximo.texto, { sourceId: jgAudiolibro.sourceId, langHint: proximo.lang || ttsState.langHint });
+          return;
+        }
+        jgAudiolibro.activo = false;
+        if(typeof jgAudiolibro.alTerminar === 'function') jgAudiolibro.alTerminar();
+      }
+      if(typeof window.jgPdfContinuarLectura === 'function' && ttsState.sourceId === 'pdf'){
+        try {
+          if(window.jgPdfContinuarLectura()) return;
+        } catch(err){
+          console.warn('[jg-pdf-continuar-browser]', err);
+        }
+      }
+      const sourceTerminado = ttsState.sourceId;
       ttsState.status = 'idle';
       ttsState.sourceId = null;
       ttsActualizarUI();
+      try{ document.dispatchEvent(new CustomEvent('jg-tts-fin', { detail: { sourceId: sourceTerminado || 'pdf' } })); }catch(_){}
       return;
     }
     const item = ttsState.queue[ttsState.idx];
@@ -17181,7 +17275,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v109';
+const JG_JS_V = 'v110';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

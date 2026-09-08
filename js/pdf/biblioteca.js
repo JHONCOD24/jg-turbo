@@ -258,6 +258,7 @@ export async function guardarDocumento({ meta, partes, pdf, portada, reconstrucc
         const almacenArchivos = resto[i];
         const antes = (await esperar(almacenArchivos.get(meta.id))) || { id: meta.id };
         await esperar(almacenArchivos.put({
+          ...antes,
           id: meta.id,
           pdf: pdf || antes.pdf || null,
           portada: portada || antes.portada || null,
@@ -384,6 +385,43 @@ export async function cargarContenido(id) {
     return fila?.partes || null;
   } catch (_) {
     return null;
+  }
+}
+
+/**
+ * Las figuras del libro (los gráficos recortados del PDF).
+ *
+ * Viven junto al PDF original, no con el texto: pesan y solo hacen falta
+ * mientras se lee. `estado` deja anotado si ya se buscaron, para no repetir
+ * el barrido en cada apertura:
+ *   'listas'  → se buscaron y hay figuras
+ *   'ninguna' → se buscaron y este libro no tiene
+ *   'sinpdf'  → no se pudieron buscar porque el original no está guardado
+ */
+export async function guardarFiguras(id, figuras, estado = 'listas') {
+  if (!id) return false;
+  try {
+    return await conAlmacenes([ARCHIVOS, DOCUMENTOS], 'readwrite', async (archivos, docs) => {
+      const previo = (await esperar(archivos.get(id))) || { id };
+      await esperar(archivos.put({ ...previo, id, figuras: figuras || [] }));
+      const doc = await esperar(docs.get(id));
+      if (doc) await esperar(docs.put({ ...doc, figurasEstado: estado, figurasCuenta: (figuras || []).length }));
+      return true;
+    });
+  } catch (error) {
+    /* Quedarse sin sitio no puede impedir leer: se anota y se sigue. */
+    console.warn('[jg-figuras] no se pudieron guardar', error);
+    return false;
+  }
+}
+
+/** Las figuras guardadas de un libro. Lista vacía si aún no se han buscado. */
+export async function cargarFiguras(id) {
+  try {
+    const fila = await conAlmacenes([ARCHIVOS], 'readonly', (a) => esperar(a.get(id)));
+    return Array.isArray(fila?.figuras) ? fila.figuras : [];
+  } catch (_) {
+    return [];
   }
 }
 
@@ -827,7 +865,7 @@ export async function guardarPortadaRecibida(id, dataURL) {
     if (!portada) return false;
     await conAlmacenes([ARCHIVOS], 'readwrite', async (archivos) => {
       const antes = (await esperar(archivos.get(id))) || { id };
-      await esperar(archivos.put({ id, pdf: antes.pdf || null, portada }));
+      await esperar(archivos.put({ ...antes, id, pdf: antes.pdf || null, portada }));
     });
     await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
       const doc = await esperar(docs.get(id));
@@ -863,7 +901,7 @@ export async function guardarPortadaGenerada(id, portada, origen = 'dibujada') {
   try {
     await conAlmacenes([ARCHIVOS], 'readwrite', async (archivos) => {
       const antes = (await esperar(archivos.get(id))) || { id };
-      await esperar(archivos.put({ id, pdf: antes.pdf || null, portada }));
+      await esperar(archivos.put({ ...antes, id, pdf: antes.pdf || null, portada }));
     });
     await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
       const doc = await esperar(docs.get(id));

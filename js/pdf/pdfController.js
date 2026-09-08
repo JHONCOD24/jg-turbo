@@ -11,7 +11,8 @@
  *    con tres millones de letras congela hasta un buen computador): se divide
  *    en capítulos y se muestra uno, sin perder el resto.
  */
-import { procesarPdf, abrirPdf, ErrorPdf } from './extractorPdf.js';
+import { procesarPdf, abrirPdf, ErrorPdf, cargarMotor } from './extractorPdf.js';
+import { extraerFiguras } from './figurasPdf.js';
 import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
 import { partirTextoCanonico, mejorCorte as mejorCorteCanonico, LIMITE_PARTE as LIMITE_PARTE_CANONICO } from './particion.js';
 import {
@@ -1630,6 +1631,8 @@ export function inicializarLectorPdf(deps = {}) {
     estado.id = id;
     estado.titulo = titulo;
     estado.partes = partes;
+    if (estado.figuras && estado.figuras.length) soltarFiguras();
+    estado.figuras = estado.figuras || [];
     try {
       localStorage.setItem('jg_pdf_doc_abierto', id);
       localStorage.setItem('jg_pdf_vista_activa', 'lector');
@@ -1707,6 +1710,8 @@ export function inicializarLectorPdf(deps = {}) {
     if (estado.pulidoActivo && estado.vista === 'original' && estado.consentido) {
       iniciarCorreccionLibro({ automatica: true }).catch(() => {});
     }
+    /* Los gráficos llegan después, sin `await`: el libro ya se puede leer. */
+    asegurarFiguras(id);
   }
 
   /**
@@ -1892,6 +1897,95 @@ export function inicializarLectorPdf(deps = {}) {
       progreso: reubicarProgreso(doc.progreso, partes, nuevas),
       bloques: construirBloquesAuditoria(reconstruido.texto, [], capitulos),
     };
+  }
+
+  /* ── Figuras del libro ─────────────────────────────────────────────
+   *
+   * Los gráficos no están en el texto: hay que sacarlos del PDF aparte. Se
+   * hace SIEMPRE en segundo plano y después de que el libro ya se pueda leer,
+   * porque un barrido de mil páginas no puede retrasar la lectura ni un
+   * segundo. Se hace una sola vez por libro y queda guardado.
+   */
+  let figurasEnCurso = null;
+
+  function soltarFiguras() {
+    for (const f of estado.figuras || []) {
+      if (f.url) { try { URL.revokeObjectURL(f.url); } catch (_) { /* nada */ } }
+    }
+    estado.figuras = [];
+    if (figurasEnCurso) figurasEnCurso.cancelado = true;
+    figurasEnCurso = null;
+  }
+
+  /** Convierte lo guardado en algo que la vista pueda pintar. */
+  function prepararFiguras(guardadas) {
+    const salida = [];
+    (guardadas || []).forEach((f, i) => {
+      if (!f || !f.blob) return;
+      let url = '';
+      try { url = URL.createObjectURL(f.blob); } catch (_) { return; }
+      salida.push({ ...f, indice: i, url });
+    });
+    return salida;
+  }
+
+  async function asegurarFiguras(id, doc) {
+    if (!id) return;
+    soltarFiguras();
+    const registro = doc || await almacen.cargarDocumento(id).catch(() => null);
+    if (estado.id !== id) return;          /* se abrió otro libro entretanto */
+    const yaHechas = registro?.figurasEstado;
+
+    /* Ya se buscaron alguna vez: se pintan y no se vuelve a barrer. */
+    if (yaHechas === 'listas' || yaHechas === 'ninguna') {
+      const guardadas = yaHechas === 'listas' ? await almacen.cargarFiguras(id) : [];
+      if (guardadas.length) {
+        estado.figuras = prepararFiguras(guardadas);
+        if (libroVista) libroVista.renderLectura({ conservar: true });
+      }
+      return;
+    }
+
+    /* Primera vez (o libro de antes de esta versión): barrido en diferido. */
+    const pdf = await almacen.cargarArchivo(id);
+    if (!pdf) {
+      await almacen.guardarFiguras(id, [], 'sinpdf');
+      return;
+    }
+
+    const cancelacion = { cancelado: false };
+    figurasEnCurso = cancelacion;
+    try {
+      const pdfjs = await cargarMotor();
+      const docPdf = await pdfjs.getDocument({
+        data: new Uint8Array(await pdf.arrayBuffer()),
+        useSystemFonts: true,
+        isEvalSupported: false,
+      }).promise;
+      try {
+        const { figuras, cancelado } = await extraerFiguras(docPdf, pdfjs, {
+          cancelacion,
+          anchoObjetivo: 1000,
+        });
+        if (cancelado || estado.id !== id) return;
+        await almacen.guardarFiguras(id, figuras, figuras.length ? 'listas' : 'ninguna');
+        if (figuras.length) {
+          estado.figuras = prepararFiguras(figuras);
+          if (libroVista) libroVista.renderLectura({ conservar: true });
+          avisar(figuras.length === 1
+            ? 'Se añadió 1 gráfico del PDF a la lectura.'
+            : `Se añadieron ${figuras.length} gráficos del PDF a la lectura.`,
+          'info', { efimero: true });
+        }
+      } finally {
+        try { await docPdf.destroy(); } catch (_) { /* nada */ }
+      }
+    } catch (error) {
+      /* Que falten los gráficos no puede romper la lectura. */
+      console.warn('[jg-figuras] no se pudieron extraer', error);
+    } finally {
+      if (figurasEnCurso === cancelacion) figurasEnCurso = null;
+    }
   }
 
   async function abrirDocumento(id) {
@@ -5864,6 +5958,7 @@ export function inicializarLectorPdf(deps = {}) {
     }
     guia.desdeCaracter = desde;
     try { el.salida.setSelectionRange(desde, texto.length); } catch (_) { /* textarea oculto */ }
+    precargarSiguienteCapitulo();
 
     if (typeof window.ttsHablar === 'function') {
       const trozo = texto.slice(desde);
@@ -5880,6 +5975,42 @@ export function inicializarLectorPdf(deps = {}) {
     } else {
       if (boton) boton.click();
       else avisar('Pulsa Escuchar para leer desde aquí.', 'info', { efimero: true });
+    }
+  }
+
+  function precargarSiguienteCapitulo() {
+    let cfg = {};
+    try {
+      if (libroVista && typeof libroVista.obtenerConfig === 'function') {
+        cfg = libroVista.obtenerConfig();
+      } else {
+        cfg = JSON.parse(localStorage.getItem('jg_pdf_lectura') || '{}');
+      }
+    } catch (_) {}
+    if (cfg.modoPagina !== 'scroll') return;
+
+    const siguienteIndice = estado.parteActual + 1;
+    if (estado.partes && estado.partes[siguienteIndice] && typeof window.ttsFetchNeuralChunk === 'function') {
+      try {
+        const proximoBruto = textoDeParte(siguienteIndice) || estado.partes[siguienteIndice]?.texto || '';
+        if (proximoBruto.trim()) {
+          const langPrefetch = estado.vista === 'es' ? 'es' : idiomaActual();
+          const textoPrefetch = prepararParaVoz(proximoBruto, langPrefetch);
+          const primerChunk = textoPrefetch.slice(0, 500);
+          if (primerChunk.length > 40) {
+            setTimeout(() => {
+              try {
+                const prefs = typeof ttsPrefs === 'function' ? ttsPrefs() : { preferFish: false };
+                const prefsPdf = { ...prefs, preferFish: false, fishId: '' };
+                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, prefsPdf.bilingualMode || 'regional') : [];
+                if (probe && probe[0] && typeof window.ttsFetchNeuralChunk === 'function') {
+                  window.ttsFetchNeuralChunk(probe[0], prefsPdf, 1, 'pdf').catch(()=>{});
+                }
+              } catch (_) {}
+            }, 1500);
+          }
+        }
+      } catch (_) {}
     }
   }
 
@@ -5912,6 +6043,45 @@ export function inicializarLectorPdf(deps = {}) {
       }
     } catch (_) {}
     return r;
+  };
+
+  /* ── Lectura continua de corrido entre capítulos en modo scroll («Desplazando hacia abajo») ──
+   * Cuando termina la narración de voz de un capítulo y el usuario tiene configurado
+   * el modo scroll, la lectura continúa fluidamente al siguiente capítulo desde el inicio
+   * hasta completar el libro (a menos que el usuario pause o detenga la lectura).
+   * En modo "Pasando páginas", no avanza solo (se mantiene el comportamiento original).
+   */
+  window.jgPdfContinuarLectura = function () {
+    if (!hayDocumento() || !enModoLectura()) return false;
+    let cfg = {};
+    try {
+      if (libroVista && typeof libroVista.obtenerConfig === 'function') {
+        cfg = libroVista.obtenerConfig();
+      } else {
+        cfg = JSON.parse(localStorage.getItem('jg_pdf_lectura') || '{}');
+      }
+    } catch (_) {}
+    if (cfg.modoPagina !== 'scroll') return false;
+
+    const capaDe = (i) => (
+      estado.textoAprobadoPorBloque.get(`cap_${i}`)
+      || estado.textoSeguroPorBloque.get(`cap_${i}`)
+      || textoDeParte(i) || ''
+    ).trim();
+
+    let idx = estado.parteActual + 1;
+    while (idx < estado.partes.length && !capaDe(idx)) idx += 1;
+    if (idx >= estado.partes.length) {
+      avisar('Terminó la lectura del documento.', 'ok');
+      return false;
+    }
+
+    mostrarParte(idx).then(() => {
+      setTimeout(() => {
+        leerDesdeCaracter(0, { forzarNuevo: true });
+      }, 60);
+    });
+    return true;
   };
 
   refrescarInicio();

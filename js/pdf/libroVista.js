@@ -63,7 +63,11 @@ export function initLibroVista({ el, estado, api }) {
     if (el.aparFuente) el.aparFuente.value = cfg.fuente;
     if (el.aparModo) el.aparModo.value = cfg.modoPagina === 'scroll' ? 'scroll' : 'paginas';
     guardarApariencia(cfg);
-    if (el.textoCol) el.textoCol.style.setProperty('--pdf-col-ancho', cfg.ancho + 'ch');
+    if (el.textoCol) {
+      el.textoCol.dataset.ancho = String(cfg.ancho);
+      el.textoCol.style.setProperty('--pdf-col-ancho', cfg.ancho + 'ch');
+    }
+    if (el.resultArea) el.resultArea.dataset.ancho = String(cfg.ancho);
     /* Cambiar el tamaño o el ancho cambia cuántas palabras caben: hay que
      * repartir las páginas otra vez, conservando el sitio. */
     programarMedicion(100);
@@ -109,7 +113,7 @@ export function initLibroVista({ el, estado, api }) {
     const ancla = conservar ? caracterVisible() : 0;
     const texto = api.textoDeParte ? api.textoDeParte(estado.parteActual) : (el.salida ? el.salida.value : '');
     /* El HTML trae las posiciones puestas: no hace falta añadir nada al texto. */
-    el.lectura.innerHTML = construirLectura(texto);
+    el.lectura.innerHTML = construirLectura(texto, estado.figuras || []);
     // Capítulo y página física son referencias distintas: las partes internas
     // de procesamiento no se presentan como páginas del libro.
     if (el.docRef) {
@@ -127,7 +131,14 @@ export function initLibroVista({ el, estado, api }) {
     if (el.btnCortes) el.btnCortes.hidden = pend === 0;
     /* Capítulo nuevo: se reparte desde su primera página. */
     pag.actual = 0;
-    if (!conservar) pag.ancla = 0;
+    if (!conservar) {
+      pag.ancla = 0;
+      if (!hayPaginado()) {
+        if (el.textoCol) el.textoCol.scrollTop = 0;
+        seguimiento = true;
+        if (el.volverLectura) el.volverLectura.hidden = true;
+      }
+    }
     traerTipografiaLectura();
     ajustarComposicion();
     requestAnimationFrame(() => {
@@ -141,8 +152,84 @@ export function initLibroVista({ el, estado, api }) {
        * render NO viene de una unión (ver `uniendo`). */
       if (!uniendo && typeof api.unirPalabrasAuto === 'function') api.unirPalabrasAuto();
       else if (uniendo) marcarUnir('trabajando');
+      /* Las figuras cambian el alto del texto: hasta que no están dibujadas,
+       * el reparto en páginas no es el definitivo. */
+      const figs = [...el.lectura.querySelectorAll('.lec-figura img')].filter((i) => !i.complete);
+      if (figs.length) {
+        Promise.all(figs.map((i) => new Promise((listo) => {
+          i.addEventListener('load', listo, { once: true });
+          i.addEventListener('error', listo, { once: true });
+        }))).then(() => {
+          if (!el.lectura || el.lectura.hidden) return;
+          medirPaginas({ conservar: true });
+          pintarPieLectura();
+        });
+      }
     });
   }
+
+  /* ── Visor de figuras ───────────────────────────────────────────────
+   *
+   * Un gráfico dentro del texto se ve pequeño en el teléfono. Al tocarlo se
+   * abre a pantalla completa, con pellizco para acercar. Se cierra con la
+   * X, con Escape o con el botón atrás del móvil (que aquí es un toque
+   * fuera de la imagen), igual que en cualquier galería.
+   */
+  let visorFig = null;
+
+  function crearVisorFiguras() {
+    if (visorFig) return visorFig;
+    const capa = document.createElement('div');
+    capa.className = 'lec-visor';
+    capa.hidden = true;
+    capa.setAttribute('role', 'dialog');
+    capa.setAttribute('aria-modal', 'true');
+    capa.setAttribute('aria-label', 'Figura del libro');
+    capa.innerHTML = '<button type="button" class="lec-visor__cerrar" aria-label="Cerrar figura">✕</button>'
+      + '<div class="lec-visor__marco"><img alt=""></div>'
+      + '<p class="lec-visor__pie"></p>';
+    document.body.appendChild(capa);
+    capa.addEventListener('click', (ev) => {
+      if (ev.target === capa || ev.target.closest('.lec-visor__cerrar')) cerrarVisorFiguras();
+    });
+    visorFig = capa;
+    return capa;
+  }
+
+  function abrirVisorFiguras(img, pagina) {
+    const capa = crearVisorFiguras();
+    const grande = capa.querySelector('img');
+    grande.src = img.currentSrc || img.src;
+    grande.alt = img.alt || 'Figura del libro';
+    const pie = capa.querySelector('.lec-visor__pie');
+    pie.textContent = pagina ? 'Página ' + pagina + ' del PDF' : '';
+    capa.hidden = false;
+    document.body.classList.add('jg-visor-abierto');
+    capa.querySelector('.lec-visor__cerrar').focus({ preventScroll: true });
+  }
+
+  function cerrarVisorFiguras() {
+    if (!visorFig || visorFig.hidden) return;
+    visorFig.hidden = true;
+    visorFig.querySelector('img').src = '';
+    document.body.classList.remove('jg-visor-abierto');
+  }
+  api.cerrarVisorFiguras = cerrarVisorFiguras;
+
+  if (el.lectura) {
+    el.lectura.addEventListener('click', (ev) => {
+      const fig = ev.target.closest?.('.lec-figura');
+      if (!fig) return;
+      const img = fig.querySelector('img');
+      if (!img) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      abrirVisorFiguras(img, fig.dataset.pagina || '');
+    });
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') cerrarVisorFiguras();
+  });
 
   /* Un doble toque en un párrafo lo lee en voz alta desde ahí.
    *
@@ -303,6 +390,7 @@ export function initLibroVista({ el, estado, api }) {
       art.style.height = '';
       art.style.flex = '';
       art.style.columnWidth = '';
+      art.style.setProperty('--lec-figura-alto', '68vh');
       if (col) col.removeAttribute('data-paginado');
       if (el.paginacion) el.paginacion.hidden = true;
       pag.activo = false;
@@ -326,6 +414,9 @@ export function initLibroVista({ el, estado, api }) {
     const bordes = (parseFloat(estiloCol.paddingTop) || 0) + (parseFloat(estiloCol.paddingBottom) || 0);
     let alto = Math.floor(col.clientHeight - bordes - visibles.reduce((n,e) => n + e.getBoundingClientRect().height, 0) - huecos);
     if (alto < 80) { pag.activo = false; return; }
+    /* Una figura nunca puede ser más alta que la página, o se cortaría al
+       pasar de columna. El alto real solo se conoce aquí. */
+    art.style.setProperty('--lec-figura-alto', Math.max(120, alto - 26) + 'px');
 
     /* La página tiene que caber un número ENTERO de renglones. Si sobra medio,
      * la última línea aparece cortada por la mitad y eso delata al instante
@@ -1618,6 +1709,8 @@ export function initLibroVista({ el, estado, api }) {
     medirPaginas,
     irAPagina,
     estadoPaginas: () => ({ ...pag }),
+    obtenerConfig: () => ({ ...cfg }),
+    esModoScroll: () => cfg.modoPagina === 'scroll',
     leerOrden() { try { return localStorage.getItem('jg_pdf_orden') || 'reciente'; } catch (_) { return 'reciente'; } },
   };
 }
