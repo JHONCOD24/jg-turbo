@@ -4,14 +4,14 @@
  */
 /* v2: sube CACHE_SHELL al desplegar UI nueva para que el rediseño no quede
  * atrapado en el shell viejo. Network-first en HTML/navegación. */
-const CACHE_SHELL = 'jg-turbo-shell-v110';
+const CACHE_SHELL = 'jg-turbo-shell-v111';
 const CACHE_SHARE = 'jg-turbo-share-v1';
 const SHARE_KEY = 'shared-audio';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_SHELL).then((cache) =>
-      cache.addAll(['/', '/index.html', '/manifest.webmanifest']).catch(() => {})
+      cache.addAll(['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']).catch(() => {})
     ).then(() => self.skipWaiting())
   );
 });

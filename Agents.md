@@ -1,5 +1,17 @@
 # JG Turbo — reglas para agentes
 
+## Context7 (docs de librerías)
+
+Este repo tiene el MCP Context7 (`.grok/config.toml`, `.mcp.json`, `.cursor/mcp.json`).
+Antes de cambiar APIs, versiones o config de FastAPI, Pydantic, yt-dlp, Whisper u
+otra librería, consulta Context7. No te fíes de memoria. La clave va en
+`CONTEXT7_API_KEY`, nunca en Git.
+
+Al actualizar dependencias: sube parches y menores **dentro de los rangos** de
+`backend/requirements.txt` y `api/requirements.txt`. No cruces majors (p. ej.
+FastAPI 1.x, Pydantic 3) ni toques `av` 18.x (WDAC en Windows). No actualices
+vendor (`js/vendor/`) sin una tarea aparte.
+
 ## Si vienes nuevo: `INFORME_2026-09-05.md`
 
 Cuenta la sesión completa del 5 de septiembre de 2026: qué se pidió, qué se

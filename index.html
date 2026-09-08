@@ -1,4 +1,4 @@
-<!-- v2.64.0 · Anchura responsive en móvil y lectura continua en scroll -->
+<!-- v2.65.0 · PWA instalable con iconos 192/512 y modal de descarga/instalación -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -12,9 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="JG Turbo">
 <title>JG Turbo · Voz a texto en segundos</title>
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="alternate" type="application/manifest+json" href="/manifest.json">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1045,6 +1048,7 @@
   /* Previews de pulir/prompt y config por encima del editor */
   #improvePreviewModal.show,
   #promptImproveModal.show,
+  #installAppModal.show,
   #settingsModal.show{z-index:240}
   .modal-backdrop{
     position:absolute;inset:0;
@@ -5432,9 +5436,9 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     <button class="server-pill checking" id="serverPill" title="Estado del servidor">
       <span class="dot"></span><span id="serverTxt">Verificando…</span>
     </button>
-    <button type="button" class="mini-btn" id="btnInstallApp" hidden title="Instalar JG Turbo como aplicación de escritorio o móvil (sin barra del navegador)" aria-label="Instalar aplicación">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;" aria-hidden="true"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 19h16"/></svg>
-      <span id="btnInstallAppLabel">Instalar app</span>
+    <button type="button" class="mini-btn" id="btnInstallApp" title="Descargar e instalar JG Turbo en PC, portátil o celular" aria-label="Descargar e instalar aplicación">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:14px;height:14px;" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span id="btnInstallAppLabel">Descargar app</span>
     </button>
     <button class="mini-btn" id="btnSettingsOpen" style="padding: 6px 12px; font-weight: 600; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--text); display: flex; align-items: center; gap: 6px;" title="Configurar servidor e inteligencia artificial">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -7704,10 +7708,95 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
         <span id="configPersistStatus" style="font-size:11px;color:var(--muted-2);line-height:1.4;"></span>
       </div>
 
+      <!-- Descargar e Instalar App (PWA) -->
+      <div style="margin-top: 6px; padding: 12px 14px; border-radius: 12px; background: linear-gradient(135deg, rgba(39,225,193,0.12), rgba(39,225,193,0.04)); border: 1px solid rgba(39,225,193,0.3); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 180px;">
+          <b style="color: var(--cyan); display: flex; align-items: center; gap: 6px; font-size: 13px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:15px;height:15px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar e instalar app
+          </b>
+          <span style="font-size: 11.5px; color: var(--muted-2); line-height: 1.4; display: block; margin-top: 2px;">
+            Instala JG Turbo en tu PC, portátil o móvil para usarla sin barras del navegador.
+          </span>
+        </div>
+        <button type="button" class="btn" id="btnSettingsInstallApp" style="background: var(--cyan); color: #062b25; font-weight: 700; padding: 8px 14px; border: 0; border-radius: 999px; cursor: pointer; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+          Instalar en este equipo
+        </button>
+      </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn ghost" id="btnSettingsCancel" style="max-width: 100px; padding: 8px 16px;">Cancelar</button>
       <button class="btn" id="btnSettingsSave" style="max-width: 120px; padding: 8px 20px; background-color:var(--cyan); background: linear-gradient(135deg, var(--cyan), #11b89c); border: 0; color: #062b25; font-weight: 700; box-shadow: 0 4px 16px -4px rgba(0,0,0,.5);">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Descarga e Instalación de la App (PWA) -->
+<div class="modal" id="installAppModal">
+  <div class="modal-backdrop" id="installAppModalBackdrop"></div>
+  <div class="modal-content" style="max-width: 520px; border-color: rgba(39,225,193,0.35); box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
+    <div class="modal-header">
+      <h3 style="display: flex; align-items: center; gap: 8px; color: var(--text);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:18px;height:18px;color:var(--cyan);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Descargar / Instalar JG Turbo
+      </h3>
+      <button class="modal-close" id="installAppModalClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 20px;">
+      <p style="margin: 0; font-size: 13.5px; color: var(--text); line-height: 1.5;">
+        Instala JG Turbo como aplicación de escritorio en tu <b>PC o portátil</b> o en tu <b>celular</b>. Se abre directamente en su propia ventana, sin barras del navegador y con acceso instantáneo desde el menú Inicio o pantalla de inicio.
+      </p>
+
+      <!-- Botón de instalación nativa si el navegador lo tiene listo -->
+      <div id="pwaPromptActionBox" style="padding: 14px; border-radius: 12px; background: linear-gradient(135deg, rgba(39,225,193,0.16), rgba(39,225,193,0.05)); border: 1px solid rgba(39,225,193,0.4); text-align: center;">
+        <div style="font-size: 14px; font-weight: 700; color: var(--cyan); margin-bottom: 4px;">Instalador oficial del navegador</div>
+        <div style="font-size: 12px; color: var(--muted-2); margin-bottom: 12px;">Haz clic aquí para lanzar la instalación automática:</div>
+        <button type="button" class="btn" id="btnModalTriggerInstall" style="width: 100%; max-width: 320px; margin: 0 auto; background: var(--cyan); color: #062b25; font-weight: 800; font-size: 14px; padding: 10px 18px; border: 0; border-radius: 999px; box-shadow: 0 4px 16px rgba(39,225,193,.35); cursor: pointer;">
+          💻 Instalar aplicación en este equipo
+        </button>
+      </div>
+
+      <!-- Guías por dispositivo -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <details open style="background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;">
+          <summary style="font-weight: 700; font-size: 13px; color: var(--text); cursor: pointer; user-select: none;">
+            💻 En PC o Portátil (Google Chrome / Microsoft Edge)
+          </summary>
+          <div style="margin-top: 8px; font-size: 12.5px; color: var(--muted-2); line-height: 1.55;">
+            <b>Opción A (Barra de direcciones):</b> En la barra de URL arriba a la derecha, busca el icono <b>⊕</b> o <b>💻</b> («Instalar» o «Instalar JG Turbo») y haz clic.<br><br>
+            <b>Opción B (Menú de 3 puntos):</b> Pulsa <b>⋮</b> (Chrome) o <b>⋯</b> (Edge) → <b>«Aplicaciones»</b> → <b>«Instalar este sitio como una aplicación…»</b>.<br><br>
+            Windows creará el acceso en tu <b>Menú Inicio</b> y podrás fijarla a la <b>Barra de Tareas</b>.
+          </div>
+        </details>
+
+        <details style="background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;">
+          <summary style="font-weight: 700; font-size: 13px; color: var(--text); cursor: pointer; user-select: none;">
+            📱 En Celular Android (Google Chrome)
+          </summary>
+          <div style="margin-top: 8px; font-size: 12.5px; color: var(--muted-2); line-height: 1.55;">
+            1. Toca los tres puntos <b>⋮</b> arriba a la derecha en Chrome.<br>
+            2. Selecciona <b>«Instalar aplicación»</b> o <b>«Añadir a la pantalla principal»</b>.<br>
+            3. Confirma «Instalar». Podrás compartir audios directamente desde WhatsApp hacia JG Turbo.
+          </div>
+        </details>
+
+        <details style="background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;">
+          <summary style="font-weight: 700; font-size: 13px; color: var(--text); cursor: pointer; user-select: none;">
+            🍏 En iPhone o iPad (Safari)
+          </summary>
+          <div style="margin-top: 8px; font-size: 12.5px; color: var(--muted-2); line-height: 1.55;">
+            1. Abre JG Turbo en <b>Safari</b>.<br>
+            2. Toca el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba).<br>
+            3. Baja y toca <b>«Añadir a pantalla de inicio»</b>.<br>
+            4. Toca «Añadir». Se abrirá como app nativa a pantalla completa.
+          </div>
+        </details>
+      </div>
+
+    </div>
+    <div class="modal-footer" style="justify-content: flex-end;">
+      <button class="btn ghost" id="installAppModalCloseBtn" style="padding: 8px 18px;">Cerrar</button>
     </div>
   </div>
 </div>
@@ -12183,16 +12272,31 @@ function actualizarCopyPwaInstall(){
   if(esAndroid()){
     if(title) title.textContent = 'Android:';
     if(text) text.textContent = ' instala la app y comparte audios de WhatsApp hacia JG Turbo.';
-    if(hdrLbl) hdrLbl.textContent = 'Instalar app';
+    if(hdrLbl) hdrLbl.textContent = 'Descargar app';
   }else if(esIOS()){
     if(title) title.textContent = 'iPhone:';
     if(text) text.textContent = ' en Safari usa Compartir → «Añadir a pantalla de inicio».';
-    if(hdrLbl) hdrLbl.textContent = 'Cómo instalar';
+    if(hdrLbl) hdrLbl.textContent = 'Descargar app';
   }else{
-    if(title) title.textContent = 'Escritorio:';
-    if(text) text.textContent = ' instala JG Turbo como app de Windows (Chrome o Edge). Queda en el menú Inicio, sin barra del navegador.';
-    if(hdrLbl) hdrLbl.textContent = 'Instalar app';
+    if(title) title.textContent = 'Escritorio / PC:';
+    if(text) text.textContent = ' instala JG Turbo como app de escritorio (Chrome o Edge). Queda en el menú Inicio y barra de tareas, sin barra del navegador.';
+    if(hdrLbl) hdrLbl.textContent = 'Descargar app';
   }
+}
+
+function abrirInstallAppModal(){
+  const modal = document.getElementById('installAppModal');
+  if(!modal) return;
+  const promptBox = document.getElementById('pwaPromptActionBox');
+  if(promptBox){
+    promptBox.style.display = _deferredPwaInstall ? 'block' : 'none';
+  }
+  modal.classList.add('show');
+}
+
+function cerrarInstallAppModal(){
+  const modal = document.getElementById('installAppModal');
+  if(modal) modal.classList.remove('show');
 }
 
 function mostrarControlesInstalarApp(visible){
@@ -12203,52 +12307,53 @@ function mostrarControlesInstalarApp(visible){
     if(hdr) hdr.hidden = true;
     return;
   }
-  if(visible){
-    if(banner) banner.classList.add('show');
-    if(hdr) hdr.hidden = false;
+  if(hdr) hdr.hidden = !visible;
+  if(banner){
+    if(visible) banner.classList.add('show');
+    else banner.classList.remove('show');
   }
 }
 
 function instruccionesInstalarApp(){
   if(esIOS()){
-    return 'En iPhone / iPad (Safari):\n\n1. Abre https://jg-turbo.vercel.app\n2. Toca el botón Compartir\n3. Elige «Añadir a pantalla de inicio»\n4. Confirma «Añadir»\n\nLuego abre JG Turbo desde el icono (se ve como app, sin Safari arriba).';
+    return 'En iPhone / iPad (Safari):\n\n1. Abre https://jg-turbo.vercel.app\n2. Toca el botón Compartir (cuadrado con flecha hacia arriba)\n3. Elige «Añadir a pantalla de inicio»\n4. Confirma «Añadir»\n\nLuego abre JG Turbo desde el icono de tu pantalla (se ve como app nativa, sin Safari arriba).';
   }
   if(esAndroid()){
     return 'En Android (Chrome):\n\n1. Abre https://jg-turbo.vercel.app\n2. Menú ⋮ → «Instalar app» o «Añadir a la pantalla principal»\n3. Confirma Instalar\n\nDespués, en WhatsApp: Compartir audio → JG Turbo.';
   }
-  return 'Instalar JG Turbo en Windows (como app de escritorio, no solo un acceso directo del navegador):\n\n' +
-    '1. Abre https://jg-turbo.vercel.app en Google Chrome o Microsoft Edge (recomendado).\n' +
-    '2. En la barra de direcciones, a la derecha, busca el icono ⊕ «Instalar» / «Instalar JG Turbo».\n' +
-    '   O menú ⋮ (Chrome) / ⋯ (Edge) → «Aplicaciones» → «Instalar este sitio como una aplicación…».\n' +
+  return 'Instalar JG Turbo en PC / Portátil (como app de escritorio nativa):\n\n' +
+    '1. Abre https://jg-turbo.vercel.app en Google Chrome o Microsoft Edge.\n' +
+    '2. En la barra de direcciones (URL), a la derecha, busca el icono ⊕ o 💻 «Instalar JG Turbo».\n' +
+    '   O abre el menú ⋮ (Chrome) / ⋯ (Edge) → «Aplicaciones» → «Instalar este sitio como una aplicación…».\n' +
     '3. Confirma «Instalar».\n' +
-    '4. Windows creará JG Turbo en el menú Inicio y, si quieres, en la barra de tareas.\n' +
-    '5. Ábrela desde Inicio: se abre en su propia ventana, sin pestañas ni barra de direcciones.\n\n' +
-    'Nota: Firefox no instala PWA bien. Usa Chrome o Edge. No hace falta descargar un .exe.';
+    '4. Se abrirá inmediatamente en su propia ventana independiente y se agregará al Menú Inicio y Barra de Tareas.\n\n' +
+    'No hace falta descargar archivos .exe externos; el navegador la instala directo y seguro.';
 }
 
 async function pedirInstalarApp(){
   if(esPwaInstalada()){
-    if(typeof setEstado === 'function') setEstado('JG Turbo ya está instalada como aplicación.', false);
+    if(typeof setEstado === 'function') setEstado('JG Turbo ya está instalada como aplicación en este equipo.', false);
+    abrirInstallAppModal();
     return;
   }
   if(_deferredPwaInstall){
     try{
       _deferredPwaInstall.prompt();
       const choice = await _deferredPwaInstall.userChoice;
-      _deferredPwaInstall = null;
       if(choice && choice.outcome === 'accepted'){
+        _deferredPwaInstall = null;
         mostrarControlesInstalarApp(false);
+        cerrarInstallAppModal();
         if(typeof setEstado === 'function'){
           setEstado('✓ App instalada. Búscala en el menú Inicio como «JG Turbo».', false);
         }
+        return;
       }
     }catch(err){
       console.warn('prompt install', err);
-      alert(instruccionesInstalarApp());
     }
-    return;
   }
-  alert(instruccionesInstalarApp());
+  abrirInstallAppModal();
 }
 
 function wirePwaInstall(){
@@ -12262,28 +12367,26 @@ function wirePwaInstall(){
     if(guideIos) guideIos.style.display = 'block';
     if(guideAnd) guideAnd.style.display = 'none';
   }
-  // Ya instalada: ocultar controles
+  // Si ya está instalada en modo standalone, ocultar botones
   if(esPwaInstalada()){
     mostrarControlesInstalarApp(false);
-  }else if(esAndroid() || esEscritorio()){
-    // En móvil Android y escritorio mostramos el banner; en iOS el botón del header
-    // da las instrucciones (no hay beforeinstallprompt).
-    if(banner && esAndroid()) banner.classList.add('show');
-    if(btnHdr && !esIOS()) btnHdr.hidden = false;
-    if(btnHdr && esIOS()) btnHdr.hidden = false; // en iOS sirve de ayuda
-  }else if(esIOS() && btnHdr){
-    btnHdr.hidden = false;
+  }else{
+    // En navegador web (escritorio, portátil o móvil), mostrar SIEMPRE la opción
+    mostrarControlesInstalarApp(true);
   }
 
   window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
+    // No bloqueamos para que Chrome también muestre el icono en la barra de URL
     _deferredPwaInstall = e;
     actualizarCopyPwaInstall();
     mostrarControlesInstalarApp(true);
+    const promptBox = document.getElementById('pwaPromptActionBox');
+    if(promptBox) promptBox.style.display = 'block';
   });
   window.addEventListener('appinstalled', () => {
     _deferredPwaInstall = null;
     mostrarControlesInstalarApp(false);
+    cerrarInstallAppModal();
     if(typeof setEstado === 'function'){
       setEstado(
         esEscritorio()
@@ -12295,6 +12398,41 @@ function wirePwaInstall(){
   });
   if(btn) btn.addEventListener('click', () => { pedirInstalarApp(); });
   if(btnHdr) btnHdr.addEventListener('click', () => { pedirInstalarApp(); });
+  const btnSettingsInst = document.getElementById('btnSettingsInstallApp');
+  if(btnSettingsInst) btnSettingsInst.addEventListener('click', () => {
+    cerrarSettingsModal();
+    pedirInstalarApp();
+  });
+
+  const modalClose = document.getElementById('installAppModalClose');
+  const modalCloseBtn = document.getElementById('installAppModalCloseBtn');
+  const modalBackdrop = document.getElementById('installAppModalBackdrop');
+  const btnTrigger = document.getElementById('btnModalTriggerInstall');
+
+  if(modalClose) modalClose.addEventListener('click', cerrarInstallAppModal);
+  if(modalCloseBtn) modalCloseBtn.addEventListener('click', cerrarInstallAppModal);
+  if(modalBackdrop) modalBackdrop.addEventListener('click', cerrarInstallAppModal);
+
+  if(btnTrigger){
+    btnTrigger.addEventListener('click', async () => {
+      if(_deferredPwaInstall){
+        try{
+          _deferredPwaInstall.prompt();
+          const choice = await _deferredPwaInstall.userChoice;
+          if(choice && choice.outcome === 'accepted'){
+            _deferredPwaInstall = null;
+            cerrarInstallAppModal();
+            mostrarControlesInstalarApp(false);
+          }
+        }catch(err){
+          console.warn('prompt error', err);
+        }
+      }else{
+        alert(instruccionesInstalarApp());
+      }
+    });
+  }
+
   const pickWa = document.getElementById('btnPickWhatsAppAudio');
   if(pickWa && fileInput){
     pickWa.addEventListener('click', () => fileInput.click());
@@ -12305,11 +12443,16 @@ function registrarServiceWorker(){
   if(!('serviceWorker' in navigator)) return;
   // Solo en https o localhost
   if(location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
-  window.addEventListener('load', () => {
+  const doRegister = () => {
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
       console.warn('SW no registrado', err);
     });
-  });
+  };
+  if(document.readyState === 'complete'){
+    doRegister();
+  }else{
+    window.addEventListener('load', doRegister);
+  }
 }
 
 // Arranque: pestaña por URL, audio compartido, PWA
@@ -17275,7 +17418,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v110';
+const JG_JS_V = 'v111';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
