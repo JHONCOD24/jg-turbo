@@ -3,6 +3,19 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-08 · v109 · Letra nítida sin destello borroso y anclaje secuencial contiguo
+
+1. **Destello de letra (nitidez máxima):**
+   - Se reemplazó el halo radial difuso de 10px (`--lec-guia-glow: 0 0 10px ...`) por una sombra de contraste nítida y micro-resplandor de 1.5px (`0 1px 2px rgba(0,0,0,0.45), 0 0 1.5px color-mix(...)`).
+   - El texto `#FFFFFF` en modo noche se mantiene brillante y claro, pero con bordes 100% nítidos y cristalinos, sin sensación borrosa.
+
+2. **Sincronización voz-guía y paso de página sin retraso (~7 líneas resueltas):**
+   - En libros reales, los bloques de TTS neural (hasta 900 caracteres / ~14 líneas) se desfasaban porque las búsquedas con `indexOf` global o caídas en `primero`/`corto` atrapaban coincidencias 400-500 caracteres antes (exactamente 7 líneas).
+   - Nuevo algoritmo de **Anclaje Secuencial Contiguo Guiado por Cursor** en `js/pdf/guiaAnclas.js`: busca la aguja en una ventana local restringida centrada en el cursor esperado donde terminó el bloque previo, garantizando avance monótono estricto.
+   - En `js/pdf/pdfController.js`: `situarBloques` calcula `inicioCompacto` según `guia.desdeCaracter` para que «leer desde aquí» no busque desde el inicio del libro, y `posicionDeVoz` acota el último bloque a su longitud real.
+   - En `js/pdf/libroVista.js`: `marcarRango` tolera huecos de formato inter-párrafo para no pausar el seguimiento automático de página.
+   - Verificado con `verificar_pdf_guia_tiempo.mjs` (0/71 muestras con desfase, retraso máximo acotado) y `verificar_pdf_tiempo_real.mjs`.
+
 ## 2026-09-08 · Guía a la par de la voz (anclaje verificado)
 
 Lo reportado: escuchando con la guía, la voz iba 2-3 líneas por delante y la
@@ -17,7 +30,68 @@ repetición temprana y el bloque se barría en menos sitio del real.
 - Re-medido: anclas exactas 5/5, retraso máximo 41 caracteres, cero muestras a
   más de un tramo. Pruebas: `test_pdf_guia_anclas.mjs` (10, incluye el caso del
   estribillo) y `verificar_pdf_guia_tiempo.mjs` (regresión con voz sintética).
-- Despliegue dpl_v108: `JG_JS_V='v108'`, shell-v108, módulos con igual tamaño local/prod, home 200.
+
+## 2026-09-08 · v2.63.0 · Los gráficos del PDF se ven dentro de la lectura
+
+Lo reportado: en un libro ya en producción («El placebo eres tú») se leían los
+pies de figura pero no se veía ningún gráfico. La causa: el lector solo llamaba
+a `getTextContent()`; las imágenes de un PDF no están ahí, sino en la lista de
+operaciones de dibujo de cada página, y nunca se leían. Lo único que se
+dibujaba era la portada.
+
+**Cómo funciona ahora** (`js/pdf/figurasPdf.js`, módulo nuevo):
+
+1. **Barrido.** Se recorre cada página con `getOperatorList()` llevando la
+   matriz de transformación activa (`save`/`restore`/`transform`) y se anota la
+   caja de cada imagen. 441 páginas en ~1,7 s.
+2. **Filtro de adornos.** Lo que se repite en 3 o más páginas Y ocupa menos del
+   8 % de la página es decoración (viñeta de capítulo, logo), no figura. El
+   tamaño solo no vale: en «El placebo» las 26 láminas a color miden todas
+   igual y son contenido; en «Sex code» la viñeta de capítulo sale 8 veces y no
+   lo es. También se descarta la portada.
+3. **Recorte.** Se dibuja la página desplazada sobre un lienzo del tamaño justo
+   (`render({ transform })`) y sale un JPEG de ~1000 px. Los rótulos pegados al
+   gráfico («FIGURA 3.1 A») entran en el recorte; un renglón de prosa que cruza
+   toda la caja, no —ya se lee en el texto y se duplicaría.
+4. **Ancla.** Cada figura guarda las últimas letras que había justo encima
+   (compactadas a `a-z0-9`, como `situarPaginas`). Si la lámina ocupa la página
+   entera, el ancla se busca en la página anterior o en la siguiente.
+5. **Colocación.** `situarFiguras()` busca ese ancla en el texto del capítulo
+   que se está pintando y `construirLectura()` inserta la `<figure>` entre los
+   bloques correctos. Búsqueda con cursor hacia delante: sin eso, un ancla que
+   también aparece en el índice mandaba la figura a la página 2.
+
+**Integración**
+- Siempre en segundo plano y después de montar el libro (`asegurarFiguras`):
+  un barrido de mil páginas no puede retrasar la lectura. Se hace una vez por
+  libro y queda guardado (`figurasEstado`: `listas` / `ninguna` / `sinpdf`).
+- Los libros que ya estaban cargados se reprocesan solos desde su PDF guardado,
+  sin tocar texto, marcas ni progreso.
+- Los blobs viven en el almacén `archivos` de IndexedDB, junto al PDF. Se
+  arregló que `guardarDocumento` y las dos rutas de portada reescribían esa
+  fila y habrían borrado las figuras.
+- La `<figure>` NO lleva `data-ini`/`data-fin`: queda invisible para la voz, el
+  resaltado y «leer desde aquí». Una imagen no se lee.
+- Al tocarla se abre a pantalla completa (visor con Escape y toque fuera).
+- El pie no se repite en la imagen: ya viaja en el texto del libro.
+
+**Tres fallos encontrados y corregidos en la prueba de navegador**
+- `loading="lazy"` en un lector por columnas: las imágenes no llegaban a
+  cargarse, medían 0 y el reparto en páginas salía mal. Se quitó.
+- `style="aspect-ratio"` aplastaba las figuras altas contra el alto máximo
+  (810×1901 → 716×534). Con `width`/`height` como atributos y ambos en `auto`
+  por CSS, el navegador encoge a lo ancho y respeta la proporción.
+- pdf.js 6 usa `Map.prototype.getOrInsertComputed` en `getOperatorList()`. En
+  un navegador que no la traiga, el texto se lee pero las figuras fallaban en
+  silencio: se añadió un respaldo mínimo y protegido.
+
+**Comprobado**
+- «El placebo eres tú»: 62 figuras (36 gráficos + 26 láminas a color), 6,18 MB,
+  5,4 s de extracción en navegador, 62/62 ancladas en su sitio.
+- «Sex code»: 5 figuras reales; las 8 viñetas de capítulo, descartadas.
+- Proporciones exactas y ninguna figura partida entre columnas.
+- Batería local: 30 de 31 (`test_pdf_musica_crossfade` necesita
+  `npx playwright install` en este equipo).
 
 ## 2026-09-08 · Contenido lateral redimensionable (tablet y escritorio)
 

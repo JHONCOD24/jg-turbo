@@ -1587,7 +1587,7 @@
   :root{
     --lec-tam:19px; --lec-inter:1.7;
     --lec-guia-texto:#FFFFFF;
-    --lec-guia-glow:0 0 10px color-mix(in srgb, var(--lec-acento, var(--cyan)) 70%, transparent), 0 0 1.5px rgba(255,255,255,.95);
+    --lec-guia-glow:0 1px 2px rgba(0,0,0,.45), 0 0 1.5px color-mix(in srgb, var(--lec-acento, var(--cyan)) 35%, transparent);
   }
   #pdfResultArea[data-tema="papel"]{
     --lec-bg:var(--lec-papel); --lec-texto:#1A1A1A; --lec-suave:#5C5750;
@@ -1601,7 +1601,7 @@
     --lec-linea:rgba(255,255,255,.08); --lec-acento:#27E1C1;
     --lec-superficie:var(--surface); --lec-superficie-2:var(--surface-2);
     --lec-guia-texto:#FFFFFF;
-    --lec-guia-glow:0 0 10px color-mix(in srgb, var(--lec-acento, var(--cyan)) 75%, transparent), 0 0 1.5px rgba(255,255,255,.95);
+    --lec-guia-glow:0 1px 2px rgba(0,0,0,.50), 0 0 1.5px color-mix(in srgb, var(--lec-acento, var(--cyan)) 35%, transparent);
   }
 
   /* ── El tema del lector viste también sus controles ────────────────
@@ -17181,7 +17181,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v108';
+const JG_JS_V = 'v109';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

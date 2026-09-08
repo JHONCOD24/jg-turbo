@@ -60,58 +60,78 @@ export const MAX_INTENTOS_ANCLA = 6;
 /**
  * Dónde empieza, en texto compacto, cada bloque de audio.
  *
+ * Como la síntesis de voz divide el texto de forma secuencial y contigua,
+ * cada bloque i DEBE arrancar en torno a donde termina el bloque i-1.
+ * Buscar el arranque mediante una ventana local guiada por cursor evita
+ * caer en estribillos, palabras repetidas o arranques previos de la página anterior,
+ * eliminando por completo el desfase y el salto tardío de página.
+ *
  * @param {string} textoCompacto - capítulo compactado
  * @param {string[]} bloquesCompactos - cada bloque de la cola, compactado
+ * @param {number} [inicioCompacto=0] - posición compacta inicial (para "leer desde aquí")
  * @returns {(number|null)[]} ancla por bloque (null = no se encontró)
  */
-export function situarBloquesTexto(textoCompacto, bloquesCompactos) {
+export function situarBloquesTexto(textoCompacto, bloquesCompactos, inicioCompacto = 0) {
   const texto = String(textoCompacto || '');
   const bloques = Array.isArray(bloquesCompactos) ? bloquesCompactos : [];
   const anclas = new Array(bloques.length).fill(null);
-  let desde = 0;
-  let ultimoAncla = 0;
-  bloques.forEach((bloque, i) => {
-    const aguja = String(bloque || '').slice(0, 48);
-    if (aguja.length < 6) return;
-    /* El ancla no puede caer pegada a la anterior: el bloque previo ocupa
-     * sitio (al menos la mitad de su largo). Así una repetición temprana
-     * dentro del bloque anterior ni siquiera se considera. */
-    const largoPrevio = i === 0 ? 0 : String(bloques[i - 1] || '').length;
-    const baseMin = i === 0 ? 0 : ultimoAncla + Math.floor(largoPrevio * 0.5);
-    let buscarDesde = Math.max(desde, 0);
-    let primero = -1;
-    let mejor = -1;
-    let mejorPuntaje = -1;
-    for (let intento = 0; intento < MAX_INTENTOS_ANCLA; intento += 1) {
-      const cand = texto.indexOf(aguja, buscarDesde);
-      if (cand === -1) break;
-      if (primero === -1) primero = cand;
-      if (cand >= baseMin) {
-        const puntaje = puntuarContinuacion(texto, String(bloques[i] || ''), cand);
-        if (puntaje > mejorPuntaje) {
-          mejorPuntaje = puntaje;
-          mejor = cand;
+  let cursor = Math.max(0, Math.min(texto.length, Number(inicioCompacto) || 0));
+  let ultimoAncla = null;
+  let ultimoLargo = 0;
+
+  for (let i = 0; i < bloques.length; i += 1) {
+    const bloque = String(bloques[i] || '');
+    if (bloque.length < 6) {
+      if (ultimoAncla != null) cursor = ultimoAncla + ultimoLargo + bloque.length;
+      continue;
+    }
+
+    const cursorEsperado = ultimoAncla != null ? ultimoAncla + ultimoLargo : cursor;
+    const lenAguja = Math.min(36, bloque.length);
+    const aguja = bloque.slice(0, lenAguja);
+
+    // Ventana local alrededor de cursorEsperado: [cursorEsperado - 40, cursorEsperado + ...]
+    const winMin = Math.max(0, cursorEsperado - 40);
+    const winMax = Math.min(texto.length, cursorEsperado + Math.max(220, lenAguja + 60));
+    const trozo = texto.slice(winMin, winMax);
+
+    let p = trozo.indexOf(aguja);
+    if (p === -1 && lenAguja > 20) p = trozo.indexOf(bloque.slice(0, 20));
+    if (p === -1 && lenAguja > 12) p = trozo.indexOf(bloque.slice(0, 12));
+
+    let cand = -1;
+    if (p !== -1) {
+      cand = winMin + p;
+      const score = puntuarContinuacion(texto, bloque, cand);
+      if (score < 0.3 && i > 0) cand = -1;
+    }
+
+    // Si no se encontró en la ventana local, buscar un poco más adelante
+    if (cand === -1) {
+      const trozoExt = texto.slice(cursorEsperado, Math.min(texto.length, cursorEsperado + 500));
+      const pExt = trozoExt.indexOf(bloque.slice(0, Math.min(24, lenAguja)));
+      if (pExt !== -1) {
+        const cExt = cursorEsperado + pExt;
+        if (puntuarContinuacion(texto, bloque, cExt) >= 0.4) {
+          cand = cExt;
         }
-        if (puntaje >= UMBRAL_CONTINUACION) break;
       }
-      buscarDesde = cand + 1;
     }
-    let elegido = -1;
-    if (mejor >= 0 && mejorPuntaje >= MINIMO_CONTINUACION) elegido = mejor;
-    else if (primero >= 0) elegido = primero;
-    else {
-      /* Último recurso de antes: aguja corta. Sin verificación porque ya es
-       * aproximado; el reparto proporcional lo acota. */
-      if (aguja.length > 16) {
-        const corto = texto.indexOf(aguja.slice(0, 16), desde);
-        if (corto !== -1) elegido = corto;
+
+    if (cand !== -1) {
+      // Garantizar avance estrictamente monótono: no retroceder
+      if (ultimoAncla != null && cand <= ultimoAncla) {
+        cand = ultimoAncla + Math.max(1, Math.floor(ultimoLargo * 0.5));
       }
-      if (elegido === -1) return;
+      anclas[i] = cand;
+      ultimoAncla = cand;
+      ultimoLargo = bloque.length;
+      cursor = cand + bloque.length;
+    } else {
+      // Dejar null para que rellenarAnclas interpole, y avanzar el cursor
+      cursor = cursorEsperado + bloque.length;
     }
-    anclas[i] = elegido;
-    ultimoAncla = elegido;
-    desde = elegido + Math.max(1, Math.floor(aguja.length / 2));
-  });
+  }
   return anclas;
 }
 

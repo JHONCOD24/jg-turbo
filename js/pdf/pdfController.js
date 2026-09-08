@@ -4246,10 +4246,16 @@ export function inicializarLectorPdf(deps = {}) {
     return compactarTexto(texto);
   }
 
-  /** Idem: anclaje verificado (continuacion + avance minimo) en guiaAnclas.js. */
+  /** Idem: anclaje verificado (secuencial contiguo guiado por cursor) en guiaAnclas.js. */
   function situarBloques(textos) {
     const lista = (textos || []).map((bruto) => compactarTexto(String(bruto || '')).texto);
-    return rellenarAnclas(situarBloquesTexto(guia.compacto, lista), guia.compacto.length);
+    let inicioCompacto = 0;
+    if (guia.desdeCaracter > 0 && guia.mapa && guia.mapa.length) {
+      const idx = guia.mapa.findIndex((pos) => pos >= guia.desdeCaracter);
+      if (idx >= 0) inicioCompacto = idx;
+    }
+    guia.largosBloques = lista.map((b) => b.length);
+    return rellenarAnclas(situarBloquesTexto(guia.compacto, lista, inicioCompacto), guia.compacto.length);
   }
 
   /** Punto del texto visible donde va la voz ahora mismo. */
@@ -4258,7 +4264,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (!anclas.length || !guia.mapa || !guia.mapa.length) return null;
     const i = Math.max(0, Math.min(anclas.length - 1, Number(datos.bloque) || 0));
     const inicio = anclas[i];
-    const fin = i + 1 < anclas.length ? anclas[i + 1] : guia.compacto.length;
+    const fin = i + 1 < anclas.length ? anclas[i + 1] : Math.min(guia.compacto.length, inicio + (guia.largosBloques?.[i] || 600));
     const dentro = Math.max(0, Math.min(1, Number(datos.dentroBloque) || 0));
     const enCompacto = Math.round(inicio + (fin - inicio) * dentro);
     const acotado = Math.max(0, Math.min(guia.mapa.length - 1, enCompacto));

@@ -182,13 +182,18 @@ export function initLibroVista({ el, estado, api }) {
     });
     try { el.lectura.normalize(); } catch (_) {}
 
-    const bloque = [...el.lectura.querySelectorAll('[data-ini]')].reverse()
+    const bloques = [...el.lectura.querySelectorAll('[data-ini]')];
+    if (!bloques.length) return null;
+    let bloque = bloques.slice().reverse()
       .find((b) => Number(b.dataset.ini) <= ini && Number(b.dataset.fin) > ini);
+    if (!bloque) {
+      bloque = bloques.find((b) => Number(b.dataset.ini) >= ini) || bloques[bloques.length - 1];
+    }
     if (!bloque) return null;
 
     const base = Number(bloque.dataset.ini);
-    const desde = ini - base;
-    const hasta = Math.min(fin - base, bloque.textContent.length);
+    const desde = Math.max(0, ini - base);
+    const hasta = Math.min(Math.max(desde + 1, fin - base), bloque.textContent.length);
     if (!(hasta > desde)) return null;
 
     const recorrido = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
