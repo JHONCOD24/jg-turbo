@@ -598,10 +598,17 @@ export function inicializarLectorPdf(deps = {}) {
 
   function pintarBotonesFila(fila) {
     const filas = [...el.organizarLista.querySelectorAll('.pdf-org-fila')];
+    const indice = filas.indexOf(fila);
     const antes = fila.querySelector('[data-mov="antes"]');
     const despues = fila.querySelector('[data-mov="despues"]');
-    if (antes) antes.disabled = filas.indexOf(fila) <= 0;
-    if (despues) despues.disabled = filas.indexOf(fila) >= filas.length - 1;
+    const posicion = fila.querySelector('[data-mov="posicion"]');
+    if (antes) antes.disabled = indice <= 0;
+    if (despues) despues.disabled = indice >= filas.length - 1;
+    if (posicion) posicion.value = String(indice + 1);
+  }
+
+  function actualizarControlesOrganizar() {
+    el.organizarLista?.querySelectorAll('.pdf-org-fila').forEach(pintarBotonesFila);
   }
 
   function moverFila(fila, direccion) {
@@ -616,7 +623,7 @@ export function inicializarLectorPdf(deps = {}) {
       if (!sig) return;
       lista.insertBefore(sig, fila);
     }
-    pintarBotonesFila(fila);
+    actualizarControlesOrganizar();
     anunciarPosicionFila(fila);
     try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
   }
@@ -658,6 +665,35 @@ export function inicializarLectorPdf(deps = {}) {
     const controles = document.createElement('div');
     controles.className = 'pdf-org-controles';
 
+    const posicionLabel = document.createElement('label');
+    posicionLabel.className = 'pdf-org-posicion';
+    const posicionTexto = document.createElement('span');
+    posicionTexto.textContent = 'Posición';
+    const posicion = document.createElement('select');
+    posicion.dataset.mov = 'posicion';
+    posicion.setAttribute('aria-label', `Posición de ${tituloDoc}`);
+    for (let i = 0; i < ordenTemporal.length; i += 1) {
+      const opcion = document.createElement('option');
+      opcion.value = String(i + 1);
+      opcion.textContent = i === 0
+        ? '1 · Primero'
+        : i === ordenTemporal.length - 1 ? `${i + 1} · Último` : String(i + 1);
+      posicion.appendChild(opcion);
+    }
+    posicion.addEventListener('change', () => {
+      const filas = [...el.organizarLista.querySelectorAll('.pdf-org-fila')];
+      const actual = filas.indexOf(li);
+      const destino = Math.max(0, Math.min(filas.length - 1, Number(posicion.value) - 1));
+      if (destino === actual) return;
+      if (destino > actual) el.organizarLista.insertBefore(li, filas[destino].nextSibling);
+      else el.organizarLista.insertBefore(li, filas[destino]);
+      actualizarControlesOrganizar();
+      anunciarPosicionFila(li);
+      try { posicion.focus({ preventScroll: true }); } catch (_) {}
+      try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+    });
+    posicionLabel.append(posicionTexto, posicion);
+
     const tirador = document.createElement('button');
     tirador.type = 'button';
     tirador.className = 'pdf-org-tirador';
@@ -681,7 +717,7 @@ export function inicializarLectorPdf(deps = {}) {
     btnAntes.type = 'button';
     btnAntes.className = 'mini-btn pdf-org-btn';
     btnAntes.dataset.mov = 'antes';
-    btnAntes.textContent = 'Mover antes';
+    btnAntes.textContent = 'Subir';
     btnAntes.setAttribute('aria-label', `Mover ${tituloDoc} una posición antes`);
     btnAntes.addEventListener('click', () => moverFila(li, 'antes'));
 
@@ -689,11 +725,11 @@ export function inicializarLectorPdf(deps = {}) {
     btnDespues.type = 'button';
     btnDespues.className = 'mini-btn pdf-org-btn';
     btnDespues.dataset.mov = 'despues';
-    btnDespues.textContent = 'Mover después';
+    btnDespues.textContent = 'Bajar';
     btnDespues.setAttribute('aria-label', `Mover ${tituloDoc} una posición después`);
     btnDespues.addEventListener('click', () => moverFila(li, 'despues'));
 
-    controles.append(tirador, btnAntes, btnDespues);
+    controles.append(posicionLabel, btnAntes, btnDespues, tirador);
 
     /* Alt+flechas: atajo explicado en la ayuda del panel y en el tirador. */
     li.addEventListener('keydown', (e) => {
@@ -710,7 +746,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (!el.organizarLista) return;
     el.organizarLista.innerHTML = '';
     for (const doc of ordenTemporal) el.organizarLista.appendChild(filaOrganizar(doc));
-    el.organizarLista.querySelectorAll('.pdf-org-fila').forEach(pintarBotonesFila);
+    actualizarControlesOrganizar();
   }
 
   function entrarLayoutOrganizar() {
@@ -790,7 +826,15 @@ export function inicializarLectorPdf(deps = {}) {
     organizando = true;
     let modoOrden = 'reciente';
     try { modoOrden = localStorage.getItem('jg_pdf_orden') || 'reciente'; } catch (_) {}
-    ordenTemporal = ordenarDocumentos(documentos, modoOrden);
+    /* Empezar exactamente como la persona ve la biblioteca. El selector y
+       la configuración pueden tardar un ciclo en alinearse; tomar primero los
+       ids renderizados evita que «Organizar» parezca cambiar el orden al abrir. */
+    const idsEnPantalla = [...el.rejilla.querySelectorAll('.pdf-libro')].map((fila) => fila.dataset.docId);
+    const porId = new Map(documentos.map((doc) => [doc.id, doc]));
+    const ordenBase = ordenarDocumentos(documentos, el.orden?.value || modoOrden);
+    ordenTemporal = idsEnPantalla.map((id) => porId.get(id)).filter(Boolean);
+    const yaIncluidos = new Set(ordenTemporal.map((doc) => doc.id));
+    for (const doc of ordenBase) if (!yaIncluidos.has(doc.id)) ordenTemporal.push(doc);
     previoOrganizar = {
       filtro: estado.filtro,
       consulta: estado.consulta,
@@ -812,7 +856,7 @@ export function inicializarLectorPdf(deps = {}) {
     if (el.orden) el.orden.closest('.pdf-biblio-barra')?.setAttribute('hidden', '');
     pintarOrganizador();
     anunciarOrganizar(`Organizando ${ordenTemporal.length} libros. Nada se guarda hasta que pulses Guardar orden.`);
-    el.organizarLista?.querySelector('.pdf-org-tirador')?.focus({ preventScroll: false });
+    el.organizarLista?.querySelector('[data-mov="posicion"]')?.focus({ preventScroll: false });
   }
 
   function salirOrganizar() {
@@ -1855,29 +1899,48 @@ export function inicializarLectorPdf(deps = {}) {
     el.barraRelleno.style.width = `${porcentaje}%`;
     el.barraDoc.setAttribute('aria-valuenow', String(porcentaje));
     const varias = estado.partes.length > 1;
-    /* Cabecera (PDF-03): el título del libro ya está en el h3; aquí va UNA
-     * sola etiqueta de sección —el título editorial si se conoce, si no
-     * «Sección X de Y»—, nunca el porcentaje ni los minutos (viven en el
-     * pie) y nunca dos rótulos de capítulo a la vez. */
+    /* El título del libro vive solo en el h3. Debajo se muestra la sección
+     * actual y su posición; si una parte repite el título del libro, se usa
+     * «Sección X de Y» para no decir lo mismo dos veces. */
     const etiqueta = etiquetaSeccion(estado.partes, estado.parteActual);
+    const normalizarTitulo = (valor) => String(valor || '').trim().toLocaleLowerCase('es').replace(/\s+/g, ' ');
+    const posicionSeccion = varias ? `${estado.parteActual + 1} de ${estado.partes.length}` : '';
+    const repiteLibro = normalizarTitulo(etiqueta) === normalizarTitulo(estado.titulo);
+    const etiquetaCabecera = repiteLibro
+      ? (varias ? `Sección ${posicionSeccion}` : 'Documento completo')
+      : (varias && !/^(sección|capítulo)\s+\d+\s+de\s+\d+$/i.test(etiqueta)
+        ? `${etiqueta} · ${posicionSeccion}` : etiqueta);
     if (el.donde) {
-      el.donde.textContent = etiqueta;
-      el.donde.title = etiqueta;
-      el.donde.setAttribute('aria-expanded', el.docRef && !el.docRef.hidden ? 'true' : 'false');
+      el.donde.textContent = etiquetaCabecera;
+      el.donde.title = etiquetaCabecera;
     }
-    /* Detalle bajo demanda (PDF-03): título completo + referencia física.
-     * La página del PDF es donde EMPIEZA esta sección, y se dice así; si no
-     * se conoce, no se inventa: el detalle trae solo el título. */
+    /* Página física y tiempo restante permanecen arriba. La página conocida
+     * corresponde al inicio de la sección; el nombre accesible lo aclara. */
     if (el.docRef) {
       const parte = estado.partes[estado.parteActual] || {};
-      const titCompleto = String(estado.titulo || '').trim();
-      const titSeccion = String(parte.titulo || '').trim();
       const pagFisica = parte.pagina || parte.pageStart || '';
-      const trozos = [];
-      if (titCompleto) trozos.push(titCompleto);
-      if (titSeccion && titSeccion !== etiqueta) trozos.push(titSeccion);
-      if (pagFisica) trozos.push(`Página ${pagFisica} del PDF (inicio de esta sección)`);
-      el.docRef.textContent = trozos.join(' · ') || etiqueta;
+      const tiempo = minutosRestantes();
+      const larga = [pagFisica ? `Desde la página ${pagFisica} del PDF` : '', tiempo ? `${tiempo} restantes` : ''].filter(Boolean).join(' · ');
+      const corta = [pagFisica ? `Desde pág. ${pagFisica}` : '', tiempo || ''].filter(Boolean).join(' · ');
+      el.docRef.replaceChildren();
+      if (larga) {
+        const spanLarga = document.createElement('span');
+        spanLarga.className = 'pdf-doc-ref-larga';
+        spanLarga.textContent = larga;
+        const spanCorta = document.createElement('span');
+        spanCorta.className = 'pdf-doc-ref-corta';
+        spanCorta.textContent = corta;
+        el.docRef.append(spanLarga, spanCorta);
+        el.docRef.hidden = false;
+        el.docRef.setAttribute('aria-label', [
+          etiquetaCabecera,
+          pagFisica ? `Página ${pagFisica} del PDF, inicio de esta sección` : '',
+          tiempo ? `${tiempo} restantes en esta sección` : '',
+        ].filter(Boolean).join('. '));
+      } else {
+        el.docRef.hidden = true;
+        el.docRef.removeAttribute('aria-label');
+      }
     }
     if (varias) {
       el.navPos.textContent = `Sección ${estado.parteActual + 1} de ${estado.partes.length}`;
@@ -1896,23 +1959,6 @@ export function inicializarLectorPdf(deps = {}) {
     /* El pie vive en la vista de libro; su % ahora es del libro y cambia
      * con el progreso, no solo al pasar página. */
     try { libroVista?.pintarPieLectura?.(); } catch (_) {}
-  }
-
-  /* El resumen de progreso se pulsa y amplía el contexto (PDF-03): título
-   * completo + página física, sin abandonar la lectura. En el teléfono la
-   * cabecera es fija: el detalle crece ENCIMA del texto, solo cuando la
-   * persona lo pide. */
-  if (el.donde && el.docRef && !el.donde.dataset.conDetalle) {
-    el.donde.dataset.conDetalle = '1';
-    el.donde.addEventListener('click', () => {
-      const abierto = !el.docRef.hidden;
-      el.docRef.hidden = abierto;
-      el.donde.setAttribute('aria-expanded', abierto ? 'false' : 'true');
-      const ident = el.donde.closest('.pdf-doc-ident');
-      if (ident) ident.dataset.detalle = abierto ? 'no' : 'si';
-      /* La cabecera cambió de alto: se remide sin perder el sitio (PDF-09). */
-      try { libroVista?.remedirTrasCromo?.(); } catch (_) {}
-    });
   }
 
   let temporizadorGuardado = null;

@@ -1097,3 +1097,14 @@ destruía el contexto de la prueba. **Regla:** el guardián recuerda si había
 controlador al registrar; el primer `controllerchange` sin mando previo solo
 marca, no recarga. Comprobado: la suite pasa entera y la actualización real
 sigue recargando una vez.
+
+## Sembrar una portada solo en metadatos cambia el orden durante una prueba (2026-09-09)
+
+**Síntoma:** la prueba de Organizar cancelaba correctamente, pero la rejilla
+reaparecía en otro orden y parecía que Cancelar había guardado. **Causa:** los
+documentos de prueba declaraban `tienePortada: true` sin guardar el blob de la
+portada. La reconciliación en segundo plano reparaba esas portadas, actualizaba
+la fecha de los documentos y alteraba el orden por recientes durante el caso.
+**Regla:** toda prueba de orden que siembre documentos con portada debe guardar
+también una portada en `archivos`, o desactivar de forma explícita esa
+reconciliación. No usar metadatos incompatibles con los almacenes relacionados.

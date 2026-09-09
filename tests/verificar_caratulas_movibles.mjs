@@ -1,11 +1,11 @@
 /* JG Turbo · Verificación E2E del modo «Organizar» de la biblioteca PDF
  * (PDF-05/06 del plan UX/UI). Cubre: botón Organizar y su explicación con
- * <2 libros, filas temporales con tirador y botones, teclado Alt+flechas,
+ * <2 libros, posición directa, tirador y botones, teclado Alt+flechas,
  * arrastre con Escape que cancela, Guardar que persiste y Cancelar que no.
  * Ejecutar: node tests/verificar_caratulas_movibles.mjs
  */
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve, join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -48,7 +48,7 @@ const servidor = createServer(async (req, res) => {
 });
 
 await new Promise((r) => servidor.listen(0, '127.0.0.1', r));
-const BASE = `http://127.0.0.1:${servidor.address().port}`;
+const BASE = process.env.JG_BASE || `http://127.0.0.1:${servidor.address().port}`;
 console.log(`Probando el modo Organizar en ${BASE}/\n`);
 
 const navegador = await chromium.launch({ headless: true });
@@ -58,7 +58,9 @@ const prepararLibros = async (page, cuantos = 3) => {
     /* Sin deleteDatabase: la app mantiene la base abierta y borrarla se
      * queda colgado en «blocked». Se limpian los almacenes y ya. */
     localStorage.removeItem('jg_pdf_orden_manual');
-    localStorage.removeItem('jg_pdf_orden');
+    /* Estado determinista: el bundle de configuración puede restaurar la
+       preferencia entre el primer arranque y la recarga de la prueba. */
+    localStorage.setItem('jg_pdf_orden', 'reciente');
     const dbReq = indexedDB.open('jg-turbo-pdf', 5);
     await new Promise((resolver, rechazar) => {
       dbReq.onsuccess = () => resolver(dbReq.result);
@@ -71,11 +73,13 @@ const prepararLibros = async (page, cuantos = 3) => {
       };
     });
     const db = dbReq.result;
-    const tx = db.transaction(['documentos', 'contenido'], 'readwrite');
+    const tx = db.transaction(['documentos', 'contenido', 'archivos'], 'readwrite');
     const docs = tx.objectStore('documentos');
     const cont = tx.objectStore('contenido');
+    const archivos = tx.objectStore('archivos');
     docs.clear();
     cont.clear();
+    archivos.clear();
     const libros = [
       { id: 'doc-alfa', titulo: 'Alfa y Omega', actualizado: 1000, creado: 1000, estado: 'leyendo', paginasLeidas: 10, totalPaginas: 50, tienePortada: true, origenPortada: 'real' },
       { id: 'doc-beta', titulo: 'Beta Reader', actualizado: 2000, creado: 2000, estado: 'sin-empezar', paginasLeidas: 0, totalPaginas: 80, tienePortada: true, origenPortada: 'real' },
@@ -84,6 +88,7 @@ const prepararLibros = async (page, cuantos = 3) => {
     for (const lib of libros) {
       docs.put(lib);
       cont.put({ id: lib.id, partes: [{ titulo: 'Capítulo 1', texto: 'Contenido de prueba para el libro ' + lib.titulo }] });
+      archivos.put({ id: lib.id, pdf: null, portada: new Blob(['portada'], { type: 'image/png' }) });
     }
     await new Promise((r) => { tx.oncomplete = r; });
     db.close();
@@ -127,6 +132,15 @@ try {
     comprobar(!(await page.locator('#pdfRejilla').isVisible()), 'la rejilla normal queda suspendida');
     comprobar(!(await page.locator('.pdf-biblioteca-filtros').isVisible()), 'los filtros quedan suspendidos');
     comprobar(!(await page.locator('#pdfBuscarLibro').isVisible()), 'la búsqueda queda suspendida');
+    const destinoCaptura = join(APP, '.playwright-cli', 'pdf-organizar');
+    await mkdir(destinoCaptura, { recursive: true });
+    await page.screenshot({ path: join(destinoCaptura, 'organizar-movil.png'), fullPage: true });
+
+    const selectorPosicion = page.locator('.pdf-org-fila').first().locator('[data-mov="posicion"]');
+    comprobar(await selectorPosicion.isVisible(), 'cada libro permite elegir una posición directa');
+    const cajaPosicion = await selectorPosicion.boundingBox();
+    comprobar(!!cajaPosicion && cajaPosicion.height >= 44,
+      `el selector de posición mide al menos 44 px (${cajaPosicion ? cajaPosicion.height : 'n/a'})`);
 
     const tirador = page.locator('.pdf-org-fila').first().locator('.pdf-org-tirador');
     const cajaTirador = await tirador.boundingBox();
@@ -134,14 +148,27 @@ try {
       `el tirador mide ≥44×44 (${cajaTirador ? `${cajaTirador.width}×${cajaTirador.height}` : 'n/a'})`);
 
     const primera = page.locator('.pdf-org-fila').first();
-    comprobar(await primera.locator('[data-mov="antes"]').isDisabled(), 'en la primera fila «Mover antes» está deshabilitado');
+    comprobar(await primera.locator('[data-mov="antes"]').isDisabled(), 'en la primera fila «Subir» está deshabilitado');
     const ultima = page.locator('.pdf-org-fila').last();
-    comprobar(await ultima.locator('[data-mov="despues"]').isDisabled(), 'en la última fila «Mover después» está deshabilitado');
+    comprobar(await ultima.locator('[data-mov="despues"]').isDisabled(), 'en la última fila «Bajar» está deshabilitado');
+
+    const idUltimaAntes = (await idsOrganizar(page)).at(-1);
+    await page.locator(`.pdf-org-fila[data-doc-id="${idUltimaAntes}"] [data-mov="posicion"]`).selectOption('1');
+    await page.waitForTimeout(150);
+    comprobar((await idsOrganizar(page))[0] === idUltimaAntes,
+      'elegir posición 1 mueve el libro al inicio de una vez');
+    comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
+      'elegir posición mantiene el orden temporal hasta Guardar');
+
+    await page.locator(`.pdf-org-fila[data-doc-id="${idUltimaAntes}"] [data-mov="posicion"]`).selectOption('3');
+    await page.waitForTimeout(150);
+    comprobar((await idsOrganizar(page)).at(-1) === idUltimaAntes,
+      'elegir la última posición mueve el libro al final de una vez');
 
     const idPrimera = (await idsOrganizar(page))[0];
     await primera.locator('[data-mov="despues"]').click();
     await page.waitForTimeout(200);
-    comprobar((await idsOrganizar(page))[1] === idPrimera, '«Mover después» baja la fila una posición');
+    comprobar((await idsOrganizar(page))[1] === idPrimera, '«Bajar» mueve la fila una posición');
     const anuncio = await page.locator('#pdfOrganizarLive').textContent();
     comprobar(/posición 2 de 3/.test(anuncio || ''), `el anuncio dice la posición («${anuncio}»)`);
     comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
@@ -253,8 +280,9 @@ try {
       await page.waitForTimeout(400);
       comprobar(!(await page.locator('#pdfOrganizar').isVisible()),
         'Escape sin arrastre cancela el modo Organizar');
-      comprobar(JSON.stringify(await idsRejilla(page)) === JSON.stringify(ordenAlEntrar),
-        'y la rejilla conserva el orden anterior');
+      const ordenTrasCancelar = await idsRejilla(page);
+      comprobar(JSON.stringify(ordenTrasCancelar) === JSON.stringify(ordenAlEntrar),
+        `y la rejilla conserva el orden anterior (${JSON.stringify(ordenAlEntrar)} → ${JSON.stringify(ordenTrasCancelar)})`);
       comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
         'nada quedó guardado');
     }

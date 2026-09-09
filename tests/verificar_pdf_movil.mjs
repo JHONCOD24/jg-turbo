@@ -4,7 +4,7 @@
  * tres cosas que no se ven leyendo el CSS:
  *   1. cuánto de la pantalla es texto y cuánto son controles,
  *   2. que todo lo que se toca quepa bajo un dedo (44 px),
- *   3. que escritorio y tablet NO cambien.
+ *   3. que escritorio y tablet conserven una lectura amplia y sin desbordes.
  *
  *   node tests/verificar_pdf_movil.mjs
  *   JG_BASE=https://jg-turbo.vercel.app node tests/verificar_pdf_movil.mjs
@@ -215,6 +215,26 @@ try {
   comprobar('la posición de sección no duplica «Cap.» en el renderizado',
     !/cap\./i.test(renderizado.navAntes) && !/cap\.\s*sección/i.test(renderizado.navTexto),
     JSON.stringify(renderizado));
+  const contextoCabecera = await tel.evaluate(() => {
+    const titulo = document.querySelector('#pdfResultTitle')?.textContent?.trim() || '';
+    const seccion = document.querySelector('#pdfDocDonde')?.textContent?.trim() || '';
+    const referencia = document.querySelector('#pdfDocRef')?.textContent?.trim() || '';
+    const linea = document.querySelector('.pdf-doc-linea');
+    return {
+      titulo, seccion, referencia,
+      desborde: linea ? Math.max(0, linea.scrollWidth - linea.clientWidth) : 999,
+      repiteTitulo: !!titulo && seccion.toLocaleLowerCase('es') === titulo.toLocaleLowerCase('es'),
+    };
+  });
+  comprobar('el título del libro no se repite como sección', !contextoCabecera.repiteTitulo,
+    JSON.stringify(contextoCabecera));
+  comprobar('la cabecera muestra la posición dentro del documento', /\d+\s+de\s+\d+/.test(contextoCabecera.seccion),
+    contextoCabecera.seccion);
+  comprobar('la cabecera muestra página y tiempo restante',
+    /pág\.|página/i.test(contextoCabecera.referencia) && /min|h\b/i.test(contextoCabecera.referencia),
+    contextoCabecera.referencia);
+  comprobar('el contexto superior no desborda', contextoCabecera.desborde <= 1,
+    `${contextoCabecera.desborde}px`);
   comprobar('no hay desplazamiento horizontal', m.scrollHorizontal <= 1, `sobran ${m.scrollHorizontal} px`);
   comprobar('las acciones secundarias están plegadas en Texto',
     await tel.locator('#pdfHerramientasMenu').getAttribute('open') === null);
@@ -444,13 +464,13 @@ try {
   await estrecho.screenshot({ path: join(destino, 'estrecho.png') });
   await estrecho.close();
 
-  /* ── 6. Escritorio y tablet no se tocan ─────────────────────────────── */
-  console.log('\n── 6. Escritorio y tablet intactos ─────────────────────────────');
+  /* ── 6. Escritorio y tablet conservan lectura útil ─────────────────── */
+  console.log('\n── 6. Escritorio y tablet conservan lectura útil ───────────────');
   for (const [nombre, width, height, cabMax] of [['tablet', 768, 1024, 72], ['escritorio', 1440, 900, 72]]) {
     const p = await abrirLibro(width, height);
     const g = await reparto(p);
     console.log(`  ${nombre}:`, { cabecera: g.cabecera, texto: g.textoAlto, parte: `${Math.round(g.parteTexto * 100)} %` });
-    comprobar(`${nombre} conserva su cabecera de una fila`, g.cabecera > 0 && g.cabecera <= cabMax, `mide ${g.cabecera} px`);
+    comprobar(`${nombre} conserva una cabecera compacta`, g.cabecera > 0 && g.cabecera <= cabMax, `mide ${g.cabecera} px`);
     comprobar(`${nombre} NO muestra la barra del teléfono`, !g.barraMovilVisible);
     comprobar(`${nombre} sigue sin desplazamiento horizontal`, g.scrollHorizontal <= 1, `sobran ${g.scrollHorizontal} px`);
     await p.screenshot({ path: join(destino, `${nombre}.png`) });

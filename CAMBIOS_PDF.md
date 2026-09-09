@@ -3,6 +3,48 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-09 · v2.69.0 · Contexto de lectura y orden directo (`JG_JS_V=v119`, shell-v119)
+
+### Cabecera del lector
+
+- El título del libro aparece una sola vez. Si el nombre de la sección repite
+  el título, se sustituye por `Sección X de Y` o `Documento completo`.
+- La segunda línea reúne el capítulo o sección actual, su posición dentro del
+  documento, la página física donde empieza y el tiempo restante estimado de
+  esa sección. El tiempo deja de repetirse en el pie.
+- En móvil se usa una referencia corta. En tablet estrecha, el contexto ocupa
+  una segunda línea de 68 px totales y las acciones permanecen en la primera;
+  en tablet ancha y escritorio se conserva una sola fila.
+
+### Organización de la biblioteca
+
+- Cada libro ofrece un selector `Posición` que lo mueve directamente al lugar
+  elegido. `Subir`, `Bajar`, Alt + flechas y el tirador quedan como alternativas.
+- Los cambios siguen siendo temporales hasta `Guardar orden`; `Cancelar` y
+  Escape restauran el orden anterior.
+- Al abrir Organizar se toma primero el orden que la persona ya ve en la
+  cuadrícula, evitando saltos causados por preferencias todavía en proceso de
+  restauración.
+- En móvil todos los controles miden al menos 44 px y las instrucciones se
+  presentan en bloque, sin heredar el encabezado horizontal de la aplicación.
+
+### Verificación
+
+- `verificar_caratulas_movibles.mjs`: posición directa, controles táctiles,
+  orden temporal, cancelar, guardar, recarga, teclado y arrastre.
+- `verificar_pdf_movil.mjs`: 57 comprobaciones; cabecera 48 px en teléfono,
+  68 px en tablet y 44 px en escritorio, sin desbordes ni pérdida de texto.
+- `verificar_pdf_geometria.mjs`, `verificar_pdf_scroll.mjs`,
+  `verificar_pdf_paginas.mjs`, `verificar_pdf_voz_acordeon.mjs`,
+  `verificar_pdf_mini_flotante.mjs` y `verificar_movil_pantalla.mjs`: en verde.
+- La suite general `verificar_pdf_navegador.mjs` completó lectura, búsqueda,
+  biblioteca, capítulos, libro largo, exportación y voz básica. En su recorrido
+  ajeno a este cambio registró un fallo de avance temporizado del audiolibro y
+  quedó esperando el caso OCR; las suites enfocadas de voz sí terminaron en verde.
+
+Despliegue de producción: `dpl_5UWP3rKawhE11utBk3Bzt4EHCP6q` (READY),
+alias `https://jg-turbo.vercel.app`.
+
 ## 2026-09-09 · v2.68.0 · Correcciones auditoría UX/UI v117 (`JG_JS_V=v118`, shell-v118)
 
 Documento de correcciones: `CORRECCIONES_AUDITORIA_UX_UI_PDF_V117.md`. Plan base:

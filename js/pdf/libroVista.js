@@ -810,7 +810,10 @@ export function initLibroVista({ el, estado, api }) {
         else {
           const anchoCab = cabecera.clientWidth || 0;
           const anchoAcc = acciones ? acciones.scrollWidth : 0;
-          cabecera.dataset.cabecera = (anchoCab > 0 && anchoAcc > anchoCab * 0.52) ? 'dos' : 'una';
+          /* En tablet la fila única dejaba apenas unos caracteres para el
+             capítulo aun sin desbordar botones. Reservar la segunda fila
+             desde este punto conserva sección, página y tiempo legibles. */
+          cabecera.dataset.cabecera = (anchoCab > 0 && anchoAcc > anchoCab * 0.44) ? 'dos' : 'una';
         }
       } else if (cabecera) { delete cabecera.dataset.cabecera; }
       if (ident) ident.title = ident.querySelector('h3')?.textContent || '';
@@ -834,10 +837,9 @@ export function initLibroVista({ el, estado, api }) {
     /* PDF-03: cada cifra con su alcance identificable. El tiempo es de la
      * sección abierta; el porcentaje es del LIBRO (no de las páginas
      * visibles, que era un segundo porcentaje ambiguo). */
-    if (restante) {
-      const min = typeof api.minutosRestantes === 'function' ? api.minutosRestantes() : '';
-      restante.textContent = min ? `${min} en esta sección` : '';
-    }
+    /* El tiempo restante pasó a la cabecera para acompañar sección y página.
+       El pie conserva únicamente el progreso total del libro. */
+    if (restante) { restante.textContent = ''; restante.hidden = true; }
     if (porc) {
       const delLibro = typeof api.porcentajeLibro === 'function' ? api.porcentajeLibro() : null;
       if (Number.isFinite(delLibro)) {
