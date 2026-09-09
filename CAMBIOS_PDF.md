@@ -118,6 +118,20 @@ y `verificar_pdf_fidelidad` (timeouts).
 - `sw.js`: `jg-turbo-shell-v118`
 - Sin cambios de IndexedDB ni claves `jg_*`.
 
+### Despliegue (2026-09-09, un solo `dpl` para toda la tanda)
+
+- Producción: `dpl_it24a31vg` READY (`https://jg-turbo-it24a31vg-jhoncod24s-projects.vercel.app`),
+  alias `https://jg-turbo.vercel.app`.
+- Verificado contra el dominio: marcador v2.68.0 + v118, shell-v118, `libroVista.js`
+  92 998 b y `pdfController.js` 307 607 b idénticos local/prod con
+  `--pdf-reserva-arriba` servido, `/api/health` 200, móvil 53/53, actualización
+  8/8, pestañas 31/31 y arranque 10/10 contra producción.
+- Nota: el primer despliegue de la tanda subió sin `js/pdf/` (el `/XD "pdf"` de
+  robocopy excluyó toda carpeta llamada `pdf` en cualquier nivel — trampa
+  2026-09-08). Se redesplegó con exclusión por ruta absoluta; `js/pdf/` verificado
+  byte a byte después. Sin cambio de versión entre ambos (misma v118).
+- `git push origin main` (5c59d17); `origin/main..HEAD` vacío.
+
 ## 2026-09-08 · v2.67.0 · Carátulas originales en toda la biblioteca y auto-reconciliación (`JG_JS_V=v113`, shell-v113)
 
 > Despliegue `dpl_GSZkk6J6WS6BNYms9jfxzXckSxQ4` (READY): `https://jg-turbo-50sf3fa2x-jhoncod24s-projects.vercel.app`
