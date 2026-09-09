@@ -6,7 +6,17 @@ import { crearLibro } from './generarPdfPrueba.mjs';
 import assert from 'node:assert/strict';
 import { despertarCromo as despertar, abrirHerramientas } from './_cromo.mjs';
 const app = resolve(import.meta.dirname, '..');
-const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
+const { chromium } = await (async () => {
+  const candidatos = [
+    resolve(app, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) {}
+  }
+  throw new Error('No se encontró Playwright (ni en el repo ni en las carpetas vecinas).');
+})();
 const destino = resolve(app, '.playwright-cli/pdf-paginas');
 await mkdir(destino, { recursive: true });
 const pdf = join(destino, 'libro.pdf'); crearLibro(pdf, 24);
@@ -80,11 +90,14 @@ try {
     await p.locator('#btnPdfBmVoz').click(); await p.waitForTimeout(300);
   }
   assert.equal(medida.ocultos,0); assert.equal(medida.dialogo,false);
+  /* La etiqueta lleva alcance («Página 1 de 10 de la sección», PDF-03): se
+   * extrae el primer número en vez de suponer el formato viejo «1 de 10». */
+  const numeroPagina = (etiqueta) => Number(String(etiqueta).replace(/^\D+/, '').split(' de ')[0]);
   assert(Number(medida.paginas.split(' de ')[1])>1,'paginación real');
   const texto=await p.locator('#pdfOutput').inputValue();
   await p.locator('#btnPdfPagNext').click(); await p.waitForTimeout(400);
   medida=await medir(); assert(medida.desplazamiento>100,'siguiente mueve el texto');
-  assert(medida.paginas.startsWith('2 de ')); assert.equal(await p.locator('#pdfOutput').inputValue(),texto);
+  assert(numeroPagina(medida.paginas)===2); assert.equal(await p.locator('#pdfOutput').inputValue(),texto);
   /* En el teléfono, Apariencia / Contenido / Opciones se accionan desde la
      barra del pulgar; en tablet y escritorio siguen en la cabecera. */
   const puerta = (escritorio, movil) => p.locator(width > 640 ? escritorio : movil);

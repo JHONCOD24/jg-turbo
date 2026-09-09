@@ -747,6 +747,14 @@ export function initLibroVista({ el, estado, api }) {
     if (alto > 0) document.body.style.setProperty('--pdf-cab-alto', alto + 'px');
   }
 
+  /* Remedir tras un cambio del cromo que sí pidió la persona (PDF-09):
+   * desplegar el detalle de la cabecera, abrir una hoja, etc. La caja
+   * paginada conserva el ancla de carácter: cambia el reparto, no el sitio. */
+  function remedirTrasCromo() {
+    medirCabecera();
+    programarMedicion(80);
+  }
+
   /** El pie: cuánto queda y por dónde vas. Se refresca al cambiar de página. */
   function pintarPieLectura() {
     const pie = document.getElementById('pdfPieLectura');
@@ -1103,11 +1111,24 @@ export function initLibroVista({ el, estado, api }) {
       return;
     }
     const valor = modo === 'buscar' ? 'buscar' : (modo ? 'si' : 'no');
+    const abriendo = valor !== 'no' && dock.dataset.abierto === 'no';
     dock.dataset.abierto = valor;
     const btn = $$('btnPdfBmVoz');
     if (btn) {
       btn.classList.toggle('is-on', valor === 'si');
       btn.setAttribute('aria-expanded', valor === 'si' ? 'true' : 'false');
+    }
+    /* Foco al abrir la hoja de voz (PDF-10): quien la pidió con el botón
+     * «Voz» aterriza en «Escuchar», no en el vacío. Se difiere un turno:
+     * el foco por defecto del propio clic cae DESPUÉS de este manejador y
+     * si no se espera lo pisa. Si la persona ya se movió a otro control o
+     * se abrió el buscador, no se le arrebata. */
+    if (abriendo && valor === 'si') {
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (a && a !== document.body && a.id !== 'btnPdfBmVoz' && dock.contains(a)) return;
+        dock.querySelector('[data-tts-action="toggle"]')?.focus({ preventScroll: true });
+      }, 0);
     }
     /* Al guardar los ajustes, si la voz sigue, se aparta el cromo para
        devolver el texto. No se detiene la narración. */
@@ -1115,6 +1136,9 @@ export function initLibroVista({ el, estado, api }) {
       inmersivo(true);
     }
   }
+  /* El cierre de la hoja de voz con Escape vive en el manejador de más
+   * abajo (junto al de inmersión), que además devuelve el foco a «Voz».
+   * Aquí no se duplica: un Escape, un cierre. */
   if (dock) {
     dock.dataset.abierto = 'no';
     dock.dataset.desplegado = cfg.vozDesplegado === false ? 'no' : 'si';
@@ -1274,6 +1298,18 @@ export function initLibroVista({ el, estado, api }) {
     if (document.body.classList.contains('jg-inmersivo')) inmersivo(false);
   }
 
+  /* Sin foco invisible (PDF-10): el cromo apartado es `opacity:0`, así que
+   * el teclado SÍ puede caer en un control que no se ve. Al navegar con
+   * Tab y aterrizar en uno, primero se revela la interfaz y luego se usa. */
+  document.addEventListener('focusin', (e) => {
+    if (!document.body.classList.contains('jg-inmersivo')) return;
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    if (t.closest('.pdf-doc-top, .pdf-modo-barra, #pdfPaginacion, .pdf-barra-movil')) {
+      devolverCromo();
+    }
+  });
+
   /* Cuándo se aparta el cromo, y por qué NO hay temporizador.
    *
    * La primera versión lo escondía tras 3,2 s sin tocar nada. Mala idea: se
@@ -1419,10 +1455,12 @@ export function initLibroVista({ el, estado, api }) {
       devolverCromo();
     }, { capture: true, passive: true });
   }
-  document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
       if (dock && enTelefono() && (dock.dataset.abierto === 'si' || dock.dataset.abierto === 'buscar')) {
         abrirDock(false);
+        /* El foco vuelve al botón que abrió la hoja (PDF-10). */
+        $$('btnPdfBmVoz')?.focus({ preventScroll: true });
         return;
       }
       if (document.body.classList.contains('jg-inmersivo')) devolverCromo();
@@ -1801,6 +1839,7 @@ export function initLibroVista({ el, estado, api }) {
     medirPaginas,
     irAPagina,
     pintarPieLectura,
+    remedirTrasCromo,
     estadoPaginas: () => ({ ...pag }),
     obtenerConfig: () => ({ ...cfg }),
     esModoScroll: () => cfg.modoPagina === 'scroll',

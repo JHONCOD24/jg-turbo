@@ -3451,7 +3451,7 @@
   .pdf-indice-lista{list-style:none;margin:0;padding:6px}
   /* «Ir al inicio del libro» (PDF-04): navegación, no borrado. Vive en
      Contenido para que exista siempre, sin avisos temporizados. */
-  .pdf-indice-acciones{padding:2px 6px 6px;display:flex;justify-content:center}
+  .pdf-indice-acciones{padding:2px 6px 6px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
   .pdf-indice-acciones .mini-btn{min-height:44px;flex:1 1 auto}
   .pdf-cap{
     display:flex;align-items:center;gap:10px;width:100%;min-height:46px;
@@ -7022,6 +7022,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               </div>
               <div class="pdf-indice-acciones">
                 <button type="button" class="mini-btn" id="btnPdfIndiceInicio" title="Volver a la primera sección del libro">Ir al inicio del libro</button>
+                <button type="button" class="mini-btn" id="btnPdfIndiceActual" title="Centrar la lista en la sección que estás leyendo">Volver a la sección actual</button>
               </div>
               <ol class="pdf-indice-lista" id="pdfIndiceLista"></ol>
             </nav>

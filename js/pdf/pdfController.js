@@ -1761,6 +1761,7 @@ export function inicializarLectorPdf(deps = {}) {
     cerrarIndice();
     cerrarHojasFlotantes();
     if (el.masMenu) el.masMenu.open = false;
+    let focoYaEnHoja = false;
     if (cual === 'indice') {
       pintarIndice();
       el.indice.hidden = false;
@@ -1772,6 +1773,10 @@ export function inicializarLectorPdf(deps = {}) {
         const lista = el.indiceLista;
         lista.scrollTop += actual.getBoundingClientRect().top - lista.getBoundingClientRect().top
           - lista.clientHeight / 2 + actual.clientHeight / 2;
+        /* Foco en la sección actual al abrir (PDF-10): orienta sin recorrer
+         * todo el índice. El cierre devuelve el foco al disparador, como en
+         * Apariencia. */
+        try { actual.focus({ preventScroll: true }); focoYaEnHoja = true; } catch (_) {}
       }
     } else if (cual === 'apariencia') {
       el.aparienciaHoja.hidden = false;
@@ -1796,12 +1801,15 @@ export function inicializarLectorPdf(deps = {}) {
      * hoja. Sin el filtro, el primer botón del índice a <1024px es el
      * «colapsar» de escritorio (display:none): focus() no hacía nada, el
      * foco caía al <body> y la trampa de Tab, que vive en resultArea,
-     * nunca se disparaba. */
-    const enfocable = hojaModal
-      ? [...hojaModal.querySelectorAll('button:not([disabled]), select, input, summary')]
-        .find((n) => n.getClientRects().length && !n.closest('[hidden]'))
-      : null;
-    enfocable?.focus({ preventScroll: true });
+     * nunca se disparaba. Si el índice ya enfocó su sección actual, ese
+     * foco manda y aquí no se pisa. */
+    if (!focoYaEnHoja) {
+      const enfocable = hojaModal
+        ? [...hojaModal.querySelectorAll('button:not([disabled]), select, input, summary')]
+          .find((n) => n.getClientRects().length && !n.closest('[hidden]'))
+        : null;
+      enfocable?.focus({ preventScroll: true });
+    }
     if (!habiaOtra) capas.abrir('hoja', () => cerrarHojas({ desdeHistorial: true }));
   }
 
@@ -1902,6 +1910,8 @@ export function inicializarLectorPdf(deps = {}) {
       el.donde.setAttribute('aria-expanded', abierto ? 'false' : 'true');
       const ident = el.donde.closest('.pdf-doc-ident');
       if (ident) ident.dataset.detalle = abierto ? 'no' : 'si';
+      /* La cabecera cambió de alto: se remide sin perder el sitio (PDF-09). */
+      try { libroVista?.remedirTrasCromo?.(); } catch (_) {}
     });
   }
 
@@ -4795,6 +4805,17 @@ export function inicializarLectorPdf(deps = {}) {
   if (btnIndiceInicio) btnIndiceInicio.addEventListener('click', () => {
     if (!hayDocumento()) return;
     mostrarParte(0, { desplazamiento: 0 });
+  });
+  /* «Volver a la sección actual» (PDF-10): centra la lista en la sección
+   * que se está leyendo y la enfoca, sin navegar ni cerrar el Contenido. */
+  const btnIndiceActual = $('btnPdfIndiceActual');
+  if (btnIndiceActual) btnIndiceActual.addEventListener('click', () => {
+    const actual = el.indiceLista?.querySelector('[aria-current="true"]');
+    if (!actual) return;
+    const lista = el.indiceLista;
+    lista.scrollTop += actual.getBoundingClientRect().top - lista.getBoundingClientRect().top
+      - lista.clientHeight / 2 + actual.clientHeight / 2;
+    try { actual.focus({ preventScroll: true }); } catch (_) {}
   });
 
   el.salida.addEventListener('input', () => {
