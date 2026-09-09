@@ -1814,23 +1814,22 @@
   }
   .pdf-voz-cab-titulo{margin:0;font-size:14px;font-weight:700;color:var(--lec-texto, var(--text))}
   .pdf-voz-cab-ayuda{margin:2px 0 0;font-size:11px;color:var(--lec-suave, var(--muted));line-height:1.35}
-  .pdf-voz-cab-ocultar,.pdf-voz-acordeon{flex:none;min-height:44px}
+  .pdf-voz-acordeon{flex:none;min-height:44px}
   .pdf-voz-acordeon{gap:7px}
   .pdf-voz-chevron{width:16px;height:16px;flex:none;transition:transform .2s ease}
   #btnPdfDockDesplegar[aria-expanded="false"] .pdf-voz-chevron{transform:rotate(-90deg)}
   .pdf-voz-nombre{display:none}
-  .pdf-voz-x{width:15px;height:15px;flex:none}
   /* Ajustes plegados. Teléfono: dentro de la hoja solo se pliegan voz,
-     velocidad y música (~50 px). Tablet y escritorio: la paleta entera se
-     pliega en acordeón — como el botón «Voz» del teléfono esconde la hoja,
-     aquí el mismo interruptor esconde la consola y queda la cabecera con el
+     velocidad y «Más ajustes» (~50 px); la reproducción y el estado quedan
+     a la vista. Tablet y escritorio: la paleta entera se pliega en
+     acordeón — como el botón «Voz» del teléfono esconde la hoja, aquí el
+     mismo interruptor esconde la consola y queda la cabecera con el
      toggle. Ocultar no detiene la lectura. */
   #pdfDockNav[data-desplegado="no"] .tts-voice-select,
   #pdfDockNav[data-desplegado="no"] .tts-rate-control,
-  #pdfDockNav[data-desplegado="no"] #btnPdfMusica,
+  #pdfDockNav[data-desplegado="no"] #pdfTtsMas,
   #pdfDockNav[data-desplegado="no"] .tts-field-label{display:none!important}
   @media (min-width:641px){
-    .pdf-voz-cab-ocultar{display:none}
     .pdf-voz-acordeon{display:inline-flex}
     .pdf-voz-cab-textos{display:block}
     #pdfDockNav[data-desplegado="no"] .tts-console{display:none!important}
@@ -1839,42 +1838,40 @@
     #pdfDockNav[data-desplegado="no"] .pdf-voz-cab{padding-bottom:2px}
   }
   @media (max-width:640px){
-    /* Cabecera acordeón de una sola fila (44 px): flecha + Voz a la
-       izquierda, X a la derecha. El título largo y la ayuda viven en el
-       DOM y en el `title`, pero no gastan filas en 390 px. */
+    /* Cabecera acordeón de una sola fila (44 px): la flecha con «Voz» a la
+       izquierda es el único cierre de los ajustes; la hoja se cierra con el
+       botón «Voz» de la barra del pulgar. */
     .pdf-voz-cab{padding:0 2px 6px;min-height:44px}
     .pdf-voz-cab-textos{display:none}
     .pdf-voz-acordeon{display:inline-flex;min-width:44px;padding:8px 12px 8px 10px}
     .pdf-voz-nombre{display:inline;font-size:13px;font-weight:700}
     .pdf-voz-acordeon-txt{display:none}
-    .pdf-voz-cab-ocultar{
-      display:inline-flex;margin-left:auto;min-width:44px;min-height:44px;
-      padding:8px 12px;justify-content:center;
-    }
-    .pdf-voz-ocultar-txt{
-      position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
-      clip:rect(0,0,0,0);white-space:nowrap;border:0;
-    }
   }
   .pdf-dock-nav .tts-console{margin:0;border:0;background:none;padding:0;gap:6px 7px}
+  /* La regla global `.tts-console:not(.tts-console--modal)` pone márgenes
+     laterales de 10 px y va después en el fuente: con ID se le gana para
+     que la consola no desborde el dock (scrollWidth ≤ clientWidth). */
+  #pdfDockNav .tts-console{margin:0}
   .pdf-dock-nav .tts-console-play .btn-tts{min-height:44px;padding:8px 14px;font-size:13px;border-radius:12px}
   .pdf-dock-nav .tts-console-play .btn-tts-stop{min-height:44px;border-radius:12px}
   .pdf-dock-nav .tts-voice-select,
   .pdf-dock-nav .tts-rate-control{min-height:40px}
   .pdf-dock-nav #btnPdfDesdeAqui svg{width:15px;height:15px;flex:none}
-  /* En celular y tablet el reproductor se coloca en una rejilla de dos filas
-     exactas: arriba la barra de avance con el tiempo, abajo los controles.
-     Dejado al ajuste automático se partía en cuatro líneas y el dock se comía
-     250 px de pantalla —más que el propio texto en un celular pequeño—. */
+  /* En celular y tablet el reproductor se coloca en filas exactas: barra
+     de avance, controles de reproducción, voz y velocidad, estado y
+     «Más ajustes». La música, el temporizador y el MP3 ya no compiten en
+     la segunda fila: viven plegados en el apartado secundario. */
   @media (max-width:1023px){
     .pdf-dock-nav .tts-console,
     .pdf-dock-nav .tts-console.tts-con-barra{
       display:grid !important;
-      grid-template-columns:minmax(0,1fr) auto auto auto;
+      grid-template-columns:minmax(0,1fr) auto auto;
       grid-template-areas:
-        "barra barra barra barra"
-        "play  parar aqui  mp3"
-        "voz   voz   vel   musica";
+        "barra  barra  barra"
+        "play   parar  aqui"
+        "voz    voz    vel"
+        "estado estado estado"
+        "mas    mas    mas";
       align-items:center;gap:6px;overflow:visible;
     }
     .pdf-dock-nav .tts-console > *{min-width:0}
@@ -1890,61 +1887,101 @@
     }
     .pdf-dock-nav .tts-console .tts-seek{min-width:0}
     .pdf-dock-nav .tts-console .tts-time{min-width:0;text-align:right}
-    .pdf-dock-nav .tts-console .btn-tts-download{grid-area:mp3;min-width:44px;padding-inline:9px}
+    .pdf-dock-nav .tts-console .btn-tts-download{grid-area:auto;min-width:44px;padding-inline:9px}
     .pdf-dock-nav .tts-console .btn-tts{grid-area:play;min-width:48px;justify-content:center;padding-inline:12px}
     .pdf-dock-nav .tts-console .btn-tts-stop{grid-area:parar;min-width:44px;padding-inline:10px}
-    /* «Desde aquí» compacto: icono de 44 px en vez de franja de texto a todo
-       lo ancho. El nombre sigue en `aria-label` para el lector de pantalla. */
+    /* «Desde aquí» con su etiqueta a la vista (PDF-08): ninguna acción
+       principal depende solo de icono. */
     .pdf-dock-nav .tts-console #btnPdfDesdeAqui{
       grid-area:aqui;min-width:44px;min-height:44px;padding:8px 10px;justify-content:center;
     }
     .pdf-dock-nav .tts-console #btnPdfDesdeAqui svg{width:16px;height:16px;flex:none}
-    .pdf-dock-nav .tts-console #btnPdfDesdeAqui .pdf-desde-aqui-txt{font-size:0}
+    .pdf-dock-nav .tts-console #btnPdfDesdeAqui .pdf-desde-aqui-txt{font-size:12.5px;font-weight:600;white-space:nowrap}
     .pdf-dock-nav .tts-console .tts-voice-select{grid-area:voz;width:100%;min-width:0;max-width:none;font-size:12px;min-height:42px}
     .pdf-dock-nav .tts-console .tts-rate-control{grid-area:vel;min-width:0;gap:5px;padding-inline:7px}
     .pdf-dock-nav .tts-console .tts-rate-range{width:3.6rem;min-width:3rem}
     .pdf-dock-nav .tts-console .tts-rate-value{min-width:2.9rem}
-    .pdf-dock-nav .tts-console #btnPdfMusica{grid-area:musica;min-width:44px;min-height:44px}
-    .pdf-dock-nav .tts-console .tts-console-status{display:none !important}
     /* Los textos de los botones se ocultan a la vista pero siguen siendo el
        nombre accesible: quien use lector de pantalla oye «Escuchar», no
        «botón». */
     .pdf-dock-nav .tts-console .btn-tts .tts-label,
     .pdf-dock-nav .tts-console .btn-tts-stop{font-size:0}
-    /* Con la pantalla justa, el icono de descarga se explica solo y así la
-       barra de avance recupera 40 px. */
-    .pdf-dock-nav .tts-console [data-tts-download-label]{font-size:0}
     .pdf-dock-nav .tts-console .btn-tts-stop svg{width:15px;height:15px}
     .pdf-dock-nav .tts-console .btn-tts svg{width:17px;height:17px}
+  }
+  /* El estado de la voz (PDF-07) ocupa su propia fila: una línea pequeña
+     con alcance explícito —inactiva, preparando, reproduciendo, en pausa,
+     finalizada o con error— en vez de un icono ambiguo. La posición en
+     el grid la pone cada plantilla (área «estado»). */
+  .pdf-dock-nav .tts-console .tts-console-status{
+    grid-area:estado;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:12px;font-weight:600;color:var(--lec-suave, var(--muted));line-height:1.4;
+  }
+  /* «Más ajustes» (PDF-08): apartado secundario plegable con música,
+     temporizador y descarga MP3. Ocupa la fila completa del grid. */
+  .pdf-dock-nav .tts-console #pdfTtsMas{grid-column:1 / -1;min-width:0;margin:0}
+  .pdf-dock-nav .tts-console .tts-mas-resumen{
+    display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;
+    font-size:13px;font-weight:600;color:var(--lec-suave, var(--muted));
+    list-style:none;border-radius:10px;padding:0 4px;
+  }
+  .pdf-dock-nav .tts-console .tts-mas-resumen::-webkit-details-marker{display:none}
+  .pdf-dock-nav .tts-console .tts-mas-resumen::before{
+    content:'';width:14px;height:14px;flex:none;
+    background:currentColor;opacity:.7;
+    clip-path:polygon(20% 15%, 20% 85%, 85% 50%);
+    transition:transform .15s ease;
+  }
+  .pdf-dock-nav .tts-console #pdfTtsMas[open] .tts-mas-resumen::before{transform:rotate(90deg)}
+  .pdf-dock-nav .tts-console .tts-mas-resumen:hover{color:var(--lec-acento, var(--cyan))}
+  .pdf-dock-nav .tts-console .tts-mas-resumen:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:2px}
+  .pdf-dock-nav .tts-console .tts-mas-cuerpo{
+    display:flex;flex-direction:column;gap:10px;padding:6px 2px 2px;min-width:0;
+  }
+  .pdf-dock-nav .tts-console .tts-mas-cuerpo .pdf-btn-musica{min-height:44px;justify-content:flex-start}
+  .pdf-dock-nav .tts-console .tts-mas-cuerpo .btn-tts-download{
+    min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    border-radius:12px;font-size:13px;font-weight:600;
+  }
+  /* El icono del MP3 no trae tamaño propio: sin esto el svg ocupa 300 px y
+     la fila de «Más ajustes» crece hasta tapar la hoja. */
+  .pdf-dock-nav .tts-console .tts-mas-cuerpo .btn-tts-download svg{width:16px;height:16px;flex:none}
+  .pdf-dock-nav .tts-console .tts-mas-cuerpo .tts-mas-dormir{display:flex;flex-direction:column;gap:6px}
+  .pdf-dock-nav .tts-console .tts-mas-cuerpo .tts-mas-dormir select{min-height:44px;max-width:100%}
+  @media (prefers-reduced-motion:reduce){
+    .pdf-dock-nav .tts-console .tts-mas-resumen::before{transition:none}
   }
   @media (min-width:561px) and (max-width:1023px){
     .pdf-dock-nav .tts-console .btn-tts .tts-label{font-size:13px}
     .pdf-dock-nav .tts-console .btn-tts{padding-inline:16px}
     .pdf-dock-nav .tts-console [data-tts-download-label]{font-size:11.5px}
   }
-  /* En escritorio el reproductor también se ordena en dos filas: al dejarlo
-     envolver solo, la velocidad y la etiqueta del motor caían a una tercera
-     línea y el dock crecía hasta 175 px. */
+  /* En escritorio el reproductor también se ordena en filas: reproducción,
+     voz y velocidad, estado y «Más ajustes». Sin música ni MP3 en la fila
+     de controles, tres columnas bastan y el dock no crece a lo ancho. */
   @media (min-width:1024px){
     .pdf-dock-nav .tts-console,
     .pdf-dock-nav .tts-console.tts-con-barra{
       display:grid;
-      grid-template-columns:auto auto auto auto minmax(10rem,1fr) auto auto;
+      grid-template-columns:auto auto minmax(0,1fr);
       grid-template-areas:
-        "barra barra barra barra barra barra barra"
-        "play  parar aqui  mp3   voz   vel   musica";
+        "barra  barra  barra"
+        "play   parar  aqui"
+        "voz    voz    vel"
+        "estado estado estado"
+        "mas    mas    mas";
       align-items:center;gap:8px;
     }
+    .pdf-dock-nav .tts-console > *{min-width:0}
     .pdf-dock-nav .tts-console .tts-transport{grid-area:barra;margin:0}
     .pdf-dock-nav .tts-console .btn-tts{grid-area:play}
     .pdf-dock-nav .tts-console .btn-tts-stop{grid-area:parar}
-    .pdf-dock-nav .tts-console #btnPdfDesdeAqui{grid-area:aqui}
-    .pdf-dock-nav .tts-console .btn-tts-download{grid-area:mp3}
+    .pdf-dock-nav .tts-console #btnPdfDesdeAqui{grid-area:aqui;justify-self:start}
     .pdf-dock-nav .tts-console .tts-voice-select{grid-area:voz;width:100%;max-width:none}
     .pdf-dock-nav .tts-console .tts-rate-control{grid-area:vel}
-    .pdf-dock-nav .tts-console #btnPdfMusica{grid-area:musica;min-width:44px;min-height:44px}
-    .pdf-dock-nav .tts-console .tts-console-engine,
-    .pdf-dock-nav .tts-console .tts-console-status{display:none}
+    .pdf-dock-nav .tts-console .tts-console-status{grid-area:estado}
+    .pdf-dock-nav .tts-console #pdfTtsMas{grid-area:mas}
+    .pdf-dock-nav .tts-console .tts-console-engine{display:none}
   }
 
   /* Un documento sin capítulos no necesita columna de índice: eran 260 px de
@@ -5405,9 +5442,9 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 @media (prefers-reduced-motion:reduce){
   .pdf-lectura *,.pdf-realce mark{transition:none!important;animation:none!important;scroll-behavior:auto!important}
 }
-/* 320 px: el botón «Desde aquí» no tiene celda en la rejilla del dock y abría
-   una columna implícita que desbordaba el área 26 px (medido). En pantalla
-   mínima ocupa su propia fila; el gesto de tocar el párrafo sigue intacto. */
+/* 320 px: con la etiqueta «Desde aquí» a la vista, la fila de reproducción
+   queda justa; el botón ocupa su propia fila a lo ancho para que nada se
+   comprima ni se desborde. */
 @media (max-width:360px){
   .pdf-dock-nav #btnPdfDesdeAqui{grid-column:1 / -1;justify-self:stretch}
 }
@@ -6799,20 +6836,9 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                         </div>
                         <p class="pdf-mas-ayuda">Resalta la frase que suena y arrastra el texto tras ella. Si te desplazas a mano, te deja mirar unos segundos antes de retomar.</p>
                         <p class="pdf-ayuda-gesto">Toca dos veces cualquier párrafo para leer desde ahí.</p>
-                        <label class="task-field" for="pdfDormir">
-                          <span class="task-field-label">Apagar la voz sola</span>
-                          <select id="pdfDormir">
-                            <option value="0">No apagarla</option>
-                            <option value="5">En 5 minutos</option>
-                            <option value="10">En 10 minutos</option>
-                            <option value="15">En 15 minutos</option>
-                            <option value="30">En 30 minutos</option>
-                            <option value="45">En 45 minutos</option>
-                            <option value="60">En 1 hora</option>
-                            <option value="capitulo">Al terminar este capítulo</option>
-                          </select>
-                        </label>
-                        <p class="pdf-dormir-estado" id="pdfDormirEstado" role="status" aria-live="polite" hidden></p>
+                        <!-- El temporizador («Apagar la voz sola») vive en
+                             «Más ajustes» del reproductor, junto a música y
+                             MP3. -->
 
                         <details class="result-listen pdf-listen" style="margin-left:0;margin-right:0" open>
                           <summary style="display:none"><span>Escuchar el documento</span><span>Voz neural · descarga MP3</span></summary>
@@ -7250,12 +7276,6 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                     <p class="pdf-voz-cab-titulo">Herramientas de voz</p>
                     <p class="pdf-voz-cab-ayuda">Ocultar no detiene la lectura.</p>
                   </div>
-                  <button type="button" class="mini-btn pdf-voz-cab-ocultar" id="btnPdfDockOcultar"
-                          aria-label="Ocultar herramientas de voz. La lectura sigue."
-                          title="Ocultar herramientas de voz. La lectura sigue.">
-                    <svg class="pdf-voz-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    <span class="pdf-voz-ocultar-txt">Ocultar</span>
-                  </button>
                 </div>
                 <div class="tts-console" data-tts-console="pdf" data-tts-source="#pdfOutput">
                   <div class="tts-console-head">
@@ -7291,15 +7311,40 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                         <output class="tts-rate-value" data-tts-rate-value>1.00×</output>
                       </span>
                     </div>
-                    <button type="button" class="mini-btn pdf-btn-musica is-off" id="btnPdfMusica"
-                            aria-expanded="false" aria-controls="pdfMusicaHoja"
-                            title="Música de fondo para lectura"
-                            aria-label="Música de fondo: apagada">
-                      <svg class="pdf-musica-nota" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                      <span class="pdf-musica-txt">Música</span>
-                      <span class="pdf-musica-estado" id="pdfMusicaEstadoBadge">Apagado</span>
-                    </button>
                   </div>
+                  <!-- Más ajustes (PDF-08): lo secundario —música,
+                       temporizador y descarga MP3— vive plegado aquí, no
+                       compitiendo con reproducir ni con la voz. El botón MP3
+                       lo monta el motor dentro de este cuerpo (ver
+                       `ttsMontarDescarga`); el temporizador se mudó desde
+                       Opciones sin cambiar su funcionamiento. -->
+                  <details class="tts-mas-ajustes" id="pdfTtsMas">
+                    <summary class="tts-mas-resumen">Más ajustes</summary>
+                    <div class="tts-mas-cuerpo" id="pdfTtsMasCuerpo">
+                      <button type="button" class="mini-btn pdf-btn-musica is-off" id="btnPdfMusica"
+                              aria-expanded="false" aria-controls="pdfMusicaHoja"
+                              title="Música de fondo para lectura"
+                              aria-label="Música de fondo: apagada">
+                        <svg class="pdf-musica-nota" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                        <span class="pdf-musica-txt">Música</span>
+                        <span class="pdf-musica-estado" id="pdfMusicaEstadoBadge">Apagado</span>
+                      </button>
+                      <label class="task-field tts-mas-dormir" for="pdfDormir">
+                        <span class="task-field-label">Apagar la voz sola</span>
+                        <select id="pdfDormir">
+                          <option value="0">No apagarla</option>
+                          <option value="5">En 5 minutos</option>
+                          <option value="10">En 10 minutos</option>
+                          <option value="15">En 15 minutos</option>
+                          <option value="30">En 30 minutos</option>
+                          <option value="45">En 45 minutos</option>
+                          <option value="60">En 1 hora</option>
+                          <option value="capitulo">Al terminar este capítulo</option>
+                        </select>
+                      </label>
+                      <p class="pdf-dormir-estado" id="pdfDormirEstado" role="status" aria-live="polite" hidden></p>
+                    </div>
+                  </details>
                 </div>
 
                 <div class="pdf-search" id="pdfSearchRow" hidden>
@@ -16065,9 +16110,6 @@ function ttsCombinarAudiosMp3(partes){
 
 function ttsMontarDescarga(consoleEl){
   if(!consoleEl || consoleEl.querySelector('[data-tts-action="download"]')) return;
-  const fila = consoleEl.querySelector('.tts-console-play');
-  const escuchar = fila && fila.querySelector('[data-tts-action="toggle"]');
-  if(!fila || !escuchar) return;
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'btn-tts-download';
@@ -16075,6 +16117,16 @@ function ttsMontarDescarga(consoleEl){
   boton.setAttribute('title', 'Descargar todo el texto como audio MP3');
   boton.setAttribute('aria-label', 'Descargar audio MP3');
   boton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-tts-download-label>MP3</span>';
+  /* En el lector de PDF el MP3 es ajuste secundario (PDF-08): nace dentro
+   * de «Más ajustes», no en la fila de reproducción. Las demás consolas
+   * conservan su sitio de siempre. */
+  if(consoleEl.getAttribute('data-tts-console') === 'pdf'){
+    const cuerpo = consoleEl.querySelector('#pdfTtsMasCuerpo');
+    if(cuerpo){ cuerpo.appendChild(boton); return; }
+  }
+  const fila = consoleEl.querySelector('.tts-console-play');
+  const escuchar = fila && fila.querySelector('[data-tts-action="toggle"]');
+  if(!fila || !escuchar) return;
   escuchar.insertAdjacentElement('afterend', boton);
 }
 

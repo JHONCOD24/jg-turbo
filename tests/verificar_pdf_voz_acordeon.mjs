@@ -6,6 +6,10 @@
  * escritorio, y que el teléfono conserva su comportamiento original
  * (la hoja abierta solo pliega voz/velocidad, no la consola).
  *
+ * Desde PDF-07 la voz NACE PLEGADA cuando no hay preferencia guardada: la
+ * primera entrada sin audio no despliega la configuración completa. Por eso
+ * esta suite parte de plegada, despliega, y vuelve a plegar.
+ *
  * Lo que no se ve leyendo el CSS:
  *   1. que el estado plegado persiste tras recargar (F5),
  *   2. que plegar NO devuelve la lectura al principio del capítulo
@@ -107,8 +111,17 @@ try {
     const p = await abrirLibro(width, height);
 
     let e = await estadoDock(p);
-    comprobar(`${nombre}: la paleta nace desplegada`, e.desplegado === 'si' && e.consolaVisible && e.btnExpandido,
+    /* PDF-07: sin preferencia guardada la voz nace plegada. */
+    comprobar(`${nombre}: la paleta nace plegada sin preferencia guardada`, e.desplegado === 'no' && !e.consolaVisible && !e.btnExpandido,
       JSON.stringify({ desplegado: e.desplegado, consola: e.consolaVisible, aria: e.btnExpandido }));
+    const altoPlegado = e.dockAlto;
+
+    /* Desplegar con el interruptor. */
+    await p.locator('#btnPdfDockDesplegar').click();
+    await p.waitForTimeout(350);
+    e = await estadoDock(p);
+    comprobar(`${nombre}: desplegar muestra la consola y el estado`, e.consolaVisible && e.btnExpandido && e.desplegado === 'si',
+      JSON.stringify({ consola: e.consolaVisible, aria: e.btnExpandido }));
     const altoDesplegado = e.dockAlto;
 
     /* Plegar con el interruptor. */
@@ -123,7 +136,7 @@ try {
       `desplegado ${altoDesplegado} px → plegado ${e.dockAlto} px`);
     await p.screenshot({ path: join(destino, `${nombre}-plegada.png`) });
 
-    /* Desplegar de nuevo. */
+    /* Desplegar de nuevo para dejar la lectura usable. */
     await p.locator('#btnPdfDockDesplegar').click();
     await p.waitForTimeout(350);
     e = await estadoDock(p);
@@ -139,6 +152,10 @@ try {
      avanzado. Es el síntoma exacto de la trampa v2.41. */
   console.log('\n── La lectura no se pierde al plegar (escritorio) ───────────────');
   const p = await abrirLibro(1440, 900);
+  /* Nace plegada (PDF-07): se despliega primero para que el plegado que se
+   * mide sea un plegado de verdad. */
+  await p.locator('#btnPdfDockDesplegar').click();
+  await p.waitForTimeout(350);
   const paginacionVisible = await p.evaluate(() => document.querySelector('#pdfPaginacion')?.hidden === false);
   if (paginacionVisible) {
     await p.locator('#btnPdfPagNext').click();
@@ -148,7 +165,9 @@ try {
     await p.locator('#btnPdfDockDesplegar').click();
     await p.waitForTimeout(700); /* la remedición va con debounce de 80 ms */
     const despues = await p.evaluate(() => document.querySelector('#pdfPagPos')?.textContent || '');
-    const pagina = parseInt(despues, 10) || 1;
+    /* La etiqueta lleva alcance («Página 4 de 15 de la sección», PDF-03):
+     * se extrae el primer número en vez de suponer que empieza por él. */
+    const pagina = parseInt(String(despues).replace(/^\D+/, ''), 10) || 1;
     comprobar('plegar la paleta no devuelve la lectura a la página 1', pagina > 1,
       `antes «${antes}» → después «${despues}»`);
   } else {
@@ -190,6 +209,13 @@ try {
   let m = await estadoDock(tel);
   comprobar('teléfono: la hoja «Voz» abre con la consola a la vista', m.abierto === 'si' && m.consolaVisible,
     JSON.stringify({ abierto: m.abierto, consola: m.consolaVisible }));
+  /* La hoja nace con los ajustes plegados (PDF-07): el primer toque los
+   * despliega y el segundo los vuelve a plegar. */
+  await tel.locator('#btnPdfDockDesplegar').click();
+  await tel.waitForTimeout(300);
+  m = await estadoDock(tel);
+  comprobar('teléfono: desplegar muestra el selector de voz dentro de la hoja', m.selectorVozVisible && m.btnExpandido,
+    JSON.stringify({ selector: m.selectorVozVisible, aria: m.btnExpandido }));
   await tel.locator('#btnPdfDockDesplegar').click();
   await tel.waitForTimeout(300);
   m = await estadoDock(tel);

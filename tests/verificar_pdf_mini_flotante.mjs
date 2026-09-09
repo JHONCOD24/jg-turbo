@@ -76,7 +76,7 @@ try {
    * `verificar_pdf_movil.mjs`, que hace lo mismo. */
   await p.evaluate(() => document.body.classList.add('jg-voz-activa'));
   await p.waitForTimeout(300);
-  await p.locator('#btnPdfDockOcultar').click();
+  await p.locator('#btnPdfBmVoz').click();
   await p.waitForTimeout(500);
 
   const mini = () => p.evaluate(() => {
@@ -116,7 +116,7 @@ try {
     voz: document.body.classList.contains('jg-voz-activa'),
   }));
   comprobar('Ajustes abre la paleta y la voz sigue', dock.abierto === 'si' && dock.voz, JSON.stringify(dock));
-  await p.locator('#btnPdfDockOcultar').click();
+  await p.locator('#btnPdfBmVoz').click();
   await p.waitForTimeout(400);
 
   /* ── 4. Se arrastra con el dedo ─────────────────────────────────── */

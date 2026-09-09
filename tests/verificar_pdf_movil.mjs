@@ -192,7 +192,7 @@ try {
     `antes ${m.textoAlto} px, ahora ${dentro.textoAlto} px`);
   /* El fallo que esto vigila: al remaquetar, el reparto cambiaba y la lectura
      volvía al principio del capítulo. Pasabas de página y no pasabas nada. */
-  comprobar('el salto de página se sostiene', paginaDespues.startsWith('2 de ') && paginaAntes.startsWith('1 de '),
+  comprobar('el salto de página se sostiene', numeroPagina(paginaDespues) === 2 && numeroPagina(paginaAntes) === 1,
     `${paginaAntes} → ${paginaDespues}`);
   comprobar('el número total de páginas no cambia',
     paginaAntes.split(' de ')[1] === paginaDespues.split(' de ')[1],
@@ -284,7 +284,7 @@ try {
   const hojaAbierta = await tel.evaluate(() => document.querySelector('#pdfDockNav')?.dataset.abierto === 'si');
   comprobar('Voz abre las herramientas sin apagar la lectura', hojaAbierta
     && await tel.evaluate(() => document.body.classList.contains('jg-voz-activa')));
-  await tel.locator('#btnPdfDockOcultar').click();
+  await tel.locator('#btnPdfBmVoz').click();
   await tel.waitForTimeout(400);
   const despuesOcultar = await tel.evaluate(() => {
     const dock = document.querySelector('#pdfDockNav');
@@ -320,7 +320,7 @@ try {
     await tel.waitForTimeout(700);
   };
   const pagina = () => tel.locator('#pdfPagPos').textContent();
-  const numeroPagina = (etiqueta) => Number(String(etiqueta).split(' de ')[0]);
+  function numeroPagina(etiqueta){ return Number(String(etiqueta).replace(/^\D+/, '').split(' de ')[0]); }
 
   const p0 = await pagina();
   await deslizar(330, 60);          // dedo hacia la izquierda = página siguiente

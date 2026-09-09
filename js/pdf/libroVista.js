@@ -21,7 +21,7 @@ function leerApariencia() {
    * haga, en el teléfono manda un tamaño fluido que mantiene la línea en
    * 32-46 caracteres. En cuanto lo mueve, manda ella: alguien con poca
    * vista tiene que poder agrandar aunque la línea quede corta. */
-  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas', tamElegido: false, vozDesplegado: true };
+  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas', tamElegido: false, vozDesplegado: false };
   try {
     const crudo = localStorage.getItem('jg_pdf_lectura');
     if (crudo) cfg = { ...cfg, ...JSON.parse(crudo) };
@@ -1121,9 +1121,88 @@ export function initLibroVista({ el, estado, api }) {
     pintarDesplegado();
   }
 
+  /* ── Estados explícitos de la voz (PDF-07) ───────────────────────────
+   *
+   * El motor es la única fuente de verdad (no se duplica ni se cambia):
+   * aquí solo se traduce lo que él ya dice a seis nombres explícitos —
+   * inactiva, preparando, reproduciendo, en pausa, finalizada y con
+   * error— y se pintan en la línea de estado del dock, que antes vivía
+   * oculta. «Finalizada» llega por el evento `jg-tts-fin` del final
+   * natural; «Detener» manual vuelve a inactiva. El error es el único
+   * estado que el motor no anuncia: se detecta cuando arrancar no produce
+   * ni preparación ni reproducción (p. ej. sin texto o sin motor).
+   */
+  let vozFinPdf = false;
+  let vozEsperaInicio = false;
+  const VOZ_PROPIOS = new Set([
+    'Voz inactiva', 'Preparando la voz…', 'Reproduciendo',
+    'Voz en pausa', 'Lectura finalizada', 'No se pudo iniciar la voz',
+  ]);
+  function pintarEstadoVoz(nombre, texto) {
+    if (!dock) return;
+    dock.dataset.vozEstado = nombre;
+    const linea = dock.querySelector('[data-tts-status]');
+    if (linea && texto && linea.textContent !== texto) linea.textContent = texto;
+  }
+  function traducirEstadoVoz(textoMotor) {
+    const t = String(textoMotor || '').trim();
+    if (VOZ_PROPIOS.has(t)) return;
+    if (t === 'Preparando voz…' || t === 'Cargando…') {
+      vozEsperaInicio = false;
+      vozFinPdf = false;
+      pintarEstadoVoz('preparando', 'Preparando la voz…');
+    } else if (t === 'Leyendo…') {
+      vozEsperaInicio = false;
+      vozFinPdf = false;
+      pintarEstadoVoz('reproduciendo', 'Reproduciendo');
+    } else if (t === 'En pausa') {
+      vozEsperaInicio = false;
+      pintarEstadoVoz('pausado', 'Voz en pausa');
+    } else {
+      /* Reposo del motor («Lista»): si se acababa de pedir arrancar y no
+       * pasó nada, es un error de generación; si terminó natural, se
+       * conserva «finalizada»; si no, inactiva. */
+      if (vozEsperaInicio) {
+        vozEsperaInicio = false;
+        pintarEstadoVoz('error', 'No se pudo iniciar la voz');
+      } else if (vozFinPdf) {
+        pintarEstadoVoz('finalizado', 'Lectura finalizada');
+      } else {
+        pintarEstadoVoz('inactivo', 'Voz inactiva');
+      }
+    }
+  }
+  const lineaEstadoVoz = dock ? dock.querySelector('[data-tts-status]') : null;
+  if (lineaEstadoVoz && typeof MutationObserver !== 'undefined') {
+    new MutationObserver(() => traducirEstadoVoz(lineaEstadoVoz.textContent)).observe(
+      lineaEstadoVoz, { childList: true, characterData: true, subtree: true });
+  }
+  document.addEventListener('jg-tts-fin', (e) => {
+    if (e?.detail?.sourceId !== 'pdf') return;
+    vozFinPdf = true;
+    vozEsperaInicio = false;
+    pintarEstadoVoz('finalizado', 'Lectura finalizada');
+  });
+  document.addEventListener('jg-tts-detener', () => {
+    vozFinPdf = false;
+    vozEsperaInicio = false;
+    pintarEstadoVoz('inactivo', 'Voz inactiva');
+  });
+  /* Arrancar se pide con «Escuchar» o con «Desde aquí»: se marca la espera
+   * para que el reposo posterior se lea como error y no como inactividad. */
+  for (const id of ['btnPdfDesdeAqui']) {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', () => { vozFinPdf = false; vozEsperaInicio = true; });
+  }
+  const btnEscucharPdf = dock ? dock.querySelector('[data-tts-action="toggle"]') : null;
+  if (btnEscucharPdf) btnEscucharPdf.addEventListener('click', () => { vozFinPdf = false; vozEsperaInicio = true; });
+  pintarEstadoVoz('inactivo', 'Voz inactiva');
+
   const puentes = [
     ['btnPdfBmVoz', () => abrirDock((dock?.dataset.abierto || 'no') !== 'si')],
-    ['btnPdfDockOcultar', () => abrirDock(false)],
+    /* El acordeón («Mostrar/Ocultar ajustes») es el único cierre de los
+     * ajustes (PDF-08): la hoja del teléfono se cierra con el botón «Voz»
+     * de la barra del pulgar. Cerrar nunca detiene la lectura. */
     ['btnPdfDockDesplegar', () => alternarAjustes()],
     ['btnPdfVozMiniAjustes', () => { devolverCromo(); abrirDock(true); }],
     ['btnPdfBmApariencia', () => {
