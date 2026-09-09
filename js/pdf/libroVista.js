@@ -1715,8 +1715,32 @@ export function initLibroVista({ el, estado, api }) {
   };
 }
 
-export function ordenarDocumentos(docs, modo) {
+export function ordenarDocumentos(docs, modo, ordenManualIds = null) {
   const lista = (docs || []).slice();
+  if (modo === 'personalizado') {
+    let ids = ordenManualIds;
+    if (!ids) {
+      try {
+        const guardado = typeof localStorage !== 'undefined' ? localStorage.getItem('jg_pdf_orden_manual') : null;
+        if (guardado) ids = JSON.parse(guardado);
+      } catch (_) {}
+    }
+    if (Array.isArray(ids) && ids.length > 0) {
+      const mapaPos = new Map();
+      ids.forEach((id, idx) => mapaPos.set(String(id), idx));
+      lista.sort((a, b) => {
+        const idA = String(a?.id || '');
+        const idB = String(b?.id || '');
+        const posA = mapaPos.has(idA) ? mapaPos.get(idA) : -1;
+        const posB = mapaPos.has(idB) ? mapaPos.get(idB) : -1;
+        if (posA !== -1 && posB !== -1) return posA - posB;
+        if (posA !== -1 && posB === -1) return -1;
+        if (posA === -1 && posB !== -1) return 1;
+        return (Number(b.actualizado) || Number(b.creado) || 0) - (Number(a.actualizado) || Number(a.creado) || 0);
+      });
+      return lista;
+    }
+  }
   if (modo === 'titulo') lista.sort((a, b) => String(a.titulo || '').localeCompare(String(b.titulo || ''), 'es'));
   else if (modo === 'creado') lista.sort((a, b) => (Number(b.creado) || 0) - (Number(a.creado) || 0));
   else lista.sort((a, b) => (Number(b.actualizado) || Number(b.creado) || 0) - (Number(a.actualizado) || Number(a.creado) || 0));

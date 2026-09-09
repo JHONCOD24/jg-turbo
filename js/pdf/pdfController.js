@@ -474,6 +474,130 @@ export function inicializarLectorPdf(deps = {}) {
     }
   }
 
+  let rejillaMovibleIniciada = false;
+  let arrastreActivo = null;
+
+  async function guardarOrdenRejilla() {
+    if (!el.rejilla) return;
+    const items = Array.from(el.rejilla.querySelectorAll('.pdf-libro'));
+    const idsVisibles = items.map((it) => it.dataset.docId).filter(Boolean);
+    if (!idsVisibles.length) return;
+
+    try {
+      let idsCompletos = [];
+      const guardado = typeof localStorage !== 'undefined' ? localStorage.getItem('jg_pdf_orden_manual') : null;
+      if (guardado) {
+        try { idsCompletos = JSON.parse(guardado) || []; } catch (_) {}
+      }
+      if (!idsCompletos.length) {
+        const todos = await almacen.listarDocumentos();
+        idsCompletos = (todos || []).map((d) => d.id);
+      }
+
+      const setVisibles = new Set(idsVisibles);
+      let idxVisible = 0;
+      const resultado = [];
+      for (const id of idsCompletos) {
+        if (setVisibles.has(id)) {
+          if (idxVisible < idsVisibles.length) {
+            resultado.push(idsVisibles[idxVisible++]);
+          }
+        } else {
+          resultado.push(id);
+        }
+      }
+      while (idxVisible < idsVisibles.length) {
+        resultado.push(idsVisibles[idxVisible++]);
+      }
+
+      localStorage.setItem('jg_pdf_orden_manual', JSON.stringify(resultado));
+      localStorage.setItem('jg_pdf_orden', 'personalizado');
+    } catch (_) {
+      try {
+        localStorage.setItem('jg_pdf_orden_manual', JSON.stringify(idsVisibles));
+        localStorage.setItem('jg_pdf_orden', 'personalizado');
+      } catch (_) {}
+    }
+
+    if (el.orden) {
+      try { el.orden.value = 'personalizado'; } catch (_) {}
+    }
+  }
+
+  function activarRejillaMovible(rejilla) {
+    if (rejillaMovibleIniciada || !rejilla) return;
+    rejillaMovibleIniciada = true;
+
+    window.addEventListener('pointermove', (e) => {
+      if (!arrastreActivo) return;
+
+      if (!arrastreActivo.iniciado) {
+        const dx = Math.abs(e.clientX - arrastreActivo.inicioX);
+        const dy = Math.abs(e.clientY - arrastreActivo.inicioY);
+        if (arrastreActivo.tipoPuntero !== 'touch' && (dx > 5 || dy > 5)) {
+          arrastreActivo.iniciado = true;
+          arrastreActivo.item.classList.add('jg-arrastrando');
+          arrastreActivo.item.dataset.bloquearClick = '1';
+        } else if (arrastreActivo.tipoPuntero === 'touch' && (dx > 8 || dy > 8)) {
+          if (arrastreActivo.longPressTimer) {
+            clearTimeout(arrastreActivo.longPressTimer);
+            arrastreActivo.longPressTimer = null;
+          }
+        }
+      }
+
+      if (arrastreActivo.iniciado) {
+        if (e.cancelable) e.preventDefault();
+
+        if (e.clientY < 65) {
+          window.scrollBy({ top: -14, behavior: 'auto' });
+        } else if (e.clientY > window.innerHeight - 65) {
+          window.scrollBy({ top: 14, behavior: 'auto' });
+        }
+
+        const bajo = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pdf-libro');
+        if (bajo && bajo !== arrastreActivo.item && bajo.parentElement === rejilla) {
+          const rect = bajo.getBoundingClientRect();
+          const centroX = rect.left + rect.width / 2;
+          const centroY = rect.top + rect.height / 2;
+          const esDespues = (e.clientY > centroY) || (e.clientY >= rect.top && e.clientX > centroX);
+          if (esDespues) {
+            rejilla.insertBefore(arrastreActivo.item, bajo.nextSibling);
+          } else {
+            rejilla.insertBefore(arrastreActivo.item, bajo);
+          }
+        }
+      }
+    }, { passive: false });
+
+    function terminarArrastre() {
+      if (!arrastreActivo) return;
+      if (arrastreActivo.longPressTimer) {
+        clearTimeout(arrastreActivo.longPressTimer);
+        arrastreActivo.longPressTimer = null;
+      }
+      const item = arrastreActivo.item;
+      const huboArrastre = arrastreActivo.iniciado;
+      arrastreActivo = null;
+
+      if (huboArrastre && item) {
+        item.classList.remove('jg-arrastrando');
+        guardarOrdenRejilla();
+        setTimeout(() => {
+          if (item) item.dataset.bloquearClick = '0';
+        }, 220);
+      } else if (item) {
+        item.classList.remove('jg-arrastrando');
+        setTimeout(() => {
+          if (item) item.dataset.bloquearClick = '0';
+        }, 100);
+      }
+    }
+
+    window.addEventListener('pointerup', terminarArrastre);
+    window.addEventListener('pointercancel', terminarArrastre);
+  }
+
   function tarjetaLibro(doc) {
     const infoTitulo = limpiarNombreLibro(doc.titulo, doc.nombreArchivo);
     const tituloDoc = (doc.titulo && doc.titulo.trim().toLowerCase() !== '(anonymous)' && doc.titulo.trim().toLowerCase() !== 'untitled')
@@ -488,14 +612,121 @@ export function inicializarLectorPdf(deps = {}) {
     item.setAttribute('aria-label', `Abrir ${tituloDoc}`);
 
     item.addEventListener('click', (e) => {
-      if (e.target.closest('.pdf-libro-menu')) return;
+      if (e.target.closest('.pdf-libro-menu') || e.target.closest('.pdf-libro-arrastre')) return;
+      if (item.dataset.bloquearClick === '1') return;
       abrirDocumento(doc.id);
     });
     item.addEventListener('keydown', (e) => {
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowUp')) {
+        e.preventDefault();
+        const ant = item.previousElementSibling;
+        if (ant && ant.classList.contains('pdf-libro')) {
+          item.parentElement.insertBefore(item, ant);
+          guardarOrdenRejilla();
+          item.focus();
+        }
+        return;
+      }
+      if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const sig = item.nextElementSibling;
+        if (sig && sig.classList.contains('pdf-libro')) {
+          item.parentElement.insertBefore(sig, item);
+          guardarOrdenRejilla();
+          item.focus();
+        }
+        return;
+      }
       if (e.key === 'Enter' || e.key === ' ') {
-        if (e.target.closest('.pdf-libro-menu')) return;
+        if (e.target.closest('.pdf-libro-menu') || e.target.closest('.pdf-libro-arrastre')) return;
         e.preventDefault();
         abrirDocumento(doc.id);
+      }
+    });
+
+    // Tirador táctil y de ratón para mover carátula
+    const tirador = document.createElement('button');
+    tirador.type = 'button';
+    tirador.className = 'pdf-libro-arrastre';
+    tirador.title = 'Arrastra para reordenar esta carátula';
+    tirador.setAttribute('aria-label', `Mover carátula de ${tituloDoc}`);
+    tirador.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:14px;height:14px;"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>';
+
+    tirador.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      e.stopPropagation();
+      try {
+        if (navigator.vibrate) navigator.vibrate(25);
+      } catch (_) {}
+      arrastreActivo = {
+        item,
+        tipoPuntero: e.pointerType,
+        inicioX: e.clientX,
+        inicioY: e.clientY,
+        iniciado: true,
+        longPressTimer: null
+      };
+      item.classList.add('jg-arrastrando');
+      item.dataset.bloquearClick = '1';
+    });
+
+    item.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.pdf-libro-menu') || e.target.closest('.pdf-libro-arrastre')) return;
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+      let timer = null;
+      if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+        timer = setTimeout(() => {
+          if (arrastreActivo && arrastreActivo.item === item) {
+            arrastreActivo.iniciado = true;
+            item.classList.add('jg-arrastrando');
+            item.dataset.bloquearClick = '1';
+            try {
+              if (navigator.vibrate) navigator.vibrate(25);
+            } catch (_) {}
+          }
+        }, 280);
+      }
+
+      arrastreActivo = {
+        item,
+        tipoPuntero: e.pointerType,
+        inicioX: e.clientX,
+        inicioY: e.clientY,
+        iniciado: false,
+        longPressTimer: timer
+      };
+    });
+
+    item.setAttribute('draggable', 'true');
+    item.addEventListener('dragstart', (e) => {
+      if (e.target.closest('.pdf-libro-menu')) {
+        e.preventDefault();
+        return;
+      }
+      item.classList.add('jg-arrastrando');
+      item.dataset.bloquearClick = '1';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', doc.id);
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('jg-arrastrando');
+      guardarOrdenRejilla();
+      setTimeout(() => { item.dataset.bloquearClick = '0'; }, 200);
+    });
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const arrastrado = el.rejilla ? el.rejilla.querySelector('.pdf-libro.jg-arrastrando') : null;
+      if (!arrastrado || arrastrado === item) return;
+      const rect = item.getBoundingClientRect();
+      const medioX = rect.left + rect.width / 2;
+      const medioY = rect.top + rect.height / 2;
+      const esDespues = (e.clientY > medioY) || (e.clientY >= rect.top && e.clientX > medioX);
+      if (esDespues) {
+        item.parentElement?.insertBefore(arrastrado, item.nextSibling);
+      } else {
+        item.parentElement?.insertBefore(arrastrado, item);
       }
     });
 
@@ -672,8 +903,75 @@ export function inicializarLectorPdf(deps = {}) {
       pop.append(conPdf);
     }
 
-    pop.append(reiniciar, buscarTapa, privado, compartir, borrar);
+    const moverInicio = document.createElement('button');
+    moverInicio.type = 'button';
+    moverInicio.className = 'mini-btn';
+    moverInicio.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg><span>Mover al inicio</span>';
+    moverInicio.title = `Mover ${tituloDoc} a la primera posición`;
+    moverInicio.setAttribute('aria-label', `Mover ${tituloDoc} a la primera posición`);
+    moverInicio.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      if (item.parentElement && item.parentElement.firstElementChild !== item) {
+        item.parentElement.prepend(item);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» colocado al principio.`, 'ok', { efimero: true });
+      }
+    });
+
+    const moverAtras = document.createElement('button');
+    moverAtras.type = 'button';
+    moverAtras.className = 'mini-btn';
+    moverAtras.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="15 18 9 12 15 6"/></svg><span>Mover a la izquierda</span>';
+    moverAtras.title = `Mover ${tituloDoc} una posición a la izquierda`;
+    moverAtras.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la izquierda`);
+    moverAtras.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      const ant = item.previousElementSibling;
+      if (ant && ant.classList.contains('pdf-libro')) {
+        item.parentElement.insertBefore(item, ant);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» movido hacia la izquierda.`, 'ok', { efimero: true });
+      }
+    });
+
+    const moverAdelante = document.createElement('button');
+    moverAdelante.type = 'button';
+    moverAdelante.className = 'mini-btn';
+    moverAdelante.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="9 18 15 12 9 6"/></svg><span>Mover a la derecha</span>';
+    moverAdelante.title = `Mover ${tituloDoc} una posición a la derecha`;
+    moverAdelante.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la derecha`);
+    moverAdelante.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      const sig = item.nextElementSibling;
+      if (sig && sig.classList.contains('pdf-libro')) {
+        item.parentElement.insertBefore(sig, item);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» movido hacia la derecha.`, 'ok', { efimero: true });
+      }
+    });
+
+    const moverFinal = document.createElement('button');
+    moverFinal.type = 'button';
+    moverFinal.className = 'mini-btn';
+    moverFinal.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg><span>Mover al final</span>';
+    moverFinal.title = `Mover ${tituloDoc} a la última posición`;
+    moverFinal.setAttribute('aria-label', `Mover ${tituloDoc} a la última posición`);
+    moverFinal.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      if (item.parentElement && item.parentElement.lastElementChild !== item) {
+        item.parentElement.appendChild(item);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» colocado al final.`, 'ok', { efimero: true });
+      }
+    });
+
+    pop.append(reiniciar, buscarTapa, moverInicio, moverAtras, moverAdelante, moverFinal, privado, compartir, borrar);
     menu.append(summary, pop);
+    item.appendChild(tirador);
     item.appendChild(menu);
 
     const cuerpo = document.createElement('div');
@@ -888,6 +1186,7 @@ export function inicializarLectorPdf(deps = {}) {
     const limite = estado.biblioLimite || 40;
     const pagina = paginarDocumentos(visibles, limite);
     for (const doc of pagina.visibles) el.rejilla.appendChild(tarjetaLibro(doc));
+    activarRejillaMovible(el.rejilla);
     if (el.mostrarMas) {
       el.mostrarMas.hidden = !(pagina.resto > 0);
       el.mostrarMas.textContent = 'Mostrar más (' + pagina.resto + ' restantes)';

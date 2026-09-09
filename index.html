@@ -2437,12 +2437,48 @@
     color:var(--muted-2);
   }
   .pdf-libro-estado{
-    position:absolute;top:7px;left:7px;padding:3px 9px;border-radius:999px;
+    position:absolute;bottom:7px;left:7px;padding:3px 9px;border-radius:999px;
     font-size:10px;font-weight:700;letter-spacing:.03em;
-    background:rgba(4,6,10,.82);color:var(--muted);backdrop-filter:blur(3px);
+    background:rgba(4,6,10,.82);color:var(--muted);backdrop-filter:blur(3px);z-index:2;
   }
   .pdf-libro-estado[data-estado="leyendo"]{color:var(--cyan)}
   .pdf-libro-estado[data-estado="terminado"]{color:#8FE9C8}
+
+  /* Tirador para mover y reordenar carátulas en móvil, tablet y escritorio */
+  .pdf-libro-arrastre{
+    position:absolute;top:6px;left:6px;z-index:3;
+    width:32px;height:32px;border-radius:50%;
+    background:rgba(4,6,10,.82);backdrop-filter:blur(4px);
+    display:grid;place-items:center;color:var(--muted);
+    cursor:grab;cursor:-webkit-grab;touch-action:none;user-select:none;-webkit-user-select:none;
+    border:1px solid rgba(255,255,255,.1);transition:color .15s, background .15s, transform .15s, border-color .15s, opacity .15s;
+    opacity:0.85;padding:0;
+  }
+  .pdf-libro:hover .pdf-libro-arrastre,
+  .pdf-libro:focus-within .pdf-libro-arrastre{
+    opacity:1;color:var(--text);border-color:rgba(255,255,255,.25);
+  }
+  .pdf-libro-arrastre:hover{
+    color:var(--cyan);background:rgba(4,6,10,.95);border-color:rgba(39,225,193,.45);
+    transform:scale(1.08);
+  }
+  .pdf-libro-arrastre:active{
+    cursor:grabbing;cursor:-webkit-grabbing;transform:scale(.95);
+  }
+  .pdf-libro.jg-arrastrando{
+    opacity:.55;
+    transform:scale(1.04);
+    border-color:var(--cyan);
+    box-shadow:0 20px 40px -10px rgba(0,0,0,.9), 0 0 0 2px var(--cyan);
+    z-index:10;
+    transition:none !important;
+  }
+  #pdfBiblioteca[data-vista="compacta"] .pdf-libro{
+    padding-left:42px;position:relative;
+  }
+  #pdfBiblioteca[data-vista="compacta"] .pdf-libro-arrastre{
+    top:50%;left:8px;transform:translateY(-50%);
+  }
 
   /* Menú de opciones de la tarjeta */
   .pdf-libro-menu{
@@ -2457,11 +2493,14 @@
   .pdf-libro-menu summary::-webkit-details-marker{display:none}
   .pdf-libro-menu summary:hover{color:var(--text);background:rgba(4,6,10,.95)}
   .pdf-libro-menu[open] summary{background:var(--surface);color:var(--cyan)}
+  .pdf-libro:has(.pdf-libro-menu[open]){
+    overflow:visible;z-index:20;
+  }
   .pdf-libro-menu-pop{
     position:absolute;right:0;top:36px;background:var(--bg-2);
     border:1px solid var(--line);border-radius:var(--pdf-r-sm);
     box-shadow:0 12px 28px rgba(0,0,0,.7);padding:6px;display:flex;flex-direction:column;
-    gap:4px;min-width:130px;z-index:10;
+    gap:4px;min-width:145px;max-height:calc(100vh - 80px);overflow-y:auto;z-index:25;
   }
   .pdf-libro-menu-pop .mini-btn{width:100%;justify-content:flex-start;min-height:36px;font-size:11.5px;gap:6px}
 
@@ -6278,6 +6317,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             <label class="pdf-biblio-orden">Orden
               <select id="pdfOrden" aria-label="Orden de la biblioteca">
                 <option value="reciente">Última lectura</option>
+                <option value="personalizado">Personalizado (a mi gusto)</option>
                 <option value="titulo">Título</option>
                 <option value="creado">Fecha de incorporación</option>
               </select>
@@ -7918,6 +7958,8 @@ const JG_CONFIG_KEYS = [
   'jg_tts_rate',
   'jg_tts_engine',
   'jg_tts_bilingual',
+  'jg_pdf_orden',
+  'jg_pdf_orden_manual',
 ];
 const JG_GLOSSARY_DEFAULT = [
   'Claude', 'Anthropic', 'Gemini', 'OpenAI', 'ChatGPT', 'GPT-4', 'GPT-4o', 'Grok', 'xAI',
@@ -17425,7 +17467,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v113';
+const JG_JS_V = 'v114';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
