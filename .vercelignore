@@ -30,4 +30,16 @@ js/vendor/pdfjs/pdf.worker.legacy.min.mjs
 # Libros y herramientas locales de PDF (no se despliegan)
 /pdf/
 
+# Audio local y fondos pesados (no van a Vercel)
+Fondos Musicales/
+*.wav
+*.tmp
+*.webm
+ejemplos/
+output/
+skills/
+bin/
+*.lnk
+
+
 
