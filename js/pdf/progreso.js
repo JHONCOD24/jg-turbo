@@ -87,6 +87,33 @@ export function etiquetaEstado(estado) {
   }[estado] || 'Sin empezar';
 }
 
+/**
+ * ¿Este título nombra de verdad una parte del libro, o es el rótulo técnico
+ * que pone el troceado cuando no encontró un encabezado? («Capítulo 3»,
+ * «Parte 2», «Documento completo»… son relleno, no el índice del autor.)
+ */
+export function esTituloEditorial(titulo) {
+  let t = String(titulo || '').trim().replace(/ \(\d+\)$/, '');
+  if (!t) return false;
+  if (t === 'Documento completo' || t === 'Antes del primer capítulo') return false;
+  if (/^(capítulo|parte) \d+$/i.test(t)) return false;
+  return true;
+}
+
+/**
+ * La única etiqueta de sección de la cabecera (PDF-03): el título editorial
+ * cuando se conoce; si no, «Sección X de Y». Nunca presenta las unidades
+ * técnicas de partición como capítulos del autor.
+ */
+export function etiquetaSeccion(partes, indice) {
+  const lista = Array.isArray(partes) ? partes : [];
+  const total = lista.length || 1;
+  const i = Math.max(0, Math.min(total - 1, Math.floor(Number(indice) || 0)));
+  const tit = String(lista[i]?.titulo || '').trim();
+  if (esTituloEditorial(tit)) return tit;
+  return total > 1 ? `Sección ${i + 1} de ${total}` : 'Sección única';
+}
+
 /** Frase corta para mostrar debajo del título: «CAPÍTULO II · 45 %». */
 export function etiquetaProgreso(progreso, partes) {
   const porcentaje = calcularPorcentaje(progreso, partes);

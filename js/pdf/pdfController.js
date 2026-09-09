@@ -38,6 +38,7 @@ import { crearTraductor, necesitaTraduccion } from './traduccion.js';
 import {
   progresoInicial, avanzarProgreso, calcularPorcentaje, estadoDeLectura,
   etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
+  etiquetaSeccion,
 } from './progreso.js';
 import { construirAncla, resolverAncla } from './anclaTexto.js';
 import { limpiarNombreLibro, conseguirCaratula, buscarPortadaCanonica } from './caratula.js';
@@ -138,9 +139,6 @@ export function inicializarLectorPdf(deps = {}) {
     auditoriaHoja: $('pdfAuditoriaHoja'), auditoriaProveedor: $('pdfAuditoriaProveedor'),
     auditoriaAceptar: $('btnPdfAuditoriaAceptar'), auditoriaRechazar: $('btnPdfAuditoriaRechazar'),
     auditoriaCerrar: $('btnPdfAuditoriaCerrar'),
-    reanudar: $('pdfReanudar'), reanudarTxt: $('pdfReanudarTxt'),
-    reanudarInicio: $('btnPdfReanudarInicio'),
-    btnReanudarCerrar: $('btnPdfReanudarCerrar'),
     reanudarCorreccion: $('pdfReanudarCorreccion'),
     reanudarCorreccionTxt: $('pdfReanudarCorreccionTxt'),
     btnReanudarCorreccion: $('btnPdfReanudarCorreccion'),
@@ -252,6 +250,60 @@ export function inicializarLectorPdf(deps = {}) {
     estadoFidelidad: null,
     paginasFuente: [],
   };
+
+  /* ── Estado veraz de sincronización (PDF-01) ─────────────────────
+   *
+   * La tarjeta decía «Sincronizado» a todo lo que no fuera privado, porque
+   * solo miraba `doc.sincronizar`. Ahora se mira lo que de verdad se sabe:
+   * si no hay vinculación, el libro solo está aquí; si hay cambios sin
+   * confirmar en la nube, está pendiente; «Sincronizado» solo con la
+   * confirmación vigente (`actualizado <= sincronizado` y `sincronizado > 0`).
+   * El fallo no vive en el documento (no hay campo persistente para eso):
+   * se recuerda el último fallo global y, mientras siga pendiente lo que
+   * falló, la tarjeta lo dice en vez de fingir que está al día. */
+  let sincronizandoAhora = false;
+  let ultimoFalloSync = 0;
+  try { ultimoFalloSync = Number(localStorage.getItem('jg_sync_ultimo_error')) || 0; } catch (_) {}
+  function marcarFalloSync() {
+    ultimoFalloSync = Date.now();
+    try { localStorage.setItem('jg_sync_ultimo_error', String(ultimoFalloSync)); } catch (_) {}
+  }
+  function limpiarFalloSync() {
+    ultimoFalloSync = 0;
+    try { localStorage.removeItem('jg_sync_ultimo_error'); } catch (_) {}
+  }
+  function hayPendienteLocal(doc) {
+    if (!doc || doc.sincronizar === false) return false;
+    const act = Number(doc.actualizado) || 0;
+    const sub = Number(doc.sincronizado) || 0;
+    if (!sub) return true;   /* nunca se confirmó una subida: falta */
+    return act > sub;
+  }
+  function estadoSincroniaDoc(doc) {
+    if (!doc || doc.sincronizar === false) return 'local';
+    if (!nube || !nube.estaVinculada || !nube.estaVinculada()) return 'local';
+    if (hayPendienteLocal(doc)) {
+      if (sincronizandoAhora) return 'pendiente';
+      if (ultimoFalloSync) return 'error';
+      return 'pendiente';
+    }
+    return 'sincronizado';
+  }
+  function etiquetaSincroniaDoc(doc) {
+    const est = estadoSincroniaDoc(doc);
+    if (est === 'local') return 'Solo en este dispositivo';
+    if (est === 'pendiente') return 'Pendiente de sincronizar';
+    if (est === 'error') return 'No se pudo sincronizar';
+    return 'Sincronizado';
+  }
+  /* Anuncia sin mover el foco: la tarjeta y la nube coinciden en el texto. */
+  function anunciarSync(mensaje) {
+    if (!mensaje) return;
+    try {
+      const vivo = document.getElementById('pdfSyncLive');
+      if (vivo) vivo.textContent = mensaje;
+    } catch (_) {}
+  }
 
   /* ── Ayudas ──────────────────────────────────────────────────────── */
 
@@ -1033,7 +1085,8 @@ export function inicializarLectorPdf(deps = {}) {
       const lect = etiquetaEstado(doc.estado);
       const corr = doc.pendientesLimites > 0 ? (doc.pendientesLimites + ' cortes por revisar')
         : (doc.versionReconstruccion >= 7 ? 'Texto revisado' : 'Texto local');
-      const sync = doc.sincronizar === false ? 'Solo en este aparato' : 'Sincronizado';
+      const sync = etiquetaSincroniaDoc(doc);
+      sub.dataset.sync = estadoSincroniaDoc(doc);
       sub.textContent = lect + ' · ' + corr + ' · ' + sync;
       sub.title = 'Lectura: ' + lect + '. Corrección: ' + corr + '. Nube: ' + sync;
       cuerpo.appendChild(sub);
@@ -1321,7 +1374,7 @@ export function inicializarLectorPdf(deps = {}) {
 
       const titulo = document.createElement('span');
       titulo.className = 'pdf-cap-titulo';
-      titulo.textContent = parte.titulo;
+      titulo.textContent = etiquetaSeccion(estado.partes, i);
       /* Con el panel angosto el título se corta: el completo vive en el tooltip. */
       titulo.title = parte.titulo || '';
 
@@ -1335,7 +1388,7 @@ export function inicializarLectorPdf(deps = {}) {
         datos.appendChild(marcaTrad);
       }
       const pagina = document.createElement('span');
-      pagina.textContent = parte.pagina ? `pág. ${parte.pagina}` : '';
+      pagina.textContent = parte.pagina ? `pág. ${parte.pagina} del PDF` : '';
       datos.appendChild(pagina);
 
       /* Barra fina bajo el capítulo en curso: dice cuánto llevas DENTRO de
@@ -1355,7 +1408,7 @@ export function inicializarLectorPdf(deps = {}) {
       });
       /* El texto accesible dice todo lo que el color y la marca cuentan. */
       boton.setAttribute('aria-label',
-        `${parte.titulo}${parte.pagina ? `, página ${parte.pagina}` : ''}, ${
+        `${etiquetaSeccion(estado.partes, i)}${parte.pagina ? `, página ${parte.pagina} del PDF` : ''}, ${
           { leido: 'leído', leyendo: 'leyendo ahora', pendiente: 'pendiente' }[situacion]}`);
 
       fila.appendChild(boton);
@@ -1734,21 +1787,32 @@ export function inicializarLectorPdf(deps = {}) {
     el.barraRelleno.style.width = `${porcentaje}%`;
     el.barraDoc.setAttribute('aria-valuenow', String(porcentaje));
     const varias = estado.partes.length > 1;
-    /* Las tres cosas que se preguntan al abrir un libro: dónde voy, cuánto
-     * llevo y cuánto me falta. El título del capítulo no va aquí: ya está en
-     * el índice y en la barra de capítulos, y en un celular solo empujaba
-     * fuera lo demás. */
-    const falta = minutosRestantes();
-    const trozos = [];
-    if (varias) trozos.push(`Cap. ${estado.parteActual + 1} de ${estado.partes.length}`);
-    trozos.push(`${porcentaje} % leído`);
-    if (falta) trozos.push(`quedan ${falta}`);
-    el.donde.textContent = trozos.join(' · ');
-    el.donde.title = varias
-      ? `${estado.partes[estado.parteActual]?.titulo || ''} — ${trozos.join(' · ')}`
-      : trozos.join(' · ');
+    /* Cabecera (PDF-03): el título del libro ya está en el h3; aquí va UNA
+     * sola etiqueta de sección —el título editorial si se conoce, si no
+     * «Sección X de Y»—, nunca el porcentaje ni los minutos (viven en el
+     * pie) y nunca dos rótulos de capítulo a la vez. */
+    const etiqueta = etiquetaSeccion(estado.partes, estado.parteActual);
+    if (el.donde) {
+      el.donde.textContent = etiqueta;
+      el.donde.title = etiqueta;
+      el.donde.setAttribute('aria-expanded', el.docRef && !el.docRef.hidden ? 'true' : 'false');
+    }
+    /* Detalle bajo demanda (PDF-03): título completo + referencia física.
+     * La página del PDF es donde EMPIEZA esta sección, y se dice así; si no
+     * se conoce, no se inventa: el detalle trae solo el título. */
+    if (el.docRef) {
+      const parte = estado.partes[estado.parteActual] || {};
+      const titCompleto = String(estado.titulo || '').trim();
+      const titSeccion = String(parte.titulo || '').trim();
+      const pagFisica = parte.pagina || parte.pageStart || '';
+      const trozos = [];
+      if (titCompleto) trozos.push(titCompleto);
+      if (titSeccion && titSeccion !== etiqueta) trozos.push(titSeccion);
+      if (pagFisica) trozos.push(`Página ${pagFisica} del PDF (inicio de esta sección)`);
+      el.docRef.textContent = trozos.join(' · ') || etiqueta;
+    }
     if (varias) {
-      el.navPos.textContent = `${estado.parteActual + 1} de ${estado.partes.length}`;
+      el.navPos.textContent = `Sección ${estado.parteActual + 1} de ${estado.partes.length}`;
       el.prev.disabled = estado.parteActual === 0;
       el.next.disabled = estado.parteActual >= estado.partes.length - 1;
     }
@@ -1761,6 +1825,24 @@ export function inicializarLectorPdf(deps = {}) {
      * cuando el documento es de una sola pieza. */
     el.resultArea.dataset.varias = varias ? 'si' : 'no';
     actualizarAvanceIndice();
+    /* El pie vive en la vista de libro; su % ahora es del libro y cambia
+     * con el progreso, no solo al pasar página. */
+    try { libroVista?.pintarPieLectura?.(); } catch (_) {}
+  }
+
+  /* El resumen de progreso se pulsa y amplía el contexto (PDF-03): título
+   * completo + página física, sin abandonar la lectura. En el teléfono la
+   * cabecera es fija: el detalle crece ENCIMA del texto, solo cuando la
+   * persona lo pide. */
+  if (el.donde && el.docRef && !el.donde.dataset.conDetalle) {
+    el.donde.dataset.conDetalle = '1';
+    el.donde.addEventListener('click', () => {
+      const abierto = !el.docRef.hidden;
+      el.docRef.hidden = abierto;
+      el.donde.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+      const ident = el.donde.closest('.pdf-doc-ident');
+      if (ident) ident.dataset.detalle = abierto ? 'no' : 'si';
+    });
   }
 
   let temporizadorGuardado = null;
@@ -2113,17 +2195,20 @@ export function inicializarLectorPdf(deps = {}) {
     await mostrarParte(estado.progreso.parte || 0, {
       desplazamiento: estado.progreso.desplazamiento || 0,
     });
-    /* Decirle a la persona que la app se acordó de dónde iba. Se retira solo:
-     * es una confirmación, no un cartel permanente. */
-    if (el.reanudar && el.reanudarTxt) {
+    /* Confirmar la posición recuperada sin tapar texto (PDF-04): la
+     * confirmación vive en la zona de estado del lector, no en un flotante
+     * sobre el texto; no mueve el foco, no trae acciones temporizadas y se
+     * retira sola. «Ir al inicio del libro» vive en Contenido. */
+    if (el.modoEstados) {
       const frase = etiquetaReanudar(estado.progreso, estado.partes);
-      el.reanudar.hidden = !frase;
-      el.reanudarTxt.textContent = frase;
       if (frase) {
+        el.modoEstados.textContent = 'Lectura reanudada';
         clearTimeout(estado.temporizadorReanudar);
         estado.temporizadorReanudar = setTimeout(() => {
-          if (el.reanudar) el.reanudar.hidden = true;
-        }, 9000);
+          if (el.modoEstados && el.modoEstados.textContent === 'Lectura reanudada') {
+            el.modoEstados.textContent = '';
+          }
+        }, 6000);
       }
     }
     if (estado.pulidoActivo && estado.vista === 'original' && estado.consentido) {
@@ -2719,11 +2804,6 @@ export function inicializarLectorPdf(deps = {}) {
   if (el.auditoriaAceptar) el.auditoriaAceptar.addEventListener('click', () => cerrarHojaAuditoria(true));
   if (el.auditoriaRechazar) el.auditoriaRechazar.addEventListener('click', () => cerrarHojaAuditoria(false));
   if (el.auditoriaCerrar) el.auditoriaCerrar.addEventListener('click', () => cerrarHojaAuditoria(null));
-  if (el.btnReanudarCerrar) {
-    el.btnReanudarCerrar.addEventListener('click', () => {
-      if (el.reanudar) el.reanudar.hidden = true;
-    });
-  }
   if (el.btnReanudarCorreccionCerrar) {
     el.btnReanudarCorreccionCerrar.addEventListener('click', () => {
       if (el.reanudarCorreccion) el.reanudarCorreccion.hidden = true;
@@ -4644,13 +4724,13 @@ export function inicializarLectorPdf(deps = {}) {
     sincronizarAhora({ desdeCabecera: true });
   });
 
-  if (el.reanudarInicio) el.reanudarInicio.addEventListener('click', () => {
+  /* «Ir al inicio del libro» vive en Contenido (PDF-04): solo navega a la
+   * primera sección; no borra historial de lectura, decisiones ni
+   * preferencias. Sigue disponible siempre, sin temporizador. */
+  const btnIndiceInicio = $('btnPdfIndiceInicio');
+  if (btnIndiceInicio) btnIndiceInicio.addEventListener('click', () => {
     if (!hayDocumento()) return;
-    el.reanudar.hidden = true;
     mostrarParte(0, { desplazamiento: 0 });
-    estado.progreso = avanzarProgreso(estado.progreso, { parte: 0, desplazamiento: 0, caracter: 0, cita: '', antes: '' });
-    irAPosicion(0, { centrar: false });
-    guardarProgresoPronto();
   });
 
   el.salida.addEventListener('input', () => {
@@ -5964,6 +6044,7 @@ export function inicializarLectorPdf(deps = {}) {
     const boton = desdeCabecera ? el.actualizarBiblio : el.nubeSync;
     const etiqueta = desdeCabecera ? el.actualizarBiblioLabel : el.nubeSyncLabel;
     const contar = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+    sincronizandoAhora = true;
     try {
       const resultado = await conBotonOcupado(boton, etiqueta, 'Actualizando…',
         () => nube.sincronizar({
@@ -5973,6 +6054,8 @@ export function inicializarLectorPdf(deps = {}) {
             if (desdeCabecera) avisar(mensaje, 'info');
           },
         }));
+      sincronizandoAhora = false;
+      limpiarFalloSync();
       await refrescarInicio();
       await pintarNube();
       const nada = !resultado.subidos && !resultado.bajados && !resultado.caratulas;
@@ -5995,14 +6078,19 @@ export function inicializarLectorPdf(deps = {}) {
         avisar(avisoPedido, 'info');
       }
       await pintarBiblioteca();
+      anunciarSync(mensaje);
       return resultado;
     } catch (error) {
+      sincronizandoAhora = false;
+      marcarFalloSync();
       const fallo = error?.message || 'No se pudo sincronizar.';
       if (!silencioso) {
         avisoNube(fallo, 'error');
         if (desdeCabecera) avisar(fallo, 'err');
       }
       el.nubePunto.dataset.estado = 'error';
+      try { await pintarBiblioteca(); } catch (_) {}
+      anunciarSync('No se pudo sincronizar. Revisa tu conexión e inténtalo de nuevo.');
       return null;
     }
   }
@@ -6224,6 +6312,9 @@ export function inicializarLectorPdf(deps = {}) {
         /* Para el pie de lectura del teléfono: «restantes ~12 min». Ya se
          * calculaba aquí; solo faltaba dejárselo ver a la vista. */
         minutosRestantes: () => { try { return minutosRestantes(); } catch (_) { return ''; } },
+        /* PDF-03: el pie muestra el % del LIBRO, no el de las páginas
+         * visibles de la sección. */
+        porcentajeLibro: () => { try { return calcularPorcentaje(estado.progreso, estado.partes); } catch (_) { return null; } },
         guardarEdicion: (forzar) => { if (forzar) guardarEdicionActual(); },
         avisar,
         pausar: () => { try { pausarCorreccionLibro(); } catch (_) {} },

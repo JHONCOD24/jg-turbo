@@ -2628,7 +2628,20 @@
     font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:var(--lec-texto, var(--text));
     margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;letter-spacing:-.01em;
   }
-  .pdf-doc-donde{color:var(--lec-suave, var(--muted-2));font-size:12px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3}
+  .pdf-doc-donde{
+    display:inline-flex;align-items:center;gap:4px;
+    border:0;background:none;padding:0;margin:0;cursor:pointer;
+    color:var(--lec-suave, var(--muted-2));font:inherit;font-size:12px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3;
+    text-align:left;min-width:0;
+  }
+  .pdf-doc-donde::after{
+    content:'⌄';font-size:10px;color:var(--lec-suave, var(--muted-2));
+    flex:none;transition:transform .15s ease;
+  }
+  .pdf-doc-donde[aria-expanded="true"]::after{transform:rotate(180deg)}
+  .pdf-doc-donde:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:2px;border-radius:6px}
+  @media (prefers-reduced-motion:reduce){.pdf-doc-donde::after{transition:none}}
   .pdf-pulido-estado{
     display:inline-flex;align-items:center;gap:6px;
     font-size:11px;font-weight:700;line-height:1;
@@ -2651,10 +2664,10 @@
   @keyframes pdfPulidoIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
   .pdf-doc-acciones{display:flex;align-items:center;gap:7px;flex:none;flex-wrap:nowrap}
   .pdf-doc-acciones .mini-btn{min-height:40px;padding:8px 12px;border-radius:999px;font-weight:600}
-  .pdf-doc-acciones .count{
-    margin-left:4px;color:var(--lec-suave, var(--muted-2));font-size:11px;white-space:nowrap;font-family:'JetBrains Mono',monospace;
-    background:var(--surface);border:1px solid var(--lec-linea, var(--line));padding:5px 11px;border-radius:999px;
-  }
+  /* El conteo de palabras sale de la vista principal del lector (PDF-03):
+   * el contexto de lectura no necesita un contador técnico compitiendo con
+   * la sección. El texto sigue medido para «Editar en grande». */
+  .pdf-doc-acciones .count{display:none !important}
   #btnPdfIndice{border-radius:999px;gap:6px}
   @media (max-width:700px){
     .pdf-doc-cab{grid-template-columns:auto auto 1fr;gap:8px}
@@ -2750,14 +2763,11 @@
     body.jg-leyendo .pdf-doc-acciones .pdf-mas-summary{
       min-width:44px;min-height:44px;justify-content:center;padding:0 12px;
     }
-    /* El título ocupa el ancho que le sobra y el subtítulo se resume: en un
-       teléfono «Cap. 1 de 2 · 0 % leído · quedan ~7 min» no cabe entero, y
-       recortarlo a «que…» no le sirve a nadie. */
-    /* Tres textos competían por 200 px: el título, «Cap. 1 de 2 · 0 % leído ·
-       quedan ~7 min» (que salía cortado en «0 % leído…») y «Capítulo 1 de 2 ·
-       Página 1» (que se partía en dos líneas). Mientras se lee, lo que sirve
-       es dónde vas; el porcentaje y los minutos están en Opciones. */
-    body.jg-leyendo .pdf-doc-donde{display:none}
+    /* Tres textos competían por 200 px. Ahora la cabecera lleva el título y
+     * UNA etiqueta de sección (#pdfDocDonde, que amplía el detalle bajo
+     * demanda); el porcentaje del libro y el tiempo de la sección viven en
+     * el pie de lectura. */
+    body.jg-leyendo .pdf-doc-donde{font-size:11.5px;min-height:24px}
     body.jg-leyendo .pdf-doc-ident{gap:1px}
     body.jg-leyendo .pdf-doc-ident h3{font-size:15.5px;line-height:1.25}
     body.jg-leyendo .pdf-doc-ref{
@@ -2938,6 +2948,16 @@
       text-align:left;
       overflow-wrap:normal;
       word-break:normal;
+    }
+    /* La fuente elegida manda también en el teléfono: esta regla imponía
+       serif siempre porque su especificidad ganaba a
+       `.pdf-lectura[data-fuente]`. Con el atributo en el selector, la
+       elección (sans o serif) coincide con lo que se ve. */
+    body.jg-leyendo .pdf-lectura[data-fuente="sans"]{
+      font-family:'Figtree',system-ui,sans-serif;
+    }
+    body.jg-leyendo .pdf-lectura[data-fuente="serif"]{
+      font-family:'Literata', Georgia, 'Times New Roman', serif;
     }
     /* Justificado CON partición de palabras. Sin partir, el justificado abre
        ríos de blanco: por eso solo se activa cuando el idioma del libro es uno
@@ -3356,6 +3376,10 @@
   }
   .pdf-indice[hidden]{display:none}
   .pdf-indice-lista{list-style:none;margin:0;padding:6px}
+  /* «Ir al inicio del libro» (PDF-04): navegación, no borrado. Vive en
+     Contenido para que exista siempre, sin avisos temporizados. */
+  .pdf-indice-acciones{padding:2px 6px 6px;display:flex;justify-content:center}
+  .pdf-indice-acciones .mini-btn{min-height:44px;flex:1 1 auto}
   .pdf-cap{
     display:flex;align-items:center;gap:10px;width:100%;min-height:46px;
     padding:9px 10px;border:0;border-radius:var(--pdf-r-sm);background:none;color:var(--text);
@@ -5001,6 +5025,7 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-apariencia-hoja select{min-height:44px;background:var(--lec-superficie-2);color:var(--lec-texto);
   border:1px solid var(--lec-linea);border-radius:10px;padding:0 12px}
 .pdf-apariencia-hoja input[type=range]{width:100%;min-height:44px;accent-color:var(--lec-acento)}
+.pdf-apariencia-auto{margin:-6px 0 0;font-size:12.5px;color:var(--lec-suave)}
 .pdf-apariencia-temas{display:flex;gap:8px;flex-wrap:wrap}
 .pdf-apariencia-temas .pdf-tema-opcion{flex:1 1 30%;min-height:44px;border-radius:12px;
   border:1px solid var(--lec-linea);background:var(--lec-superficie-2);color:var(--lec-texto);
@@ -6354,6 +6379,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <span id="pdfActualizarBiblioLabel">Actualizar</span>
             </button>
           </header>
+          <p class="sr-only" id="pdfSyncLive" role="status" aria-live="polite"></p>
 
           <div class="pdf-biblioteca-filtros">
             <div class="pdf-filtros-pills" role="group" aria-label="Filtrar por estado">
@@ -6597,8 +6623,8 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <div class="pdf-doc-ident">
                 <h3 id="pdfResultTitle">Tu texto</h3>
                 <div class="pdf-doc-linea">
-                  <p class="pdf-doc-donde" id="pdfDocDonde">—</p>
-                  <p class="pdf-doc-ref" id="pdfDocRef" aria-live="polite"></p>
+                  <button type="button" class="pdf-doc-donde" id="pdfDocDonde" aria-controls="pdfDocRef" aria-expanded="false" title="Ver título completo y página del PDF">—</button>
+                  <p class="pdf-doc-ref" id="pdfDocRef" aria-live="polite" hidden></p>
                   <span class="pdf-pulido-estado" id="pdfPulidoEstado" hidden aria-live="polite" role="button" tabindex="0" title="Ver qué está haciendo"></span>
                 </div>
               </div>
@@ -6814,11 +6840,6 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                 <span class="count" id="pdfCount">0 palabras</span>
               </div>
             </header>
-            <div class="pdf-reanudar" id="pdfReanudar" hidden role="status" aria-live="polite">
-              <span class="pdf-reanudar-txt" id="pdfReanudarTxt"></span>
-              <button type="button" class="mini-btn" id="btnPdfReanudarInicio">Empezar de cero</button>
-              <button type="button" class="pdf-reanudar-cerrar" id="btnPdfReanudarCerrar" aria-label="Cerrar aviso">×</button>
-            </div>
             <div class="pdf-reanudar" id="pdfReanudarCorreccion" hidden role="status" aria-live="polite">
               <span class="pdf-reanudar-txt" id="pdfReanudarCorreccionTxt"></span>
               <button type="button" class="mini-btn" id="btnPdfReanudarCorreccion">Reanudar corrección</button>
@@ -6913,6 +6934,9 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
+              <div class="pdf-indice-acciones">
+                <button type="button" class="mini-btn" id="btnPdfIndiceInicio" title="Volver a la primera sección del libro">Ir al inicio del libro</button>
+              </div>
               <ol class="pdf-indice-lista" id="pdfIndiceLista"></ol>
             </nav>
 
@@ -6979,10 +7003,11 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                     <button type="button" class="pdf-tema-opcion" id="btnPdfTemaSepia" data-tema="sepia">◐ Sepia</button>
                     <button type="button" class="pdf-tema-opcion is-on" id="btnPdfTemaNoche" data-tema="noche">☾ Noche</button>
                   </div>
-                  <label for="pdfAparTam">Tamaño de letra
-                    <input type="range" id="pdfAparTam" min="16" max="28" step="1" value="19">
+                  <label for="pdfAparTam">Tamaño de letra (<output id="pdfAparTamVal" for="pdfAparTam">19 px</output>)
+                    <input type="range" id="pdfAparTam" min="16" max="28" step="1" value="19" aria-describedby="pdfAparAuto">
                   </label>
-                  <label for="pdfAparInter">Espacio entre líneas
+                  <p class="pdf-apariencia-auto" id="pdfAparAuto" role="status">Tamaño automático según la pantalla</p>
+                  <label for="pdfAparInter">Espacio entre líneas (<output id="pdfAparInterVal" for="pdfAparInter">1,7</output>)
                     <input type="range" id="pdfAparInter" min="1.4" max="2" step="0.1" value="1.7">
                   </label>
                   <label for="pdfAparAncho">Anchura del texto
@@ -17523,7 +17548,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v115';
+const JG_JS_V = 'v116';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

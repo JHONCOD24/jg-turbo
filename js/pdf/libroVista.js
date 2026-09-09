@@ -59,6 +59,19 @@ export function initLibroVista({ el, estado, api }) {
     }
     if (el.aparTam) el.aparTam.value = String(cfg.tam);
     if (el.aparInter) el.aparInter.value = String(cfg.inter);
+    /* Valor visible junto a la etiqueta y en el control accesible: lo que
+       se lee es lo que se ve (PDF-02). El tamaño automático se indica; al
+       mover el control se muestra el valor aplicado. */
+    try {
+      const tamVal = document.getElementById('pdfAparTamVal');
+      if (tamVal) tamVal.textContent = cfg.tamElegido ? `${cfg.tam} px` : `${cfg.tam} px · automático`;
+      if (el.aparTam) el.aparTam.setAttribute('aria-valuetext', cfg.tamElegido ? `${cfg.tam} píxeles` : `${cfg.tam} píxeles, automático`);
+      const interVal = document.getElementById('pdfAparInterVal');
+      if (interVal) interVal.textContent = String(cfg.inter).replace('.', ',');
+      if (el.aparInter) el.aparInter.setAttribute('aria-valuetext', `interlineado ${String(cfg.inter).replace('.', ',')}`);
+      const auto = document.getElementById('pdfAparAuto');
+      if (auto) auto.hidden = !!cfg.tamElegido;
+    } catch (_) {}
     if (el.aparAncho) el.aparAncho.value = String(cfg.ancho);
     if (el.aparFuente) el.aparFuente.value = cfg.fuente;
     if (el.aparModo) el.aparModo.value = cfg.modoPagina === 'scroll' ? 'scroll' : 'paginas';
@@ -114,17 +127,8 @@ export function initLibroVista({ el, estado, api }) {
     const texto = api.textoDeParte ? api.textoDeParte(estado.parteActual) : (el.salida ? el.salida.value : '');
     /* El HTML trae las posiciones puestas: no hace falta añadir nada al texto. */
     el.lectura.innerHTML = construirLectura(texto, estado.figuras || []);
-    // Capítulo y página física son referencias distintas: las partes internas
-    // de procesamiento no se presentan como páginas del libro.
-    if (el.docRef) {
-      const parte = (estado.partes || [])[estado.parteActual];
-      const cap = Number(estado.parteActual) + 1;
-      const total = (estado.partes || []).length || 1;
-      const pag = parte?.pagina || parte?.pageStart || '';
-      el.docRef.textContent = pag
-        ? 'Capítulo ' + cap + ' de ' + total + ' · Página ' + pag
-        : 'Capítulo ' + cap + ' de ' + total;
-    }
+    /* La referencia de cabecera (sección + página física bajo demanda) la
+     * pinta `actualizarBarraDoc` en el controlador: una sola fuente. */
     // «Revisar cortes» solo aparece cuando hay algo que revisar.
     const pend = (estado.limites || []).filter((l) => l && l.decision === 'pending').length;
     if (el.cortesCuenta) el.cortesCuenta.textContent = pend ? '(' + pend + ')' : '';
@@ -325,7 +329,9 @@ export function initLibroVista({ el, estado, api }) {
   function hayPaginado() { return cfg.modoPagina !== 'scroll'; }
 
   function pintarPaginacion() {
-    if (el.pagPos) el.pagPos.textContent = (pag.actual + 1) + ' de ' + pag.total;
+    /* El alcance va en la etiqueta (PDF-03): esta cuenta es de la SECCIÓN
+     * abierta, no del libro ni del PDF físico. */
+    if (el.pagPos) el.pagPos.textContent = `Página ${pag.actual + 1} de ${pag.total} de la sección`;
     if (el.pagPrev) el.pagPrev.disabled = pag.actual <= 0;
     if (el.pagNext) el.pagNext.disabled = pag.actual >= pag.total - 1;
   }
@@ -747,14 +753,21 @@ export function initLibroVista({ el, estado, api }) {
     if (!pie) return;
     const restante = document.getElementById('pdfPieRestante');
     const porc = document.getElementById('pdfPiePorcentaje');
+    /* PDF-03: cada cifra con su alcance identificable. El tiempo es de la
+     * sección abierta; el porcentaje es del LIBRO (no de las páginas
+     * visibles, que era un segundo porcentaje ambiguo). */
     if (restante) {
       const min = typeof api.minutosRestantes === 'function' ? api.minutosRestantes() : '';
-      restante.textContent = min ? `restantes ${min} en el capítulo` : '';
+      restante.textContent = min ? `${min} en esta sección` : '';
     }
     if (porc) {
-      const total = Math.max(1, pag.total || 1);
-      const hecho = Math.round(((pag.actual + 1) / total) * 100);
-      porc.textContent = `${Math.min(100, Math.max(0, hecho))} %`;
+      const delLibro = typeof api.porcentajeLibro === 'function' ? api.porcentajeLibro() : null;
+      if (Number.isFinite(delLibro)) {
+        porc.textContent = `${Math.min(100, Math.max(0, Math.round(delLibro)))} % del libro`;
+      } else {
+        const total = Math.max(1, pag.total || 1);
+        porc.textContent = `${Math.min(100, Math.max(0, Math.round(((pag.actual + 1) / total) * 100)))} %`;
+      }
     }
   }
   api.pintarPieLectura = pintarPieLectura;
@@ -1708,6 +1721,7 @@ export function initLibroVista({ el, estado, api }) {
     refrescarPausa,
     medirPaginas,
     irAPagina,
+    pintarPieLectura,
     estadoPaginas: () => ({ ...pag }),
     obtenerConfig: () => ({ ...cfg }),
     esModoScroll: () => cfg.modoPagina === 'scroll',
