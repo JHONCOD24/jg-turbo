@@ -22,7 +22,17 @@ import { pathToFileURL } from 'node:url';
 import { crearLibro } from './generarPdfPrueba.mjs';
 
 const app = resolve(import.meta.dirname, '..');
-const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
+const { chromium } = await (async () => {
+  const candidatos = [
+    resolve(app, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) {}
+  }
+  throw new Error('No se encontró Playwright (ni en el repo ni en las carpetas vecinas).');
+})();
 const destino = resolve(app, '.playwright-cli/lectura-movil');
 await mkdir(destino, { recursive: true });
 const pdf = join(destino, 'libro.pdf');
@@ -126,10 +136,16 @@ const medirLectura = (p) => p.evaluate(() => {
   };
 });
 
-async function abrir(width, height) {
+async function abrir(width, height, prefsLectura = null) {
   const p = await navegador.newPage({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   p.on('pageerror', (e) => fallos.push(`error de JavaScript: ${String(e).slice(0, 130)}`));
   await p.goto(base);
+  /* PDF-02: la fuente elegida manda también en el teléfono. El modelo
+   * editorial (serif) se verifica fijando la preferencia; sin ella el
+   * valor por defecto es sans. */
+  if (prefsLectura) {
+    await p.evaluate((prefs) => localStorage.setItem('jg_pdf_lectura', JSON.stringify(prefs)), prefsLectura);
+  }
   await p.locator('#tabPdf').click();
   await p.locator('#pdfInput').setInputFiles(pdf);
   await p.locator('#btnPdfRead').click();
@@ -142,7 +158,7 @@ async function abrir(width, height) {
 try {
   for (const [nombre, w, h] of TELEFONOS) {
     console.log(`\n── ${nombre} · ${w}×${h} ───────────────────────────────────────`);
-    const p = await abrir(w, h);
+    const p = await abrir(w, h, { fuente: 'serif' });
     const m = await medirLectura(p);
     console.log(`   medida ${m.medida} car/línea · texto ${Math.round(m.parte * 100)} % · ${m.tam}px/${m.interlineado} · ${m.alineado} · contraste ${m.contraste}:1`);
 
@@ -186,6 +202,17 @@ try {
     console.log(`   ${nombre}: ${m.tam}px · ${m.alineado} · ${m.familia.split(',')[0]}`);
     comprobar(`${nombre} conserva su tipografía (no editorial)`, !/Literata/i.test(m.familia), m.familia);
     comprobar(`${nombre} no queda justificado`, m.alineado !== 'justify', m.alineado);
+    await p.close();
+  }
+
+  /* PDF-02: con fuente sans elegida, el teléfono la respeta (ya no impone
+   * serif siempre). */
+  console.log('\n── La fuente elegida manda en el teléfono ──────────────────────');
+  {
+    const p = await abrir(390, 844, { fuente: 'sans' });
+    const m = await medirLectura(p);
+    console.log(`   sans: ${m.familia.split(',')[0]}`);
+    comprobar('con sans elegida el teléfono lee en sans (no impone serif)', !/Literata/i.test(m.familia), m.familia);
     await p.close();
   }
 } finally {

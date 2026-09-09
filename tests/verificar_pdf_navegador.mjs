@@ -51,6 +51,9 @@ const comprobar = (condicion, mensaje) => {
   if (condicion) console.log(`OK: ${mensaje}`);
   else { fallos += 1; console.error(`FALLO: ${mensaje}`); }
 };
+/* La etiqueta de sección lleva alcance («Sección 3 de 12», PDF-03): se
+ * extrae el primer número en vez de suponer el formato viejo «3 de 12». */
+const numeroSeccion = (etiqueta) => Number(String(etiqueta || '').replace(/^\D+/, '').split(' de ')[0]);
 
 /* ── Servidor estático mínimo ──────────────────────────────────────── */
 const TIPOS = {
@@ -348,7 +351,7 @@ console.log('\n── Documento corto con capítulos ─────────
   await pagina.locator('#pdfIndiceLista .pdf-cap').nth(2).click();
   await pagina.waitForTimeout(600);
   comprobar(
-    (await pagina.locator('#pdfNavPos').textContent())?.startsWith('3 de'),
+    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 3,
     'se puede saltar a un capítulo concreto'
   );
 
@@ -402,7 +405,7 @@ console.log('\n── Libro de 300 páginas ────────────
   await pagina.locator('#pdfIndiceLista .pdf-cap').nth(4).click();
   await pagina.waitForTimeout(700);
   comprobar(
-    (await pagina.locator('#pdfNavPos').textContent())?.startsWith('5 de'),
+    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 5,
     'salta al capítulo elegido en el índice'
   );
   comprobar(
@@ -418,7 +421,7 @@ console.log('\n── Libro de 300 páginas ────────────
   await pagina.locator('#btnPdfNext').click();
   await pagina.waitForTimeout(500);
   comprobar(
-    (await pagina.locator('#pdfNavPos').textContent())?.startsWith('6 de'),
+    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 6,
     'el botón siguiente avanza de capítulo'
   );
 
@@ -654,7 +657,7 @@ console.log('\n── Biblioteca y continuidad ───────────
   await pagina.waitForTimeout(1300);
   comprobar(await pagina.locator('#pdfResultArea').isVisible(), 'continúa sin volver a subir el archivo');
   comprobar(
-    (await pagina.locator('#pdfNavPos').textContent())?.startsWith('6 de'),
+    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 6,
     'vuelve al capítulo exacto donde se quedó'
   );
   comprobar(

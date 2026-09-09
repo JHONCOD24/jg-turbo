@@ -9,7 +9,17 @@ import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 
 const app = resolve(import.meta.dirname, '..');
-const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
+const { chromium } = await (async () => {
+  const candidatos = [
+    resolve(app, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) {}
+  }
+  throw new Error('No se encontró Playwright (ni en el repo ni en las carpetas vecinas).');
+})();
 const tipos = { '.html':'text/html', '.js':'text/javascript', '.mjs':'text/javascript', '.json':'application/json', '.svg':'image/svg+xml' };
 let demorarSalud = true;
 
