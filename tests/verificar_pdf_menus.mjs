@@ -6,7 +6,17 @@ import { pathToFileURL } from 'node:url';
 import { crearLibro } from './generarPdfPrueba.mjs';
 
 const app = resolve(import.meta.dirname, '..');
-const { chromium } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
+const { chromium } = await (async () => {
+  const candidatos = [
+    resolve(app, 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'node_modules', 'playwright', 'index.mjs'),
+    resolve(app, '..', 'JG Turbo_OLD', 'node_modules', 'playwright', 'index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) {}
+  }
+  throw new Error('No se encontró Playwright (ni en el repo ni en las carpetas vecinas).');
+})();
 const out = join(app, '.playwright-cli/pdf-menus');
 await mkdir(out, { recursive: true });
 crearLibro(join(out, 'libro.pdf'), 24);

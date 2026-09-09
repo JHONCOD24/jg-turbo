@@ -187,6 +187,9 @@ export function inicializarLectorPdf(deps = {}) {
     volverLectura: $('pdfVolverLectura'), btnPausar: $('btnPdfPausarCorreccion'),
     orden: $('pdfOrden'), vistaPortadas: $('pdfVistaPortadas'), vistaCompacta: $('pdfVistaCompacta'),
     mostrarMas: $('pdfMostrarMas'),
+    btnOrganizar: $('btnPdfOrganizar'), organizar: $('pdfOrganizar'),
+    organizarLista: $('pdfOrganizarLista'),
+    organizarGuardar: $('btnPdfOrganizarGuardar'), organizarCancelar: $('btnPdfOrganizarCancelar'),
   };
   if (!el.drop || !el.salida) return null;
 
@@ -526,42 +529,50 @@ export function inicializarLectorPdf(deps = {}) {
     }
   }
 
-  let rejillaMovibleIniciada = false;
-  let arrastreActivo = null;
+  /* ── Modo Organizar (PDF-05/06) ──────────────────────────────────────
+   *
+   * Reordenar dejó de ser un tirador permanente sobre cada carátula: la
+   * biblioteca normal es para leer. «Organizar» abre una lista temporal de
+   * filas con controles propios (tirador 44×44, Mover antes/después,
+   * Alt+flechas). Nada se guarda hasta «Guardar orden»; «Cancelar» y Escape
+   * restauran el orden anterior. Al entrar se suspenden filtros y búsqueda
+   * (se mueven TODOS los libros) y se restituyen al salir.
+   */
+  let organizando = false;
+  let ordenTemporal = [];
+  let previoOrganizar = null;
+  let arrastreOrg = null;
 
-  async function guardarOrdenRejilla() {
-    if (!el.rejilla) return;
-    const items = Array.from(el.rejilla.querySelectorAll('.pdf-libro'));
-    const idsVisibles = items.map((it) => it.dataset.docId).filter(Boolean);
-    if (!idsVisibles.length) return;
+  /** Título de verdad del documento (sin «(anonymous)» ni «untitled»). */
+  function tituloLimpioDe(doc) {
+    const info = limpiarNombreLibro(doc.titulo, doc.nombreArchivo);
+    return (doc.titulo && doc.titulo.trim().toLowerCase() !== '(anonymous)' && doc.titulo.trim().toLowerCase() !== 'untitled')
+      ? doc.titulo
+      : (info.titulo || doc.nombreArchivo || 'Documento');
+  }
 
+  /** Persiste el orden manual con la clave de siempre (jg_pdf_orden_manual). */
+  async function guardarOrdenIds(idsVisibles) {
+    if (!Array.isArray(idsVisibles) || !idsVisibles.length) return;
     try {
       let idsCompletos = [];
       const guardado = typeof localStorage !== 'undefined' ? localStorage.getItem('jg_pdf_orden_manual') : null;
-      if (guardado) {
-        try { idsCompletos = JSON.parse(guardado) || []; } catch (_) {}
-      }
+      if (guardado) { try { idsCompletos = JSON.parse(guardado) || []; } catch (_) {} }
       if (!idsCompletos.length) {
         const todos = await almacen.listarDocumentos();
         idsCompletos = (todos || []).map((d) => d.id);
       }
-
       const setVisibles = new Set(idsVisibles);
       let idxVisible = 0;
       const resultado = [];
       for (const id of idsCompletos) {
         if (setVisibles.has(id)) {
-          if (idxVisible < idsVisibles.length) {
-            resultado.push(idsVisibles[idxVisible++]);
-          }
+          if (idxVisible < idsVisibles.length) resultado.push(idsVisibles[idxVisible++]);
         } else {
           resultado.push(id);
         }
       }
-      while (idxVisible < idsVisibles.length) {
-        resultado.push(idsVisibles[idxVisible++]);
-      }
-
+      while (idxVisible < idsVisibles.length) resultado.push(idsVisibles[idxVisible++]);
       localStorage.setItem('jg_pdf_orden_manual', JSON.stringify(resultado));
       localStorage.setItem('jg_pdf_orden', 'personalizado');
     } catch (_) {
@@ -570,110 +581,302 @@ export function inicializarLectorPdf(deps = {}) {
         localStorage.setItem('jg_pdf_orden', 'personalizado');
       } catch (_) {}
     }
-
-    if (el.orden) {
-      try { el.orden.value = 'personalizado'; } catch (_) {}
-    }
+    if (el.orden) { try { el.orden.value = 'personalizado'; } catch (_) {} }
   }
 
-  function activarRejillaMovible(rejilla) {
-    if (rejillaMovibleIniciada || !rejilla) return;
-    rejillaMovibleIniciada = true;
+  function anunciarOrganizar(texto) {
+    const vivo = document.getElementById('pdfOrganizarLive');
+    if (vivo) vivo.textContent = texto || '';
+  }
 
-    // Cerrar menús de opciones abiertos al pulsar en cualquier otro punto
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.pdf-libro-menu')) {
-        document.querySelectorAll('.pdf-libro-menu[open]').forEach((m) => {
-          m.open = false;
-        });
-      }
+  function anunciarPosicionFila(fila) {
+    const filas = [...el.organizarLista.querySelectorAll('.pdf-org-fila')];
+    const pos = filas.indexOf(fila) + 1;
+    const titulo = fila.dataset.titulo || 'libro';
+    anunciarOrganizar(`«${titulo}», posición ${pos} de ${filas.length}`);
+  }
+
+  function pintarBotonesFila(fila) {
+    const filas = [...el.organizarLista.querySelectorAll('.pdf-org-fila')];
+    const antes = fila.querySelector('[data-mov="antes"]');
+    const despues = fila.querySelector('[data-mov="despues"]');
+    if (antes) antes.disabled = filas.indexOf(fila) <= 0;
+    if (despues) despues.disabled = filas.indexOf(fila) >= filas.length - 1;
+  }
+
+  function moverFila(fila, direccion) {
+    if (!fila || !fila.parentElement) return;
+    const lista = fila.parentElement;
+    if (direccion === 'antes') {
+      const ant = fila.previousElementSibling;
+      if (!ant) return;
+      lista.insertBefore(fila, ant);
+    } else {
+      const sig = fila.nextElementSibling;
+      if (!sig) return;
+      lista.insertBefore(sig, fila);
+    }
+    pintarBotonesFila(fila);
+    anunciarPosicionFila(fila);
+    try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+  }
+
+  function filaOrganizar(doc) {
+    const tituloDoc = tituloLimpioDe(doc);
+    const li = document.createElement('li');
+    li.className = 'pdf-org-fila';
+    li.dataset.docId = doc.id;
+    li.dataset.titulo = tituloDoc;
+
+    const tapa = document.createElement('div');
+    tapa.className = 'pdf-org-tapa';
+    tapa.dataset.sinPortada = doc.tienePortada ? '0' : '1';
+    tapa.dataset.inicial = (tituloDoc || '?').trim().charAt(0).toUpperCase();
+    if (doc.tienePortada) {
+      almacen.cargarPortada(doc.id).then((blob) => {
+        if (blob && blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          estado.urlsPortada.push(url);
+          tapa.style.backgroundImage = `url("${url}")`;
+          tapa.dataset.sinPortada = '0';
+        }
+      }).catch(() => {});
+    }
+
+    const texto = document.createElement('div');
+    texto.className = 'pdf-org-texto';
+    const titulo = document.createElement('span');
+    titulo.className = 'pdf-org-titulo';
+    titulo.textContent = tituloDoc;
+    titulo.title = tituloDoc;
+    const meta = document.createElement('span');
+    meta.className = 'pdf-org-meta';
+    const partesGuardadas = (doc.titulosPartes || []).length || 1;
+    meta.textContent = `${doc.paginasLeidas || 0} págs · ${partesGuardadas > 1 ? `${partesGuardadas} capítulos` : 'capítulo único'}`;
+    texto.append(titulo, meta);
+
+    const controles = document.createElement('div');
+    controles.className = 'pdf-org-controles';
+
+    const tirador = document.createElement('button');
+    tirador.type = 'button';
+    tirador.className = 'pdf-org-tirador';
+    tirador.title = `Arrastrar para mover ${tituloDoc}. Con el teclado: Alt + flechas arriba o abajo.`;
+    tirador.setAttribute('aria-label', `Mover ${tituloDoc} arrastrando, o con Alt más flechas`);
+    tirador.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="width:16px;height:16px;"><circle cx="6" cy="3" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="3" r="1.1" fill="currentColor" stroke="none"/><circle cx="6" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="6" cy="13" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="13" r="1.1" fill="currentColor" stroke="none"/></svg>';
+    tirador.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      arrastreOrg = {
+        fila: li,
+        tirador,
+        pointerId: e.pointerId,
+        inicioX: e.clientX,
+        inicioY: e.clientY,
+        iniciado: false,
+        ordenAlInicio: null,
+      };
     });
 
-    window.addEventListener('pointermove', (e) => {
-      if (!arrastreActivo) return;
+    const btnAntes = document.createElement('button');
+    btnAntes.type = 'button';
+    btnAntes.className = 'mini-btn pdf-org-btn';
+    btnAntes.dataset.mov = 'antes';
+    btnAntes.textContent = 'Mover antes';
+    btnAntes.setAttribute('aria-label', `Mover ${tituloDoc} una posición antes`);
+    btnAntes.addEventListener('click', () => moverFila(li, 'antes'));
 
-      if (!arrastreActivo.iniciado) {
-        const dx = Math.abs(e.clientX - arrastreActivo.inicioX);
-        const dy = Math.abs(e.clientY - arrastreActivo.inicioY);
-        if (arrastreActivo.tipoPuntero !== 'touch' && (dx > 4 || dy > 4)) {
-          arrastreActivo.iniciado = true;
-          arrastreActivo.item.classList.add('jg-arrastrando');
-          arrastreActivo.item.dataset.bloquearClick = '1';
-        } else if (arrastreActivo.tipoPuntero === 'touch' && (dx > 8 || dy > 8)) {
-          if (arrastreActivo.longPressTimer) {
-            clearTimeout(arrastreActivo.longPressTimer);
-            arrastreActivo.longPressTimer = null;
-          }
-        }
-      }
+    const btnDespues = document.createElement('button');
+    btnDespues.type = 'button';
+    btnDespues.className = 'mini-btn pdf-org-btn';
+    btnDespues.dataset.mov = 'despues';
+    btnDespues.textContent = 'Mover después';
+    btnDespues.setAttribute('aria-label', `Mover ${tituloDoc} una posición después`);
+    btnDespues.addEventListener('click', () => moverFila(li, 'despues'));
 
-      if (arrastreActivo.iniciado) {
-        if (e.cancelable) e.preventDefault();
+    controles.append(tirador, btnAntes, btnDespues);
 
-        if (e.clientY < 70) {
-          window.scrollBy({ top: -14, behavior: 'auto' });
-        } else if (e.clientY > window.innerHeight - 70) {
-          window.scrollBy({ top: 14, behavior: 'auto' });
-        }
+    /* Alt+flechas: atajo explicado en la ayuda del panel y en el tirador. */
+    li.addEventListener('keydown', (e) => {
+      if (!e.altKey) return;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); moverFila(li, 'antes'); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); moverFila(li, 'despues'); }
+    });
 
-        const bajo = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pdf-libro');
-        if (bajo && bajo !== arrastreActivo.item && bajo.parentElement === rejilla) {
-          const rect = bajo.getBoundingClientRect();
-          const centroX = rect.left + rect.width / 2;
-          const centroY = rect.top + rect.height / 2;
-          const esDespues = (e.clientY > centroY) || (Math.abs(e.clientY - centroY) < rect.height * 0.4 && e.clientX > centroX);
-          if (esDespues) {
-            if (arrastreActivo.item.previousElementSibling !== bajo) {
-              rejilla.insertBefore(arrastreActivo.item, bajo.nextSibling);
-            }
-          } else {
-            if (arrastreActivo.item.nextElementSibling !== bajo) {
-              rejilla.insertBefore(arrastreActivo.item, bajo);
-            }
-          }
-        }
-      }
-    }, { passive: false });
-
-    function terminarArrastre() {
-      if (!arrastreActivo) return;
-      if (arrastreActivo.longPressTimer) {
-        clearTimeout(arrastreActivo.longPressTimer);
-        arrastreActivo.longPressTimer = null;
-      }
-      const item = arrastreActivo.item;
-      const tirador = arrastreActivo.tirador;
-      const pointerId = arrastreActivo.pointerId;
-      const huboArrastre = arrastreActivo.iniciado;
-      arrastreActivo = null;
-
-      if (tirador && pointerId !== undefined) {
-        try { tirador.releasePointerCapture(pointerId); } catch (_) {}
-      }
-
-      if (huboArrastre && item) {
-        item.classList.remove('jg-arrastrando');
-        guardarOrdenRejilla();
-        setTimeout(() => {
-          if (item) item.dataset.bloquearClick = '0';
-        }, 220);
-      } else if (item) {
-        item.classList.remove('jg-arrastrando');
-        setTimeout(() => {
-          if (item) item.dataset.bloquearClick = '0';
-        }, 100);
-      }
-    }
-
-    window.addEventListener('pointerup', terminarArrastre);
-    window.addEventListener('pointercancel', terminarArrastre);
+    li.append(tapa, texto, controles);
+    return li;
   }
 
+  function pintarOrganizador() {
+    if (!el.organizarLista) return;
+    el.organizarLista.innerHTML = '';
+    for (const doc of ordenTemporal) el.organizarLista.appendChild(filaOrganizar(doc));
+    el.organizarLista.querySelectorAll('.pdf-org-fila').forEach(pintarBotonesFila);
+  }
+
+  function entrarLayoutOrganizar() {
+    document.querySelectorAll('.pdf-libro-menu[open]').forEach((m) => { m.open = false; });
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.pdf-libro-menu')) entrarLayoutOrganizar();
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!arrastreOrg) return;
+    const a = arrastreOrg;
+    if (!a.iniciado) {
+      const dx = Math.abs(e.clientX - a.inicioX);
+      const dy = Math.abs(e.clientY - a.inicioY);
+      if (dx > 6 || dy > 6) {
+        a.iniciado = true;
+        a.ordenAlInicio = [...el.organizarLista.querySelectorAll('.pdf-org-fila')].map((f) => f.dataset.docId);
+        try { a.tirador.setPointerCapture(a.pointerId); } catch (_) {}
+        a.fila.classList.add('jg-arrastrando');
+        try { if (navigator.vibrate) navigator.vibrate(15); } catch (_) {}
+      } else {
+        return;
+      }
+    }
+    if (e.cancelable) e.preventDefault();
+    /* Autodesplazamiento del contenedor real: la biblioteca vive en el
+     * scroll del DOCUMENTO (ver TRAMPAS §3), así que el borde que se
+     * vigila es el de la ventana. */
+    if (e.clientY < 80) window.scrollBy({ top: -16, behavior: 'auto' });
+    else if (e.clientY > window.innerHeight - 80) window.scrollBy({ top: 16, behavior: 'auto' });
+
+    const bajo = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pdf-org-fila');
+    el.organizarLista.querySelectorAll('.pdf-org-fila.es-destino').forEach((f) => f.classList.remove('es-destino'));
+    if (bajo && bajo !== a.fila) {
+      bajo.classList.add('es-destino');
+      const rect = bajo.getBoundingClientRect();
+      const esDespues = e.clientY > rect.top + rect.height / 2;
+      if (esDespues) {
+        if (a.fila.previousElementSibling !== bajo) el.organizarLista.insertBefore(a.fila, bajo.nextSibling);
+      } else if (a.fila.nextElementSibling !== bajo) {
+        el.organizarLista.insertBefore(a.fila, bajo);
+      }
+    }
+  }, { passive: false });
+
+  function terminarArrastreOrg() {
+    if (!arrastreOrg) return;
+    const a = arrastreOrg;
+    arrastreOrg = null;
+    if (a.tirador && a.pointerId !== undefined) {
+      try { a.tirador.releasePointerCapture(a.pointerId); } catch (_) {}
+    }
+    a.fila?.classList.remove('jg-arrastrando');
+    el.organizarLista?.querySelectorAll('.pdf-org-fila.es-destino').forEach((f) => f.classList.remove('es-destino'));
+    if (a.iniciado) anunciarPosicionFila(a.fila);
+  }
+  window.addEventListener('pointerup', terminarArrastreOrg);
+  window.addEventListener('pointercancel', terminarArrastreOrg);
+
+  /** Reordena las filas a partir de una lista de ids (para cancelar). */
+  function reponerOrdenOrg(ids) {
+    const mapa = new Map(ordenTemporal.map((d) => [d.id, d]));
+    ordenTemporal = (ids || []).map((id) => mapa.get(id)).filter(Boolean);
+    const faltantes = ordenTemporal.length !== (ids || []).length;
+    if (faltantes) {
+      const presentes = new Set(ordenTemporal.map((d) => d.id));
+      for (const d of mapa.values()) if (!presentes.has(d.id)) ordenTemporal.push(d);
+    }
+    pintarOrganizador();
+  }
+
+  async function entrarOrganizar() {
+    if (organizando) return;
+    const documentos = await almacen.listarDocumentos();
+    if (documentos.length < 2) return;
+    organizando = true;
+    let modoOrden = 'reciente';
+    try { modoOrden = localStorage.getItem('jg_pdf_orden') || 'reciente'; } catch (_) {}
+    ordenTemporal = ordenarDocumentos(documentos, modoOrden);
+    previoOrganizar = {
+      filtro: estado.filtro,
+      consulta: estado.consulta,
+      buscar: el.buscarLibro ? el.buscarLibro.value : '',
+    };
+    /* Suspender filtros y búsqueda: se organizan TODOS los libros. */
+    estado.filtro = 'todos';
+    estado.consulta = '';
+    if (el.buscarLibro) el.buscarLibro.value = '';
+    document.querySelectorAll('.pdf-filtro').forEach((b) => {
+      b.classList.toggle('is-on', b.dataset.filtro === 'todos');
+    });
+    if (el.organizar) el.organizar.hidden = false;
+    if (el.rejilla) el.rejilla.hidden = true;
+    if (el.mostrarMas) el.mostrarMas.hidden = true;
+    if (el.vacia) el.vacia.hidden = true;
+    const filtros = document.querySelector('.pdf-biblioteca-filtros');
+    if (filtros) filtros.hidden = true;
+    if (el.orden) el.orden.closest('.pdf-biblio-barra')?.setAttribute('hidden', '');
+    pintarOrganizador();
+    anunciarOrganizar(`Organizando ${ordenTemporal.length} libros. Nada se guarda hasta que pulses Guardar orden.`);
+    el.organizarLista?.querySelector('.pdf-org-tirador')?.focus({ preventScroll: false });
+  }
+
+  function salirOrganizar() {
+    if (!organizando) return;
+    organizando = false;
+    arrastreOrg = null;
+    ordenTemporal = [];
+    if (el.organizar) el.organizar.hidden = true;
+    if (el.rejilla) el.rejilla.hidden = false;
+    const filtros = document.querySelector('.pdf-biblioteca-filtros');
+    if (filtros) filtros.hidden = false;
+    el.orden?.closest('.pdf-biblio-barra')?.removeAttribute('hidden');
+    if (previoOrganizar) {
+      estado.filtro = previoOrganizar.filtro;
+      estado.consulta = previoOrganizar.consulta;
+      if (el.buscarLibro) el.buscarLibro.value = previoOrganizar.buscar;
+      document.querySelectorAll('.pdf-filtro').forEach((b) => {
+        b.classList.toggle('is-on', b.dataset.filtro === estado.filtro);
+      });
+      previoOrganizar = null;
+    }
+    anunciarOrganizar('');
+  }
+
+  async function guardarOrganizacion() {
+    if (!organizando) return;
+    const ids = [...el.organizarLista.querySelectorAll('.pdf-org-fila')].map((f) => f.dataset.docId);
+    salirOrganizar();
+    await guardarOrdenIds(ids);
+    await pintarBiblioteca();
+    avisar('Orden guardado.', 'ok', { efimero: true });
+    if (el.btnOrganizar) el.btnOrganizar.focus({ preventScroll: true });
+  }
+
+  function cancelarOrganizacion() {
+    if (!organizando) return;
+    salirOrganizar();
+    pintarBiblioteca();
+    avisar('Se conservó el orden anterior.', 'info', { efimero: true });
+    if (el.btnOrganizar) el.btnOrganizar.focus({ preventScroll: true });
+  }
+
+  if (el.btnOrganizar) el.btnOrganizar.addEventListener('click', () => { entrarOrganizar(); });
+  if (el.organizarGuardar) el.organizarGuardar.addEventListener('click', () => { guardarOrganizacion(); });
+  if (el.organizarCancelar) el.organizarCancelar.addEventListener('click', cancelarOrganizacion);
+  /* Escape cancela primero el arrastre activo (PDF-06); si no hay arrastre,
+   * cancela el modo entero sin guardar. */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !organizando) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (arrastreOrg?.iniciado) {
+      const ids = arrastreOrg.ordenAlInicio;
+      terminarArrastreOrg();
+      if (ids) reponerOrdenOrg(ids);
+      anunciarOrganizar('Arrastre cancelado. El orden volvió a como estaba.');
+      return;
+    }
+    if (arrastreOrg) terminarArrastreOrg();
+    cancelarOrganizacion();
+  }, true);
+
   function tarjetaLibro(doc) {
-    const infoTitulo = limpiarNombreLibro(doc.titulo, doc.nombreArchivo);
-    const tituloDoc = (doc.titulo && doc.titulo.trim().toLowerCase() !== '(anonymous)' && doc.titulo.trim().toLowerCase() !== 'untitled')
-      ? doc.titulo
-      : (infoTitulo.titulo || doc.nombreArchivo || 'Documento');
+    const tituloDoc = tituloLimpioDe(doc);
 
     const item = document.createElement('li');
     item.className = 'pdf-libro';
@@ -685,92 +888,13 @@ export function inicializarLectorPdf(deps = {}) {
 
     item.addEventListener('click', (e) => {
       if (e.target.closest('.pdf-libro-acciones')) return;
-      if (item.dataset.bloquearClick === '1') return;
       abrirDocumento(doc.id);
     });
     item.addEventListener('keydown', (e) => {
-      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowUp')) {
-        e.preventDefault();
-        const ant = item.previousElementSibling;
-        if (ant && ant.classList.contains('pdf-libro')) {
-          item.parentElement.insertBefore(item, ant);
-          guardarOrdenRejilla();
-          item.focus();
-        }
-        return;
-      }
-      if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowDown')) {
-        e.preventDefault();
-        const sig = item.nextElementSibling;
-        if (sig && sig.classList.contains('pdf-libro')) {
-          item.parentElement.insertBefore(sig, item);
-          guardarOrdenRejilla();
-          item.focus();
-        }
-        return;
-      }
       if (e.key === 'Enter' || e.key === ' ') {
         if (e.target.closest('.pdf-libro-acciones')) return;
         e.preventDefault();
         abrirDocumento(doc.id);
-      }
-    });
-
-    // Tirador táctil y de ratón para mover carátula (minimalista, elegante, no invasivo)
-    const tirador = document.createElement('button');
-    tirador.type = 'button';
-    tirador.className = 'pdf-libro-arrastre';
-    tirador.title = 'Arrastrar para reordenar esta carátula';
-    tirador.setAttribute('aria-label', `Mover carátula de ${tituloDoc}`);
-    tirador.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="width:13px;height:13px;"><path d="M3.5 6h9M3.5 10h9"/></svg>';
-
-    tirador.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 && e.pointerType === 'mouse') return;
-      e.stopPropagation();
-      e.preventDefault();
-      try {
-        tirador.setPointerCapture(e.pointerId);
-      } catch (_) {}
-      arrastreActivo = {
-        item,
-        tirador,
-        pointerId: e.pointerId,
-        tipoPuntero: e.pointerType,
-        inicioX: e.clientX,
-        inicioY: e.clientY,
-        iniciado: true,
-        longPressTimer: null
-      };
-      item.classList.add('jg-arrastrando');
-      item.dataset.bloquearClick = '1';
-      try {
-        if (navigator.vibrate) navigator.vibrate(25);
-      } catch (_) {}
-    });
-
-    item.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.pdf-libro-acciones')) return;
-      if (e.pointerType === 'touch' || e.pointerType === 'pen') {
-        const timer = setTimeout(() => {
-          if (arrastreActivo && arrastreActivo.item === item && !arrastreActivo.iniciado) {
-            arrastreActivo.iniciado = true;
-            item.classList.add('jg-arrastrando');
-            item.dataset.bloquearClick = '1';
-            try {
-              if (navigator.vibrate) navigator.vibrate(30);
-            } catch (_) {}
-          }
-        }, 280);
-
-        arrastreActivo = {
-          item,
-          pointerId: e.pointerId,
-          tipoPuntero: e.pointerType,
-          inicioX: e.clientX,
-          inicioY: e.clientY,
-          iniciado: false,
-          longPressTimer: timer
-        };
       }
     });
 
@@ -805,93 +929,9 @@ export function inicializarLectorPdf(deps = {}) {
     const pop = document.createElement('div');
     pop.className = 'pdf-libro-menu-pop';
 
-    // Fila compacta de botones de movimiento
-    const seccionMov = document.createElement('div');
-    seccionMov.className = 'pdf-menu-seccion-mov';
-
-    const lblMov = document.createElement('span');
-    lblMov.className = 'pdf-menu-etiqueta';
-    lblMov.textContent = 'Mover posición';
-
-    const filaMov = document.createElement('div');
-    filaMov.className = 'pdf-menu-fila-mov';
-
-    const btnInicio = document.createElement('button');
-    btnInicio.type = 'button';
-    btnInicio.className = 'mini-btn-mov';
-    btnInicio.dataset.mov = 'inicio';
-    btnInicio.title = 'Mover al inicio';
-    btnInicio.setAttribute('aria-label', `Mover ${tituloDoc} a la primera posición`);
-    btnInicio.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg><span class="sr-only">Mover al inicio</span>';
-    btnInicio.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      if (item.parentElement && item.parentElement.firstElementChild !== item) {
-        item.parentElement.prepend(item);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» colocado al principio.`, 'ok', { efimero: true });
-        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
-      }
-    });
-
-    const btnAtras = document.createElement('button');
-    btnAtras.type = 'button';
-    btnAtras.className = 'mini-btn-mov';
-    btnAtras.dataset.mov = 'atras';
-    btnAtras.title = 'Mover a la izquierda';
-    btnAtras.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la izquierda`);
-    btnAtras.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span class="sr-only">Mover a la izquierda</span>';
-    btnAtras.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      const ant = item.previousElementSibling;
-      if (ant && ant.classList.contains('pdf-libro')) {
-        item.parentElement.insertBefore(item, ant);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» movido hacia la izquierda.`, 'ok', { efimero: true });
-        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
-      }
-    });
-
-    const btnAdelante = document.createElement('button');
-    btnAdelante.type = 'button';
-    btnAdelante.className = 'mini-btn-mov';
-    btnAdelante.dataset.mov = 'adelante';
-    btnAdelante.title = 'Mover a la derecha';
-    btnAdelante.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la derecha`);
-    btnAdelante.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg><span class="sr-only">Mover a la derecha</span>';
-    btnAdelante.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      const sig = item.nextElementSibling;
-      if (sig && sig.classList.contains('pdf-libro')) {
-        item.parentElement.insertBefore(sig, item);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» movido hacia la derecha.`, 'ok', { efimero: true });
-        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
-      }
-    });
-
-    const btnFinal = document.createElement('button');
-    btnFinal.type = 'button';
-    btnFinal.className = 'mini-btn-mov';
-    btnFinal.dataset.mov = 'final';
-    btnFinal.title = 'Mover al final';
-    btnFinal.setAttribute('aria-label', `Mover ${tituloDoc} a la última posición`);
-    btnFinal.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg><span class="sr-only">Mover al final</span>';
-    btnFinal.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      if (item.parentElement && item.parentElement.lastElementChild !== item) {
-        item.parentElement.appendChild(item);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» colocado al final.`, 'ok', { efimero: true });
-        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
-      }
-    });
-
-    filaMov.append(btnInicio, btnAtras, btnAdelante, btnFinal);
-    seccionMov.append(lblMov, filaMov);
+    /* El reordenamiento ya no vive aquí: desde PDF-05/06 existe el modo
+     * «Organizar» (lista temporal con Guardar/Cancelar). El menú de la
+     * tarjeta solo mantiene acciones sobre ESTE libro. */
 
     const reiniciar = document.createElement('button');
     reiniciar.type = 'button';
@@ -1029,12 +1069,10 @@ export function inicializarLectorPdf(deps = {}) {
       });
     }
 
-    const div1 = document.createElement('div');
-    div1.className = 'pdf-menu-divisor';
     const div2 = document.createElement('div');
     div2.className = 'pdf-menu-divisor';
 
-    pop.append(seccionMov, div1, buscarTapa, reiniciar, privado, compartir);
+    pop.append(buscarTapa, reiniciar, privado, compartir);
     if (pedir) pop.append(pedir);
     if (reenviar) pop.append(reenviar);
     if (conPdf) pop.append(conPdf);
@@ -1061,7 +1099,7 @@ export function inicializarLectorPdf(deps = {}) {
 
     const acciones = document.createElement('div');
     acciones.className = 'pdf-libro-acciones';
-    acciones.append(tirador, menu);
+    acciones.append(menu);
 
     pie.append(meta, acciones);
 
@@ -1243,14 +1281,28 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   async function pintarBiblioteca() {
+    /* Mientras se organiza, la rejilla está suspendida: repintar aquí
+     * borraría las filas temporales y su orden sin guardar. Al salir del
+     * modo se repinta de todos modos. */
+    if (organizando) return;
     const documentos = await almacen.listarDocumentos();
     liberarPortadas();
     el.rejilla.innerHTML = '';
+    el.rejilla.hidden = false;
 
     const hay = documentos.length > 0;
     el.biblioteca.hidden = !hay;
     if (el.lead) el.lead.hidden = hay;
     if (el.subir) el.subir.classList.toggle('pdf-subir--secundaria', hay);
+
+    /* Con menos de dos libros no hay nada que organizar: el botón se
+     * deshabilita y EXPLICA por qué (PDF-05). */
+    if (el.btnOrganizar) {
+      el.btnOrganizar.disabled = documentos.length < 2;
+      el.btnOrganizar.title = documentos.length < 2
+        ? 'Para organizar necesitas al menos dos libros en la biblioteca.'
+        : 'Reordenar tus libros arrastrando, con botones o con el teclado.';
+    }
 
     if (!hay) { el.espacio.textContent = ''; return; }
 
@@ -1264,7 +1316,6 @@ export function inicializarLectorPdf(deps = {}) {
     const limite = estado.biblioLimite || 40;
     const pagina = paginarDocumentos(visibles, limite);
     for (const doc of pagina.visibles) el.rejilla.appendChild(tarjetaLibro(doc));
-    activarRejillaMovible(el.rejilla);
     if (el.mostrarMas) {
       el.mostrarMas.hidden = !(pagina.resto > 0);
       el.mostrarMas.textContent = 'Mostrar más (' + pagina.resto + ' restantes)';
@@ -1741,7 +1792,16 @@ export function inicializarLectorPdf(deps = {}) {
       if (el.masPanel) el.masPanel.scrollTop = 0;
     }
     pintarFondoHojas();
-    hojaModal?.querySelector('button:not([disabled]), select, input, summary')?.focus({ preventScroll: true });
+    /* Foco al abrir (PDF-10): el primer control ENFOCABLE Y VISIBLE de la
+     * hoja. Sin el filtro, el primer botón del índice a <1024px es el
+     * «colapsar» de escritorio (display:none): focus() no hacía nada, el
+     * foco caía al <body> y la trampa de Tab, que vive en resultArea,
+     * nunca se disparaba. */
+    const enfocable = hojaModal
+      ? [...hojaModal.querySelectorAll('button:not([disabled]), select, input, summary')]
+        .find((n) => n.getClientRects().length && !n.closest('[hidden]'))
+      : null;
+    enfocable?.focus({ preventScroll: true });
     if (!habiaOtra) capas.abrir('hoja', () => cerrarHojas({ desdeHistorial: true }));
   }
 
@@ -2024,6 +2084,10 @@ export function inicializarLectorPdf(deps = {}) {
   let scrollAntesLector = 0;
   let restauracionScroll = 'auto';
   function abrirLector() {
+    /* Si alguien abre un libro con el organizador puesto (p. ej. «Seguir
+     * leyendo» o un PDF recién importado), el modo se retira sin guardar:
+     * el lector manda. */
+    if (organizando) salirOrganizar();
     const nuevo = !(el.area && el.area.classList.contains('has-results'));
     if (el.area) el.area.classList.add('has-results');
     el.resultArea.style.display = '';

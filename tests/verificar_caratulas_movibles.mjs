@@ -1,8 +1,11 @@
-/* JG Turbo · Verificación E2E de Carátulas Movibles en Móvil, Tablet y Escritorio
+/* JG Turbo · Verificación E2E del modo «Organizar» de la biblioteca PDF
+ * (PDF-05/06 del plan UX/UI). Cubre: botón Organizar y su explicación con
+ * <2 libros, filas temporales con tirador y botones, teclado Alt+flechas,
+ * arrastre con Escape que cancela, Guardar que persiste y Cancelar que no.
  * Ejecutar: node tests/verificar_caratulas_movibles.mjs
  */
 import { createServer } from 'node:http';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { resolve, join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -46,174 +49,234 @@ const servidor = createServer(async (req, res) => {
 
 await new Promise((r) => servidor.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${servidor.address().port}`;
-console.log(`Probando carátulas movibles en ${BASE}/\n`);
+console.log(`Probando el modo Organizar en ${BASE}/\n`);
 
 const navegador = await chromium.launch({ headless: true });
 
-try {
-  // Preparamos 3 libros de prueba en IndexedDB
-  const prepararLibros = async (page) => {
-    await page.evaluate(async () => {
-      const dbReq = indexedDB.open('jg-turbo-pdf', 5);
-      await new Promise((resolver, rechazar) => {
-        dbReq.onsuccess = () => resolver(dbReq.result);
-        dbReq.onerror = () => rechazar(dbReq.error);
-        dbReq.onupgradeneeded = (e) => {
-          const bd = e.target.result;
-          if (!bd.objectStoreNames.contains('documentos')) bd.createObjectStore('documentos', { keyPath: 'id' });
-          if (!bd.objectStoreNames.contains('contenido')) bd.createObjectStore('contenido', { keyPath: 'id' });
-          if (!bd.objectStoreNames.contains('archivos')) bd.createObjectStore('archivos', { keyPath: 'id' });
-        };
-      });
-      const db = dbReq.result;
-      const tx = db.transaction(['documentos', 'contenido'], 'readwrite');
-      const docs = tx.objectStore('documentos');
-      const cont = tx.objectStore('contenido');
-
-      const libros = [
-        { id: 'doc-alfa', titulo: 'Alfa y Omega', actualizado: 1000, creado: 1000, estado: 'leyendo', paginasLeidas: 10, totalPaginas: 50, tienePortada: true, origenPortada: 'real' },
-        { id: 'doc-beta', titulo: 'Beta Reader', actualizado: 2000, creado: 2000, estado: 'sin-empezar', paginasLeidas: 0, totalPaginas: 80, tienePortada: true, origenPortada: 'real' },
-        { id: 'doc-gamma', titulo: 'Gamma Rays', actualizado: 3000, creado: 3000, estado: 'terminado', paginasLeidas: 100, totalPaginas: 100, tienePortada: true, origenPortada: 'real' },
-      ];
-
-      for (const lib of libros) {
-        docs.put(lib);
-        cont.put({ id: lib.id, partes: [{ titulo: 'Capítulo 1', texto: 'Contenido de prueba para el libro ' + lib.titulo }] });
-      }
-
-      await new Promise((r) => { tx.oncomplete = r; });
-      db.close();
+const prepararLibros = async (page, cuantos = 3) => {
+  await page.evaluate(async (n) => {
+    /* Sin deleteDatabase: la app mantiene la base abierta y borrarla se
+     * queda colgado en «blocked». Se limpian los almacenes y ya. */
+    localStorage.removeItem('jg_pdf_orden_manual');
+    localStorage.removeItem('jg_pdf_orden');
+    const dbReq = indexedDB.open('jg-turbo-pdf', 5);
+    await new Promise((resolver, rechazar) => {
+      dbReq.onsuccess = () => resolver(dbReq.result);
+      dbReq.onerror = () => rechazar(dbReq.error);
+      dbReq.onupgradeneeded = (e) => {
+        const bd = e.target.result;
+        if (!bd.objectStoreNames.contains('documentos')) bd.createObjectStore('documentos', { keyPath: 'id' });
+        if (!bd.objectStoreNames.contains('contenido')) bd.createObjectStore('contenido', { keyPath: 'id' });
+        if (!bd.objectStoreNames.contains('archivos')) bd.createObjectStore('archivos', { keyPath: 'id' });
+      };
     });
-  };
-
-  const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
-  const page = await ctx.newPage();
-
-  /* ──────────────────────────────────────────────────────────────────────
-   * 1. FORMATO MÓVIL (390 x 844)
-   * ────────────────────────────────────────────────────────────────────── */
-  console.log('── 1. Formato Móvil (390 x 844) ──');
-  {
-    await page.goto(`${BASE}/?tab=pdf`);
-    await prepararLibros(page);
-    await page.reload();
-    await page.waitForSelector('#pdfBiblioteca:not([hidden])', { timeout: 6000 });
-
-    // Verificar opción 'personalizado' en #pdfOrden
-    const opcionPersonalizado = await page.$('#pdfOrden option[value="personalizado"]');
-    comprobar(opcionPersonalizado !== null, 'el selector #pdfOrden incluye la opción "Personalizado"');
-
-    await page.waitForTimeout(600);
-
-    // Verificar tarjetas y tiradores
-    const tarjetas = await page.locator('.pdf-libro').all();
-    comprobar(tarjetas.length === 3, `se muestran las 3 tarjetas de libros (obtuvo: ${tarjetas.length})`);
-
-    const tirador = await page.locator('.pdf-libro .pdf-libro-arrastre').first();
-    comprobar((await tirador.count()) > 0, 'las tarjetas disponen de tirador de arrastre (.pdf-libro-arrastre)');
-
-    // Verificar botones del menú de opciones del libro
-    const menuSummary = page.locator('.pdf-libro .pdf-libro-menu summary').first();
-    await menuSummary.click();
-    const btnMoverFinal = page.locator('.pdf-libro-menu button:has-text("Mover al final")').first();
-    comprobar((await btnMoverFinal.count()) > 0, 'el menú incluye acción táctil "Mover al final"');
-
-    // Pulsar "Mover al final" para el primer libro visible
-    const primerIdAntes = await page.evaluate(() => document.querySelector('.pdf-libro')?.dataset.docId);
-    await btnMoverFinal.click();
-    await page.waitForTimeout(400);
-
-    const ultimoIdDespues = await page.evaluate(() => {
-      const lista = document.querySelectorAll('.pdf-libro');
-      return lista[lista.length - 1]?.dataset.docId;
-    });
-    comprobar(ultimoIdDespues === primerIdAntes, `el libro se movió al final (${ultimoIdDespues} === ${primerIdAntes})`);
-
-    // Verificar que se guardó el orden manual en localStorage y cambió el selector
-    const ordenGuardado = await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'));
-    const modoOrden = await page.evaluate(() => localStorage.getItem('jg_pdf_orden'));
-    comprobar(ordenGuardado !== null && JSON.parse(ordenGuardado).length === 3, 'se guardó el orden manual en localStorage');
-    comprobar(modoOrden === 'personalizado', 'el modo de orden se estableció automáticamente en "personalizado"');
-    // No cerramos ctx aquí para mantener la base IndexedDB y localStorage
-  }
-
-  /* ──────────────────────────────────────────────────────────────────────
-   * 2. FORMATO TABLET (820 x 1180)
-   * ────────────────────────────────────────────────────────────────────── */
-  console.log('\n── 2. Formato Tablet (820 x 1180) ──');
-  {
-    await page.setViewportSize({ width: 820, height: 1180 });
-    await page.waitForTimeout(400);
-
-    // Verificar menú "Mover al inicio"
-    const ultimoMenu = page.locator('.pdf-libro:last-child .pdf-libro-menu summary');
-    await ultimoMenu.click();
-    const btnMoverInicio = page.locator('.pdf-libro:last-child .pdf-libro-menu button:has-text("Mover al inicio")');
-    comprobar((await btnMoverInicio.count()) > 0, 'el menú en tablet incluye "Mover al inicio"');
-
-    const ultimoIdAntes = await page.evaluate(() => {
-      const lista = document.querySelectorAll('.pdf-libro');
-      return lista[lista.length - 1]?.dataset.docId;
-    });
-    await btnMoverInicio.click();
-    await page.waitForTimeout(400);
-
-    const primerIdDespues = await page.evaluate(() => document.querySelector('.pdf-libro')?.dataset.docId);
-    comprobar(primerIdDespues === ultimoIdAntes, `el último libro se reubicó en la primera posición (${primerIdDespues})`);
-  }
-
-  /* ──────────────────────────────────────────────────────────────────────
-   * 3. FORMATO ESCRITORIO (1280 x 800)
-   * ────────────────────────────────────────────────────────────────────── */
-  console.log('\n── 3. Formato Escritorio (1280 x 800) ──');
-  {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.waitForTimeout(400);
-
-    // Verificar atajos de teclado accesibles: Alt + ArrowRight
-    const primerLibro = page.locator('.pdf-libro:first-child');
-    const idPrimero = await primerLibro.getAttribute('data-doc-id');
-    await primerLibro.focus();
-    await page.keyboard.press('Alt+ArrowRight');
-    await page.waitForTimeout(400);
-
-    const segundoId = await page.evaluate(() => document.querySelectorAll('.pdf-libro')[1]?.dataset.docId);
-    comprobar(segundoId === idPrimero, 'teclado accesible (Alt+ArrowRight) mueve la tarjeta hacia la derecha');
-
-    // Simular arrastre físico con puntero (ratón)
-    const tirador1 = page.locator('.pdf-libro:first-child .pdf-libro-arrastre');
-    const caja1 = await tirador1.boundingBox();
-    const cajaDestino = await page.locator('.pdf-libro:last-child').boundingBox();
-    if (caja1 && cajaDestino) {
-      const idArrastrado = await page.locator('.pdf-libro:first-child').getAttribute('data-doc-id');
-      await page.mouse.move(caja1.x + caja1.width / 2, caja1.y + caja1.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(cajaDestino.x + cajaDestino.width / 2, cajaDestino.y + cajaDestino.height / 2, { steps: 10 });
-      await page.waitForTimeout(150);
-      await page.mouse.up();
-      await page.waitForTimeout(400);
-      const ultimoIdDespues = await page.evaluate(() => {
-        const items = document.querySelectorAll('.pdf-libro');
-        return items[items.length - 1]?.dataset.docId;
-      });
-      comprobar(ultimoIdDespues === idArrastrado, 'arrastre físico con puntero posiciona la carátula en su nueva ubicación');
+    const db = dbReq.result;
+    const tx = db.transaction(['documentos', 'contenido'], 'readwrite');
+    const docs = tx.objectStore('documentos');
+    const cont = tx.objectStore('contenido');
+    docs.clear();
+    cont.clear();
+    const libros = [
+      { id: 'doc-alfa', titulo: 'Alfa y Omega', actualizado: 1000, creado: 1000, estado: 'leyendo', paginasLeidas: 10, totalPaginas: 50, tienePortada: true, origenPortada: 'real' },
+      { id: 'doc-beta', titulo: 'Beta Reader', actualizado: 2000, creado: 2000, estado: 'sin-empezar', paginasLeidas: 0, totalPaginas: 80, tienePortada: true, origenPortada: 'real' },
+      { id: 'doc-gamma', titulo: 'Gamma Rays', actualizado: 3000, creado: 3000, estado: 'terminado', paginasLeidas: 100, totalPaginas: 100, tienePortada: true, origenPortada: 'real' },
+    ].slice(0, n);
+    for (const lib of libros) {
+      docs.put(lib);
+      cont.put({ id: lib.id, partes: [{ titulo: 'Capítulo 1', texto: 'Contenido de prueba para el libro ' + lib.titulo }] });
     }
+    await new Promise((r) => { tx.oncomplete = r; });
+    db.close();
+  }, cuantos);
+};
 
-    // Verificar persistencia tras recarga F5
-    const idsAntesRecarga = await page.evaluate(() => Array.from(document.querySelectorAll('.pdf-libro')).map(x => x.dataset.docId));
+const abrirBiblioteca = async (page) => {
+  /* Con la biblioteca vacía la sección está oculta: primero se espera a la
+   * app, luego se siembran los libros y la recarga ya la muestra. */
+  await page.goto(`${BASE}/?tab=pdf`);
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(600);
+};
+
+const idsRejilla = (page) => page.evaluate(() =>
+  Array.from(document.querySelectorAll('#pdfRejilla .pdf-libro')).map((x) => x.dataset.docId));
+
+const idsOrganizar = (page) => page.evaluate(() =>
+  Array.from(document.querySelectorAll('#pdfOrganizarLista .pdf-org-fila')).map((x) => x.dataset.docId));
+
+try {
+  /* ── 1. Móvil: entrar al modo, controles de fila y botones ────────── */
+  console.log('── 1. Móvil (390×844): filas, botones y anuncio ──');
+  {
+    const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    const page = await ctx.newPage();
+    await abrirBiblioteca(page);
+    await prepararLibros(page, 3);
     await page.reload();
-    await page.waitForSelector('#pdfBiblioteca:not([hidden])', { timeout: 6000 });
+    await page.waitForSelector('#pdfBiblioteca:not([hidden])', { timeout: 8000 });
+    await page.waitForTimeout(500);
+
+    comprobar(await page.locator('#btnPdfOrganizar').isEnabled(), '«Organizar» está habilitado con 3 libros');
+    comprobar((await page.locator('.pdf-libro .pdf-libro-arrastre').count()) === 0,
+      'las tarjetas normales ya no llevan tirador permanente');
+
+    await page.locator('#btnPdfOrganizar').click();
+    await page.waitForTimeout(300);
+    comprobar(await page.locator('#pdfOrganizar').isVisible(), 'al pulsar Organizar se abre la lista temporal');
+    comprobar((await idsOrganizar(page)).length === 3, 'las filas muestran TODOS los libros (3)');
+    comprobar(!(await page.locator('#pdfRejilla').isVisible()), 'la rejilla normal queda suspendida');
+    comprobar(!(await page.locator('.pdf-biblioteca-filtros').isVisible()), 'los filtros quedan suspendidos');
+    comprobar(!(await page.locator('#pdfBuscarLibro').isVisible()), 'la búsqueda queda suspendida');
+
+    const tirador = page.locator('.pdf-org-fila').first().locator('.pdf-org-tirador');
+    const cajaTirador = await tirador.boundingBox();
+    comprobar(!!cajaTirador && cajaTirador.width >= 44 && cajaTirador.height >= 44,
+      `el tirador mide ≥44×44 (${cajaTirador ? `${cajaTirador.width}×${cajaTirador.height}` : 'n/a'})`);
+
+    const primera = page.locator('.pdf-org-fila').first();
+    comprobar(await primera.locator('[data-mov="antes"]').isDisabled(), 'en la primera fila «Mover antes» está deshabilitado');
+    const ultima = page.locator('.pdf-org-fila').last();
+    comprobar(await ultima.locator('[data-mov="despues"]').isDisabled(), 'en la última fila «Mover después» está deshabilitado');
+
+    const idPrimera = (await idsOrganizar(page))[0];
+    await primera.locator('[data-mov="despues"]').click();
+    await page.waitForTimeout(200);
+    comprobar((await idsOrganizar(page))[1] === idPrimera, '«Mover después» baja la fila una posición');
+    const anuncio = await page.locator('#pdfOrganizarLive').textContent();
+    comprobar(/posición 2 de 3/.test(anuncio || ''), `el anuncio dice la posición («${anuncio}»)`);
+    comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
+      'mover con botones NO guarda todavía (orden temporal)');
+
+    /* Teclado: Alt+flechas (sobre la fila que se movió, no sobre la que
+     * ahora ocupa su sitio). */
+    await page.locator(`.pdf-org-fila[data-doc-id="${idPrimera}"] .pdf-org-tirador`).focus();
+    await page.keyboard.press('Alt+ArrowUp');
+    await page.waitForTimeout(150);
+    comprobar((await idsOrganizar(page))[0] === idPrimera, 'Alt+↑ devuelve la fila a la primera posición');
+
+    /* Cancelar restaura y no persiste */
+    await page.locator('#btnPdfOrganizarCancelar').click();
     await page.waitForTimeout(400);
-
-    const idsDespuesRecarga = await page.evaluate(() => Array.from(document.querySelectorAll('.pdf-libro')).map(x => x.dataset.docId));
-    comprobar(
-      JSON.stringify(idsAntesRecarga) === JSON.stringify(idsDespuesRecarga),
-      `el orden manual personalizado sobrevive la recarga F5 (${idsDespuesRecarga.join(', ')})`
-    );
-
+    comprobar(!(await page.locator('#pdfOrganizar').isVisible()), 'Cancelar cierra el modo');
+    comprobar(await page.locator('#pdfRejilla').isVisible(), 'y devuelve la rejilla');
+    comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
+      'Cancelar no escribió ningún orden en localStorage');
     await ctx.close();
   }
 
+  /* ── 2. Guardar persiste; sobrevive F5 ─────────────────────────────── */
+  console.log('\n── 2. Guardar orden persiste (tablet 820×1180) ──');
+  {
+    const ctx = await navegador.newContext({ viewport: { width: 820, height: 1180 }, hasTouch: true });
+    const page = await ctx.newPage();
+    await abrirBiblioteca(page);
+    await prepararLibros(page, 3);
+    await page.reload();
+    await page.waitForSelector('#pdfBiblioteca:not([hidden])', { timeout: 8000 });
+    await page.waitForTimeout(500);
+
+    await page.locator('#btnPdfOrganizar').click();
+    await page.waitForTimeout(300);
+    const primera = page.locator('.pdf-org-fila').first();
+    const idPrimera = (await idsOrganizar(page))[0];
+    await primera.locator('[data-mov="despues"]').click();
+    await page.locator('#btnPdfOrganizarGuardar').click();
+    await page.waitForTimeout(500);
+    const guardado = await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'));
+    comprobar(guardado !== null && JSON.parse(guardado).length === 3, 'Guardar escribió el orden completo en jg_pdf_orden_manual');
+    comprobar(await page.evaluate(() => localStorage.getItem('jg_pdf_orden')) === 'personalizado',
+      'y fijó el modo de orden en «personalizado»');
+    comprobar((await idsRejilla(page))[1] === idPrimera, 'la rejilla refleja el orden guardado');
+
+    await page.reload();
+    await page.waitForSelector('#pdfBiblioteca:not([hidden])', { timeout: 8000 });
+    await page.waitForTimeout(500);
+    comprobar((await idsRejilla(page))[1] === idPrimera, 'el orden guardado sobrevive la recarga F5');
+    await ctx.close();
+  }
+
+  /* ── 3. Escritorio: arrastre con puntero y Escape que cancela ─────── */
+  console.log('\n── 3. Escritorio (1280×800): arrastre y Escape ──');
+  {
+    const ctx = await navegador.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    await abrirBiblioteca(page);
+    await prepararLibros(page, 3);
+    await page.reload();
+    await page.waitForSelector('#pdfBiblioteca:not([hidden])', { timeout: 8000 });
+    await page.waitForTimeout(500);
+
+    await page.locator('#btnPdfOrganizar').click();
+    await page.waitForTimeout(300);
+    const ordenAlEntrar = await idsOrganizar(page);
+    const idPrimera = ordenAlEntrar[0];
+
+    const tirador = page.locator('.pdf-org-fila').first().locator('.pdf-org-tirador');
+    const cajaTirador = await tirador.boundingBox();
+    const destino = await page.locator('.pdf-org-fila').last().boundingBox();
+    comprobar(!!cajaTirador && !!destino, 'hay filas medibles para arrastrar');
+    if (cajaTirador && destino) {
+      /* Se suta en la mitad INFERIOR de la última fila: ahí la fila
+       * arrastrada queda al final. */
+      const yDestino = destino.y + destino.height * 0.8;
+      await page.mouse.move(cajaTirador.x + cajaTirador.width / 2, cajaTirador.y + cajaTirador.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(destino.x + destino.width / 2, yDestino, { steps: 12 });
+      await page.waitForTimeout(120);
+      const duranteArrastre = await idsOrganizar(page);
+      comprobar(duranteArrastre[duranteArrastre.length - 1] === idPrimera,
+        'el arrastre lleva la primera fila al final (orden temporal)');
+      comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
+        'el arrastre tampoco guarda por sí solo');
+
+      /* Escape durante el arrastre: cancela y repone el orden del inicio
+       * del arrastre (PDF-06). */
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(200);
+      comprobar(JSON.stringify(await idsOrganizar(page)) === JSON.stringify(ordenAlEntrar),
+        'Escape cancela el arrastre y repone el orden de ese arrastre');
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+
+      /* Reponer, arrastrar de verdad y soltar fuera: sigue sin guardar. */
+      await page.mouse.move(cajaTirador.x + cajaTirador.width / 2, cajaTirador.y + cajaTirador.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(destino.x + destino.width / 2, yDestino, { steps: 12 });
+      await page.mouse.up();
+      await page.waitForTimeout(300);
+      comprobar((await idsOrganizar(page)).at(-1) === idPrimera, 'soltar deja la fila donde se soltó');
+      comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
+        'soltar el arrastre sigue sin persistir: solo Guardar persiste');
+
+      /* Escape sin arrastre: cancela el modo entero. */
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      comprobar(!(await page.locator('#pdfOrganizar').isVisible()),
+        'Escape sin arrastre cancela el modo Organizar');
+      comprobar(JSON.stringify(await idsRejilla(page)) === JSON.stringify(ordenAlEntrar),
+        'y la rejilla conserva el orden anterior');
+      comprobar((await page.evaluate(() => localStorage.getItem('jg_pdf_orden_manual'))) === null,
+        'nada quedó guardado');
+    }
+    await ctx.close();
+  }
+
+  /* ── 4. Con un solo libro, Organizar deshabilitado y explicado ────── */
+  console.log('\n── 4. Un libro: deshabilitado y explicado ──');
+  {
+    const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    await abrirBiblioteca(page);
+    await prepararLibros(page, 1);
+    await page.reload();
+    await page.waitForSelector('#pdfBiblioteca:not([hidden])', { timeout: 8000 });
+    await page.waitForTimeout(500);
+    const btn = page.locator('#btnPdfOrganizar');
+    comprobar(await btn.isDisabled(), 'con un solo libro «Organizar» está deshabilitado');
+    const titulo = await btn.getAttribute('title');
+    comprobar(/al menos dos libros/.test(titulo || ''), `y su título explica por qué («${titulo}»)`);
+    await ctx.close();
+  }
 } finally {
   await navegador.close();
   servidor.close();
@@ -223,5 +286,5 @@ if (fallos > 0) {
   console.error(`\n❌ ${fallos} pruebas fallaron.`);
   process.exit(1);
 } else {
-  console.log('\n✔ Verificación completa de carátulas movibles en móvil, tablet y escritorio exitosa.');
+  console.log('\n✔ Verificación del modo Organizar completada con éxito.');
 }
