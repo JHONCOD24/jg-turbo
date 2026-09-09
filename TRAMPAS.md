@@ -1052,3 +1052,23 @@ y mantener `.vercelignore` alineado con `.gitignore` para carpetas pesadas de au
 `*.wav`, etc.).
 
 Detalle y taller en `pdf/regla-pdf/c3-trabajo/NOTAS_C3.md`.
+
+## Adaptar PDF con regla-pdf: un título que parte página pierde su marcador (2026-09-09)
+
+**Síntoma:** `5_construir.py` moría al guardar con `ValueError: ... undefined
+destination target for 'm215'`, aunque la clave existía en el índice.
+**Causa:** ReportLab dibuja el FRAGMENTO del párrafo partido (`S[0]`), que es
+un objeto nuevo sin el atributo `_m`; `afterFlowable` nunca registra el
+marcador y el enlace queda colgando. Solo pica con títulos largos (en este
+libro, un paso de ejercicio de 329 caracteres). **Regla:** los párrafos con
+marcador usan la subclase `Tit`, cuyo `split()` hereda `_m` al primer
+fragmento (medido: 557/558 destinos antes, 546/546 después). Detalle y taller
+en `pdf/regla-pdf/aprendiz-trabajo/NOTAS_APRENDIZ.md`.
+
+## Enfocar «el primer botón» puede no enfocar nada (2026-09-09)
+
+**Síntoma (verificar_pdf_menus, 768 px):** abrir Contenido dejaba el foco en el `<body>` y Shift+Tab escapaba de la hoja. **Causa:** `hojaModal.querySelector('button…)` devolvía el botón de colapsar del índice, oculto a <1024 px; `focus()` sobre un elemento sin caja no hace nada. Es la ida de la trampa ya documentada («Un control que se oculta se lleva el foco», que cubre la vuelta al cerrar). **Regla:** al dar foco dentro de una hoja, filtrar por visibilidad (`getClientRects().length` y sin ancestro `[hidden]`), igual que ya hace la trampa de Tab.
+
+## Borrar la base en una prueba se cuelga si la app la tiene abierta (2026-09-09)
+
+**Síntoma:** una suite de navegador se quedaba colgada sin error ni timeout al sembrar libros. **Causa:** `indexedDB.deleteDatabase()` se queda en «blocked» mientras la propia página mantiene la base abierta; el `open()` posterior no resuelve nunca y la prueba muere en silencio. **Regla:** en la siembra, limpiar los almacenes con una transacción (`clear()` + `put`) en vez de borrar la base; las claves de orden en `localStorage` se quitan a mano.
