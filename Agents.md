@@ -253,6 +253,23 @@ pregunta si hay otra. No meter lógica de PDF dentro del motor de voz.
 con su CRC32). Si se toca, correr `pytest backend/tests/test_docx_valido.py`: usa
 `zipfile`, que **verifica el CRC** y detecta un archivo que Word rechazaría.
 
+**Carátulas de libros (estándar obligatorio y permanente):**
+Todo PDF en la app **debe mostrar siempre su carátula original auténtica**, tanto en la cuadrícula de la biblioteca como en «Seguir leyendo» y en el lector. Para garantizarlo:
+1. **Jerarquía estricta de carátulas (`js/pdf/caratula.js`):**
+   - **Prioridad 1 — Catálogo canónico local (`PORTADAS_CANONICAS`):** Libros base y obras esenciales se registran en `PORTADAS_CANONICAS` asociadas a `/img/portadas/{nombre}.jpg`. Estas imágenes se precachean en el Service Worker (`sw.js`) bajo `CACHE_SHELL` para disponibilidad offline inmediata en PWA.
+   - **Prioridad 2 — Extracción directa de página 1 (`extractorPdf.js`):** Si no es canónico, se extrae la página 1 del PDF con `pdf.js` a canvas (380 px de ancho, JPEG 0.85). **Muestreo de blancura:** si más del 99.2% de los píxeles son blancos (portadilla de texto interior o página en blanco), el extractor pasa a la página 2 antes de rendirse.
+   - **Prioridad 3 — Consulta a catálogo (OpenLibrary / Google Books):** Si falla la extracción local, se consulta `buscarPortadaReal(titulo, autor)`.
+   - **Prioridad 4 — Canvas dibujado:** Solo como respaldo si todo lo demás falla.
+2. **Sanitización obligatoria de títulos:**
+   - **Prohibido buscar `(anonymous)` o títulos vacíos.** `limpiarNombreLibro()` descarta metadatos espurios como `(anonymous)` y recurre al nombre de archivo (`nombreArchivo`) para evitar que OpenLibrary devuelva novelas no relacionadas (p. ej. *Sinners Anonymous*).
+3. **Al adaptar un nuevo PDF con `regla-pdf`:**
+   - La primera página del PDF generado **debe ser la carátula gráfica original a sangre** (`portada_original: true` en `perfil.json`, con `portada.jpg`).
+   - Al compilar con `5_construir.py`, pasar siempre título y autor limpios (`python 5_construir.py "Título" "Autor"`), impidiendo metadatos anónimos en ReportLab.
+   - Si el libro formará parte de la biblioteca estándar, guardar además una versión optimizada en `img/portadas/{slug}.jpg` (ancho 380 px, JPEG liviano) y registrarla en `PORTADAS_CANONICAS`.
+4. **Auto-reconciliación en segundo plano:**
+   - `completarCaratulasQueFaltan()` en `pdfController.js` detecta libros con portada dibujada, faltante o título anónimo, actualizándolos en IndexedDB y refrescando **en simultáneo** `pintarBiblioteca()` y `pintarContinuar()`.
+
+
 ## Sincronización entre dispositivos (leer antes de tocar `api/sync.py`)
 
 Documento maestro: **`CAMBIOS_SYNC.md`**.

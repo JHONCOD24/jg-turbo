@@ -46,6 +46,48 @@ canvas marrón («CD» en Conversaciones con Dios 1), anuncios de Bookey
 - *Cache shell offline*: `sw.js` precachea las portadas de `/img/portadas/`
   bajo la versión `jg-turbo-shell-v113` con estrategia stale-while-revalidate.
 
+### Estándar técnico y protocolo permanente para Carátulas de PDF
+
+> **Principio rector:** Ningún libro de la biblioteca debe mostrar iniciales
+> dibujadas en canvas ni páginas en blanco de portadilla. La carátula original
+> es la identidad del libro y debe preservarse con la misma fidelidad que su texto.
+
+#### 1. Ciclo de resolución de carátulas (`js/pdf/caratula.js`)
+El motor evalúa cuatro niveles en orden estricto de prioridad:
+1. **Canónico Local (`PORTADAS_CANONICAS`):** Mapeo estático de títulos normalizados
+   hacia `/img/portadas/{archivo}.jpg`. No depende de internet ni de APIs externas;
+   funciona en el Service Worker de la PWA de forma instantánea.
+2. **Extracción directa de página 1 (`extractorPdf.js`):** Renderizado de la
+   página 1 a 380 px con factor de escala responsive. Lleva **filtro de blancura**:
+   si el muestreo de píxeles indica >99.2% blanco (portadilla interna o página en
+   blanco), salta automáticamente a examinar la página 2.
+3. **Catálogo online (`buscarPortadaReal`):** Consulta a OpenLibrary y Google Books.
+   **Regla obligatoria:** `limpiarNombreLibro()` descarta `(anonymous)` y títulos
+   vacíos, recurriendo al nombre de archivo para evitar falsos positivos (p. ej.
+   novelas románticas de Somme Sketcher).
+4. **Canvas fallback (`dibujarPortada`):** Dibujo con degradado e iniciales sólo
+   si no hay red, no hay imagen en el PDF y el libro no está en el catálogo.
+
+#### 2. Protocolo para adaptar o ingresar nuevos libros
+Cuando cualquier agente o desarrollador adapte un PDF:
+- **Página 1 a sangre:** La primera página del PDF adaptado DEBE ser la carátula
+  gráfica original completa (`portada_original: true` en `perfil.json` con `portada.jpg`).
+- **Metadatos obligatorios en compilación:** Al correr `5_construir.py`, pasar
+  siempre `python3 5_construir.py "Título Limpio" "Autor"`. Nunca omitirlos para
+  no inyectar `(anonymous)` en el PDF.
+- **Libros base:** Si el libro se integrará a la biblioteca predeterminada,
+  agregar su imagen optimizada a `img/portadas/{slug}.jpg` (ancho 380 px, JPEG
+  20-50 KB) y registrarla en `PORTADAS_CANONICAS` en `js/pdf/caratula.js`.
+- **Precacheo en SW:** Al añadir archivos a `img/portadas/`, añadirlos al array
+  de precacheo en `sw.js` y subir el número de `CACHE_SHELL` y `JG_JS_V`.
+
+#### 3. Auto-reconciliación en la interfaz (`pdfController.js`)
+`completarCaratulasQueFaltan()` se ejecuta tras pintar la biblioteca. Identifica
+registros locales obsoletos (`origenPortada === 'dibujada'`, sin portada o con
+título anónimo) y los asciende a `'real'`, refrescando **al mismo tiempo**
+`pintarBiblioteca()` y `pintarContinuar()` para que el usuario no vea una
+carátula desactualizada en el banner superior.
+
 ## 2026-09-08 · v2.66.0 · Sincronía voz-texto definitiva (`JG_JS_V=v112`, shell-v112)
 
 > Despliegue `dpl_eeu5tx9rn` (READY): `https://jg-turbo-eeu5tx9rn-jhoncod24s-projects.vercel.app`
