@@ -4,14 +4,21 @@
  */
 /* v2: sube CACHE_SHELL al desplegar UI nueva para que el rediseño no quede
  * atrapado en el shell viejo. Network-first en HTML/navegación. */
-const CACHE_SHELL = 'jg-turbo-shell-v112';
+const CACHE_SHELL = 'jg-turbo-shell-v113';
 const CACHE_SHARE = 'jg-turbo-share-v1';
 const SHARE_KEY = 'shared-audio';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_SHELL).then((cache) =>
-      cache.addAll(['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']).catch(() => {})
+      cache.addAll([
+        '/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png',
+        '/img/portadas/conversaciones-con-dios-1.jpg',
+        '/img/portadas/conversaciones-con-dios-2.jpg',
+        '/img/portadas/secretos-de-copywriting.jpg',
+        '/img/portadas/el-placebo-eres-tu.jpg',
+        '/img/portadas/cashvertising.jpg',
+      ]).catch(() => {})
     ).then(() => self.skipWaiting())
   );
 });
@@ -65,10 +72,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* Módulos, motores y pistas de música (/js/ y /audio/musica/):
+  /* Módulos, motores, carátulas y pistas de música (/js/, /img/portadas/ y /audio/musica/):
    * se sirven del caché al instante y se actualizan por detrás.
-   * Permite leer y escuchar música de fondo sin conexión. */
-  if (req.method === 'GET' && (url.pathname.startsWith('/js/') || url.pathname.startsWith('/audio/musica/'))) {
+   * Permite leer y ver la biblioteca completa sin conexión. */
+  if (req.method === 'GET' && (url.pathname.startsWith('/js/') || url.pathname.startsWith('/audio/musica/') || url.pathname.startsWith('/img/portadas/'))) {
     event.respondWith(
       caches.open(CACHE_SHELL).then((cache) =>
         cache.match(req).then((guardado) => {

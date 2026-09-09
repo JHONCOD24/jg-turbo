@@ -11,7 +11,7 @@
  *    con tres millones de letras congela hasta un buen computador): se divide
  *    en capítulos y se muestra uno, sin perder el resto.
  */
-import { procesarPdf, abrirPdf, ErrorPdf, cargarMotor } from './extractorPdf.js';
+import { procesarPdf, abrirPdf, ErrorPdf, cargarMotor, renderizarPortada } from './extractorPdf.js';
 import { extraerFiguras } from './figurasPdf.js';
 import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
 import { partirTextoCanonico, mejorCorte as mejorCorteCanonico, LIMITE_PARTE as LIMITE_PARTE_CANONICO } from './particion.js';
@@ -40,7 +40,7 @@ import {
   etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
 } from './progreso.js';
 import { construirAncla, resolverAncla } from './anclaTexto.js';
-import { limpiarNombreLibro, conseguirCaratula } from './caratula.js';
+import { limpiarNombreLibro, conseguirCaratula, buscarPortadaCanonica } from './caratula.js';
 import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 import { musicaFondo, CATALOGO_PISTAS, ANIMOS } from './musicaFondo.js';
@@ -388,44 +388,104 @@ export function inicializarLectorPdf(deps = {}) {
    */
   async function ponerCaratula(doc, { buscarReal = false, forzar = false } = {}) {
     if (!doc || !doc.id) return 'ninguna';
-    if (doc.tienePortada && !forzar) return 'ninguna';
+    if (doc.tienePortada && !forzar && doc.origenPortada !== 'dibujada') return 'ninguna';
     try {
-      const { titulo, autor } = limpiarNombreLibro(doc.titulo || doc.nombreArchivo || '');
+      const { titulo, autor } = limpiarNombreLibro(doc.titulo, doc.nombreArchivo);
       if (!titulo) return 'ninguna';
-      const { blob, origen } = await conseguirCaratula({ titulo, autor, buscarReal });
-      if (!blob) return 'ninguna';
-      await almacen.guardarPortadaGenerada(doc.id, blob, origen);
-      return origen;
+      const esAnonimo = !doc.titulo || doc.titulo.trim().toLowerCase() === '(anonymous)' || doc.titulo.trim().toLowerCase() === 'untitled';
+      const nuevoTitulo = esAnonimo ? titulo : null;
+
+      // 1. Portada canónica oficial del proyecto si coincide con los libros reconocidos
+      const canonica = buscarPortadaCanonica(titulo || doc.nombreArchivo);
+      if (canonica && typeof fetch !== 'undefined') {
+        try {
+          const resp = await fetch(canonica);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            if (blob && blob.size > 1000) {
+              await almacen.guardarPortadaGenerada(doc.id, blob, 'real', { nuevoTitulo });
+              return 'real';
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 2. Extraer directamente de la página 1 del PDF original si está guardado en este aparato
+      const archivoPdf = await almacen.cargarArchivo(doc.id).catch(() => null);
+      if (archivoPdf) {
+        try {
+          const { doc: pdfDoc } = await abrirPdf(archivoPdf);
+          const portadaPdf = await renderizarPortada(pdfDoc, { ancho: 380, numero: 1 });
+          if (portadaPdf && portadaPdf.size > 2500) {
+            await almacen.guardarPortadaGenerada(doc.id, portadaPdf, 'pdf', { nuevoTitulo });
+            return 'pdf';
+          }
+        } catch (ePdf) {
+          console.warn('[jg-pdf] no se pudo extraer portada de PDF', ePdf);
+        }
+      }
+
+      // 3. Portada real del catálogo (OpenLibrary / Google Books)
+      if (buscarReal) {
+        const { blob, origen } = await conseguirCaratula({ titulo, autor, buscarReal: true });
+        if (blob && origen === 'real') {
+          await almacen.guardarPortadaGenerada(doc.id, blob, 'real', { nuevoTitulo });
+          return 'real';
+        }
+      }
+
+      // 4. Red de seguridad: portada dibujada
+      const { blob: blobDib, origen: origenDib } = await conseguirCaratula({ titulo, autor, buscarReal: false });
+      if (blobDib) {
+        await almacen.guardarPortadaGenerada(doc.id, blobDib, origenDib, { nuevoTitulo });
+        return origenDib;
+      }
+
+      return 'ninguna';
     } catch (_) {
       return 'ninguna';   /* sin carátula el libro se abre igual */
     }
   }
 
   /**
-   * Da carátula dibujada a todos los libros que no tengan ninguna.
+   * Asegura que todos los libros muestren su carátula original auténtica.
    *
-   * Sin red y sin bloquear: se lanza tras pintar la biblioteca y cada libro
-   * aparece en cuanto está listo. Solo dibuja; la portada real se busca a
-   * petición, porque salir a internet por cada libro al abrir la app sería
-   * gastar datos sin que nadie lo haya pedido.
+   * Revisa libros sin carátula, con carátula dibujada provisional o con título anónimo,
+   * extrayendo la portada real del PDF o del catálogo oficial en segundo plano sin bloquear la app.
    */
   async function completarCaratulasQueFaltan(documentos) {
-    const sinTapa = (documentos || []).filter((d) => d && !d.borrado && !d.tienePortada);
-    if (!sinTapa.length) return;
+    const candidatos = (documentos || []).filter((d) =>
+      d && !d.borrado && (
+        !d.tienePortada ||
+        d.origenPortada === 'dibujada' ||
+        !d.titulo ||
+        d.titulo.trim().toLowerCase() === '(anonymous)' ||
+        (buscarPortadaCanonica(d.titulo || d.nombreArchivo) && d.origenPortada !== 'real' && d.origenPortada !== 'pdf')
+      )
+    );
+    if (!candidatos.length) return;
     let puestas = 0;
-    for (const doc of sinTapa) {
-      if (await ponerCaratula(doc, { buscarReal: false }) !== 'ninguna') puestas += 1;
+    for (const doc of candidatos) {
+      if (await ponerCaratula(doc, { buscarReal: true, forzar: true }) !== 'ninguna') puestas += 1;
     }
-    if (puestas) pintarBiblioteca();
+    if (puestas) {
+      pintarBiblioteca();
+      pintarContinuar();
+    }
   }
 
   function tarjetaLibro(doc) {
+    const infoTitulo = limpiarNombreLibro(doc.titulo, doc.nombreArchivo);
+    const tituloDoc = (doc.titulo && doc.titulo.trim().toLowerCase() !== '(anonymous)' && doc.titulo.trim().toLowerCase() !== 'untitled')
+      ? doc.titulo
+      : (infoTitulo.titulo || doc.nombreArchivo || 'Documento');
+
     const item = document.createElement('li');
     item.className = 'pdf-libro';
     item.dataset.docId = doc.id;
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
-    item.setAttribute('aria-label', `Abrir ${doc.titulo || 'documento'}`);
+    item.setAttribute('aria-label', `Abrir ${tituloDoc}`);
 
     item.addEventListener('click', (e) => {
       if (e.target.closest('.pdf-libro-menu')) return;
@@ -442,7 +502,7 @@ export function inicializarLectorPdf(deps = {}) {
     const tapa = document.createElement('div');
     tapa.className = 'pdf-libro-tapa';
     tapa.dataset.sinPortada = doc.tienePortada ? '0' : '1';
-    tapa.dataset.inicial = (doc.titulo || '?').trim().charAt(0).toUpperCase();
+    tapa.dataset.inicial = (tituloDoc || '?').trim().charAt(0).toUpperCase();
 
     const estadoEl = document.createElement('span');
     estadoEl.className = 'pdf-libro-estado';
@@ -489,14 +549,14 @@ export function inicializarLectorPdf(deps = {}) {
     buscarTapa.type = 'button';
     buscarTapa.className = 'mini-btn';
     buscarTapa.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Buscar carátula</span>';
-    buscarTapa.title = `Buscar la carátula real de ${doc.titulo || 'este libro'}`;
-    buscarTapa.setAttribute('aria-label', `Buscar la carátula real de ${doc.titulo || 'este libro'}`);
+    buscarTapa.title = `Buscar la carátula real de ${tituloDoc}`;
+    buscarTapa.setAttribute('aria-label', `Buscar la carátula real de ${tituloDoc}`);
     buscarTapa.addEventListener('click', async (e) => {
       e.stopPropagation();
       menu.open = false;
       avisar('Buscando la carátula…', 'info');
       const origen = await ponerCaratula(doc, { buscarReal: true, forzar: true });
-      if (origen === 'real') avisar(`Carátula encontrada para «${doc.titulo}».`, 'ok', { efimero: true });
+      if (origen === 'real' || origen === 'pdf') avisar(`Carátula encontrada para «${tituloDoc}».`, 'ok', { efimero: true });
       else if (origen === 'dibujada') avisar('No aparece en el catálogo: se dibujó una carátula.', 'info', { efimero: true });
       else avisar('No se pudo poner carátula a este libro.', 'warn');
       await pintarBiblioteca();
@@ -620,8 +680,8 @@ export function inicializarLectorPdf(deps = {}) {
     cuerpo.className = 'pdf-libro-cuerpo';
     const titulo = document.createElement('span');
     titulo.className = 'pdf-libro-titulo';
-    titulo.textContent = doc.titulo || doc.nombreArchivo || 'Documento';
-    titulo.title = doc.titulo || doc.nombreArchivo || 'Documento';
+    titulo.textContent = tituloDoc;
+    titulo.title = tituloDoc;
     const meta = document.createElement('span');
     meta.className = 'pdf-libro-meta';
     const partesGuardadas = (doc.titulosPartes || []).length || 1;
@@ -636,7 +696,7 @@ export function inicializarLectorPdf(deps = {}) {
     barra.setAttribute('aria-valuemin', '0');
     barra.setAttribute('aria-valuemax', '100');
     barra.setAttribute('aria-valuenow', String(porcentaje));
-    barra.setAttribute('aria-label', `Progreso de ${doc.titulo || 'documento'}`);
+    barra.setAttribute('aria-label', `Progreso de ${tituloDoc}`);
     const relleno = document.createElement('div');
     relleno.className = 'pdf-barra-relleno';
     relleno.style.width = `${porcentaje}%`;
@@ -679,15 +739,41 @@ export function inicializarLectorPdf(deps = {}) {
     /* La portada se pide aparte: la lista se pinta sin esperar por las tapas. */
     if (doc.tienePortada) {
       almacen.cargarPortada(doc.id).then((blob) => {
-        /* El registro dice que hay carátula pero el archivo no está (libro que
-         * llegó por sincronización antes de que las carátulas viajaran):
-         * se muestra la inicial en vez de un cuadro vacío. */
-        if (!blob) { tapa.dataset.sinPortada = '1'; return; }
-        const url = URL.createObjectURL(blob);
-        estado.urlsPortada.push(url);
-        tapa.style.backgroundImage = `url("${url}")`;
-        tapa.dataset.sinPortada = '0';
+        if (blob && blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          estado.urlsPortada.push(url);
+          tapa.style.backgroundImage = `url("${url}")`;
+          tapa.dataset.sinPortada = '0';
+        } else {
+          tapa.dataset.sinPortada = '1';
+          ponerCaratula(doc, { buscarReal: true, forzar: true }).then((nuevoOrigen) => {
+            if (nuevoOrigen !== 'ninguna') {
+              almacen.cargarPortada(doc.id).then((nb) => {
+                if (nb) {
+                  const url = URL.createObjectURL(nb);
+                  estado.urlsPortada.push(url);
+                  tapa.style.backgroundImage = `url("${url}")`;
+                  tapa.dataset.sinPortada = '0';
+                }
+              });
+            }
+          }).catch(() => {});
+        }
       }).catch(() => { /* sin tapa se vive */ });
+    } else {
+      tapa.dataset.sinPortada = '1';
+      ponerCaratula(doc, { buscarReal: true }).then((origen) => {
+        if (origen !== 'ninguna') {
+          almacen.cargarPortada(doc.id).then((nb) => {
+            if (nb) {
+              const url = URL.createObjectURL(nb);
+              estado.urlsPortada.push(url);
+              tapa.style.backgroundImage = `url("${url}")`;
+              tapa.dataset.sinPortada = '0';
+            }
+          });
+        }
+      }).catch(() => {});
     }
     return item;
   }
@@ -830,7 +916,12 @@ export function inicializarLectorPdf(deps = {}) {
     el.continuar.hidden = !enCurso;
     if (!enCurso) return;
 
-    el.continuarTitulo.textContent = doc.titulo || 'Documento';
+    const infoTitulo = limpiarNombreLibro(doc.titulo, doc.nombreArchivo);
+    const tituloDoc = (doc.titulo && doc.titulo.trim().toLowerCase() !== '(anonymous)' && doc.titulo.trim().toLowerCase() !== 'untitled')
+      ? doc.titulo
+      : (infoTitulo.titulo || doc.nombreArchivo || 'Documento');
+
+    el.continuarTitulo.textContent = tituloDoc;
     const falsasPartes = (doc.titulosPartes || ['x']).map((t) => ({ titulo: t, texto: 'x' }));
     const porcentaje = calcularPorcentaje(doc.progreso, falsasPartes);
     el.continuarDonde.textContent = etiquetaProgreso(doc.progreso, falsasPartes);
@@ -839,6 +930,10 @@ export function inicializarLectorPdf(deps = {}) {
     el.btnContinuar.onclick = () => abrirDocumento(doc.id);
 
     el.continuarTapa.style.backgroundImage = '';
+    const canonica = buscarPortadaCanonica(tituloDoc || doc.nombreArchivo);
+    if (canonica) {
+      el.continuarTapa.style.backgroundImage = `url("${canonica}")`;
+    }
     if (doc.tienePortada) {
       almacen.cargarPortada(doc.id).then((blob) => {
         if (!blob) return;

@@ -18,7 +18,17 @@ import { pathToFileURL } from 'node:url';
 import { crearLibro } from './generarPdfPrueba.mjs';
 
 const app = resolve(import.meta.dirname, '..');
-const { chromium, devices } = await import(pathToFileURL(resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs')));
+const { chromium, devices } = await (async () => {
+  const candidatos = [
+    resolve(app, 'node_modules/playwright/index.mjs'),
+    resolve(app, '../node_modules/playwright/index.mjs'),
+    resolve(app, '../JG Turbo_OLD/node_modules/playwright/index.mjs'),
+  ];
+  for (const ruta of candidatos) {
+    try { return await import(pathToFileURL(ruta).href); } catch (_) {}
+  }
+  throw new Error('Playwright not found');
+})();
 const destino = resolve(app, '.playwright-cli/arranque');
 await mkdir(destino, { recursive: true });
 const pdf = join(destino, 'libro.pdf');

@@ -68,4 +68,9 @@ node_modules/
 output/
 ejemplos/*.pdf
 ejemplos/_*.txt
+/pdf/
+.commandcode/
+.cursor/
+.grok/
+.mcp.json
 

@@ -27,3 +27,7 @@ tests/
 js/vendor/pdfjs/pdf.legacy.min.mjs
 js/vendor/pdfjs/pdf.worker.legacy.min.mjs
 
+# Libros y herramientas locales de PDF (no se despliegan)
+/pdf/
+
+

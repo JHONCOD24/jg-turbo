@@ -4,6 +4,7 @@
  */
 import {
   limpiarNombreLibro, elegirMejorPortada, colorDeTitulo, iniciales,
+  buscarPortadaCanonica,
 } from '../js/pdf/caratula.js';
 
 let fallos = 0;
@@ -43,6 +44,10 @@ function comprobar(condicion, mensaje) {
     'no toca la palabra PDF cuando forma parte del título');
   comprobar(limpiarNombreLibro('LA_INTELIGENCIA_EMOCIONAL.PDF').titulo.toLowerCase() === 'la inteligencia emocional',
     'normaliza un nombre todo en mayúsculas con guiones bajos');
+  comprobar(limpiarNombreLibro('Conversaciones con Dios 2 (Adaptado).pdf').titulo === 'Conversaciones con Dios 2',
+    'quita la marca de adaptado conservando el título');
+  comprobar(limpiarNombreLibro('(anonymous)').titulo === '',
+    'descarta anonymous como título válido');
 }
 {
   /* Autor detectado cuando el nombre lo separa de forma reconocible. */
@@ -141,6 +146,33 @@ function comprobar(condicion, mensaje) {
   comprobar(iniciales('') === '?', 'un título vacío da un símbolo neutro');
   comprobar(iniciales('   ') === '?', 'solo espacios da un símbolo neutro');
   comprobar(iniciales('123 456') === '14', 'funciona con números');
+}
+
+/* ── Nombre alternativo de respaldo ──────────────────────────────────── */
+{
+  const res = limpiarNombreLibro('(anonymous)', 'Conversaciones con Dios 2 (Adaptado).pdf');
+  comprobar(res.titulo === 'Conversaciones con Dios 2',
+    `si el título es anonymous, usa el nombre de archivo alternativo (obtuvo: "${res.titulo}")`);
+
+  const res2 = limpiarNombreLibro('', 'Secretos de Copywriting .pdf');
+  comprobar(res2.titulo === 'Secretos de Copywriting',
+    `si el título está vacío, usa el nombre de archivo alternativo (obtuvo: "${res2.titulo}")`);
+}
+
+/* ── Portadas canónicas verificadas del proyecto ──────────────────────── */
+{
+  comprobar(buscarPortadaCanonica('Conversaciones con Dios 2') === '/img/portadas/conversaciones-con-dios-2.jpg',
+    'reconoce la portada canónica de Conversaciones con Dios 2');
+  comprobar(buscarPortadaCanonica('Conversaciones con Dios 1 - edición adaptada') === '/img/portadas/conversaciones-con-dios-1.jpg',
+    'reconoce la portada canónica de Conversaciones con Dios 1');
+  comprobar(buscarPortadaCanonica('El placebo eres tú') === '/img/portadas/el-placebo-eres-tu.jpg',
+    'reconoce la portada canónica de El placebo eres tú');
+  comprobar(buscarPortadaCanonica('Secretos de Copywriting') === '/img/portadas/secretos-de-copywriting.jpg',
+    'reconoce la portada canónica de Secretos de Copywriting');
+  comprobar(buscarPortadaCanonica('CA$HVERTISING') === '/img/portadas/cashvertising.jpg',
+    'reconoce la portada canónica de CA$HVERTISING');
+  comprobar(buscarPortadaCanonica('Un libro cualquiera sin portada') === null,
+    'devuelve null para libros no canónicos');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

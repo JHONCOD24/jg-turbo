@@ -982,3 +982,60 @@ directorio así, no pelear: desplegar desde una copia limpia en el temporal
 `.vercel/project.json` para conservar el link). Es el mismo flujo que ya
 usó la v2.46.0. El `.pytest_cache` de esta raíz sigue ahí: bórralo con
 permisos de administrador cuando puedas.
+
+## Adaptar un libro: dos trampas medidas (2026-09-08)
+
+**Síntoma:** al extraer «Conversaciones con Dios 1» se perdieron los créditos
+completos (título original, traductor, editorial, ISBN) sin que nada fallara.
+**Causa:** el filtro de cabecera era `startswith("CONVERSACIONES CON DIOS")`
+y el bloque de créditos empieza con esas mismas palabras. **Regla:** el filtro
+debe pedir la cabecera entera (`"CONVERSACIONES CON DIOS – Volumen"`); y toda
+adaptación cierra con un diff de vocabulario original↔nuevo donde cada palabra
+perdida/sobrante tenga explicación (índice viejo, títulos nuevos, OCR medido).
+
+**Síntoma:** «poderosa-» + «hubo» se pegó como «poderosahubo» y «derecha-» +
+«izquierda» como «derechaizquierda». **Causa:** la regla «renglón que termina
+en guión + minúscula = partir» es falsa en este libro: de 13 casos, 6 eran
+incisos a raya y solo 4 eran particiones. **Regla:** no hay heurística que
+distinga guion de inciso de guion de partición; se listan los casos medidos
+(`PEGAR_CON_GUION` / `PEGAR_SIN_GUION`, lo demás va a raya) y el QA lo vigila
+con el diff de vocabulario, que es el que delata la palabra pegada.
+
+## Carátulas de libros: cuatro trampas medidas (2026-09-08)
+
+**Síntoma:** «Conversaciones con Dios 2» mostraba una carátula ajena («Sinners Anonymous»
+de Somme Sketcher) en lugar de la del libro. **Causa:** el PDF generado por ReportLab
+tenía en sus metadatos el título `(anonymous)`; `buscarPortadaReal` consultó OpenLibrary
+con ese título y OpenLibrary devolvió la novela romántica más popular con esa palabra.
+**Regla:** `limpiarNombreLibro` debe descartar `(anonymous)` y títulos genéricos o vacíos,
+usando el nombre de archivo como respaldo limpio.
+
+**Síntoma:** «El placebo eres tú» mostraba una portada en blanco puro en la biblioteca.
+**Causa:** la página 1 del PDF era una portadilla interior de texto con márgenes enormes;
+`extractorPdf.js` renderizaba ciegamente la página 1 sin medir si contenía una imagen
+real o solo blanco. **Regla:** muestrear píxeles de la página 1; si más del 99.2% es blanco,
+evaluar la página 2 antes de rendirse.
+
+**Síntoma:** carátulas que volvían a canvas dibujado («CD») al abrir la app sin red o si
+OpenLibrary/Google Books fallaban. **Causa:** depender al 100% de APIs externas y no tener
+un catálogo canónico de alta fidelidad preempaquetado en el Service Worker para los libros
+base de la app. **Regla:** mantener `PORTADAS_CANONICAS` en `caratula.js` apuntando a
+`/img/portadas/*.jpg`, precacheadas en `sw.js`.
+
+**Síntoma:** la cuadrícula de la biblioteca mostraba la portada nueva pero el banner superior
+«Seguir leyendo» seguía con la portada vieja o dibujada. **Causa:** `completarCaratulasQueFaltan`
+solo invocaba `pintarBiblioteca()`. **Regla:** toda actualización asíncrona de carátulas
+debe refrescar simultáneamente `pintarBiblioteca()` y `pintarContinuar()`.
+
+## Adaptar PDF con regla-pdf: pies del mismo tamaño que los títulos (2026-09-09)
+
+**Síntoma:** al correr `2_extraer.py` sin modificar sobre «Conversaciones con Dios 3»,
+los 464 pies (autor + número) y 232 cabeceras se clasificaban como `capitulo` y el
+índice salía con cientos de entradas basura. **Causa:** pies y cabeceras van en
+Jokerman 12 pt, exactamente el mismo tamaño que los números de capítulo (Georgia
+Bold 12), y `rol_linea()` decide por tamaño antes que por fuente. **Regla:** antes
+del paso 2, contar por fuente los repetidos de arriba/abajo del diagnóstico; si la
+familia del pie no es la del cuerpo, descartar por fuente (medido: 696 líneas
+Jokerman = 232×3, exacto), nunca por banda inferior: en este libro el cuerpo baja
+hasta y1=762,6 y el pie empieza en y0=763,3, así que la banda mordería prosa.
+Detalle y taller en `pdf/regla-pdf/c3-trabajo/NOTAS_C3.md`.

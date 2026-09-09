@@ -32,6 +32,12 @@ const BASURA = [
   /\b(copia|copy)\s*\d*\b/gi,
   /\(\s*\d{1,3}\s*\)\s*$/g,      /* el «(1)» de los duplicados, solo al final */
   /\b(final|definitivo|v\d+)\b\s*$/gi,
+  /\(\s*anonymous\s*\)/gi,
+  /\banonymous\b/gi,
+  /\buntitled\b/gi,
+  /\b(sin\s+t[íi]tulo)\b/gi,
+  /\(\s*adaptado(\s+para\s+lectura)?\s*\)/gi,
+  /\[\s*adaptado(\s+para\s+lectura)?\s*\]/gi,
 ];
 
 const EXTENSIONES = /\.(pdf|epub|mobi|djvu|txt|doc|docx)$/i;
@@ -45,7 +51,7 @@ const sinTildes = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, ''
  * @param {string} nombre
  * @returns {{titulo:string, autor:string}}
  */
-export function limpiarNombreLibro(nombre) {
+function limpiarCadenaSimple(nombre) {
   let t = String(nombre || '').trim();
   if (!t) return { titulo: '', autor: '' };
 
@@ -108,6 +114,24 @@ export function limpiarNombreLibro(nombre) {
   titulo = titulo.charAt(0).toUpperCase() + titulo.slice(1);
 
   return { titulo, autor };
+}
+
+/**
+ * Convierte el nombre de un archivo en título y, si se deja ver, autor.
+ * Si el nombre principal queda vacío (p. ej. «(anonymous)»), intenta el alternativo.
+ *
+ * @param {string} nombre
+ * @param {string} [alternativo]
+ * @returns {{titulo:string, autor:string}}
+ */
+export function limpiarNombreLibro(nombre, alternativo = '') {
+  const primero = limpiarCadenaSimple(nombre);
+  if (primero.titulo) return primero;
+  if (alternativo) {
+    const segundo = limpiarCadenaSimple(alternativo);
+    if (segundo.titulo) return segundo;
+  }
+  return primero;
 }
 
 /** Palabras que no ayudan a comparar dos títulos. */
@@ -357,11 +381,59 @@ export async function buscarPortadaReal({ titulo, autor = '' } = {}) {
 }
 
 /**
- * La carátula de este libro, por el mejor camino disponible.
+ * Portadas originales canónicas verificadas que la app sirve directamente
+ * para garantizar la máxima calidad y funcionamiento offline sin depender de catálogos externos.
+ */
+export const PORTADAS_CANONICAS = [
+  { clave: 'conversaciones con dios 1', ruta: '/img/portadas/conversaciones-con-dios-1.jpg' },
+  { clave: 'conversaciones con dios 2', ruta: '/img/portadas/conversaciones-con-dios-2.jpg' },
+  { clave: 'secretos de copywriting', ruta: '/img/portadas/secretos-de-copywriting.jpg' },
+  { clave: 'el placebo eres tu', ruta: '/img/portadas/el-placebo-eres-tu.jpg' },
+  { clave: 'cashvertising', ruta: '/img/portadas/cashvertising.jpg' },
+];
+
+/**
+ * Comprueba si un título coincide con alguna portada canónica oficial.
+ * @param {string} titulo
+ * @returns {string|null} ruta de la portada o null
+ */
+export function buscarPortadaCanonica(titulo) {
+  const norm = sinTildes(String(titulo || ''))
+    .toLowerCase()
+    .replace(/\$/g, 's')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!norm) return null;
+  for (const item of PORTADAS_CANONICAS) {
+    if (norm.includes(item.clave) || item.clave.includes(norm)) {
+      return item.ruta;
+    }
+  }
+  return null;
+}
+
+/**
+ * La carátula de este libro, por el mejor camino disponible:
+ * 1. Portada canónica verificada del proyecto (si coincide).
+ * 2. Portada real del catálogo (OpenLibrary / Google Books).
+ * 3. Portada dibujada con título, autor y color característico.
+ *
  * @param {{titulo:string, autor?:string, buscarReal?:boolean}} libro
  * @returns {Promise<{blob:Blob|null, origen:'real'|'dibujada'|'ninguna'}>}
  */
 export async function conseguirCaratula({ titulo, autor = '', buscarReal = true } = {}) {
+  const rutaCanonica = buscarPortadaCanonica(titulo);
+  if (rutaCanonica && typeof fetch !== 'undefined') {
+    try {
+      const resp = await fetch(rutaCanonica);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        if (blob && blob.size > 1000) return { blob, origen: 'real' };
+      }
+    } catch (_) {}
+  }
+
   if (buscarReal) {
     const real = await buscarPortadaReal({ titulo, autor });
     if (real) return { blob: real, origen: 'real' };

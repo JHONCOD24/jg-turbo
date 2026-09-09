@@ -207,8 +207,8 @@ export function componerRegistroDocumento(previo, meta, {
     caracteres: partes
       ? partes.reduce((suma, p) => suma + String(p.texto || '').length, 0)
       : (datos.caracteres || base.caracteres || 0),
-    tieneArchivo: pdf ? true : Boolean(base.tieneArchivo),
-    tienePortada: portada ? true : Boolean(base.tienePortada),
+    tieneArchivo: pdf ? true : (datos.tieneArchivo !== undefined ? Boolean(datos.tieneArchivo) : Boolean(base.tieneArchivo)),
+    tienePortada: portada ? true : (datos.tienePortada !== undefined ? Boolean(datos.tienePortada) : Boolean(base.tienePortada)),
     progreso: datos.progreso || base.progreso || progresoInicial(),
     estado: datos.estado || base.estado || 'sin-empezar',
     creado: base.creado || datos.creado || ahora,
@@ -893,10 +893,11 @@ export async function guardarPortadaRecibida(id, dataURL) {
  *
  * @param {string} id
  * @param {Blob} portada
- * @param {'real'|'dibujada'} origen – solo para saber de dónde salió
+ * @param {'real'|'dibujada'|'pdf'} origen – solo para saber de dónde salió
+ * @param {{nuevoTitulo?:string}} [opciones]
  * @returns {Promise<boolean>}
  */
-export async function guardarPortadaGenerada(id, portada, origen = 'dibujada') {
+export async function guardarPortadaGenerada(id, portada, origen = 'dibujada', { nuevoTitulo = null } = {}) {
   if (!id || !portada || !portada.size) return false;
   try {
     await conAlmacenes([ARCHIVOS], 'readwrite', async (archivos) => {
@@ -908,6 +909,9 @@ export async function guardarPortadaGenerada(id, portada, origen = 'dibujada') {
       if (!doc) return;
       doc.tienePortada = true;
       doc.origenPortada = origen;
+      if (nuevoTitulo && (!doc.titulo || doc.titulo.trim().toLowerCase() === '(anonymous)' || doc.titulo.trim().toLowerCase() === 'untitled')) {
+        doc.titulo = nuevoTitulo;
+      }
       doc.contenidoActualizado = Date.now();
       doc.actualizado = Date.now();
       doc.portadaSincronizada = 0;      /* la nube todavía no la tiene */

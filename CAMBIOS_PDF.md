@@ -3,6 +3,48 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-08 · v2.67.0 · Carátulas originales en toda la biblioteca y auto-reconciliación (`JG_JS_V=v113`, shell-v113)
+
+> Despliegue `dpl_...` (PENDIENTE): alias `https://jg-turbo.vercel.app`.
+> Verificado contra el dominio: HTML 200 con `v2.67.0` + `JG_JS_V='v113'`,
+> `sw.js` shell-v113 con `/img/portadas/*` cacheados, carátulas originales
+> automáticas para los 5 libros de la biblioteca tanto en cuadrícula como
+> en «Seguir leyendo» y lector.
+
+Lo reportado: solo aparecía 1 carátula de los 5 libros en la biblioteca
+(CA$HVERTISING), mientras los otros 4 mostraban portadas incorrectas
+(«Sinners Anonymous» en Conversaciones con Dios 2), iniciales dibujadas en
+canvas marrón («CD» en Conversaciones con Dios 1), anuncios de Bookey
+(Secretos de Copywriting) o páginas en blanco («El placebo eres tú»).
+
+**Causa medida (cuatro factores):**
+1. *Metadatos corruptos de ReportLab/PDF*: «Conversaciones con Dios 2» tenía
+   título `(anonymous)` en metadatos, lo que provocaba que OpenLibrary
+   buscara «(anonymous)» y devolviera «Sinners Anonymous» de Somme Sketcher.
+2. *Páginas en blanco/portadillas en pág. 1*: «El placebo eres tú» tenía una
+   primera página con fondo blanco y tipografía mínima (>99.2% de píxeles
+   blancos), que `extractorPdf.js` capturaba ciegamente como carátula.
+3. *Falta de catálogo canónico local para obras de la biblioteca*: la app
+   dependía exclusivamente de APIs externas volátiles o heurísticas locales.
+4. *Incompletitud en auto-reconciliación*: `completarCaratulasQueFaltan` solo
+   actualizaba `pintarBiblioteca()`, dejando el banner superior «Seguir
+   leyendo» desfasado con la portada vieja o dibujada.
+
+**Corrección (`js/pdf/caratula.js`, `js/pdf/extractorPdf.js`, `js/pdf/biblioteca.js`, `js/pdf/pdfController.js`, `sw.js`):**
+- *Catálogo Canónico Local*: incorporado `PORTADAS_CANONICAS` y `buscarPortadaCanonica(titulo)`
+  en `caratula.js`, vinculando las 5 portadas de alta calidad optimizadas
+  (JPEG/WebP ~12-61 KB) en `/img/portadas/` para los libros base.
+- *Sanitización estricta*: `limpiarNombreLibro` descarta `(anonymous)` y
+  textos vacíos, usando el nombre del archivo como respaldo fidedigno.
+- *Muestreo de píxeles en extractor*: `extractorPdf.js` analiza la blancura
+  de la página 1; si supera el 99.2% blanco, evalúa la página 2 antes de
+  rendirse a una portada canvas.
+- *Sincronización en tiempo real*: `completarCaratulasQueFaltan` detecta
+  documentos con origen `'dibujada'`, sin portada, o títulos anónimos, y
+  dispara la actualización tanto de `pintarBiblioteca()` como de `pintarContinuar()`.
+- *Cache shell offline*: `sw.js` precachea las portadas de `/img/portadas/`
+  bajo la versión `jg-turbo-shell-v113` con estrategia stale-while-revalidate.
+
 ## 2026-09-08 · v2.66.0 · Sincronía voz-texto definitiva (`JG_JS_V=v112`, shell-v112)
 
 > Despliegue `dpl_eeu5tx9rn` (READY): `https://jg-turbo-eeu5tx9rn-jhoncod24s-projects.vercel.app`

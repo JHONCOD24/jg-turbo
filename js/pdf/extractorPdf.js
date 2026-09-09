@@ -235,6 +235,29 @@ export async function renderizarPortada(doc, { ancho = 380, numero = 1 } = {}) {
     contexto.fillStyle = '#ffffff';
     contexto.fillRect(0, 0, lienzo.width, lienzo.height);
     await pagina.render({ canvasContext: contexto, viewport: vista }).promise;
+
+    /* Si la primera página es casi 100% blanca (portadilla vacía o desbordada),
+     * probar la página 2 para capturar la carátula gráfica real. */
+    if (numero === 1 && (doc.numPages || 1) >= 2) {
+      try {
+        const datosImg = contexto.getImageData(0, 0, lienzo.width, lienzo.height);
+        const px = datosImg.data;
+        let blancos = 0;
+        const paso = 16;
+        const total = Math.floor(px.length / paso);
+        for (let i = 0; i < px.length; i += paso) {
+          if (px[i] > 248 && px[i + 1] > 248 && px[i + 2] > 248) blancos += 1;
+        }
+        if (blancos / (total || 1) > 0.992) {
+          try { pagina?.cleanup?.(); } catch (_) {}
+          pagina = null;
+          lienzo.width = 0;
+          lienzo.height = 0;
+          return renderizarPortada(doc, { ancho, numero: 2 });
+        }
+      } catch (_) { /* si falla lectura de píxeles, conservar página 1 */ }
+    }
+
     const blob = await new Promise((listo) => lienzo.toBlob(listo, 'image/jpeg', 0.82));
     lienzo.width = 0;
     lienzo.height = 0;
