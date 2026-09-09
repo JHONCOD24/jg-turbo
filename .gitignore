@@ -68,7 +68,14 @@ node_modules/
 output/
 ejemplos/*.pdf
 ejemplos/_*.txt
-/pdf/
+pdf/*.pdf
+pdf/*.txt
+pdf/*.json
+pdf/*.py
+pdf/*.png
+pdf/_adaptacion/
+pdf/regla-pdf/c3-trabajo/
+
 .commandcode/
 .cursor/
 .grok/
