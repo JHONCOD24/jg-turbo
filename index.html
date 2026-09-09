@@ -3826,9 +3826,9 @@
     }
     .tabs-row{gap:6px;margin-bottom:10px}
     .tabs{padding:4px;gap:4px;width:100%}
-    .tab span.lbl{display:none}
-    .tab{padding:11px 4px;min-height:44px}
-    .tab .em{font-size:18px}
+    /* Las etiquetas de las pestañas viven en el bloque ≤640 de más abajo
+       (icono sobre etiqueta, nombres completos): aquí no se ocultan, para
+       que reordenar el CSS no las apague por accidente. */
     /* Comandos de voz: fuera de la barra superior (viven en Opciones) */
     .btn-cheat{display:none !important}
     .kbd-hint{display:none !important}
@@ -4513,7 +4513,14 @@
     background:linear-gradient(135deg,#5B7CFF,#3D5AFE);border:0;color:#fff;box-shadow:0 10px 24px -10px rgba(61,90,254,.7);
   }
   .trans-run-row .btn-trans-main:hover{filter:brightness(1.05);transform:translateY(-1px)}
-  .trans-run-row .btn-trans-main:disabled{filter:none;transform:none;opacity:.85}
+  /* APP-02: mismo patrón veraz que Archivo/YouTube (fondo plano, sin
+     gradiente apagado): vacío se distingue por texto y estado, no por
+     un simple fundido que parece activo. */
+  .trans-run-row .btn-trans-main:disabled{
+    filter:none;transform:none;background:var(--surface-2);
+    border-color:var(--line);color:var(--muted-2);box-shadow:none;
+    cursor:not-allowed;opacity:.7;
+  }
   .trans-run-row .btn-trans-main svg{width:18px;height:18px}
   .trans-editor--result.has-content{border-color:rgba(39,225,193,.48);box-shadow:0 0 0 1px rgba(39,225,193,.08)}
   .trans-listen:not(.has-text){display:none}
@@ -4541,9 +4548,16 @@
     .trans-editor--result > textarea{min-height:160px}
   }
   @media (max-width:640px){
-    .tab{flex-direction:column;gap:1px;padding:7px 2px;min-height:52px;font-size:10px}
-    .tab span.lbl{display:block;max-width:100%}
-    .tab .em{font-size:15px;line-height:1.2}
+    /* APP-01: cinco pestañas con icono sobre etiqueta y nombres completos.
+       El espaciado ya va al mínimo (2 px) antes que el texto; la etiqueta
+       puede partirse en dos líneas y la pestaña crece (nunca se recorta),
+       así con aumento de texto siguen identificables y alcanzables. La
+       especificidad con ancestro es a propósito: la regla global tardía
+       `.tab` ganaría por orden y rompería los nombres a 320 px. */
+    .tabs{gap:2px;padding:2px}
+    .tabs .tab{flex-direction:column;gap:1px;padding:7px 2px;min-height:52px;height:auto;font-size:11px}
+    .tabs .tab span.lbl{display:block;max-width:100%;white-space:normal;line-height:1.25;overflow-wrap:anywhere}
+    .tabs .tab .em{font-size:15px;line-height:1.2}
     .file-opts,.yt-opts{grid-template-columns:1fr}
     .result-head{align-items:center}
     .result-title-group{flex:1}
@@ -7473,10 +7487,11 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           </div>
 
           <div class="trans-run-row">
-            <button type="button" class="btn btn-trans-main" id="btnTransTranslate">
+            <button type="button" class="btn btn-trans-main" id="btnTransTranslate" aria-describedby="transRunHint">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
               <span id="transBtnLabel">Traducir ahora</span>
             </button>
+            <p class="task-action-hint" id="transRunHint">Escribe o importa texto para traducir</p>
             <div id="transProgArea" class="trans-prog" hidden aria-live="polite">
               <div class="prog-bar"><div class="prog-fill" id="transProg"></div></div>
               <div class="prog-label" id="transProgLabel">Traduciendo…</div>
@@ -17360,6 +17375,11 @@ function actualizarContadoresTraduccion() {
   if (btnTransCopy) btnTransCopy.disabled = !hayTraduccion;
   if (btnTransTxt) btnTransTxt.disabled = !hayTraduccion;
   if (btnTransClear) btnTransClear.disabled = !hayOrigen && !hayTraduccion;
+  /* APP-02: el motivo visible junto a la acción, no solo color. Vacío =
+   * deshabilitado + explicación; con texto = activo; procesando y error
+   * ya cambian el texto del botón y el área de progreso/validación. */
+  const transRunHint = document.getElementById('transRunHint');
+  if (transRunHint) transRunHint.hidden = hayOrigen;
   transTrg?.closest('.trans-editor')?.classList.toggle('has-content', hayTraduccion);
   document.querySelector('[data-tts-console="trans"]')?.closest('.trans-listen')?.classList.toggle('has-text', hayTraduccion);
   if(typeof ttsActualizarProgreso === 'function') ttsActualizarProgreso();
