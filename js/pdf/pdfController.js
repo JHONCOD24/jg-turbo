@@ -528,13 +528,22 @@ export function inicializarLectorPdf(deps = {}) {
     if (rejillaMovibleIniciada || !rejilla) return;
     rejillaMovibleIniciada = true;
 
+    // Cerrar menús de opciones abiertos al pulsar en cualquier otro punto
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.pdf-libro-menu')) {
+        document.querySelectorAll('.pdf-libro-menu[open]').forEach((m) => {
+          m.open = false;
+        });
+      }
+    });
+
     window.addEventListener('pointermove', (e) => {
       if (!arrastreActivo) return;
 
       if (!arrastreActivo.iniciado) {
         const dx = Math.abs(e.clientX - arrastreActivo.inicioX);
         const dy = Math.abs(e.clientY - arrastreActivo.inicioY);
-        if (arrastreActivo.tipoPuntero !== 'touch' && (dx > 5 || dy > 5)) {
+        if (arrastreActivo.tipoPuntero !== 'touch' && (dx > 4 || dy > 4)) {
           arrastreActivo.iniciado = true;
           arrastreActivo.item.classList.add('jg-arrastrando');
           arrastreActivo.item.dataset.bloquearClick = '1';
@@ -549,9 +558,9 @@ export function inicializarLectorPdf(deps = {}) {
       if (arrastreActivo.iniciado) {
         if (e.cancelable) e.preventDefault();
 
-        if (e.clientY < 65) {
+        if (e.clientY < 70) {
           window.scrollBy({ top: -14, behavior: 'auto' });
-        } else if (e.clientY > window.innerHeight - 65) {
+        } else if (e.clientY > window.innerHeight - 70) {
           window.scrollBy({ top: 14, behavior: 'auto' });
         }
 
@@ -560,11 +569,15 @@ export function inicializarLectorPdf(deps = {}) {
           const rect = bajo.getBoundingClientRect();
           const centroX = rect.left + rect.width / 2;
           const centroY = rect.top + rect.height / 2;
-          const esDespues = (e.clientY > centroY) || (e.clientY >= rect.top && e.clientX > centroX);
+          const esDespues = (e.clientY > centroY) || (Math.abs(e.clientY - centroY) < rect.height * 0.4 && e.clientX > centroX);
           if (esDespues) {
-            rejilla.insertBefore(arrastreActivo.item, bajo.nextSibling);
+            if (arrastreActivo.item.previousElementSibling !== bajo) {
+              rejilla.insertBefore(arrastreActivo.item, bajo.nextSibling);
+            }
           } else {
-            rejilla.insertBefore(arrastreActivo.item, bajo);
+            if (arrastreActivo.item.nextElementSibling !== bajo) {
+              rejilla.insertBefore(arrastreActivo.item, bajo);
+            }
           }
         }
       }
@@ -577,8 +590,14 @@ export function inicializarLectorPdf(deps = {}) {
         arrastreActivo.longPressTimer = null;
       }
       const item = arrastreActivo.item;
+      const tirador = arrastreActivo.tirador;
+      const pointerId = arrastreActivo.pointerId;
       const huboArrastre = arrastreActivo.iniciado;
       arrastreActivo = null;
+
+      if (tirador && pointerId !== undefined) {
+        try { tirador.releasePointerCapture(pointerId); } catch (_) {}
+      }
 
       if (huboArrastre && item) {
         item.classList.remove('jg-arrastrando');
@@ -610,9 +629,10 @@ export function inicializarLectorPdf(deps = {}) {
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
     item.setAttribute('aria-label', `Abrir ${tituloDoc}`);
+    item.setAttribute('draggable', 'false');
 
     item.addEventListener('click', (e) => {
-      if (e.target.closest('.pdf-libro-menu') || e.target.closest('.pdf-libro-arrastre')) return;
+      if (e.target.closest('.pdf-libro-acciones')) return;
       if (item.dataset.bloquearClick === '1') return;
       abrirDocumento(doc.id);
     });
@@ -638,28 +658,31 @@ export function inicializarLectorPdf(deps = {}) {
         return;
       }
       if (e.key === 'Enter' || e.key === ' ') {
-        if (e.target.closest('.pdf-libro-menu') || e.target.closest('.pdf-libro-arrastre')) return;
+        if (e.target.closest('.pdf-libro-acciones')) return;
         e.preventDefault();
         abrirDocumento(doc.id);
       }
     });
 
-    // Tirador táctil y de ratón para mover carátula
+    // Tirador táctil y de ratón para mover carátula (minimalista, elegante, no invasivo)
     const tirador = document.createElement('button');
     tirador.type = 'button';
     tirador.className = 'pdf-libro-arrastre';
-    tirador.title = 'Arrastra para reordenar esta carátula';
+    tirador.title = 'Arrastrar para reordenar esta carátula';
     tirador.setAttribute('aria-label', `Mover carátula de ${tituloDoc}`);
-    tirador.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:14px;height:14px;"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>';
+    tirador.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="width:13px;height:13px;"><path d="M3.5 6h9M3.5 10h9"/></svg>';
 
     tirador.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       e.stopPropagation();
+      e.preventDefault();
       try {
-        if (navigator.vibrate) navigator.vibrate(25);
+        tirador.setPointerCapture(e.pointerId);
       } catch (_) {}
       arrastreActivo = {
         item,
+        tirador,
+        pointerId: e.pointerId,
         tipoPuntero: e.pointerType,
         inicioX: e.clientX,
         inicioY: e.clientY,
@@ -668,65 +691,34 @@ export function inicializarLectorPdf(deps = {}) {
       };
       item.classList.add('jg-arrastrando');
       item.dataset.bloquearClick = '1';
+      try {
+        if (navigator.vibrate) navigator.vibrate(25);
+      } catch (_) {}
     });
 
     item.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.pdf-libro-menu') || e.target.closest('.pdf-libro-arrastre')) return;
-      if (e.button !== 0 && e.pointerType === 'mouse') return;
-
-      let timer = null;
+      if (e.target.closest('.pdf-libro-acciones')) return;
       if (e.pointerType === 'touch' || e.pointerType === 'pen') {
-        timer = setTimeout(() => {
-          if (arrastreActivo && arrastreActivo.item === item) {
+        const timer = setTimeout(() => {
+          if (arrastreActivo && arrastreActivo.item === item && !arrastreActivo.iniciado) {
             arrastreActivo.iniciado = true;
             item.classList.add('jg-arrastrando');
             item.dataset.bloquearClick = '1';
             try {
-              if (navigator.vibrate) navigator.vibrate(25);
+              if (navigator.vibrate) navigator.vibrate(30);
             } catch (_) {}
           }
         }, 280);
-      }
 
-      arrastreActivo = {
-        item,
-        tipoPuntero: e.pointerType,
-        inicioX: e.clientX,
-        inicioY: e.clientY,
-        iniciado: false,
-        longPressTimer: timer
-      };
-    });
-
-    item.setAttribute('draggable', 'true');
-    item.addEventListener('dragstart', (e) => {
-      if (e.target.closest('.pdf-libro-menu')) {
-        e.preventDefault();
-        return;
-      }
-      item.classList.add('jg-arrastrando');
-      item.dataset.bloquearClick = '1';
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', doc.id);
-    });
-    item.addEventListener('dragend', () => {
-      item.classList.remove('jg-arrastrando');
-      guardarOrdenRejilla();
-      setTimeout(() => { item.dataset.bloquearClick = '0'; }, 200);
-    });
-    item.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      const arrastrado = el.rejilla ? el.rejilla.querySelector('.pdf-libro.jg-arrastrando') : null;
-      if (!arrastrado || arrastrado === item) return;
-      const rect = item.getBoundingClientRect();
-      const medioX = rect.left + rect.width / 2;
-      const medioY = rect.top + rect.height / 2;
-      const esDespues = (e.clientY > medioY) || (e.clientY >= rect.top && e.clientX > medioX);
-      if (esDespues) {
-        item.parentElement?.insertBefore(arrastrado, item.nextSibling);
-      } else {
-        item.parentElement?.insertBefore(arrastrado, item);
+        arrastreActivo = {
+          item,
+          pointerId: e.pointerId,
+          tipoPuntero: e.pointerType,
+          inicioX: e.clientX,
+          inicioY: e.clientY,
+          iniciado: false,
+          longPressTimer: timer
+        };
       }
     });
 
@@ -741,18 +733,113 @@ export function inicializarLectorPdf(deps = {}) {
     estadoEl.textContent = etiquetaEstado(doc.estado);
     tapa.appendChild(estadoEl);
 
-    // Menú ⋯ en la esquina superior derecha
+    // Menú ⋯ de opciones del libro
     const menu = document.createElement('details');
     menu.className = 'pdf-libro-menu';
     menu.addEventListener('click', (e) => e.stopPropagation());
 
     const summary = document.createElement('summary');
-    summary.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:16px;height:16px;"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg>';
+    summary.innerHTML = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style="width:13px;height:13px;"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>';
     summary.title = 'Opciones del libro';
     summary.setAttribute('aria-label', `Opciones de ${doc.titulo || 'documento'}`);
+    menu.addEventListener('toggle', () => {
+      if (menu.open) {
+        document.querySelectorAll('.pdf-libro-menu[open]').forEach((m) => {
+          if (m !== menu) m.open = false;
+        });
+      }
+    });
 
     const pop = document.createElement('div');
     pop.className = 'pdf-libro-menu-pop';
+
+    // Fila compacta de botones de movimiento
+    const seccionMov = document.createElement('div');
+    seccionMov.className = 'pdf-menu-seccion-mov';
+
+    const lblMov = document.createElement('span');
+    lblMov.className = 'pdf-menu-etiqueta';
+    lblMov.textContent = 'Mover posición';
+
+    const filaMov = document.createElement('div');
+    filaMov.className = 'pdf-menu-fila-mov';
+
+    const btnInicio = document.createElement('button');
+    btnInicio.type = 'button';
+    btnInicio.className = 'mini-btn-mov';
+    btnInicio.dataset.mov = 'inicio';
+    btnInicio.title = 'Mover al inicio';
+    btnInicio.setAttribute('aria-label', `Mover ${tituloDoc} a la primera posición`);
+    btnInicio.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg><span class="sr-only">Mover al inicio</span>';
+    btnInicio.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      if (item.parentElement && item.parentElement.firstElementChild !== item) {
+        item.parentElement.prepend(item);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» colocado al principio.`, 'ok', { efimero: true });
+        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
+      }
+    });
+
+    const btnAtras = document.createElement('button');
+    btnAtras.type = 'button';
+    btnAtras.className = 'mini-btn-mov';
+    btnAtras.dataset.mov = 'atras';
+    btnAtras.title = 'Mover a la izquierda';
+    btnAtras.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la izquierda`);
+    btnAtras.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg><span class="sr-only">Mover a la izquierda</span>';
+    btnAtras.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      const ant = item.previousElementSibling;
+      if (ant && ant.classList.contains('pdf-libro')) {
+        item.parentElement.insertBefore(item, ant);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» movido hacia la izquierda.`, 'ok', { efimero: true });
+        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
+      }
+    });
+
+    const btnAdelante = document.createElement('button');
+    btnAdelante.type = 'button';
+    btnAdelante.className = 'mini-btn-mov';
+    btnAdelante.dataset.mov = 'adelante';
+    btnAdelante.title = 'Mover a la derecha';
+    btnAdelante.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la derecha`);
+    btnAdelante.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg><span class="sr-only">Mover a la derecha</span>';
+    btnAdelante.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      const sig = item.nextElementSibling;
+      if (sig && sig.classList.contains('pdf-libro')) {
+        item.parentElement.insertBefore(sig, item);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» movido hacia la derecha.`, 'ok', { efimero: true });
+        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
+      }
+    });
+
+    const btnFinal = document.createElement('button');
+    btnFinal.type = 'button';
+    btnFinal.className = 'mini-btn-mov';
+    btnFinal.dataset.mov = 'final';
+    btnFinal.title = 'Mover al final';
+    btnFinal.setAttribute('aria-label', `Mover ${tituloDoc} a la última posición`);
+    btnFinal.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" aria-hidden="true"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg><span class="sr-only">Mover al final</span>';
+    btnFinal.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.open = false;
+      if (item.parentElement && item.parentElement.lastElementChild !== item) {
+        item.parentElement.appendChild(item);
+        guardarOrdenRejilla();
+        avisar(`«${tituloDoc}» colocado al final.`, 'ok', { efimero: true });
+        try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
+      }
+    });
+
+    filaMov.append(btnInicio, btnAtras, btnAdelante, btnFinal);
+    seccionMov.append(lblMov, filaMov);
 
     const reiniciar = document.createElement('button');
     reiniciar.type = 'button';
@@ -773,9 +860,6 @@ export function inicializarLectorPdf(deps = {}) {
       sincronizarAhora({ silencioso: true });
     });
 
-    /* Buscar la carátula de verdad. Se ofrece siempre, no solo a los libros
-     * sin tapa: una portada dibujada puede cambiarse por la real si el libro
-     * aparece en el catálogo. */
     const buscarTapa = document.createElement('button');
     buscarTapa.type = 'button';
     buscarTapa.className = 'mini-btn';
@@ -796,7 +880,7 @@ export function inicializarLectorPdf(deps = {}) {
 
     const borrar = document.createElement('button');
     borrar.type = 'button';
-    borrar.className = 'mini-btn';
+    borrar.className = 'mini-btn btn-peligro';
     borrar.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg><span>Borrar</span>';
     borrar.title = `Borrar ${doc.titulo || 'este documento'} de la biblioteca`;
     borrar.setAttribute('aria-label', `Borrar ${doc.titulo || 'este documento'}`);
@@ -805,8 +889,6 @@ export function inicializarLectorPdf(deps = {}) {
       confirmarBorrado(borrar, doc);
     });
 
-    /* Solo en este aparato: el libro no sale a la nube (ni se pisa desde
-     * ella). Es la forma de tener algo privado sin cuenta ni contraseña. */
     const privado = document.createElement('button');
     privado.type = 'button';
     privado.className = 'mini-btn';
@@ -828,8 +910,6 @@ export function inicializarLectorPdf(deps = {}) {
       sincronizarAhora({ silencioso: true });
     });
 
-    /* Compartir copia: descarga un archivo para pasarlo por donde sea. Quien
-     * lo abre lo lee sin necesitar tu llave ni tu nube. */
     const compartir = document.createElement('button');
     compartir.type = 'button';
     compartir.className = 'mini-btn';
@@ -842,10 +922,9 @@ export function inicializarLectorPdf(deps = {}) {
       await descargarCopiaLibro(doc.id);
     });
 
-    /* Pedir contenido: este aparato avisa al que tiene el original para que
-     * lo mande completo la próxima vez que sincronice. */
+    let pedir = null;
     if (doc.sincronizar !== false && !doc.tieneArchivo) {
-      const pedir = document.createElement('button');
+      pedir = document.createElement('button');
       pedir.type = 'button';
       pedir.className = 'mini-btn';
       pedir.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Pedir contenido</span>';
@@ -863,12 +942,11 @@ export function inicializarLectorPdf(deps = {}) {
         avisar('Pedido enviado. Abre JG Turbo en tu otro aparato para que lo mande.', 'info');
         sincronizarAhora({ silencioso: true });
       });
-      pop.append(pedir);
     }
 
-    /* Reenviar: otro aparato pidió este libro completo. */
+    let reenviar = null;
     if (doc.pideFuente) {
-      const reenviar = document.createElement('button');
+      reenviar = document.createElement('button');
       reenviar.type = 'button';
       reenviar.className = 'mini-btn';
       reenviar.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg><span>Reenviar ahora</span>';
@@ -882,14 +960,11 @@ export function inicializarLectorPdf(deps = {}) {
         if (!ok) { avisar('No se pudo preparar el envío.', 'warn'); return; }
         await sincronizarAhora();
       });
-      pop.append(reenviar);
     }
 
-    /* Compartir con PDF: igual que la copia, pero incluye el original para
-     * que el otro aparato pueda reprocesar y usar OCR. Solo si pesa lo
-     * razonable para una descarga (se avisa antes). */
+    let conPdf = null;
     if (doc.tieneArchivo) {
-      const conPdf = document.createElement('button');
+      conPdf = document.createElement('button');
       conPdf.type = 'button';
       conPdf.className = 'mini-btn';
       conPdf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Compartir con PDF</span>';
@@ -900,79 +975,19 @@ export function inicializarLectorPdf(deps = {}) {
         menu.open = false;
         await descargarCopiaLibro(doc.id, { conPdf: true });
       });
-      pop.append(conPdf);
     }
 
-    const moverInicio = document.createElement('button');
-    moverInicio.type = 'button';
-    moverInicio.className = 'mini-btn';
-    moverInicio.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg><span>Mover al inicio</span>';
-    moverInicio.title = `Mover ${tituloDoc} a la primera posición`;
-    moverInicio.setAttribute('aria-label', `Mover ${tituloDoc} a la primera posición`);
-    moverInicio.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      if (item.parentElement && item.parentElement.firstElementChild !== item) {
-        item.parentElement.prepend(item);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» colocado al principio.`, 'ok', { efimero: true });
-      }
-    });
+    const div1 = document.createElement('div');
+    div1.className = 'pdf-menu-divisor';
+    const div2 = document.createElement('div');
+    div2.className = 'pdf-menu-divisor';
 
-    const moverAtras = document.createElement('button');
-    moverAtras.type = 'button';
-    moverAtras.className = 'mini-btn';
-    moverAtras.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="15 18 9 12 15 6"/></svg><span>Mover a la izquierda</span>';
-    moverAtras.title = `Mover ${tituloDoc} una posición a la izquierda`;
-    moverAtras.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la izquierda`);
-    moverAtras.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      const ant = item.previousElementSibling;
-      if (ant && ant.classList.contains('pdf-libro')) {
-        item.parentElement.insertBefore(item, ant);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» movido hacia la izquierda.`, 'ok', { efimero: true });
-      }
-    });
-
-    const moverAdelante = document.createElement('button');
-    moverAdelante.type = 'button';
-    moverAdelante.className = 'mini-btn';
-    moverAdelante.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="9 18 15 12 9 6"/></svg><span>Mover a la derecha</span>';
-    moverAdelante.title = `Mover ${tituloDoc} una posición a la derecha`;
-    moverAdelante.setAttribute('aria-label', `Mover ${tituloDoc} una posición a la derecha`);
-    moverAdelante.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      const sig = item.nextElementSibling;
-      if (sig && sig.classList.contains('pdf-libro')) {
-        item.parentElement.insertBefore(sig, item);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» movido hacia la derecha.`, 'ok', { efimero: true });
-      }
-    });
-
-    const moverFinal = document.createElement('button');
-    moverFinal.type = 'button';
-    moverFinal.className = 'mini-btn';
-    moverFinal.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:14px;height:14px;"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg><span>Mover al final</span>';
-    moverFinal.title = `Mover ${tituloDoc} a la última posición`;
-    moverFinal.setAttribute('aria-label', `Mover ${tituloDoc} a la última posición`);
-    moverFinal.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.open = false;
-      if (item.parentElement && item.parentElement.lastElementChild !== item) {
-        item.parentElement.appendChild(item);
-        guardarOrdenRejilla();
-        avisar(`«${tituloDoc}» colocado al final.`, 'ok', { efimero: true });
-      }
-    });
-
-    pop.append(reiniciar, buscarTapa, moverInicio, moverAtras, moverAdelante, moverFinal, privado, compartir, borrar);
+    pop.append(seccionMov, div1, buscarTapa, reiniciar, privado, compartir);
+    if (pedir) pop.append(pedir);
+    if (reenviar) pop.append(reenviar);
+    if (conPdf) pop.append(conPdf);
+    pop.append(div2, borrar);
     menu.append(summary, pop);
-    item.appendChild(tirador);
-    item.appendChild(menu);
 
     const cuerpo = document.createElement('div');
     cuerpo.className = 'pdf-libro-cuerpo';
@@ -980,6 +995,10 @@ export function inicializarLectorPdf(deps = {}) {
     titulo.className = 'pdf-libro-titulo';
     titulo.textContent = tituloDoc;
     titulo.title = tituloDoc;
+
+    const pie = document.createElement('div');
+    pie.className = 'pdf-libro-pie';
+
     const meta = document.createElement('span');
     meta.className = 'pdf-libro-meta';
     const partesGuardadas = (doc.titulosPartes || []).length || 1;
@@ -987,6 +1006,12 @@ export function inicializarLectorPdf(deps = {}) {
       ? calcularPorcentaje(doc.progreso, (doc.titulosPartes || ['x']).map(() => ({ texto: 'x' })))
       : 0;
     meta.textContent = `${doc.paginasLeidas || 0} págs · ${partesGuardadas > 1 ? `${partesGuardadas} capítulos` : 'capítulo único'}`;
+
+    const acciones = document.createElement('div');
+    acciones.className = 'pdf-libro-acciones';
+    acciones.append(tirador, menu);
+
+    pie.append(meta, acciones);
 
     const barra = document.createElement('div');
     barra.className = 'pdf-barra';
@@ -1000,7 +1025,7 @@ export function inicializarLectorPdf(deps = {}) {
     relleno.style.width = `${porcentaje}%`;
     barra.appendChild(relleno);
 
-    cuerpo.append(titulo, meta, barra);
+    cuerpo.append(titulo, pie, barra);
     // Avance de lectura, estado de corrección y sincronización por separado.
     try {
       const sub = document.createElement('span');

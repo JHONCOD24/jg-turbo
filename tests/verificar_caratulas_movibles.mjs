@@ -185,13 +185,18 @@ try {
     const caja1 = await tirador1.boundingBox();
     const cajaDestino = await page.locator('.pdf-libro:last-child').boundingBox();
     if (caja1 && cajaDestino) {
+      const idArrastrado = await page.locator('.pdf-libro:first-child').getAttribute('data-doc-id');
       await page.mouse.move(caja1.x + caja1.width / 2, caja1.y + caja1.height / 2);
       await page.mouse.down();
-      await page.mouse.move(cajaDestino.x + cajaDestino.width / 2, cajaDestino.y + cajaDestino.height / 2, { steps: 5 });
+      await page.mouse.move(cajaDestino.x + cajaDestino.width / 2, cajaDestino.y + cajaDestino.height / 2, { steps: 10 });
       await page.waitForTimeout(150);
       await page.mouse.up();
       await page.waitForTimeout(400);
-      comprobar(true, 'arrastre físico con puntero de carátula ejecutado');
+      const ultimoIdDespues = await page.evaluate(() => {
+        const items = document.querySelectorAll('.pdf-libro');
+        return items[items.length - 1]?.dataset.docId;
+      });
+      comprobar(ultimoIdDespues === idArrastrado, 'arrastre físico con puntero posiciona la carátula en su nueva ubicación');
     }
 
     // Verificar persistencia tras recarga F5
