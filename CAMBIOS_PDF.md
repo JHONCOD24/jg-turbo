@@ -5,7 +5,8 @@
 
 ## 2026-09-08 · v2.67.0 · Carátulas originales en toda la biblioteca y auto-reconciliación (`JG_JS_V=v113`, shell-v113)
 
-> Despliegue `dpl_...` (PENDIENTE): alias `https://jg-turbo.vercel.app`.
+> Despliegue `dpl_GSZkk6J6WS6BNYms9jfxzXckSxQ4` (READY): `https://jg-turbo-50sf3fa2x-jhoncod24s-projects.vercel.app`
+> con alias `https://jg-turbo.vercel.app`.
 > Verificado contra el dominio: HTML 200 con `v2.67.0` + `JG_JS_V='v113'`,
 > `sw.js` shell-v113 con `/img/portadas/*` cacheados, carátulas originales
 > automáticas para los 5 libros de la biblioteca tanto en cuadrícula como

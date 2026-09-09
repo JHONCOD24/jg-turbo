@@ -1038,4 +1038,17 @@ del paso 2, contar por fuente los repetidos de arriba/abajo del diagnóstico; si
 familia del pie no es la del cuerpo, descartar por fuente (medido: 696 líneas
 Jokerman = 232×3, exacto), nunca por banda inferior: en este libro el cuerpo baja
 hasta y1=762,6 y el pie empieza en y0=763,3, así que la banda mordería prosa.
+
+## Despliegue con copia limpia: robocopy /XD excluye por nombre simple en subcarpetas (2026-09-08)
+
+**Síntoma:** tras desplegar desde una copia limpia en `$env:TEMP`, `js/pdf/caratula.js` daba 404
+y los módulos del lector no cargaban en producción.
+**Causa:** al pasar `/XD ... "pdf" ...` a `robocopy` para evitar subir la carpeta de libros de la raíz,
+robocopy excluyó toda carpeta llamada `pdf` en cualquier nivel, borrando `js\pdf\`. Además,
+el tamaño del bundle superó los 225 MB porque `Fondos Musicales/` (archivos `.wav` de 300+ MB) no estaba
+en `.vercelignore`.
+**Regla:** para excluir una carpeta de la raíz con robocopy, usar la ruta absoluta o copiar selectivamente;
+y mantener `.vercelignore` alineado con `.gitignore` para carpetas pesadas de audio (`Fondos Musicales/`,
+`*.wav`, etc.).
+
 Detalle y taller en `pdf/regla-pdf/c3-trabajo/NOTAS_C3.md`.
