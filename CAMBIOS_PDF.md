@@ -3,6 +3,121 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-09 · v2.68.0 · Correcciones auditoría UX/UI v117 (`JG_JS_V=v118`, shell-v118)
+
+Documento de correcciones: `CORRECCIONES_AUDITORIA_UX_UI_PDF_V117.md`. Plan base:
+`PLAN_UX_UI_PDF_IMPLEMENTACION_LLM.md`. Se implementan solo las correcciones
+documentadas, sin rediseño ni cambios de lógica de negocio. Se conservan modo
+Organizar, jerarquía de voz, Contenido, portadas, progreso y sincronización.
+
+### PDF-FIX-01 · Crítica · actualización atómica PWA (`sw.js`, `index.html`)
+
+Lo reportado: primera entrada a producción tras actualizar moría con «No se
+pudo cargar el lector de PDF» (`./progreso.js` no exportaba `etiquetaSeccion`);
+una recarga lo recuperaba. El archivo actual sí exporta esa función.
+
+Causa medida: mezcla de módulos de versiones distintas. El SW servía `/js/`
+caché-primero: el módulo versionado (`pdfController.js?v=NUEVA`: fallo de caché
+→ red → NUEVO) se mezclaba con sus dependencias sin versionar (`./progreso.js`:
+acierto de caché → VIEJO). El grafo nuevo pedía un export que el viejo no tenía.
+
+Corrección mínima compatible con el SW actual y la carga dinámica:
+- `/js/`, `/audio/musica/`, `/img/portadas/`: red primero, caché como respaldo.
+  En línea todo el grafo viene de la red (coherente); sin conexión todo sale de
+  la caché (grafo viejo pero completo). No se convierte nada en carga inicial:
+  el lector sigue llegando solo al abrir su pestaña (arranque ligero intacto).
+- Puente `SKIP_WAITING`: la página pide al SW nuevo tomar el mando en cuanto
+  termina, sin esperar a cerrar pestañas; recarga única al cambiar el
+  controlador (con guardián: sin controlador previo no se recarga, que rompía
+  las pruebas con «contexto destruido»).
+- Prueba nueva `tests/verificar_pdf_actualizacion.mjs` (8): siembra caché v117,
+  recarga sin limpiar nada, lector al primer intento sin aviso ni recarga
+  manual, lectura real y arranque sin conexión.
+
+### PDF-FIX-02 · Crítica · geometría móvil (`index.html`, `js/pdf/libroVista.js`)
+
+Lo reportado a 390×844: encabezado hasta y=68 con lectura desde y=54; lectura
+hasta y=800 con paginación desde y=728. Primera y última línea cubiertas. Las
+pruebas pasaban porque medían altura y overflow, no intersecciones.
+
+Causa medida: el cromo flota (`position:fixed`) y ya no ocupa sitio en el flujo;
+`medirPaginas()` filtraba los fijos del cálculo, así que el artículo crecía
+hasta taparse. La captura lo confirmó (primera línea cortada, «Página Página»,
+texto tras la paginación).
+
+Corrección: la columna reserva el cromo medido con rectángulos reales en
+`--pdf-reserva-arriba/abajo` (sin constantes sueltas). La caja paginada es
+idéntica con cromo visible u oculto: mostrar/ocultar no toca el ancla ni
+reparte (filosofía v2.41); el total de páginas no cambia. Hallazgo al verificar:
+recalcular el ancla con `caracterVisible()` al despertar el cromo devolvía 520
+cuando lo visible era 583 y el resize siguiente caía en otra página; por eso no
+se recalcula nada en ese camino.
+
+Pruebas: `verificar_pdf_movil.mjs` +7 (no-intersección con encabezado,
+paginación y barra; primera/última línea visibles; ::before sin duplicar):
+46→53. `verificar_pdf_paginas.mjs`: ocultar/recuperar conserva página, ancla y
+total en móvil y estrecho. Matriz 8 tamaños sin solapes ni scroll horizontal.
+
+Medidas después (controles visibles): 320×568 lec 68→400 · 390×844 lec 68→665
+· 430×932 lec 68→746 · tablet 768 lec 100→778 · escritorio 1440 lec 123→640.
+Primera línea ≥ fin de cabecera y última ≤ inicio de paginación en las 8.
+
+### PDF-FIX-03 · Alta · duplicaciones del encabezado (`index.html`)
+
+JS ya escribe frases completas («Página X de Y de la sección», «Sección X de
+Y»); el CSS agregaba `Página`/`Cap.` con `::before` («Página Página 2 de 9…»,
+«Cap. Sección 2 de 107»). Retirados los dos prefijos. Aserciones de ::before
+computado en `verificar_pdf_movil.mjs` y `verificar_pdf_geometria.mjs` (6
+viewports).
+
+### PDF-FIX-04 · Alta · encabezado tablet (`index.html`, `js/pdf/libroVista.js`)
+
+Con detalle expandido y título largo, el título quedaba comprimido entre
+acciones. En 641–1023 px, `medirCabecera()` marca `data-cabecera="dos"` cuando
+las acciones piden >52 % del ancho: contexto arriba, acciones abajo (la
+miniatura decorativa se aparta; título y ref. física intactos). Una sola fila
+en otro caso. Abrir/cerrar el detalle conserva el pasaje (medido 768 y 834).
+
+### PDF-FIX-05 · Media · Apariencia (`index.html`, `js/pdf/libroVista.js`)
+
+«Tamaño de letra (», valor y «)» se partían en líneas separadas. Etiqueta y
+valor viajan en `.pdf-apar-linea` con `output{white-space:nowrap}`; el
+`aria-label` del deslizador lleva el valor visible (antes el lector de pantalla
+anunciaba el nombre sin el valor). Recarga conserva la selección (sin cambios).
+
+### APP-FIX-01 · Media · pestañas (`index.html`, `tests/verificar_pestanas.mjs`)
+
+A 320 px, `overflow-wrap:anywhere` partía «Micrófono» dejando una letra
+aislada. Cambiado a `break-word` sin guiones: 1 línea renderizada a 320 px
+(medido por rangos de cliente). Icono sobre etiqueta, foco y 44 px intactos.
+
+### PDF-QA-01 · Validación pendiente
+
+Teléfono físico con barra expandida/contraída, lector de pantalla en escritorio
+y móvil, ciclo real de TTS y reordenamiento táctil con nueve libros: pendientes
+de la persona (este entorno no los cubre). No se usa esta validación para
+ampliar alcance. Lo automatizable queda en verde abajo.
+
+### Pruebas (local, 2026-09-09)
+
+Unitarias 35 archivos en verde (incluye `test_pdf_interfaz_lectura` 17,
+`mejora_apartado` 65, `cola_correccion` 90, `musica` 53, `unir_palabras` 46).
+Navegador: movil 53/53 · paginas OK (4 tamaños + cromo estable + párrafo largo)
+· geometria en verde (6 pantallas + FIX-03 + FIX-04) · pestanas 31/31 ·
+scroll verde · actualizacion 8/8 (nueva) · arranque 10/10 · voz_acordeon 21/21
+· mini 7/7 · unir 18/18 · pantalla 62/62 · retroceo verde · integracion verde ·
+tiempo_real verde · indice_panel verde · musica_interaccion verde.
+Preexistentes (fallan igual en limpio con `git stash`, ajenos a esta tanda):
+`verificar_pdf_navegador` (corte en Biblioteca tras OCR + FALLO de aviso OCR),
+`verificar_pdf_menus` (select de voz no visible a 320), `verificar_pdf_guia_tiempo`
+y `verificar_pdf_fidelidad` (timeouts).
+
+### Versión
+
+- `index.html`: `v2.68.0` · `JG_JS_V=v118`
+- `sw.js`: `jg-turbo-shell-v118`
+- Sin cambios de IndexedDB ni claves `jg_*`.
+
 ## 2026-09-08 · v2.67.0 · Carátulas originales en toda la biblioteca y auto-reconciliación (`JG_JS_V=v113`, shell-v113)
 
 > Despliegue `dpl_GSZkk6J6WS6BNYms9jfxzXckSxQ4` (READY): `https://jg-turbo-50sf3fa2x-jhoncod24s-projects.vercel.app`

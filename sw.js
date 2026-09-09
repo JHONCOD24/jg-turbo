@@ -4,7 +4,7 @@
  */
 /* v2: sube CACHE_SHELL al desplegar UI nueva para que el rediseño no quede
  * atrapado en el shell viejo. Network-first en HTML/navegación. */
-const CACHE_SHELL = 'jg-turbo-shell-v117';
+const CACHE_SHELL = 'jg-turbo-shell-v118';
 const CACHE_SHARE = 'jg-turbo-share-v1';
 const SHARE_KEY = 'shared-audio';
 
@@ -22,6 +22,14 @@ self.addEventListener('install', (event) => {
       ]).catch(() => {})
     ).then(() => self.skipWaiting())
   );
+});
+
+/* PDF-FIX-01: el SW nuevo toma el mando en cuanto la página lo pide, sin
+ * esperar a cerrar pestañas. La página manda SKIP_WAITING al detectar una
+ * versión instalada; sin este puente, el SW viejo seguía sirviendo módulos
+ * viejos junto al HTML nuevo. */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.tipo === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -74,21 +82,24 @@ self.addEventListener('fetch', (event) => {
   }
 
   /* Módulos, motores, carátulas y pistas de música (/js/, /img/portadas/ y /audio/musica/):
-   * se sirven del caché al instante y se actualizan por detrás.
-   * Permite leer y ver la biblioteca completa sin conexión. */
+   * RED PRIMERO, caché como respaldo (PDF-FIX-01). Antes era caché-primero:
+   * con un HTML nuevo y el SW viejo aún al mando, el módulo versionado
+   * (`pdfController.js?v=NUEVA`: fallo de caché → red → NUEVO) se mezclaba con
+   * sus dependencias sin versionar (`./progreso.js`: acierto de caché → VIEJO)
+   * y el lector moría con «no exporta etiquetaSeccion» hasta recargar. En red
+   * primero, en línea todo el grafo viene de la red (coherente); sin conexión,
+   * todo sale de la caché (el grafo viejo, pero completo). */
   if (req.method === 'GET' && (url.pathname.startsWith('/js/') || url.pathname.startsWith('/audio/musica/') || url.pathname.startsWith('/img/portadas/'))) {
     event.respondWith(
-      caches.open(CACHE_SHELL).then((cache) =>
-        cache.match(req).then((guardado) => {
-          const red = fetch(req)
-            .then((res) => {
-              if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
-              return res;
-            })
-            .catch(() => guardado);
-          return guardado || red;
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copia = res.clone();
+            caches.open(CACHE_SHELL).then((c) => c.put(req, copia).catch(() => {})).catch(() => {});
+          }
+          return res;
         })
-      )
+        .catch(() => caches.open(CACHE_SHELL).then((c) => c.match(req)))
     );
   }
 });

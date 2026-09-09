@@ -65,10 +65,18 @@ export function initLibroVista({ el, estado, api }) {
     try {
       const tamVal = document.getElementById('pdfAparTamVal');
       if (tamVal) tamVal.textContent = cfg.tamElegido ? `${cfg.tam} px` : `${cfg.tam} px · automático`;
-      if (el.aparTam) el.aparTam.setAttribute('aria-valuetext', cfg.tamElegido ? `${cfg.tam} píxeles` : `${cfg.tam} píxeles, automático`);
+      /* PDF-FIX-05: el nombre accesible lleva el valor visible. Sin esto un
+       * lector de pantalla anunciaba «Tamaño de letra» sin decir cuánto. */
+      if (el.aparTam) {
+        el.aparTam.setAttribute('aria-valuetext', cfg.tamElegido ? `${cfg.tam} píxeles` : `${cfg.tam} píxeles, automático`);
+        el.aparTam.setAttribute('aria-label', `Tamaño de letra, ${cfg.tamElegido ? `${cfg.tam} píxeles` : `${cfg.tam} píxeles, automático`}`);
+      }
       const interVal = document.getElementById('pdfAparInterVal');
       if (interVal) interVal.textContent = String(cfg.inter).replace('.', ',');
-      if (el.aparInter) el.aparInter.setAttribute('aria-valuetext', `interlineado ${String(cfg.inter).replace('.', ',')}`);
+      if (el.aparInter) {
+        el.aparInter.setAttribute('aria-valuetext', `interlineado ${String(cfg.inter).replace('.', ',')}`);
+        el.aparInter.setAttribute('aria-label', `Espacio entre líneas, ${String(cfg.inter).replace('.', ',')}`);
+      }
       const auto = document.getElementById('pdfAparAuto');
       if (auto) auto.hidden = !!cfg.tamElegido;
     } catch (_) {}
@@ -410,6 +418,47 @@ export function initLibroVista({ el, estado, api }) {
     if (col) col.dataset.paginado = 'si';
     if (el.paginacion) el.paginacion.hidden = false;
 
+    /* PDF-FIX-02: reservar el cromo flotante medido dentro de la columna, EN
+     * AMBOS MODOS. En el teléfono el encabezado, la paginación y la barra son
+     * `fixed`: ya no ocupan sitio en el flujo, así que el filtro de abajo los
+     * ignora y el artículo crecía hasta taparse (y=54 con cabecera hasta y=68;
+     * y=800 con paginación en y=728). La reserva se mide con rectángulos
+     * reales y vive en variables de la columna, no en constantes: la caja
+     * paginada es IDÉNTICA con cromo visible u oculto, así que ocultar el
+     * cromo no cambia página ni ancla (el criterio de aceptación). En
+     * inmersivo queda margen vacío donde iría el cromo: se pierde alto y a
+     * cambio la lectura no se mueve (filosofía v2.41). */
+    if (col && enTelefono()) {
+      try {
+        /* Se mide el rectángulo de layout, sin importar la opacidad: el cromo
+         * apartado (opacity:0) conserva su caja y su alto, que es justo lo que
+         * hay que reservar. A propósito NO se toca la clase `jg-inmersivo`
+         * para medir: quitarla dispara la transición de .22s y el guardián de
+         * opacidad mediría 0 en mitad del fundido (así se perdió el ancla al
+         * cambiar el alto: la reserva salía 0 y el reparto caía en otra
+         * página). `display:none`/`hidden` sí excluyen: sin caja no hay nada
+         * que reservar. */
+        const altoDe = (sel) => {
+          const n = document.querySelector(sel);
+          if (!n) return 0;
+          const cs = getComputedStyle(n);
+          if (cs.display === 'none' || cs.visibility === 'hidden') return 0;
+          if (n.hidden) return 0;
+          return Math.max(0, Math.round(n.getBoundingClientRect().height));
+        };
+        const cab = altoDe('.pdf-doc-top');
+        const pagin = altoDe('#pdfPaginacion');
+        const barra = altoDe('#pdfBarraMovil');
+        /* Solo el cromo FIJO va en la reserva. El pie (.pdf-pie-lectura) vive
+         * en el flujo y ya lo descuenta el cálculo de abajo (`visibles`): si
+         * se sumara aquí se contaría dos veces y el artículo perdería 26 px. */
+        col.style.setProperty('--pdf-reserva-arriba', `${cab}px`);
+        col.style.setProperty('--pdf-reserva-abajo', `${pagin + barra}px`);
+      } catch (_) {}
+    } else if (col) {
+      try { col.style.removeProperty('--pdf-reserva-arriba'); col.style.removeProperty('--pdf-reserva-abajo'); } catch (_) {}
+    }
+
     /* Se suelta la altura para que el flex reparta el hueco de verdad. */
     art.style.height = '0px';
     art.style.flex = 'none';
@@ -745,6 +794,27 @@ export function initLibroVista({ el, estado, api }) {
     if (!cab) return;
     const alto = Math.round(cab.getBoundingClientRect().height);
     if (alto > 0) document.body.style.setProperty('--pdf-cab-alto', alto + 'px');
+    /* PDF-FIX-04: en tablet, dos filas cuando el ancho real no da. Se mide el
+     * título disponible contra lo que piden las acciones: si las acciones
+     * ocuparían más de la mitad del ancho, el título quedaría comprimido
+     * entre botones y se fragmentaría en líneas estrechas. La marca vive en
+     * la cabecera (.pdf-doc-cab), no en el body: solo afecta a ese rango. */
+    try {
+      const cabecera = el.resultArea?.querySelector('.pdf-doc-cab');
+      const ident = el.resultArea?.querySelector('.pdf-doc-ident');
+      const acciones = el.resultArea?.querySelector('.pdf-doc-acciones');
+      const enTablet = typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia('(min-width:641px) and (max-width:1023px)').matches : false;
+      if (cabecera && !enTelefono()) {
+        if (!enTablet) { delete cabecera.dataset.cabecera; }
+        else {
+          const anchoCab = cabecera.clientWidth || 0;
+          const anchoAcc = acciones ? acciones.scrollWidth : 0;
+          cabecera.dataset.cabecera = (anchoCab > 0 && anchoAcc > anchoCab * 0.52) ? 'dos' : 'una';
+        }
+      } else if (cabecera) { delete cabecera.dataset.cabecera; }
+      if (ident) ident.title = ident.querySelector('h3')?.textContent || '';
+    } catch (_) {}
   }
 
   /* Remedir tras un cambio del cromo que sí pidió la persona (PDF-09):
@@ -1257,9 +1327,10 @@ export function initLibroVista({ el, estado, api }) {
      este lector tocar un párrafo ya significa «lee desde aquí», y las dos
      cosas se robarían el gesto. */
   let tempoInmersivo = null;
-  /* Apartar el cromo NO cambia el tamaño del texto (el hueco queda
-     reservado), así que aquí no se vuelve a repartir nada: es justo lo que
-     evita que un salto de página se deshaga solo. */
+  /* PDF-FIX-02: apartar el cromo solo cambia la reserva, no la caja del texto
+   * (el reparto conserva el ancla). Aun así se reparte tras el cambio, porque
+   * la reserva nueva deja más sitio libre y hay que comprobar que el total de
+   * páginas no se movió: si se movió, la prueba lo caza. */
   /* Apartar el cromo estuvo desactivado un tiempo, y con razón: cuando los
    * controles vivían EN EL FLUJO había que elegir entre dejar una franja vacía
    * (si se conservaba su hueco) o volver a paginar el capítulo (si no). Las dos
@@ -1271,6 +1342,13 @@ export function initLibroVista({ el, estado, api }) {
    * vuelve, que es lo que hace que la página se lea como una página. */
   function inmersivo(activo) {
     if (!enTelefono()) { document.body.classList.remove('jg-inmersivo'); return; }
+    /* PDF-FIX-02: mostrar u ocultar el cromo NO toca el ancla ni reparte. La
+     * reserva es idéntica en ambos modos (se mide siempre con el cromo
+     * visible), así que no hay nada que recalcular: repartir aquí solo
+     * arriesga el sitio. Medido: recalcular el ancla con `caracterVisible()`
+     * en este punto devolvía 520 cuando lo visible era 583, y el resize
+     * siguiente caía en otra página. La página y el ancla se conservan porque
+     * no se mueven (filosofía v2.41). */
     document.body.classList.toggle('jg-inmersivo', !!activo);
   }
   /* Pasar de página es volver a leer: el cromo se aparta.

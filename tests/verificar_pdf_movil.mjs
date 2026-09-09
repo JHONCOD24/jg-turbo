@@ -155,6 +155,66 @@ try {
     `empieza en ${m.cabeceraTop} px`);
   comprobar(`el texto se lleva al menos el ${Math.round(MIN_TEXTO_VISIBLE * 100)} % de la pantalla`,
     m.parteTexto >= MIN_TEXTO_VISIBLE, `se lleva ${Math.round(m.parteTexto * 100)} %`);
+  /* PDF-FIX-02: ninguna línea intersecta el cromo. Medir altura y overflow no
+   * basta: el texto nacía en y=54 con la cabecera hasta y=68 y llegaba a y=800
+   * con la paginación en y=728, y las pruebas pasaban igual. Aquí se mide que
+   * los rectángulos no se tocan y que la primera y la última línea se ven. */
+  const sinSolape = await tel.evaluate(() => {
+    const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom }; };
+    const lec = document.querySelector('#pdfLectura').getBoundingClientRect();
+    const cab = r('.pdf-doc-top');
+    const pag = r('#pdfPaginacion');
+    const barra = r('#pdfBarraMovil');
+    const paras = [...document.querySelectorAll('#pdfLectura p')];
+    const pri = paras.length ? paras[0].getBoundingClientRect() : null;
+    const ult = paras.length ? paras[paras.length - 1].getBoundingClientRect() : null;
+    const toca = (a, b) => a && b && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+    return {
+      lecTop: Math.round(lec.top), lecBottom: Math.round(lec.bottom),
+      cabBottom: cab ? Math.round(cab.bottom) : 0,
+      pagTop: pag ? Math.round(pag.top) : 1e9,
+      barraTop: barra ? Math.round(barra.top) : 1e9,
+      tocaCab: toca(lec, cab), tocaPag: toca(lec, pag), tocaBarra: toca(lec, barra),
+      primera: pri ? { top: Math.round(pri.top), bottom: Math.round(pri.bottom) } : null,
+      ultima: ult ? { top: Math.round(ult.top), bottom: Math.round(ult.bottom) } : null,
+    };
+  });
+  console.log('  solape:', { lec: `${sinSolape.lecTop}→${sinSolape.lecBottom}`, cabFin: sinSolape.cabBottom, pagIni: sinSolape.pagTop });
+  comprobar('el texto no intersecta el encabezado', !sinSolape.tocaCab,
+    `lectura ${sinSolape.lecTop} vs cabecera hasta ${sinSolape.cabBottom}`);
+  comprobar('el texto no intersecta la paginación', !sinSolape.tocaPag,
+    `lectura hasta ${sinSolape.lecBottom} vs paginación desde ${sinSolape.pagTop}`);
+  comprobar('el texto no intersecta la barra inferior', !sinSolape.tocaBarra,
+    `lectura hasta ${sinSolape.lecBottom} vs barra desde ${sinSolape.barraTop}`);
+  comprobar('la primera línea es visible (no cortada por el encabezado)',
+    !!sinSolape.primera && sinSolape.primera.top >= sinSolape.cabBottom - 1,
+    sinSolape.primera ? `primera en ${sinSolape.primera.top}, cabecera hasta ${sinSolape.cabBottom}` : 'sin párrafos');
+  comprobar('la última línea es visible (no tapada por la paginación)',
+    !!sinSolape.ultima && sinSolape.ultima.top <= sinSolape.pagTop - 1,
+    sinSolape.ultima ? `última en ${sinSolape.ultima.top}, paginación desde ${sinSolape.pagTop}` : 'sin párrafos');
+  /* PDF-FIX-03: el texto RENDERIZADO (no solo textContent) no duplica.
+   * El CSS agregaba «Página»/«Cap.» delante de frases que JS ya escribía
+   * completas («Página Página 2 de 9…»). Se inspecciona el ::before. */
+  const renderizado = await tel.evaluate(() => {
+    const pag = document.querySelector('#pdfPagPos');
+    const nav = document.querySelector('#pdfNavPos');
+    const antes = (e, seudo) => {
+      if (!e) return '';
+      try { return getComputedStyle(e, seudo).content || ''; } catch (_) { return ''; }
+    };
+    return {
+      pagTexto: pag ? pag.textContent : '',
+      pagAntes: antes(pag, '::before'),
+      navTexto: nav ? nav.textContent : '',
+      navAntes: antes(nav, '::before'),
+    };
+  });
+  comprobar('la paginación no duplica «Página» en el renderizado',
+    !/página/i.test(renderizado.pagAntes) && !/página\s+página/i.test(renderizado.pagTexto),
+    JSON.stringify(renderizado));
+  comprobar('la posición de sección no duplica «Cap.» en el renderizado',
+    !/cap\./i.test(renderizado.navAntes) && !/cap\.\s*sección/i.test(renderizado.navTexto),
+    JSON.stringify(renderizado));
   comprobar('no hay desplazamiento horizontal', m.scrollHorizontal <= 1, `sobran ${m.scrollHorizontal} px`);
   comprobar('las acciones secundarias están plegadas en Texto',
     await tel.locator('#pdfHerramientasMenu').getAttribute('open') === null);

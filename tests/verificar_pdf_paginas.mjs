@@ -98,6 +98,37 @@ try {
   await p.locator('#btnPdfPagNext').click(); await p.waitForTimeout(400);
   medida=await medir(); assert(medida.desplazamiento>100,'siguiente mueve el texto');
   assert(numeroPagina(medida.paginas)===2); assert.equal(await p.locator('#pdfOutput').inputValue(),texto);
+  /* PDF-FIX-02: ocultar y recuperar el cromo conserva página y ancla, y mueve
+   * exactamente una página al avanzar. La caja paginada es idéntica en ambos
+   * modos (la reserva no cambia), así que el total no se mueve. */
+  if (nombre === 'movil' || nombre === 'estrecho') {
+    const totalAntes = medida.paginas.split(' de ')[1];
+    const anclaAntes = await p.evaluate(() => {
+      const lec = document.querySelector('#pdfLectura');
+      const bloques = [...lec.querySelectorAll('[data-ini]')];
+      const lr = lec.getBoundingClientRect();
+      for (const b of bloques) { if (b.getBoundingClientRect().left >= lr.left - 2) return Number(b.dataset.ini); }
+      return -1;
+    });
+    await p.evaluate(() => document.body.classList.add('jg-inmersivo'));
+    await p.waitForTimeout(500);
+    const oculto = await p.evaluate(() => document.querySelector('#pdfPagPos').textContent);
+    await p.evaluate(() => document.body.classList.remove('jg-inmersivo'));
+    await p.waitForTimeout(500);
+    const vuelto = await p.evaluate(() => document.querySelector('#pdfPagPos').textContent);
+    assert.equal(oculto.split(' de ')[1], totalAntes, 'ocultar el cromo no cambia el total de páginas');
+    assert.equal(vuelto.split(' de ')[1], totalAntes, 'recuperar el cromo no cambia el total de páginas');
+    assert.equal(vuelto.split(' de ')[0], oculto.split(' de ')[0], 'ocultar/recuperar conserva la página');
+    const anclaDespues = await p.evaluate(() => {
+      const lec = document.querySelector('#pdfLectura');
+      const bloques = [...lec.querySelectorAll('[data-ini]')];
+      const lr = lec.getBoundingClientRect();
+      for (const b of bloques) { if (b.getBoundingClientRect().left >= lr.left - 2) return Number(b.dataset.ini); }
+      return -1;
+    });
+    assert.equal(anclaDespues, anclaAntes, `el ancla se conserva (${anclaAntes})`);
+    console.log('OK:', nombre, 'cromo estable: página y ancla intactos');
+  }
   /* En el teléfono, Apariencia / Contenido / Opciones se accionan desde la
      barra del pulgar; en tablet y escritorio siguen en la cabecera. */
   const puerta = (escritorio, movil) => p.locator(width > 640 ? escritorio : movil);

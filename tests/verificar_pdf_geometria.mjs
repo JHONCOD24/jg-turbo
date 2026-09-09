@@ -246,6 +246,62 @@ for (const [nombre, opciones] of [
   const margen = Math.round(topToolbar.toolbar - topToolbar.contenedor);
   comprobar(Math.abs(margen) <= 2, `[${nombre}·lector] el toolbar queda fijo al desplazar (desplazado ${margen}px respecto al contenedor)`);
 
+  /* PDF-FIX-03: sin duplicaciones en el texto renderizado. Se inspecciona el
+   * ::before computado, no solo el textContent: el CSS agregaba «Página»/«Cap.»
+   * delante de frases que JS ya escribía completas. */
+  const dup = await pagina.evaluate(() => {
+    const antes = (e) => { try { return getComputedStyle(e, '::before').content || ''; } catch (_) { return ''; } };
+    const pag = document.querySelector('#pdfPagPos');
+    const nav = document.querySelector('#pdfNavPos');
+    return {
+      pagAntes: pag ? antes(pag) : '',
+      pagTexto: pag ? pag.textContent : '',
+      navAntes: nav ? antes(nav) : '',
+      navTexto: nav ? nav.textContent : '',
+    };
+  });
+  comprobar(!/página/i.test(dup.pagAntes) && !/página\s+página/i.test(dup.pagTexto),
+    `[${nombre}·lector] sin «Página» duplicada (${dup.pagTexto.slice(0, 40)})`);
+  comprobar(!/cap\./i.test(dup.navAntes) && !/cap\.\s*sección/i.test(dup.navTexto),
+    `[${nombre}·lector] sin «Cap.» duplicado (${dup.navTexto.slice(0, 40)})`);
+
+  /* PDF-FIX-04: en tablet, el título largo no queda comprimido entre botones.
+   * Con detalle expandido, o una sola fila legible o dos filas con el título
+   * completo; nunca fragmentado en líneas estrechas ni acciones fuera. */
+  if (nombre === 'tablet' || nombre === 'tablet ancha') {
+    const tab = await pagina.evaluate(() => {
+      const cab = document.querySelector('.pdf-doc-cab');
+      const h3 = document.querySelector('#pdfResultTitle');
+      const acc = document.querySelector('.pdf-doc-acciones');
+      if (!cab || !h3) return null;
+      const rc = cab.getBoundingClientRect();
+      const rh = h3.getBoundingClientRect();
+      /* Solo la fila visible: dentro de <details> cerrados o paneles ocultos
+       * hay botones con caja pero que nadie ve (el panel Más cerrado). Sin
+       * este filtro, cualquier panel cerrado daría un «fuera» falso. */
+      const enCerrado = (b) => {
+        for (let el = b.parentElement; el; el = el.parentElement) {
+          if (el.tagName === 'DETAILS' && !el.open) return true;
+          if ((el.hidden || getComputedStyle(el).display === 'none') && el !== acc && el !== cab) return true;
+        }
+        return false;
+      };
+      const visibles = acc ? [...acc.querySelectorAll('button, summary')].filter((b) => b.offsetParent !== null && !enCerrado(b)) : [];
+      const fuera = visibles.filter((b) => { const r = b.getBoundingClientRect(); return r.right > innerWidth + 1 || r.left < -1; });
+      return {
+        modo: cab.dataset.cabecera || 'una',
+        tituloAncho: Math.round(rh.width), cabAncho: Math.round(rc.width),
+        tituloLineas: (() => { try { const r = document.createRange(); r.selectNodeContents(h3); return r.getClientRects().length; } catch (_) { return -1; } })(),
+        fuera: fuera.length,
+      };
+    });
+    if (tab) {
+      comprobar(tab.tituloAncho >= tab.cabAncho * 0.3 || tab.modo === 'dos',
+        `[${nombre}·lector] título legible en una fila o dos filas (${tab.modo}, título ${tab.tituloAncho}px de ${tab.cabAncho}px)`);
+      comprobar(tab.fuera === 0, `[${nombre}·lector] ninguna acción fuera del viewport`);
+    }
+  }
+
   const graves = errores.filter((e) => !/favicon|manifest|sw\.js|api\/|health|Failed to load resource/i.test(e));
   comprobar(graves.length === 0, `[${nombre}] sin errores de JavaScript (${graves.length})`);
   graves.slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 160)));

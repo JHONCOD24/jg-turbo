@@ -110,6 +110,23 @@ try {
         m.marcadosOcultosPeroDibujados.length === 0,
         `[${m.marcadosOcultosPeroDibujados.join(', ')}]`);
 
+      /* APP-01: «Micrófono» no se parte dentro de la palabra a 320 px. El
+       * fallo medido dejaba una letra aislada en la segunda línea. Basta con
+       * medir las líneas renderizadas de esa etiqueta. */
+      if (tam === 'teléfono' && nombre === 'Micrófono') {
+        const lineas = await p.evaluate(() => {
+          const t = document.querySelector('#tabMic .lbl');
+          if (!t) return -1;
+          try {
+            const r = document.createRange();
+            r.selectNodeContents(t);
+            return r.getClientRects().length;
+          } catch (_) { return -1; }
+        });
+        comprobar(`${tam}/Micrófono: la etiqueta no se parte en dos líneas`,
+          lineas === 1, `${lineas} líneas`);
+      }
+
       if (nombre === 'Micrófono') {
         await p.screenshot({ path: join(destino, `${tam}-mic.png`) });
       }

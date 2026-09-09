@@ -1,4 +1,4 @@
-<!-- v2.67.0 · Carátulas originales en toda la biblioteca y auto-reconciliación -->
+<!-- v2.68.0 · Correcciones auditoría UX/UI v117 (FIX-01/02 críticos + FIX-03/04/05 + APP-01) -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -2701,6 +2701,22 @@
     font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:var(--lec-texto, var(--text));
     margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;letter-spacing:-.01em;
   }
+  /* PDF-FIX-04: en tablet, contexto y acciones en dos filas cuando el ancho
+     real no da para una legible. El JS pone `data-cabecera="dos"` solo cuando
+     mide que el título quedaría comprimido entre botones; sin esa marca se
+     conserva la fila única. Escritorio y teléfono no entran aquí. */
+  @media (min-width:641px) and (max-width:1023px){
+    #pdfResultArea .pdf-doc-cab[data-cabecera="dos"]{
+      grid-template-columns:auto minmax(0,1fr);grid-template-areas:"volver ident" "acciones acciones";
+      row-gap:6px;
+    }
+    #pdfResultArea .pdf-doc-cab[data-cabecera="dos"] > .btn-back{grid-area:volver}
+    #pdfResultArea .pdf-doc-cab[data-cabecera="dos"] > .pdf-doc-ident{grid-area:ident}
+    #pdfResultArea .pdf-doc-cab[data-cabecera="dos"] > .pdf-doc-acciones{grid-area:acciones;justify-content:flex-end;flex-wrap:wrap}
+    /* La miniatura es decorativa (aria-hidden): en dos filas se aparta para
+       que el título use todo el ancho. No se oculta el título ni la ref. */
+    #pdfResultArea .pdf-doc-cab[data-cabecera="dos"] > .pdf-doc-tapa{display:none}
+  }
   .pdf-doc-donde{
     display:inline-flex;align-items:center;gap:4px;
     border:0;background:none;padding:0;margin:0;cursor:pointer;
@@ -4556,7 +4572,10 @@
        `.tab` ganaría por orden y rompería los nombres a 320 px. */
     .tabs{gap:2px;padding:2px}
     .tabs .tab{flex-direction:column;gap:1px;padding:7px 2px;min-height:52px;height:auto;font-size:11px}
-    .tabs .tab span.lbl{display:block;max-width:100%;white-space:normal;line-height:1.25;overflow-wrap:anywhere}
+    /* APP-01: sin cortes dentro de la palabra. «anywhere» partía «Micrófono»
+       dejando una letra aislada en la segunda línea; «break-word» solo corta
+       cuando no cabe de otra forma. */
+    .tabs .tab span.lbl{display:block;max-width:100%;white-space:normal;line-height:1.25;overflow-wrap:break-word;word-break:normal;hyphens:none}
     .tabs .tab .em{font-size:15px;line-height:1.2}
     .file-opts,.yt-opts{grid-template-columns:1fr}
     .result-head{align-items:center}
@@ -5109,6 +5128,11 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
   box-shadow:0 -12px 32px -18px rgba(0,0,0,.6)}
 .pdf-apariencia-hoja .pdf-apariencia-cuerpo{display:flex;flex-direction:column;gap:14px;padding:8px 0 4px}
 .pdf-apariencia-hoja label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--lec-suave)}
+/* PDF-FIX-05: etiqueta y valor como unidad. El paréntesis y el valor no pueden
+   quedar aislados en otra línea («Tamaño de letra (» / «19 px» / «)»); el
+   <output> no se parte y viaja con su etiqueta. */
+.pdf-apariencia-hoja label .pdf-apar-linea{display:inline}
+.pdf-apariencia-hoja label output{white-space:nowrap}
 .pdf-apariencia-hoja select{min-height:44px;background:var(--lec-superficie-2);color:var(--lec-texto);
   border:1px solid var(--lec-linea);border-radius:10px;padding:0 12px}
 .pdf-apariencia-hoja input[type=range]{width:100%;min-height:44px;accent-color:var(--lec-acento)}
@@ -5420,8 +5444,9 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
   font-size:13px;color:var(--lec-suave);min-width:9ch;text-align:center;
   font-variant-numeric:tabular-nums;
 }
-.pdf-pag-pos::before{content:'Página '}
-#pdfNavPos::before{content:'Cap. '}
+/* PDF-FIX-03: sin prefijos generados. El JS ya escribe la frase completa
+   («Página X de Y de la sección», «Sección X de Y»); el ::before la duplicaba
+   («Página Página…», «Cap. Sección…»). */
 @media (max-width:767px){
   .pdf-lectura[data-paginado="si"]{--pdf-pag-hueco:28px}
 }
@@ -5563,9 +5588,20 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
   body.jg-leyendo .pdf-texto-col[data-ancho="76"],
   body.jg-leyendo:has(#pdfLectura[data-ancho="76"]) .pdf-texto-col{padding-inline:clamp(6px,1.8vw,10px)!important}
   body.jg-leyendo .pdf-lectura{padding-inline:0!important;margin-inline:0!important;width:100%!important}
+  /* PDF-FIX-02: la columna reserva el cromo medido. El cromo flota (fixed) y
+     ya no ocupa sitio en el flujo, así que sin esta reserva el texto nacía en
+     y=54 mientras el encabezado terminaba en y=68, y llegaba hasta y=800 con
+     la paginación en y=728: primera y última línea cubiertas. Las variables
+     las pone medirPaginas() con el alto real (no constantes sueltas): con
+     cromo visible reservan encabezado+pie+paginación+zona segura; en inmersivo
+     solo el pie fijo de 26 px. La caja paginada NO cambia entre modos: solo la
+     reserva, así que ocultar el cromo no remaqueta ni mueve el ancla. */
+  body.jg-leyendo .pdf-texto-col{
+    padding-top:var(--pdf-reserva-arriba,0px);
+    padding-bottom:var(--pdf-reserva-abajo,0px);
+  }
   /* Vista limpia y completa: el cromo flota por encima y se aparta al leer */
-  body.jg-leyendo #pdfResultArea{padding-top:calc(env(safe-area-inset-top) + 54px);padding-bottom:0}
-  body.jg-leyendo .pdf-texto-col{padding-bottom:max(6px,env(safe-area-inset-bottom))}
+  body.jg-leyendo #pdfResultArea{padding-top:0;padding-bottom:0}
   #pdfResultArea .pdf-apariencia-hoja{max-height:calc(var(--jg-viewport-alto,100dvh) - env(safe-area-inset-top) - 12px)}
   #pdfResultArea .pdf-doc-ident{overflow:hidden}
   #pdfResultArea .pdf-doc-linea{display:none}
@@ -7104,11 +7140,11 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                     <button type="button" class="pdf-tema-opcion" id="btnPdfTemaSepia" data-tema="sepia">◐ Sepia</button>
                     <button type="button" class="pdf-tema-opcion is-on" id="btnPdfTemaNoche" data-tema="noche">☾ Noche</button>
                   </div>
-                  <label for="pdfAparTam">Tamaño de letra (<output id="pdfAparTamVal" for="pdfAparTam">19 px</output>)
+                  <label for="pdfAparTam"><span class="pdf-apar-linea">Tamaño de letra (<output id="pdfAparTamVal" for="pdfAparTam">19 px</output>)</span>
                     <input type="range" id="pdfAparTam" min="16" max="28" step="1" value="19" aria-describedby="pdfAparAuto">
                   </label>
                   <p class="pdf-apariencia-auto" id="pdfAparAuto" role="status">Tamaño automático según la pantalla</p>
-                  <label for="pdfAparInter">Espacio entre líneas (<output id="pdfAparInterVal" for="pdfAparInter">1,7</output>)
+                  <label for="pdfAparInter"><span class="pdf-apar-linea">Espacio entre líneas (<output id="pdfAparInterVal" for="pdfAparInter">1,7</output>)</span>
                     <input type="range" id="pdfAparInter" min="1.4" max="2" step="0.1" value="1.7">
                   </label>
                   <label for="pdfAparAncho">Anchura del texto
@@ -12688,7 +12724,38 @@ function registrarServiceWorker(){
   // Solo en https o localhost
   if(location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
   const doRegister = () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).then((reg) => {
+      /* PDF-FIX-01: actualización atómica del lector. Cuando llega un SW nuevo
+       * (nueva versión desplegada), se toma el mando en cuanto termina (sin
+       * esperar a cerrar pestañas) y se avisa UNA vez para recargar: así el
+       * HTML y el grafo de módulos cambian juntos, nunca mezclados. Sin esto,
+       * el HTML nuevo con módulos viejos en caché daba «no se pudo cargar el
+       * lector» hasta la recarga manual. */
+      try {
+        if (reg.waiting) avisarActualizacion(reg.waiting);
+        reg.addEventListener('updatefound', () => {
+          const nuevo = reg.installing;
+          if (!nuevo) return;
+          nuevo.addEventListener('statechange', () => {
+            if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+              avisarActualizacion(nuevo);
+            }
+          });
+        });
+        /* PDF-FIX-01: recarga única cuando el SW nuevo toma el mando. El
+         * guardián `recargando` evita el bucle; y NO se recarga si la página
+         * nació sin controlador (primera visita): ahí no hay mezcla posible
+         * y recargar rompería las pruebas (contexto destruido). */
+        let recargando = false;
+        let teniaMando = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (recargando) return;
+          if (!teniaMando) { teniaMando = true; return; }
+          recargando = true;
+          window.location.reload();
+        });
+      } catch (_) {}
+    }).catch((err) => {
       console.warn('SW no registrado', err);
     });
   };
@@ -12696,6 +12763,17 @@ function registrarServiceWorker(){
     doRegister();
   }else{
     window.addEventListener('load', doRegister);
+  }
+}
+/* Aviso único de versión nueva: usa la píldora de estado existente si la hay,
+ * si no un aviso flotante que no tapa el lector. */
+function avisarActualizacion(worker){
+  try {
+    if (window.__jgAvisoUpdate) return;
+    window.__jgAvisoUpdate = true;
+    worker.postMessage({ tipo: 'SKIP_WAITING' });
+  } catch (_) {
+    try { worker.postMessage({ tipo: 'SKIP_WAITING' }); } catch (_) {}
   }
 }
 
@@ -17681,7 +17759,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v117';
+const JG_JS_V = 'v118';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

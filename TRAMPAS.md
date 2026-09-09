@@ -1072,3 +1072,28 @@ en `pdf/regla-pdf/aprendiz-trabajo/NOTAS_APRENDIZ.md`.
 ## Borrar la base en una prueba se cuelga si la app la tiene abierta (2026-09-09)
 
 **Síntoma:** una suite de navegador se quedaba colgada sin error ni timeout al sembrar libros. **Causa:** `indexedDB.deleteDatabase()` se queda en «blocked» mientras la propia página mantiene la base abierta; el `open()` posterior no resuelve nunca y la prueba muere en silencio. **Regla:** en la siembra, limpiar los almacenes con una transacción (`clear()` + `put`) en vez de borrar la base; las claves de orden en `localStorage` se quitan a mano.
+
+## Recalcular el ancla al mostrar el cromo la corrompe (2026-09-09)
+
+**Síntoma (FIX-02, desarrollo):** al despertar el cromo con un toque y luego
+cambiar el alto (barra del navegador), la lectura caía en otra página aunque el
+carácter visible no se había movido. **Causa:** `inmersivo(false)` recalculaba
+`pag.ancla` con `caracterVisible()` y repartía: en ese punto devolvía 520 cuando
+lo visible era 583, y el resize siguiente resolvía esa ancla mala en otra página.
+**Regla:** mostrar u ocultar el cromo NO toca el ancla ni reparte. La reserva es
+idéntica en ambos modos (se mide siempre con el cromo visible), así que no hay
+nada que recalcular: la página y el ancla se conservan porque no se mueven.
+Se vigila con el caso con-click/sin-click (`Página 2 → Página 2` en ambos) y con
+la aserción «ocultar/recuperar conserva la página» de `verificar_pdf_paginas`.
+
+## Recargar al tomar el mando rompe la primera visita (2026-09-09)
+
+**Síntoma (FIX-01, desarrollo):** `verificar_pdf_paginas.mjs` moría con
+«Execution context was destroyed» en el último bloque, siempre en el mismo
+punto y solo con los cambios. **Causa:** el `controllerchange → reload` de la
+actualización atómica recargaba también cuando la página nació SIN controlador
+(primera visita con el SW instalándose): ahí no hay mezcla posible y la recarga
+destruía el contexto de la prueba. **Regla:** el guardián recuerda si había
+controlador al registrar; el primer `controllerchange` sin mando previo solo
+marca, no recarga. Comprobado: la suite pasa entera y la actualización real
+sigue recargando una vez.
