@@ -25,6 +25,31 @@ const ROMANOS_SIGLOS = {
 const CONECTORES_PAUSA = /\s+(pero|aunque|sino|porque|mientras|entonces|además|sin embargo|no obstante|es decir|por tanto|por lo tanto)\s+/gi;
 
 /**
+ * `#` de conteo → palabra, según contexto.
+ *
+ * Medido en la biblioteca pública (2026-09-09): `Secreto #1`…`#32`,
+ * `Principle #1`, `Ad Agency Secret #18`, `LF8 #2`, `The #1 brand`. Cero
+ * etiquetas sociales (`#amor`): en estos libros TODO `#` + dígito es conteo,
+ * y Fish/Edge lo leen como «hashtag» porque aprendieron en inglés.
+ *
+ * - `#` + dígitos, con o sin espacio (`#1`, `# 12`, `LF#8`) → `número N`.
+ * - `#etiqueta` (pegado a letras) → `hashtag etiqueta`: si un libro futuro
+ *   habla de redes, la etiqueta se conserva en vez de perderse.
+ * - `#` solo ante espacio, puntuación o fin → `número`.
+ *
+ * Llamar DESPUÉS de enmascarar URLs y correos: el `#` de un ancla web
+ * (`page4#reference`) no es conteo. Solo capa voz: el visible no se toca.
+ * La cifra se deja en dígitos a propósito: en modo neural el motor la
+ * pronuncia solo (v2.25.0), y en navegador la expande la regla 6.
+ */
+function expandirNumeral(texto, numero = 'número') {
+  return String(texto || '')
+    .replace(/#\s*(\d[\d.,]*)/g, ` ${numero} $1`)
+    .replace(/#([\p{L}][\p{L}\p{N}_]*)/gu, ' hashtag $1')
+    .replace(/#/g, ` ${numero} `);
+}
+
+/**
  * ¿Esta línea suelta es un título? Versión mínima para la capa de voz: aquí
  * no hay geometría del PDF, solo el texto. Una línea corta, sola entre saltos
  * y sin signo final es, casi siempre, un título o un encabezado.
@@ -124,6 +149,16 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
 
   // Si no es español, aplicar solo limpieza básica
   if (idioma !== 'es') {
+    const enIngles = /^en/i.test(idioma || '');
+    /* Las direcciones se enmascaran también aquí: si no, el `#` de un ancla
+     * web caería en la regla de conteo de abajo. */
+    salida = salida
+      .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, enIngles ? 'email address' : 'dirección de correo')
+      .replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi, enIngles ? 'web link' : 'enlace web');
+    salida = expandirNumeral(salida, enIngles ? 'number' : 'número');
+    /* Esta rama sale antes de «Cerrar las costuras»: se colapsa aquí para no
+     * entregar dobles espacios al motor. */
+    salida = salida.replace(/[ \t]{2,}/g, ' ').trim();
     if (!neural) salida = salida.replace(/(\d+)\s*%/g, '$1 percent');
     return salida;
   }
@@ -268,6 +303,12 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     .replace(/(\p{L})\/(\p{L})/gu, '$1 o $2')   /* autor/lector → autor o lector */
     .replace(/[~|_]+/g, ' ')
     .replace(/[†‡]/g, '');
+
+  /* 3 quinquies. `#` de conteo → `número` (ver `expandirNumeral`).
+   *
+   * Va DESPUÉS de enmascarar URLs y correos (regla 0): el `#` de un ancla
+   * web ya es «enlace web» y no llega hasta aquí. */
+  salida = expandirNumeral(salida, 'número');
 
   // ── Reglas 4-6: conversión numérica ──
   // Edge TTS (y Azure) ya pronuncian «2024» como «dos mil veinticuatro» y

@@ -234,5 +234,47 @@ function comprobar(condicion, mensaje) {
     'muchas referencias seguidas no rompen');
 }
 
+/* ── `#` de conteo se dice con palabras (biblioteca pública, 2026-09-09) ──
+ * Medido: `Secreto #1`…`#32`, `Principle #1`, `Ad Agency Secret #18`,
+ * `LF8 #2`, `The #1 brand`. Cero etiquetas sociales. Fish/Edge lo leían
+ * como «hashtag». Solo capa voz: el texto visible/guardado no se toca. */
+{
+  const s1 = prepararParaVoz('Secreto #1: ¿Qué es el copywriting?', 'es');
+  comprobar(s1.includes('número 1') && !s1.includes('#') && !/hashtag/i.test(s1),
+    '«Secreto #1» suena «número 1», sin hashtag');
+  const s10 = prepararParaVoz('Secreto #10: Lo que de VERDAD vende a la gente', 'es');
+  comprobar(s10.includes('número 10') && !s10.includes('#'),
+    '«Secreto #10» suena «número 10»');
+  comprobar(prepararParaVoz('Ver el # 12 del conteo', 'es').includes('número 12'),
+    '«# 12» con espacio también es conteo');
+  comprobar(prepararParaVoz('Nivel (LF#8) y zona LF8 #2', 'es').includes('número 8')
+    && prepararParaVoz('Nivel (LF#8) y zona LF8 #2', 'es').includes('número 2'),
+    '«LF#8» pegado sin espacio también es conteo');
+  comprobar(prepararParaVoz('El capítulo # cierra aquí', 'es').includes('número')
+    && !prepararParaVoz('El capítulo # cierra aquí', 'es').includes('#'),
+    'un «#» solo suena «número»');
+  const etiqueta = prepararParaVoz('Síguenos en #lectura diaria', 'es');
+  comprobar(/hashtag lectura/i.test(etiqueta) && !etiqueta.includes('#'),
+    '«#lectura» pegado a letras se conserva como etiqueta social');
+  const url = prepararParaVoz('Consulta https://www.ejemplo.com/page4#reference4.2 para más', 'es');
+  comprobar(url.includes('enlace web') && !url.includes('#') && !/número|hashtag/i.test(url),
+    'el «#» dentro de una URL no se vuelve conteo (ya es «enlace web»)');
+  const en = prepararParaVoz('Principle #1: The Fear Factor', 'en');
+  comprobar(en.includes('number 1') && !en.includes('#') && !/hashtag/i.test(en),
+    'en inglés suena «number 1»');
+  const enMarca = prepararParaVoz('The #1 brand in vended water', 'en');
+  comprobar(enMarca.includes('number 1') && !enMarca.includes('#'),
+    '«The #1 brand» suena «number 1»');
+  const enUrl = prepararParaVoz('See https://example.com/a#b2 here', 'en');
+  comprobar(enUrl.includes('web link') && !enUrl.includes('#'),
+    'en inglés la URL con «#» tampoco se vuelve conteo');
+  comprobar(!/  /.test(prepararParaVoz('The #1 brand here', 'en')),
+    'la rama inglesa no deja dobles espacios');
+  const cuerpo = prepararParaVoz('Secreto #5: La habilidad más valiosa.', 'es');
+  for (const palabra of ['Secreto', 'habilidad', 'valiosa']) {
+    comprobar(cuerpo.includes(palabra), `con «#» se conserva «${palabra}» del autor`);
+  }
+}
+
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);
