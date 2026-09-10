@@ -4150,6 +4150,13 @@ FISH_CATALOGO_BASE = (
     ("morgan-freeman", "male", "Morgan Freeman", "7c76e349434d4f1e97078d924acea65f", "", "es"),
     ("mario-alonso-puig", "male", "Mario Alonso Puig", "b9a077022c424e89b0705cb98085e36a", "", "es"),
     ("tatiana-mae", "female", "Tatiana Mae", "16cba2445c3749d7810a0b3f348ec0d7", "", "es"),
+    ("hilary-narrador", "male", "Hilary Narrador", "937314c424504d10912e5eef334993a7", "", "es"),
+    ("palabra-biblica", "male", "Palabra Bíblica", "ca4d3745aa454def9161b48efb268577", "", "es"),
+    ("morillo", "male", "Morillo", "71f4cfa46fc64cdbadafaa3fdda6f6b4", "", "es"),
+    ("narrador-documental", "male", "Narrador Documental", "6bf6af3e27c044ce839e1d43004ac8e6", "", "es"),
+    ("jim-hopper", "male", "Jim Hopper", "b114d46e5ed6448fa0b197258e65b8d2", "", "es"),
+    ("latina-kika", "female", "Latina Kika", "2edd012fb4d14521af3f0ce245791283", "", "es"),
+    ("voz-platica", "female", "Voz Plática", "eadb1a0a15f941ebb46ed73b23da765d", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {"clara": "nico-robin", "nestor": "locutor-k"}

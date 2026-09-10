@@ -22,6 +22,13 @@ NUEVAS = {
     "morgan-freeman": "7c76e349434d4f1e97078d924acea65f",
     "mario-alonso-puig": "b9a077022c424e89b0705cb98085e36a",
     "tatiana-mae": "16cba2445c3749d7810a0b3f348ec0d7",
+    "hilary-narrador": "937314c424504d10912e5eef334993a7",
+    "palabra-biblica": "ca4d3745aa454def9161b48efb268577",
+    "morillo": "71f4cfa46fc64cdbadafaa3fdda6f6b4",
+    "narrador-documental": "6bf6af3e27c044ce839e1d43004ac8e6",
+    "jim-hopper": "b114d46e5ed6448fa0b197258e65b8d2",
+    "latina-kika": "2edd012fb4d14521af3f0ce245791283",
+    "voz-platica": "eadb1a0a15f941ebb46ed73b23da765d",
 }
 
 
