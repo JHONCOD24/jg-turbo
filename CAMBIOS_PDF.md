@@ -3,6 +3,29 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-09 · v2.71.0 · Escuchar ya no dice «hashtag» (`JG_JS_V=v121`, shell-v121)
+
+v2.70.0 reescribió `#1` → `número 1` en `prepararParaVoz()`, con pruebas verdes.
+El usuario seguía oyendo «hashtag». Causa medida: esa función **solo la llamaba
+el audiolibro**. El botón Escuchar (y «Desde aquí», y el MP3) leen el textarea
+crudo y van a `ttsHablar` → `ttsCrearCola` → Fish/Edge. Fish no interpreta el
+`#` según contexto en español (su `normalize` es para números en inglés y
+chino): hay que mandarle la palabra `número`.
+
+- `window.jgPrepararParaVoz` queda asignado al cargar el lector.
+- `ttsHablar` y la descarga MP3 la aplican cuando la fuente es PDF.
+- Red de seguridad en `ttsNormalizarTextoNarracion` (el camino de Escuchar):
+  `#` + dígitos → `número N` (`number N` en inglés), sin tocar URLs ni
+  encabezados Markdown. Los libros ya guardados lo reciben solos.
+- No se toca el PDF: el texto visible sigue con `Secreto #1`.
+- Trampa nueva: `TRAMPAS.md` §6.11.
+
+### Verificación
+
+- `test_tts_narracion.mjs`: 58/58 (el camino de Escuchar, no solo la auxiliar).
+- `test_pdf_voz.mjs`: 81/81 (capa completa, incluido `#` de ancho completo).
+- Batería unitaria: 16/16 archivos, 1008 comprobaciones OK, 0 fallos.
+
 ## 2026-09-10 · v2.70.0 · `#` de conteo suena `número` (`JG_JS_V=v120`, shell-v120)
 
 Medido en la biblioteca pública: `Secreto #1`…`#32`, `Principle #1`,

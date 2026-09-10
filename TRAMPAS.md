@@ -820,6 +820,26 @@ del visible con aguja larga, ventana que absorba la deriva y avance mínimo
 el texto guía al arrancar y no reemplazar visible con voz activa; y solo saltar
 por tiempo a bloques situados de verdad (si se interpoló, reiniciar exacto).
 
+### 6.11 La capa de voz que el usuario no usa
+
+**Síntoma** (v2.70.0): se documentó que `Secreto #1` suena `número 1`.
+`test_pdf_voz.mjs` 80/80. El usuario seguía oyendo «hashtag».
+
+**Causa:** `prepararParaVoz()` / `expandirNumeral()` solo las llamaba el
+audiolibro. El botón que la gente pulsa es **Escuchar** (y «Desde aquí»):
+leen `#pdfOutput` crudo, van a `ttsToggleFromSource` → `ttsHablar` →
+`ttsCrearCola` → `ttsNormalizarTextoNarracion` y de ahí a Fish/Edge.
+`window.jgPrepararParaVoz` se mencionaba en una verificación de navegador
+como opcional (`? … : salida`) y **nunca se asignaba**. Fish no interpreta
+el `#` según contexto en español: su `normalize` es para números en inglés
+y chino. Hay que reescribir el texto **antes** de enviarlo.
+
+**Regla:** si el arreglo es «cómo suena», la prueba tiene que cubrir el
+texto que `ttsCrearCola` entrega al motor, no solo una función auxiliar.
+El camino del usuario es Escuchar, no el audiolibro. Un `window.*` que
+una prueba llama «si existe» no es un gancho: o se asigna y se exige, o
+no cuenta.
+
 ---
 
 ## 7. Caché y despliegue

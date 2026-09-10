@@ -46,6 +46,15 @@ import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 import { musicaFondo, CATALOGO_PISTAS, ANIMOS } from './musicaFondo.js';
 
+/* El motor de voz vive en index.html y no puede importar este módulo.
+ * Escuchar, Desde aquí y el MP3 pasan por ttsHablar: sin este gancho
+ * leerían el textarea crudo y Fish/Edge dirían «hashtag» en «Secreto #1». */
+if (typeof window !== 'undefined') {
+  window.jgPrepararParaVoz = (texto, idioma, opts) => (
+    prepararParaVoz(texto, idioma || 'es', { neural: true, ...(opts || {}) })
+  );
+}
+
 /* A partir de aquí el texto se parte para que el editor siga siendo ágil. */
 const LIMITE_PARTE = LIMITE_PARTE_CANONICO;
 /* Por debajo de esto no vale la pena partir por capítulos: un folleto de dos

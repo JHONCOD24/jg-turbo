@@ -43,10 +43,11 @@ const CONECTORES_PAUSA = /\s+(pero|aunque|sino|porque|mientras|entonces|además|
  * pronuncia solo (v2.25.0), y en navegador la expande la regla 6.
  */
 function expandirNumeral(texto, numero = 'número') {
+  /* `#` ASCII y las copias de ancho completo que a veces salen de un PDF. */
   return String(texto || '')
-    .replace(/#\s*(\d[\d.,]*)/g, ` ${numero} $1`)
-    .replace(/#([\p{L}][\p{L}\p{N}_]*)/gu, ' hashtag $1')
-    .replace(/#/g, ` ${numero} `);
+    .replace(/[#＃﹟]\s*(\d[\d.,]*)/g, ` ${numero} $1`)
+    .replace(/[#＃﹟]([\p{L}][\p{L}\p{N}_]*)/gu, ' hashtag $1')
+    .replace(/[#＃﹟]/g, ` ${numero} `);
 }
 
 /**

@@ -443,11 +443,17 @@ les toca, que es lo que hace este procedimiento.
 
 ### 12.1 Dónde vive
 
-- `js/pdf/vozTexto.js` → `prepararParaVoz()` (la usa solo el audiolibro,
-  vía `pdfController.js`; exportar, traducir y guardar ni la tocan).
-- Símbolos con contexto: `expandirNumeral()` en el mismo archivo.
-- Pruebas: `tests/test_pdf_voz.mjs` (cada símbolo nuevo trae sus
-  comprobaciones: el caso real del libro + que el texto del autor se conserva).
+- `js/pdf/vozTexto.js` → `prepararParaVoz()` (capa completa: títulos,
+  abreviaturas, `#` de conteo, notas). El lector la expone como
+  `window.jgPrepararParaVoz` y **todos** los caminos de voz del PDF la
+  usan: Escuchar, Desde aquí, MP3 y audiolibro. Exportar, traducir y
+  guardar no la tocan.
+- Red de seguridad en `ttsNormalizarTextoNarracion` (`index.html`):
+  `#` + dígitos → `número N` aunque alguien se salte la capa PDF. Esta
+  función SÍ está en `ttsCrearCola`, que es por donde pasa Escuchar.
+- Pruebas: `tests/test_pdf_voz.mjs` (capa completa) **y**
+  `tests/test_tts_narracion.mjs` (el camino de Escuchar). Si solo pasa
+  la primera, el usuario sigue oyendo «hashtag».
 
 ### 12.2 Tabla vigente (medida en la biblioteca pública, 2026-09-09)
 

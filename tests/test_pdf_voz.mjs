@@ -274,6 +274,8 @@ function comprobar(condicion, mensaje) {
   for (const palabra of ['Secreto', 'habilidad', 'valiosa']) {
     comprobar(cuerpo.includes(palabra), `con «#» se conserva «${palabra}» del autor`);
   }
+  comprobar(prepararParaVoz('Secreto ＃1 del índice', 'es').includes('número 1'),
+    'el «#» de ancho completo de un PDF también es conteo');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

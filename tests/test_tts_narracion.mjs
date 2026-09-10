@@ -142,5 +142,52 @@ try {
   comprobar(pareceIngles(null) === false, 'token nulo no rompe');
 }
 
+/* ── `#` de conteo en el camino que SÍ usa Escuchar ──────────────────
+ * v2.70.0 dejó expandirNumeral solo en prepararParaVoz, que el audiolibro
+ * llama y el botón Escuchar no. Esta función SÍ está en ttsCrearCola. */
+{
+  const s1 = narrar('Secreto #1: ¿Qué es el copywriting?');
+  comprobar(s1.includes('número 1') && !s1.includes('#'),
+    '«Secreto #1» suena «número 1» en ttsNormalizarTextoNarracion');
+  comprobar(!/hashtag/i.test(s1), 'y no deja la palabra hashtag');
+  comprobar(narrar('Secreto #10: Lo que de VERDAD vende').includes('número 10'),
+    '«Secreto #10» suena «número 10»');
+  comprobar(narrar('Nivel (LF#8) y zona LF8 #2').includes('número 8')
+    && narrar('Nivel (LF#8) y zona LF8 #2').includes('número 2'),
+    '«LF#8» y «LF8 #2» también son conteo');
+  comprobar(narrar('The #1 brand in vended water').includes('número 1'),
+    'sin idioma, `#1` de marca también es conteo (español por defecto)');
+  comprobar(narrar('Principle #1: The Fear Factor', 'en').includes('number 1')
+    && !narrar('Principle #1: The Fear Factor', 'en').includes('#'),
+    'en inglés suena «number 1»');
+  const url = narrar('Consulta https://www.ejemplo.com/page4#reference4.2 para más');
+  comprobar(url.includes('https') && url.includes('#reference'),
+    'el «#» de una URL no se vuelve conteo');
+  comprobar(!narrar('# Título grande').includes('número'),
+    'un encabezado Markdown `# Título` no se convierte en «número Título»');
+  comprobar(!narrar('# Título grande').includes('#'),
+    'y sigue sin dejar la almohadilla del encabezado');
+}
+
+/* ── El gancho tiene que estar en el botón que la gente pulsa ─────────
+ * Una función auxiliar en vozTexto.js no basta: Escuchar, Desde aquí y
+ * el MP3 tienen que llamarla. Si este bloque falla, el usuario vuelve a
+ * oír «hashtag» con las unitarias en verde. */
+{
+  comprobar(html.includes('function ttsAplicarCapaVozPdf('),
+    'existe ttsAplicarCapaVozPdf, el gancho de la capa PDF');
+  const hablar = extraer('ttsHablar', 'function') || '';
+  comprobar(hablar.includes('ttsAplicarCapaVozPdf'),
+    'ttsHablar (Escuchar / Desde aquí) aplica la capa PDF');
+  comprobar(/function ttsDescargarAudio[\s\S]{0,600}ttsAplicarCapaVozPdf/.test(html),
+    'la descarga MP3 también aplica la capa PDF');
+  const cola = extraer('ttsCrearCola', 'function') || '';
+  comprobar(/ttsNormalizarTextoNarracion\(\s*texto\s*,\s*langHint\s*\)/.test(cola),
+    'ttsCrearCola pasa el idioma a ttsNormalizarTextoNarracion');
+  const pdfCtrl = fs.readFileSync(path.join(__dirname, '../js/pdf/pdfController.js'), 'utf8');
+  comprobar(pdfCtrl.includes('window.jgPrepararParaVoz'),
+    'el lector de PDF expone window.jgPrepararParaVoz');
+}
+
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);
