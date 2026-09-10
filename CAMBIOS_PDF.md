@@ -3,6 +3,28 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-09 · v2.72.0 · La guía vuelve a ir con la voz (`JG_JS_V=v122`, shell-v122)
+
+v2.71.0 hizo que `#1` sonara `número 1`. La marca se fue 1-2 párrafos más
+abajo de lo que la voz leía.
+
+**Causa:** el visible `Secreto #1` compacta a `secreto1` (el `#` no es letra).
+La cola de voz compacta a `secretonumero1`. Esa aguja no está en el capítulo:
+el ancla falla y el cursor avanza con el largo de la voz, que es mayor.
+
+**Arreglo:** al situar bloques, se compacta una copia sin las palabras
+insertadas (`textoVozParaAncla` + `elegirCompactoVoz`). El audio sigue
+diciendo «número». Si el autor escribió «número 1», se conserva el compacto
+crudo. Los libros ya guardados lo reciben solos.
+
+### Verificación
+
+- `test_pdf_guia_sincronia.mjs`: 20/20 bloques `Secreto #N` anclan con error 0
+  (en crudo: 0/20 firmes).
+- `test_pdf_voz.mjs`: 88/88; elige alineado con `#1` y crudo si el autor
+  escribió «número 1».
+- Batería: 18 archivos, 1044 comprobaciones OK, 0 fallos.
+
 ## 2026-09-09 · v2.71.0 · Escuchar ya no dice «hashtag» (`JG_JS_V=v121`, shell-v121)
 
 v2.70.0 reescribió `#1` → `número 1` en `prepararParaVoz()`, con pruebas verdes.

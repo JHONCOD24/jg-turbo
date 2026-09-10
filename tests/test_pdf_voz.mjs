@@ -1,7 +1,12 @@
 /* Pruebas de la capa de voz: pausas que suenan bien SIN tocar el texto real.
  * Ejecutar: node tests/test_pdf_voz.mjs
  */
-import { prepararParaVoz } from '../js/pdf/vozTexto.js';
+import { prepararParaVoz, textoVozParaAncla, elegirCompactoVoz } from '../js/pdf/vozTexto.js';
+import { compactarTexto } from '../js/pdf/guiaAnclas.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let fallos = 0;
 function comprobar(condicion, mensaje) {
@@ -276,6 +281,34 @@ function comprobar(condicion, mensaje) {
   }
   comprobar(prepararParaVoz('Secreto ＃1 del índice', 'es').includes('número 1'),
     'el «#» de ancho completo de un PDF también es conteo');
+}
+
+/* ── La guía debe compactar la voz SIN las palabras que se insertaron ──
+ * Visible `Secreto #1` → `secreto1`. Voz `Secreto número 1` → si se compacta
+ * tal cual, `secretonumero1` no aparece y la marca se va dos párrafos abajo. */
+{
+  const visible = 'Secreto #1: ¿Qué es el copywriting? El resto del párrafo sigue aquí con calma.';
+  const voz = prepararParaVoz(visible, 'es');
+  comprobar(voz.includes('número 1'), 'la voz sigue diciendo «número 1»');
+  const visC = compactarTexto(visible).texto;
+  const crudo = compactarTexto(voz).texto;
+  const alin = compactarTexto(textoVozParaAncla(voz)).texto;
+  comprobar(!visC.includes('numero'), 'el visible compacto no tiene «numero» (el # se tira)');
+  comprobar(crudo.includes('numero'), 'el compacto crudo de la voz sí tiene «numero»');
+  comprobar(alin === visC.slice(0, alin.length) || visC.startsWith(alin.slice(0, 12)),
+    'alineado, el arranque de la voz coincide con el visible');
+  comprobar(elegirCompactoVoz(crudo, alin, visC) === alin,
+    'con `#1` se elige el compacto alineado, no el crudo');
+  const autor = 'Había el número 1 en la lista de espera aquella mañana fría del pueblo.';
+  const autorC = compactarTexto(autor).texto;
+  const autorVoz = prepararParaVoz(autor, 'es');
+  const autorCrudo = compactarTexto(autorVoz).texto;
+  const autorAlin = compactarTexto(textoVozParaAncla(autorVoz)).texto;
+  comprobar(elegirCompactoVoz(autorCrudo, autorAlin, autorC) === autorCrudo,
+    'si el autor escribió «número 1», se conserva el compacto crudo');
+  const ctrl = fs.readFileSync(path.join(__dirname, '../js/pdf/pdfController.js'), 'utf8');
+  comprobar(ctrl.includes('textoVozParaAncla') && ctrl.includes('elegirCompactoVoz'),
+    'situarBloques alinea la voz con el visible (no compacta el crudo a ciegas)');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

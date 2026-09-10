@@ -840,6 +840,25 @@ El camino del usuario es Escuchar, no el audiolibro. Un `window.*` que
 una prueba llama «si existe» no es un gancho: o se asigna y se exige, o
 no cuenta.
 
+### 6.12 Decir «número» no puede alargar el ancla de la guía
+
+**Síntoma** (v2.71.0): `Secreto #1` ya sonaba `número 1`, pero la marca
+iba 1-2 párrafos **más abajo** de lo que la voz leía.
+
+**Causa:** `compactarTexto` tira el `#` (`Secreto #1` → `secreto1`) y
+conserva las letras de «número» (`Secreto número 1` → `secretonumero1`).
+La aguja de 64 letras no aparece en el visible, el ancla queda `null` y
+el cursor avanza con el **largo de la voz**, que es mayor: la interpolación
+empuja la marca hacia adelante. Medido: 0/20 bloques firmes en crudo,
+20/20 con la alineación.
+
+**Regla:** lo que se HABLA y lo que se BUSCA en el visible son copias
+distintas. Si la capa de voz inserta palabras (`número`, `number`,
+`hashtag`), la guía compacta una copia sin esas inserciones
+(`textoVozParaAncla` + `elegirCompactoVoz`). El audio no se toca. Una
+prueba de pronunciación no cubre la guía: hace falta una que ancle
+`#1` transformado contra el visible.
+
 ---
 
 ## 7. Caché y despliegue

@@ -51,6 +51,48 @@ function expandirNumeral(texto, numero = 'número') {
 }
 
 /**
+ * Quita las palabras que expandirNumeral AÑADE, para que la guía pueda
+ * buscar el bloque de voz dentro del texto visible.
+ *
+ * Visible `Secreto #1` compacta a `secreto1` (`#` no es letra). La voz dice
+ * `Secreto número 1` → `secretonumero1`. Esa aguja no aparece en el visible:
+ * el ancla falla y la marca cae 1-2 párrafos más abajo (el cursor avanza
+ * con el largo de la voz, que es mayor). Al quitar `número`/`number` antes
+ * de compactar, las dos cadenas vuelven a ser `secreto1`.
+ *
+ * No se usa para hablar: solo para anclar. El audio sigue diciendo «número».
+ */
+export function textoVozParaAncla(texto) {
+  return String(texto || '')
+    .replace(/\bn[uú]mero\s+(?=\d)/gi, '')
+    .replace(/\bnumber\s+(?=\d)/gi, '')
+    .replace(/\bhashtag\s+/gi, '');
+}
+
+/**
+ * Elige el compacto del bloque de voz que sí aparece en el visible.
+ *
+ * Si el autor escribió la palabra «número 1», el compacto crudo (`elnumero1`)
+ * está en el visible y se conserva. Si la voz insertó «número» sobre un `#`,
+ * el crudo no aparece y se usa el alineado (`secreto1`).
+ */
+export function elegirCompactoVoz(crudo, alineado, visibleCompacto) {
+  const c = String(crudo || '');
+  const a = String(alineado || '');
+  if (!a || a === c) return c;
+  const aguja = (t) => t.slice(0, Math.min(20, t.length));
+  const aparece = (t) => {
+    const ag = aguja(t);
+    return ag.length >= 6 && String(visibleCompacto || '').includes(ag);
+  };
+  const hayCrudo = aparece(c);
+  const hayAlin = aparece(a);
+  if (hayAlin && !hayCrudo) return a;
+  if (hayCrudo) return c;
+  return a;
+}
+
+/**
  * ¿Esta línea suelta es un título? Versión mínima para la capa de voz: aquí
  * no hay geometría del PDF, solo el texto. Una línea corta, sola entre saltos
  * y sin signo final es, casi siempre, un título o un encabezado.

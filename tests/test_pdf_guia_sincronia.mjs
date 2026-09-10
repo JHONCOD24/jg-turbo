@@ -17,6 +17,7 @@ import {
   compactarTexto, situarBloquesTexto, situarBloquesDetallado, rellenarAnclas,
   construirCostos, acumularCostos, posicionPorTiempo, tiempoPorPosicion,
 } from '../js/pdf/guiaAnclas.js';
+import { prepararParaVoz, textoVozParaAncla, elegirCompactoVoz } from '../js/pdf/vozTexto.js';
 
 let fallos = 0;
 function comprobar(condicion, mensaje) {
@@ -147,6 +148,56 @@ function vozDe(tramoVisible) {
   comprobar(firmes.every(Boolean), 'texto limpio: todo firme');
   const raro = situarBloquesDetallado(capC, ['zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz']);
   comprobar(raro.anclas[0] === null && raro.firmes[0] === false, 'lo inexistente queda pendiente, no inventado');
+}
+
+/* ── 6) `#1` → `número 1` no descoloca la guía ───────────────────────────
+ * Caso real (Secretos de Copywriting): cada título es `Secreto #N`. La voz
+ * inserta la palabra «número». Compactar esa cola tal cual no encuentra la
+ * aguja (`secretonumero1` vs `secreto1`) y el cursor avanza de más: la marca
+ * queda 1-2 párrafos más abajo de lo que suena. */
+{
+  const tramos = [];
+  for (let k = 1; k <= 20; k += 1) {
+    tramos.push(
+      `Secreto #${k}: La pieza de texto de ventas más importante que existe `
+      + `mientras los vecinos comentaban el estudio del doctor Méndez sobre el oficio `
+      + `y nadie se atrevía a salir de casa tan temprano aquella mañana fría.`,
+    );
+  }
+  const visible = tramos.join('\n\n');
+  const bloquesVoz = tramos.map((t) => prepararParaVoz(t, 'es'));
+  comprobar(bloquesVoz[0].includes('número 1') && !bloquesVoz[0].includes('#'),
+    'la voz del fixture dice «número 1», no hashtag');
+
+  const capC = compactarTexto(visible);
+  const listaCruda = bloquesVoz.map((b) => compactarTexto(b).texto);
+  const { anclas: anclasCrudas, firmes: firmesCrudas } = situarBloquesDetallado(capC.texto, listaCruda);
+  const nFirmesCrudas = firmesCrudas.filter(Boolean).length;
+
+  const listaAlin = bloquesVoz.map((b) => {
+    const crudo = compactarTexto(b).texto;
+    const alin = compactarTexto(textoVozParaAncla(b)).texto;
+    return elegirCompactoVoz(crudo, alin, capC.texto);
+  });
+  const verdaderas = [];
+  let acc = '';
+  tramos.forEach((t, i) => {
+    if (i) acc += '\n\n';
+    verdaderas.push(compactarTexto(acc).texto.length);
+    acc += t;
+  });
+
+  const { anclas, firmes } = situarBloquesDetallado(capC.texto, listaAlin);
+  let maxError = 0;
+  anclas.forEach((a, k) => {
+    if (a == null) { maxError = Math.max(maxError, 9999); return; }
+    maxError = Math.max(maxError, Math.abs(a - verdaderas[k]));
+  });
+  const nFirmes = firmes.filter(Boolean).length;
+  comprobar(nFirmes >= 18, `con la alineación, ${nFirmes}/20 bloques se sitúan buscando`);
+  comprobar(maxError <= 80, `el error de ancla con «número» insertado es ${maxError} ≤ 80`);
+  comprobar(nFirmes > nFirmesCrudas,
+    `alinear mejora el anclaje (${nFirmes} firmes vs ${nFirmesCrudas} en crudo)`);
 }
 
 console.log(fallos === 0 ? 'TODAS LAS COMPROBACIONES PASARON' : `FALLOS: ${fallos}`);

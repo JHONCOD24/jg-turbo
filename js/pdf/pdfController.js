@@ -30,7 +30,7 @@ import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndic
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
 import { initLibroVista, ordenarDocumentos, paginarDocumentos } from './libroVista.js';
-import { prepararParaVoz } from './vozTexto.js';
+import { prepararParaVoz, textoVozParaAncla, elegirCompactoVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
 import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto } from './auditoria.js';
 /* Fase B (§4.2.2): busqueda.js y exportar.js se cargan bajo demanda */
@@ -5027,7 +5027,16 @@ export function inicializarLectorPdf(deps = {}) {
 
   /** Idem: anclaje verificado (secuencial contiguo guiado por cursor) en guiaAnclas.js. */
   function situarBloques(textos) {
-    const lista = (textos || []).map((bruto) => compactarTexto(String(bruto || '')).texto);
+    /* La cola trae el texto que se HABLA (`número 1`), el visible sigue con
+     * `#1`. Compactar el crudo no encuentra la aguja y la guía se va abajo.
+     * Se alinea solo para anclar: el audio no cambia. */
+    const visible = guia.compacto || '';
+    const lista = (textos || []).map((bruto) => {
+      const s = String(bruto || '');
+      const crudo = compactarTexto(s).texto;
+      const alin = compactarTexto(textoVozParaAncla(s)).texto;
+      return elegirCompactoVoz(crudo, alin, visible);
+    });
     let inicioCompacto = 0;
     if (guia.desdeCaracter > 0 && guia.mapa && guia.mapa.length) {
       const idx = guia.mapa.findIndex((pos) => pos >= guia.desdeCaracter);
