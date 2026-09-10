@@ -387,6 +387,8 @@ export async function buscarPortadaReal({ titulo, autor = '' } = {}) {
 export const PORTADAS_CANONICAS = [
   { clave: 'conversaciones con dios 1', ruta: '/img/portadas/conversaciones-con-dios-1.jpg' },
   { clave: 'conversaciones con dios 2', ruta: '/img/portadas/conversaciones-con-dios-2.jpg' },
+  { clave: 'conversaciones con dios 3', ruta: '/img/portadas/conversaciones-con-dios-3.jpg' },
+  { clave: 'arte de la seduccion', ruta: '/img/portadas/el-arte-de-la-seduccion.jpg' },
   { clave: 'secretos de copywriting', ruta: '/img/portadas/secretos-de-copywriting.jpg' },
   { clave: 'el placebo eres tu', ruta: '/img/portadas/el-placebo-eres-tu.jpg' },
   { clave: 'cashvertising', ruta: '/img/portadas/cashvertising.jpg' },

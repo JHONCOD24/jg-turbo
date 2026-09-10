@@ -17,3 +17,31 @@ export function procedenciaLibro(doc) {
     || doc?.needsSource || doc?.pideFuente) return 'original';
   return 'desconocida';
 }
+
+/**
+ * ¿El TEXTO trae marcas de adaptación? Los adaptados llevan el marcador NUL
+ * invisible de fin de línea y la mención «Edición adaptada para lectura en
+ * JG Turbo» / «Texto refluido». Puro y con pruebas.
+ *
+ * @param {string} muestra – primeros miles de caracteres del contenido.
+ * @returns {'adaptado'|undefined} (el original no deja marca fiable: no se adivina)
+ */
+export function detectarOrigenContenido(muestra) {
+  const t = String(muestra || '');
+  if (!t) return undefined;
+  if (t.includes('\0')) return 'adaptado';
+  if (/edici[óo]n adaptada para|texto refluido/i.test(t)) return 'adaptado';
+  return undefined;
+}
+
+/**
+ * Procedencia para guardar en el registro al importar: manda la evidencia
+ * del contenido; si no la hay, valen los metadatos; si tampoco, undefined
+ * (la tarjeta usa entonces la clasificación en vivo).
+ */
+export function origenTextoRegistro({ titulo, nombreArchivo, muestra } = {}) {
+  const porContenido = detectarOrigenContenido(muestra);
+  if (porContenido) return porContenido;
+  const porMeta = procedenciaLibro({ titulo, nombreArchivo });
+  return porMeta === 'desconocida' ? undefined : porMeta;
+}

@@ -16,6 +16,7 @@
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
 import { esSincronizable, estaBorrado } from './sincronizacion.js';
 import { paqueteCorreccionSync, correccionSyncValida } from './manifiesto.js';
+import { origenTextoRegistro } from './procedencia.js';
 
 const BASE = 'jg-turbo-pdf';
 /* Versión 5: compatibilidad hacia adelante. Encontramos dispositivos cuya base
@@ -220,6 +221,23 @@ export function componerRegistroDocumento(previo, meta, {
   };
   if (datos.borrado) registro.borrado = datos.borrado;
   else delete registro.borrado;
+  /* Procedencia del texto (píldora Adaptado/Original, auditoría 2026-09-10):
+   * con contenido nuevo se detecta de nuevo (manda la evidencia del texto);
+   * sin contenido nuevo se conserva la anterior; los libros viejos quedan
+   * sin el campo y la tarjeta usa la clasificación en vivo. Campo aditivo:
+   * no requiere migración ni cambio de versión de la base. */
+  if (partes) {
+    const muestra = partes.slice(0, 2).map((p) => String(p?.texto || '')).join('\n').slice(0, 4000);
+    const detectado = origenTextoRegistro({
+      titulo: datos.titulo || base.titulo,
+      nombreArchivo: datos.nombreArchivo || base.nombreArchivo,
+      muestra,
+    });
+    if (detectado) registro.origenTexto = detectado;
+    else if (base.origenTexto) registro.origenTexto = base.origenTexto;
+    else delete registro.origenTexto;
+  } else if (datos.origenTexto) registro.origenTexto = datos.origenTexto;
+  else if (base.origenTexto) registro.origenTexto = base.origenTexto;
   return registro;
 }
 

@@ -2,6 +2,8 @@
  * Casos reales de la biblioteca en pdf/. Ejecutar: node tests/test_pdf_procedencia.mjs
  */
 import { procedenciaLibro } from '../js/pdf/procedencia.js';
+import { detectarOrigenContenido, origenTextoRegistro } from '../js/pdf/procedencia.js';
+import { componerRegistroDocumento } from '../js/pdf/biblioteca.js';
 
 let fallos = 0;
 function comprobar(condicion, mensaje) {
@@ -29,6 +31,29 @@ comprobar(procedenciaLibro({ titulo: 'Cashvertising', nombreArchivo: 'cashvertis
 comprobar(procedenciaLibro({ titulo: 'Mi documento', nombreArchivo: 'notas.pdf' }) === 'desconocida', 'sin señales es desconocida');
 comprobar(procedenciaLibro({}) === 'desconocida', 'documento vacío es desconocida');
 comprobar(procedenciaLibro(null) === 'desconocida', 'null no rompe');
+
+/* ── Evidencia del contenido (manda sobre el nombre) ── */
+comprobar(detectarOrigenContenido('Texto refluido para lectura\0 digital') === 'adaptado', 'el marcador NUL delata al adaptado');
+comprobar(detectarOrigenContenido('Edición adaptada para lectura en JG Turbo') === 'adaptado', 'la mención de edición adaptada delata');
+comprobar(detectarOrigenContenido('Érase una vez un libro cualquiera sin marcas.') === undefined, 'sin marcas no se afirma nada');
+comprobar(detectarOrigenContenido('') === undefined, 'muestra vacía no afirma nada');
+comprobar(origenTextoRegistro({ titulo: 'Libro X', nombreArchivo: 'libro.pdf', muestra: 'a\0b' }) === 'adaptado', 'el contenido manda sobre un nombre sin marcas');
+comprobar(origenTextoRegistro({ titulo: 'Libro X', nombreArchivo: 'Libro X - edición adaptada.pdf', muestra: 'texto normal' }) === 'adaptado', 'sin marcas en texto vale el nombre');
+comprobar(origenTextoRegistro({ titulo: 'Libro X', nombreArchivo: 'libro.pdf', muestra: 'texto normal' }) === undefined, 'sin evidencia no se guarda nada');
+
+/* ── El registro lo guarda al importar y lo conserva después ── */
+{
+  const conPartes = componerRegistroDocumento({}, { id: 'a', titulo: 'Libro X', nombreArchivo: 'x.pdf' }, {
+    partes: [{ titulo: 'P', texto: 'Edición adaptada para lectura en JG Turbo. Había una vez.' }], ahora: 1000,
+  });
+  comprobar(conPartes.origenTexto === 'adaptado', 'al importar con evidencia se guarda adaptado');
+  const sinContenido = componerRegistroDocumento(conPartes, { id: 'a', titulo: 'Libro X' }, { ahora: 2000 });
+  comprobar(sinContenido.origenTexto === 'adaptado', 'sin contenido nuevo se conserva el flag');
+  const normal = componerRegistroDocumento({}, { id: 'b', titulo: 'Otro', nombreArchivo: 'otro.pdf' }, {
+    partes: [{ titulo: 'P', texto: 'Texto normal sin marcas.' }], ahora: 1000,
+  });
+  comprobar(normal.origenTexto === undefined, 'sin evidencia no se inventa flag');
+}
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);

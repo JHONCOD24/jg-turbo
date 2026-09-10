@@ -171,6 +171,10 @@ function comprobar(condicion, mensaje) {
     'reconoce la portada canónica de Secretos de Copywriting');
   comprobar(buscarPortadaCanonica('CA$HVERTISING') === '/img/portadas/cashvertising.jpg',
     'reconoce la portada canónica de CA$HVERTISING');
+  comprobar(buscarPortadaCanonica('Conversaciones con Dios 3 - edición adaptada') === '/img/portadas/conversaciones-con-dios-3.jpg',
+    'reconoce la portada canónica de Conversaciones con Dios 3');
+  comprobar(buscarPortadaCanonica('El Arte de la Seducción') === '/img/portadas/el-arte-de-la-seduccion.jpg',
+    'reconoce la portada canónica de El Arte de la Seducción');
   comprobar(buscarPortadaCanonica('Un libro cualquiera sin portada') === null,
     'devuelve null para libros no canónicos');
 }

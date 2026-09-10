@@ -1142,7 +1142,8 @@ export function inicializarLectorPdf(deps = {}) {
     titulo.className = 'pdf-libro-titulo';
     titulo.textContent = tituloDoc;
 
-    const proc = procedenciaLibro(doc);
+    const procGuardado = doc.origenTexto === 'adaptado' || doc.origenTexto === 'original' ? doc.origenTexto : null;
+    const proc = procGuardado || procedenciaLibro(doc);
     let insignia = null;
     if (proc === 'adaptado' || proc === 'original') {
       insignia = document.createElement('span');
