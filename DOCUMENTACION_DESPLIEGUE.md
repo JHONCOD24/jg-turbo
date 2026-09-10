@@ -11,6 +11,12 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.74.0, 2026-09-09
+
+Corrección integral de «Secretos de Copywriting» (Bookey adaptado): eliminación de chatter de traducción («no hay texto para traducir...»), puntuación en 100% de títulos/resúmenes para pausar adecuadamente en TTS, supresión de banners de cabecera residuales, y filtros defensivos en la capa de voz y lectura.
+Marcador v2.74.0, `JG_JS_V=v124`, shell-v124.
+Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación TTS v2.73.0, 2026-09-09
 
 8 voces nuevas de Fish Audio añadidas a la biblioteca (Tatiana Mae, Hilary Narrador, Palabra Bíblica, Morillo, Narrador Documental, Jim Hopper, Latina Kika, Voz Plática).

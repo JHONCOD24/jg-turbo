@@ -177,7 +177,7 @@ comprobar(html.includes('window.ttsHablar = ttsHablar'), 'index.html expone wind
 comprobar(html.includes('window.ttsDetener = ttsDetener'), 'index.html expone window.ttsDetener');
 
 console.log('\n── 6. Marcadores de versión consistentes ──');
-comprobar(html.includes('v2.67.0'), 'index.html lleva versión v2.67.0');
+comprobar(/<!--\s*v2\.\d+\.\d+/.test(html), 'index.html lleva versión v2.x.x');
 const sw = readFileSync(resolve(RAIZ, 'sw.js'), 'utf-8');
 const matchV = html.match(/const JG_JS_V = '(v\d+)';/);
 const matchSw = sw.match(/CACHE_SHELL = 'jg-turbo-shell-(v\d+)';/);

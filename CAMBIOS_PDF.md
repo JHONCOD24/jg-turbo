@@ -3,6 +3,19 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-09 · v2.74.0 · Corrección integral «Secretos de Copywriting» (Bookey adaptado) (`JG_JS_V=v124`, shell-v124)
+
+Saneamiento profundo del libro *Secretos de Copywriting* adaptado para JG Turbo (`pdf/Secretos de Copywriting - edición adaptada para JG Turbo.pdf` y `pdf/Secretos de Copywriting .pdf`).
+
+**Problemas resueltos:**
+1. **Eliminación del chatter de traducción automática:** se erradicó por completo la frase «no hay texto para traducir, por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas», así como frases de rechazo/alucinación («¿qué necesitas que traduzca?», «hola a todos, bienvenidos a este video...») provocadas por párrafos dummy extraídos del PDF fuente de Bookey (`'1.'`, `'-'`, `': -'`).
+2. **Puntuación final en títulos y encabezados:** se implementó `asegurar_punto()` en el compilador ReportLab (`pdf/_adaptacion/construir_bookey.py`), garantizando que todos los títulos principales (H1), subtítulos de sección (H2), resúmenes, citas, preguntas y respuestas terminen con punto (`.`) o signo de cierre interrogativo/exclamativo (`?`, `!`) según las normas de la RAE. Esto previene que el lector o el motor TTS lean de corrido y sin pausa hacia el párrafo siguiente.
+3. **Limpieza de banners residuales de capítulo:** se descartaron fragmentos de cabecera de página partidos por el extractor (`Chapter X Summary...`, `by Jim Edwards`, `You Think)`, `Copy Ever!`, `you) Poor!`, `Leaves Clues`, `Without Selling`, etc.) que se fusionaban erróneamente con títulos legítimos de sección.
+4. **Corrección gramatical y traducción profesional de términos clave:** se sustituyeron traducciones literales de «copy» como «copia» por términos precisos en español («texto de ventas», «texto publicitario», «texto persuasivo»), mejorando la cohesión y fluidez de la obra.
+5. **Capa defensiva en el lector y motor de voz:**
+   - En `js/pdf/vozTexto.js`: se expandió `pareceTituloSuelto()` con palabras clave (`secreto`, `secret`, `respaldo`, `dedicatoria`, `sobre el`, `índice`, `citas`, `preguntas`, `cuestionario`) y se añadió un filtro defensivo en `prepararParaVoz()` contra cualquier residuo de traducción.
+   - En `js/pdf/limpiezaTexto.js`: se actualizó `PATRON_TITULO` y se añadió el filtro en `pulirParaLectura()`.
+
 ## 2026-09-09 · v2.72.0 · La guía vuelve a ir con la voz (`JG_JS_V=v122`, shell-v122)
 
 v2.71.0 hizo que `#1` sonara `número 1`. La marca se fue 1-2 párrafos más

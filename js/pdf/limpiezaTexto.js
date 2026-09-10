@@ -23,7 +23,7 @@ const MAX_LARGO_RELLENO = 90;
 const MAX_LARGO_TITULO = 80;
 
 const PATRON_TITULO =
-  /^(cap[íi]tulo|chapter|parte\b|part\b|secci[óo]n|libro\s+(primero|segundo|tercero|[ivxlcdm]+|\d+)|tomo|ep[íi]logo|pr[óo]logo|pr[eó]logo|introducci[óo]n|conclusi[óo]n|anexo|ap[ée]ndice|bibliograf[íi]a|[íi]ndice|prefacio|agradecimientos)\b/i;
+  /^(cap[íi]tulo|chapter|secreto|secret|parte\b|part\b|secci[óo]n|libro\s+(primero|segundo|tercero|[ivxlcdm]+|\d+)|tomo|ep[íi]logo|pr[óo]logo|pr[eó]logo|introducci[óo]n|conclusi[óo]n|anexo|ap[ée]ndice|bibliograf[íi]a|[íi]ndice|prefacio|agradecimientos|respaldo|dedicatoria|sobre\s+el\s+libro|sobre\s+el\s+autor|citas|preguntas|cuestionario)\b/i;
 
 const PATRON_ROMANO = /^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/i;
 /* Palabras españolas que por casualidad se escriben como números romanos. */
@@ -233,6 +233,11 @@ export function pareceTitulo(linea, alturaModal) {
 export function pulirParaLectura(texto) {
   if (!texto || typeof texto !== 'string') return '';
   let salida = texto;
+
+  /* Filtro de seguridad contra residuos de traducción / rechazo de IA */
+  salida = salida
+    .replace(/(?:no hay texto para traducir[,.]?\s*)?por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas[.]?/gi, '')
+    .replace(/no hay texto para traducir[.,]?/gi, '');
 
   /* 1) Ligaduras tipográficas */
   for (const [patron, reemplazo] of LIGADURAS) salida = salida.replace(patron, reemplazo);

@@ -107,7 +107,7 @@ function pareceTituloSuelto(linea) {
   if (letras.length < 2) return false;
   /* Mayúsculas, o empieza con palabra de capítulo, o es numeración. */
   if (t === t.toUpperCase()) return true;
-  if (/^(cap[íi]tulo|parte|secci[óo]n|libro|tomo|ep[íi]logo|pr[óo]logo|introducci[óo]n|conclusi[óo]n|anexo|ap[ée]ndice|prefacio)\b/i.test(t)) return true;
+  if (/^(cap[íi]tulo|chapter|secreto|secret|parte|part|secci[óo]n|libro|tomo|ep[íi]logo|pr[óo]logo|introducci[óo]n|conclusi[óo]n|anexo|ap[ée]ndice|prefacio|respaldo|dedicatoria|sobre\s+el|índice|citas|preguntas|cuestionario)\b/i.test(t)) return true;
   if (/^(?:\d{1,3}|[IVXLCDM]{1,7})\s*[.\-–—:]?\s*\S*/.test(t) && palabras.length <= 6) return true;
   return false;
 }
@@ -189,6 +189,14 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   const comasProsodicas = opts.comasProsodicas !== false; // por defecto true
   const limpiarReferencias = opts.limpiarReferencias !== false; // por defecto true
   let salida = texto;
+  /* Filtro defensivo contra alucinaciones y rechazos de traducción automática */
+  salida = salida
+    .replace(/(?:no hay texto para traducir[,.]?\s*)?por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas[.]?/gi, '')
+    .replace(/no hay texto para traducir[.,]?/gi, '')
+    .replace(/¿qué necesitas que traduzca\?[^.!?\n]*[.!?]?/gi, '')
+    .replace(/¡?dime qué necesitas que traduzca[^.!?\n]*[.!?]?/gi, '')
+    .replace(/aquí tienes la traducción[^.!?\n]*[:.]?/gi, '')
+    .replace(/hola a todos,?\s+bienvenidos a este video[^.!?\n]*[.!?]?/gi, '');
 
   // Si no es español, aplicar solo limpieza básica
   if (idioma !== 'es') {
