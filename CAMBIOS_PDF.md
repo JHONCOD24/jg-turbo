@@ -28,8 +28,10 @@ Fish/Edge lo leían como «hashtag» porque aprendieron en inglés.
 - `test_pdf_voz.mjs`: 80/80 (66 previas + 14 nuevas del `#`).
 - Batería unitaria: 16/16 archivos, 993 comprobaciones OK, 0 fallos.
 
-Despliegue de producción: `dpl_PENDIENTE` (READY),
-alias `https://jg-turbo.vercel.app`.
+Despliegue de producción: `dpl_3pGvMKusVk8eB2maWe5aFKAzF6fM` (READY),
+alias `https://jg-turbo.vercel.app`. Verificado contra el dominio:
+marcador v2.70.0, SW shell-v120, `vozTexto.js?v=v120` con `expandirNumeral`
+(19 743 B = local), `/api/health` ok.
 
 ## 2026-09-09 · v2.69.0 · Contexto de lectura y orden directo (`JG_JS_V=v119`, shell-v119)
 
