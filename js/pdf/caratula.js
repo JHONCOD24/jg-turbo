@@ -390,6 +390,7 @@ export const PORTADAS_CANONICAS = [
   { clave: 'secretos de copywriting', ruta: '/img/portadas/secretos-de-copywriting.jpg' },
   { clave: 'el placebo eres tu', ruta: '/img/portadas/el-placebo-eres-tu.jpg' },
   { clave: 'cashvertising', ruta: '/img/portadas/cashvertising.jpg' },
+  { clave: 'el aprendiz de brujo', ruta: '/img/portadas/aprendiz-de-brujo.jpg' },
 ];
 
 /**

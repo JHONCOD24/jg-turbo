@@ -75,6 +75,7 @@ pdf/*.py
 pdf/*.png
 pdf/_adaptacion/
 pdf/regla-pdf/c3-trabajo/
+pdf/regla-pdf/aprendiz-trabajo/
 
 .commandcode/
 .cursor/

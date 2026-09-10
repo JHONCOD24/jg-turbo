@@ -11,11 +11,14 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const pdf = process.argv[2];
 const vendor = process.argv[3] || './js/vendor/pdfjs';
 const pdfjs = await import('file://' + path.resolve(vendor, 'pdf.legacy.min.mjs'));
-pdfjs.GlobalWorkerOptions.workerSrc = path.resolve(vendor, 'pdf.worker.legacy.min.mjs');
+// Windows: workerSrc como file:// URL (la ruta absoluta «C:\…» rompe el
+// cargador ESM en Windows; en Linux es equivalente).
+pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(path.resolve(vendor, 'pdf.worker.legacy.min.mjs')).href;
 
 const doc = await pdfjs.getDocument({
   data: new Uint8Array(fs.readFileSync(pdf)),

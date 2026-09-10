@@ -125,10 +125,23 @@ def ajusta(plano, est):
     return ParagraphStyle(st.name + "_aj", parent=st, fontSize=f, leading=f * 1.45)
 
 def Pa(txt, est, m=None, plano=None):
-    p = Paragraph(txt, ajusta(plano if plano is not None else re.sub(r"<[^>]+>", "", txt), est))
+    # Si un título con marcador se parte entre dos páginas, ReportLab dibuja
+    # el FRAGMENTO (objeto nuevo sin `_m`): el marcador se perdía y el enlace
+    # del índice quedaba roto (medido en «El aprendiz de brujo», m215). El
+    # primer fragmento hereda el marcador; los demás, no (sin duplicados).
+    cls = Tit if m else Paragraph
+    p = cls(txt, ajusta(plano if plano is not None else re.sub(r"<[^>]+>", "", txt), est))
     if m:
         p._m = m
     return p
+
+
+class Tit(Paragraph):
+    def split(self, availWidth, availHeight):
+        frags = Paragraph.split(self, availWidth, availHeight)
+        if frags and getattr(self, "_m", None):
+            frags[0]._m = self._m
+        return frags
 
 def figura(ruta, w, h):
     W = min(MARCO_W, w * 72.0 / 200.0)
@@ -240,4 +253,15 @@ doc = Libro(SALIDA, pagesize=A5, leftMargin=MI, rightMargin=MD, topMargin=MS,
             bottomMargin=MF, title=TITULO, author=AUTOR,
             subject="Edición adaptada para lectura en app", lang="es-ES")
 doc.build(limpio)
+
+# ReportLab ignora el kwarg `lang` (BaseDocTemplate no lo tiene) y el catálogo
+# quedaba sin /Lang (medido en dos libros). Se fija con PyMuPDF tras compilar.
+import pymupdf
+_tmp = SALIDA + ".tmplang"
+_dd = pymupdf.open(SALIDA)
+_dd.xref_set_key(_dd.pdf_catalog(), "Lang", "(es-ES)")
+_dd.save(_tmp, garbage=3, deflate=True)
+_dd.close()
+os.replace(_tmp, SALIDA)
+
 print(f"{SALIDA}\npáginas: {doc.page} | {os.path.getsize(SALIDA)/1e6:.2f} MB | capítulos: {len(capitulos)}")
