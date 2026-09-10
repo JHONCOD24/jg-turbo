@@ -52,7 +52,7 @@ ver `NOTAS_*.md` en cada taller):
   documentado arriba.
 - Geometría en navegador en verde, 0 errores JS.
 
-Despliegue de producción: `dpl_[PENDIENTE]` (READY), alias
+Despliegue de producción: `dpl_9Hr9tCNNfvYaHtCuJKVTZDg3556g` (READY), alias
 `https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador
 v2.75.0, `JG_JS_V=v127`, SW shell-v127, módulos con el cambio servidos,
 `/api/health` ok.
