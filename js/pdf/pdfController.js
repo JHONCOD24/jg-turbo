@@ -1598,7 +1598,7 @@ export function inicializarLectorPdf(deps = {}) {
     try {
       const rail = document.getElementById('btnPdfIndiceRail');
       if (!rail) return;
-      const escritorio = window.matchMedia?.('(min-width:1024px)').matches;
+      const escritorio = window.matchMedia?.('(min-width:768px)').matches;
       rail.classList.toggle('mostrar', Boolean(escritorio && el.indice?.hidden));
     } catch (_) { /* sin ventana no hay riel */ }
   }
@@ -1704,7 +1704,7 @@ export function inicializarLectorPdf(deps = {}) {
     try {
       new MutationObserver(actualizarRailIndice)
         .observe(el.indice, { attributes: true, attributeFilter: ['hidden'] });
-      window.matchMedia?.('(min-width:1024px)').addEventListener?.('change', actualizarRailIndice);
+      window.matchMedia?.('(min-width:768px)').addEventListener?.('change', actualizarRailIndice);
     } catch (_) { /* sin observadores se actualiza al abrir/cerrar a mano */ }
     aplicarAnchoIndice(leerAnchoIndice());
     actualizarRailIndice();
@@ -1770,7 +1770,10 @@ export function inicializarLectorPdf(deps = {}) {
       : el.musicaHoja && !el.musicaHoja.hidden ? el.musicaHoja
       : herramientas?.open ? herramientasPanel
       : el.masMenu?.open ? el.masPanel
-      : !el.indice.hidden && innerWidth < 1024 ? el.indice : null;
+      /* El Contenido solo es una hoja modal (con fondo oscuro y el resto
+       * inerte) en el teléfono. Desde 768 px es una columna al lado del
+       * texto: ahí no oscurece nada ni bloquea la lectura de atrás. */
+      : !el.indice.hidden && innerWidth < 768 ? el.indice : null;
     el.hojaFondo.hidden = !hojaModal;
     if (!hojaModal) return;
     hojaModal.setAttribute('aria-modal', 'true');
@@ -1784,7 +1787,7 @@ export function inicializarLectorPdf(deps = {}) {
     };
     aislar(el.resultArea);
   }
-  window.matchMedia('(min-width:1024px)').addEventListener('change', pintarFondoHojas);
+  window.matchMedia('(min-width:768px)').addEventListener('change', pintarFondoHojas);
 
   /* A quién devolver el foco al cerrar una hoja: al botón que la abrió y,
    * si ese no está a la vista (abierta desde la barra del pulgar y cerrada

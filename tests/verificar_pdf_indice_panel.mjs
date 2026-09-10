@@ -115,21 +115,55 @@ await pagina.waitForTimeout(200);
 const teclado = await pagina.evaluate(() => getComputedStyle(document.querySelector('.pdf-lector-cuerpo')).getPropertyValue('--pdf-indice-ancho'));
 comprobar(px(teclado) < px(despues.var), `el teclado angosta el panel (${despues.var.trim()} → ${teclado.trim()})`);
 
-/* Colapsar muestra el riel; el riel reabre. */
+/* La columna vive EN el flujo, al lado del texto: nunca flotando encima. */
+const sitio = await pagina.evaluate(() => {
+  const nav = document.getElementById('pdfIndice');
+  const col = document.querySelector('.pdf-texto-col');
+  const n = nav.getBoundingClientRect(), t = col.getBoundingClientRect();
+  return {
+    posicion: getComputedStyle(nav).position,
+    fondo: !document.getElementById('pdfHojaFondo').hidden,
+    solapa: n.right > t.left && n.left < t.right,
+  };
+});
+comprobar(sitio.posicion !== 'fixed', `la columna va en el flujo, no flotando (position:${sitio.posicion})`);
+comprobar(sitio.solapa === false, 'la columna no se monta encima del texto');
+comprobar(sitio.fondo === false, 'en escritorio no oscurece la pantalla: no es una hoja modal');
+
+/* Colapsar cierra la columna; el botón «Contenido» de la cabecera la reabre.
+ * (El riel del borde solo existe en pantalla completa, donde la cabecera —y
+ * con ella ese botón— se retira: comprobado más abajo.) */
 await pagina.locator('#btnPdfIndiceColapsar').click();
 await pagina.waitForTimeout(300);
 const colapsado = await pagina.evaluate(() => ({
   oculto: document.getElementById('pdfIndice').hidden,
-  riel: document.getElementById('btnPdfIndiceRail')?.classList.contains('mostrar'),
-  caja: document.getElementById('btnPdfIndiceRail')?.getBoundingClientRect().height || 0,
+  rielALaVista: (document.getElementById('btnPdfIndiceRail')?.getClientRects().length || 0) > 0,
+  botonALaVista: (document.getElementById('btnPdfIndice')?.getClientRects().length || 0) > 0,
 }));
-comprobar(colapsado.oculto === true, 'colapsar oculta el panel');
-comprobar(colapsado.riel === true && colapsado.caja >= 44, `el riel aparece a tamaño de dedo (${Math.round(colapsado.caja)}px)`);
+comprobar(colapsado.oculto === true, 'colapsar cierra la columna');
+comprobar(colapsado.botonALaVista === true, 'el botón «Contenido» de la cabecera queda a la vista para reabrirla');
+comprobar(colapsado.rielALaVista === false, 'con la cabecera visible no hay un segundo mando en el borde');
 
-await pagina.locator('#btnPdfIndiceRail').click();
+await pagina.locator('#btnPdfIndice').click();
 await pagina.waitForTimeout(300);
 const reabierto = await pagina.evaluate(() => !document.getElementById('pdfIndice').hidden);
-comprobar(reabierto === true, 'el riel vuelve a abrir el panel');
+comprobar(reabierto === true, '«Contenido» vuelve a abrir la columna');
+
+/* En pantalla completa sí aparece el riel: no queda otra puerta. */
+await pagina.locator('#btnPdfIndiceColapsar').click();
+await pagina.waitForTimeout(200);
+await pagina.locator('#btnPdfPantalla').click();
+await pagina.waitForTimeout(400);
+const pantalla = await pagina.evaluate(() => ({
+  riel: (document.getElementById('btnPdfIndiceRail')?.getClientRects().length || 0) > 0,
+  caja: document.getElementById('btnPdfIndiceRail')?.getBoundingClientRect().height || 0,
+}));
+comprobar(pantalla.riel === true && pantalla.caja >= 44,
+  `en pantalla completa el riel aparece a tamaño de dedo (${Math.round(pantalla.caja)}px)`);
+await pagina.locator('#btnPdfIndiceRail').click();
+await pagina.waitForTimeout(300);
+comprobar(await pagina.evaluate(() => !document.getElementById('pdfIndice').hidden),
+  'el riel vuelve a abrir la columna en pantalla completa');
 
 comprobar(errores.length === 0, `sin errores de JavaScript (${errores.length})${errores.length ? ' → ' + errores.join(' | ') : ''}`);
 

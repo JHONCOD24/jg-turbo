@@ -1625,13 +1625,15 @@
     border-color:var(--lec-linea, var(--line));
     color:var(--lec-texto, var(--text));
   }
+  /* Mismo caso que el estado activo: el acento puro sobre la superficie-2 del
+     tema se quedaba en 4.02:1 (Papel) y 3.95:1 (Sepia) al pasar el cursor. */
   #pdfResultArea .mini-btn:hover,
   #pdfResultArea .btn-back:hover,
   #pdfResultArea .pdf-nav-btn:hover,
   #pdfResultArea .tts-nav:hover{
     background:var(--lec-superficie-2, var(--surface-2));
     border-color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 45%, transparent);
-    color:var(--lec-acento, var(--cyan));
+    color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 64%, var(--lec-texto, var(--text)));
   }
   #pdfResultArea .tts-time,
   #pdfResultArea .pdf-search-info,
@@ -1662,15 +1664,27 @@
   #pdfResultArea .tts-seek::-webkit-slider-thumb{ background:var(--lec-acento, var(--cyan)) }
   #pdfResultArea .tts-seek::-moz-range-thumb{ background:var(--lec-acento, var(--cyan)) }
   #pdfResultArea .tts-seek::-moz-range-progress{ background:var(--lec-acento, var(--cyan)) }
+  /* Un control activo se pinta con el acento SOBRE un realce del mismo
+     acento, y eso acerca fondo y texto: «Contenido» activo se quedaba en
+     4.02:1 en Papel y 3.95:1 en Sepia. Tirando el acento hacia el color del
+     texto se mantiene el matiz y sube por encima de 4.5:1 en los tres temas
+     (en Noche, sobre fondo oscuro, el contraste sube todavía más). */
   #pdfResultArea .pdf-btn-solo-icono[aria-pressed="true"],
   #pdfResultArea .pdf-btn-solo-icono[aria-expanded="true"],
   #pdfResultArea .pdf-mas-menu[open] .pdf-mas-summary{
-    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 14%, transparent);
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 12%, transparent);
     border-color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 45%, transparent);
-    color:var(--lec-acento, var(--cyan));
+    color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 64%, var(--lec-texto, var(--text)));
   }
   #pdfResultArea .pdf-cap-avance-relleno,
   #pdfResultArea .pdf-barra--doc .pdf-barra-relleno{ background:var(--lec-acento, var(--cyan)) }
+  /* El aviso de confirmación llevaba el verde menta de la app oscura fijo:
+     sobre el crema de Papel quedaba en 1.17:1, es decir, ilegible. */
+  #pdfResultArea .notice.ok{
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 11%, transparent);
+    border-color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 38%, transparent);
+    color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 55%, var(--lec-texto, var(--text)));
+  }
 
   /* A pantalla completa el tema tiñe la tarjeta entera: si no, quedaba un
      marco oscuro rodeando la página de papel. */
@@ -1698,15 +1712,34 @@
   .pdf-lector-cuerpo{
     display:flex;flex-direction:column;gap:16px;flex:1;min-height:0;
   }
-  @media (min-width:1024px){
-    /* Escritorio: misma disposición que tablet — sin columna lateral.
-       El índice se abre como panel flotante con el botón «Contenido».
-       Antes era un grid de dos columnas (260px 1fr) que dejaba una barra
-       de scroll visible al lado del texto; ahora respira como en tablet. */
+  /* Desde tablet, el Contenido es una COLUMNA que vive al lado del texto, no
+     una hoja encima. Y es una columna *bajo demanda*: la segunda pista del
+     grid solo existe mientras el índice está abierto, así que un libro con el
+     Contenido cerrado (o de un solo capítulo) no deja un hueco muerto al lado
+     del texto — que era el motivo real por el que se quitó la columna. */
+  @media (min-width:768px){
     .pdf-lector-cuerpo{
-      display:flex;flex-direction:column;gap:16px;min-height:0;
+      display:grid;grid-template-columns:minmax(0,1fr);gap:24px;
+      align-items:stretch;min-height:0;
     }
+    /* Las dos pistas se centran JUNTAS en vez de estirarse: si la del texto
+       fuera `1fr`, el índice se quedaba pegado al borde con 260 px de vacío
+       en medio, como si flotara solo en la esquina. Acotada a la medida de
+       lectura, la columna queda al lado del texto y el texto casi no se mueve
+       al abrir o cerrar el Contenido. */
+    .pdf-lector-cuerpo:has(> .pdf-indice:not([hidden])){
+      grid-template-columns:var(--pdf-indice-ancho,220px) minmax(0,var(--pdf-col-ancho,76ch));
+      justify-content:center;
+    }
+    .pdf-lector-cuerpo > .pdf-indice{align-self:stretch;min-height:0}
     .pdf-texto-col{min-height:0}
+  }
+  /* Tablet vertical: a 768 px cada píxel que se le quita al texto se nota, así
+     que la columna es más estrecha, fija y con menos aire. */
+  @media (min-width:768px) and (max-width:1023px){
+    .pdf-lector-cuerpo:has(> .pdf-indice:not([hidden])){
+      grid-template-columns:196px minmax(0,1fr);gap:18px;
+    }
   }
 
   .pdf-texto-col{
@@ -1984,8 +2017,12 @@
     .pdf-dock-nav .tts-console .tts-console-engine{display:none}
   }
 
-  /* Ya no hay columna lateral de índice en escritorio (es panel flotante),
-     así que el caso de un solo capítulo no necesita regla especial. */
+  /* Un documento sin capítulos no tiene nada que listar: ni columna, ni botón
+     que abra una columna vacía. (La columna ya solo aparece con el Contenido
+     abierto, pero esto evita que se pueda abrir para no ver nada.) */
+  @media (min-width:768px){
+    #pdfResultArea[data-varias="no"] .pdf-indice{display:none !important}
+  }
 
   /* Cabecera del lector, compacta: dos filas justas en celular. */
   @media (max-width:700px){
@@ -2015,6 +2052,16 @@
      va en flujo normal y no hace falta. */
   @media (max-width:1023px){
     body.jg-leyendo .pdf-aviso-lector{bottom:calc(var(--pdf-bm-alto,64px) + 178px + env(safe-area-inset-bottom))}
+  }
+  /* En escritorio el dock NO va en flujo normal como decía la nota de arriba:
+     se apoya al pie de la columna de texto, justo donde caía el aviso, y le
+     tapaba «Anterior», «Sección X de Y» y «Siguiente» durante 6 segundos.
+     Sube por encima de él, igual que en celular y tablet. */
+  @media (min-width:1024px){
+    /* 245 px = dock (~117) + paginación (~44) + «X % del libro» (~30) + aire.
+       Todo eso está anclado al pie de la columna, así que la cuenta se
+       mantiene aunque cambie el alto de la ventana. */
+    body.jg-leyendo .pdf-aviso-lector{bottom:245px}
   }
 
   /* Con el lector abierto, el aviso y la barra de extracción de la vista de
@@ -3316,6 +3363,10 @@
   .pdf-hoja-cerrar:focus-visible{box-shadow:var(--focus);outline:none}
   @media (min-width:1024px){
     .pdf-mas-panel .pdf-hoja-cab::before{display:none}
+  }
+  /* Desde tablet el Contenido es columna, no hoja: sin asa de arrastre y sin
+     la «X» de cerrar — su cierre es el botón de colapsar de la barra. */
+  @media (min-width:768px){
     .pdf-indice .pdf-hoja-cab{display:none}
   }
 
@@ -3399,7 +3450,14 @@
     background:var(--surface);max-height:min(52vh,420px);overflow-y:auto;overscroll-behavior:contain;
     box-shadow:0 8px 24px rgba(0,0,0,.18);
   }
-  @media (max-width:1023px){
+  /* El nav es siempre el marco y la LISTA es siempre la que se desplaza. Así
+     la barra y el pie quedan quietos, y `scrollTop` sobre la lista (que es lo
+     que hace el lector para centrar el capítulo en curso) funciona igual en el
+     teléfono, en la tablet y en escritorio. */
+  .pdf-indice{display:flex;flex-direction:column;overflow:hidden}
+  .pdf-indice-lista{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  /* Teléfono: hoja inferior. */
+  @media (max-width:767px){
     .pdf-indice{
       position:fixed;left:0;right:0;bottom:0;top:auto;max-height:min(80dvh,640px);max-width:560px;margin:0 auto;
       z-index:101;border-radius:22px 22px 0 0;box-shadow:0 -12px 60px rgba(0,0,0,.6);
@@ -3409,19 +3467,20 @@
     }
     .pdf-indice[hidden]{display:none !important}
   }
-  @media (min-width:1024px){
-    /* Escritorio: el índice se abre como panel flotante centrado,
-       igual que en tablet, sin ocupar columna lateral fija. */
+  /* Tablet y escritorio: columna en el flujo. Nunca `fixed`, nunca por encima
+     del texto, sin sombra de hoja flotante y sin animación de entrada: no está
+     apareciendo sobre nada, está ocupando su sitio. El alto lo da la fila del
+     grid y el marco se viste con los colores del tema de lectura. */
+  @media (min-width:768px){
     .pdf-indice{
-      position:fixed;left:50%;top:auto;bottom:0;transform:translateX(-50%);
-      max-height:min(80dvh,640px);max-width:600px;width:calc(100% - 48px);margin:0;
-      z-index:101;border-radius:22px 22px 0 0;box-shadow:0 -12px 60px rgba(0,0,0,.6);
-      border:1px solid var(--line);border-bottom:0;background:var(--surface-2);
-      padding:0 10px 10px;
-      animation:pdfHojaIn .24s cubic-bezier(.22,1,.36,1);
+      position:relative;left:auto;right:auto;bottom:auto;top:auto;transform:none;
+      width:auto;max-width:none;max-height:none;height:100%;min-height:0;margin:0;
+      padding:0;z-index:auto;border-radius:var(--pdf-r);
+      border:1px solid var(--lec-linea, var(--line));border-bottom-width:1px;
+      background:var(--lec-superficie, var(--surface));
+      box-shadow:none;animation:none;
     }
     .pdf-indice[hidden]{display:none !important}
-    /* El botón «Contenido» sigue visible para abrir el panel. */
   }
   /* Contenido redimensionable (solo tablet horizontal y escritorio): el
      divisor se jala con el cursor o el dedo, y el ancho lo decide el lector.
@@ -3429,17 +3488,105 @@
   .pdf-indice-divisor{display:none}
   .pdf-indice-rail{display:none}
   .pdf-indice-barra{display:none}
-  @media (min-width:1024px){
-    /* Barra propia del panel: título + colapso a tamaño de dedo. */
+  @media (min-width:768px){
+    /* Barra propia de la columna: título + colapso a tamaño de dedo. */
     .pdf-indice-barra{
       display:flex;align-items:center;justify-content:space-between;gap:8px;
-      position:sticky;top:0;z-index:3;background:var(--surface);
-      padding:6px 6px 6px 14px;border-bottom:1px solid var(--line);
+      flex:none;background:var(--lec-superficie, var(--surface));
+      padding:6px 6px 6px 14px;border-bottom:1px solid var(--lec-linea, var(--line));
       border-radius:var(--pdf-r) var(--pdf-r) 0 0;
+    }
+    /* El pie no se desplaza con la lista: queda anclado abajo, separado por su
+       propia línea, y a esta anchura los dos rótulos se apilan sin apretarse. */
+    .pdf-indice-acciones{
+      flex:none;flex-direction:column;gap:6px;
+      padding:8px;border-top:1px solid var(--lec-linea, var(--line));
+    }
+    .pdf-indice-acciones .mini-btn{justify-content:center;text-align:center}
+    /* La barra de desplazamiento de la lista era la que ensuciaba el costado
+       del texto: la nativa de Windows son 17 px grises que no pertenecen a
+       ningún tema. Aquí es una línea fina del propio tema de lectura, que se
+       afirma al pasar el cursor. */
+    .pdf-indice-lista{
+      scrollbar-width:thin;
+      scrollbar-color:var(--lec-linea, var(--line)) transparent;
+    }
+    .pdf-indice-lista::-webkit-scrollbar{width:10px}
+    .pdf-indice-lista::-webkit-scrollbar-track{background:transparent}
+    .pdf-indice-lista::-webkit-scrollbar-thumb{
+      background:var(--lec-linea, var(--line));border-radius:999px;
+      border:3px solid transparent;background-clip:padding-box;
+    }
+    .pdf-indice:hover .pdf-indice-lista::-webkit-scrollbar-thumb{
+      background:var(--lec-suave, var(--muted-2));background-clip:padding-box;
+    }
+    /* En una columna de 200 px el título y la página no caben en la misma
+       línea: el título se comía en «CAPIT…» y un índice cuyos títulos no se
+       leen no es un índice. El número manda la sangría, el título ocupa dos
+       líneas y la página baja a una segunda fila, más pequeña y apagada. */
+    .pdf-indice .pdf-cap{
+      display:grid;grid-template-columns:22px minmax(0,1fr);
+      grid-template-areas:'marca titulo' 'marca datos';
+      align-items:start;column-gap:10px;row-gap:1px;padding:9px 10px 11px;
+    }
+    .pdf-indice .pdf-cap-marca{grid-area:marca;margin-top:1px}
+    .pdf-indice .pdf-cap-titulo{
+      grid-area:titulo;white-space:normal;line-height:1.35;
+      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    }
+    .pdf-indice .pdf-cap-datos{
+      grid-area:datos;font-size:11px;line-height:1.3;font-variant-numeric:tabular-nums;
+      /* `--lec-suave` es el gris del cuerpo del texto y a 11 px se quedaba en
+         4.26:1 sobre la arena del tema Sepia. Rebajar el propio color del
+         texto un 20 % da el mismo escalón de jerarquía y no baja de 5.8:1 en
+         ninguno de los tres temas. */
+      color:color-mix(in srgb, var(--lec-texto, var(--text)) 80%, transparent);
+    }
+    .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-datos{color:var(--lec-texto, var(--text))}
+    /* La columna se viste con el tema de lectura, igual que la hoja de
+       Apariencia y el dock. Si el FONDO pasa a ser del tema (crema en Papel,
+       arena en Sepia) el texto tiene que pasar también: con los colores de la
+       app oscura, el título quedaba blanco sobre crema —1.04:1, ilegible— y
+       el capítulo en curso en cian sobre crema. El acento del tema (verde
+       hondo en Papel, ámbar en Sepia) es el que sí se lee. */
+    .pdf-indice,
+    .pdf-indice .pdf-cap,
+    .pdf-indice-barra-titulo{color:var(--lec-texto, var(--text))}
+    .pdf-indice-colapsar{color:var(--lec-suave, var(--muted))}
+    /* El número del capítulo son 10 px: el gris suave del cuerpo del texto se
+       quedaba en 4.26:1 sobre la arena del tema Sepia. */
+    .pdf-indice .pdf-cap-marca{
+      border-color:var(--lec-linea, var(--line));
+      color:color-mix(in srgb, var(--lec-texto, var(--text)) 78%, transparent);
+    }
+    .pdf-indice .pdf-cap:hover{background:var(--lec-superficie-2, var(--surface))}
+    .pdf-indice .pdf-cap:active{background:var(--lec-superficie-2, var(--surface-2))}
+    .pdf-indice .pdf-cap:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:-2px}
+    /* El acento PURO sobre su propio realce no llega a AA en los temas claros:
+       el realce acerca el fondo al texto y «CAPITULO I» se quedaba en 3.79:1.
+       Tirando el acento un 28 % hacia el color del texto se conserva el matiz
+       (verde hondo en Papel, ámbar en Sepia, cian en Noche) y sube por encima
+       de 4.5:1 en los tres. */
+    .pdf-indice{--indice-acento:color-mix(in srgb, var(--lec-acento, var(--cyan)) 64%, var(--lec-texto, var(--text)))}
+    .pdf-indice .pdf-cap[aria-current="true"]{
+      background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 11%, transparent);
+    }
+    .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-titulo{color:var(--indice-acento)}
+    .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-avance{background:var(--lec-linea, var(--line))}
+    .pdf-indice .pdf-cap-avance-relleno{background:var(--lec-acento, var(--cyan))}
+    .pdf-indice .pdf-cap[data-estado="leido"] .pdf-cap-marca{
+      border-color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 50%, transparent);
+      color:var(--indice-acento);
+    }
+    .pdf-indice .pdf-cap[data-estado="leyendo"] .pdf-cap-marca{
+      border-color:var(--lec-acento, var(--cyan));color:var(--indice-acento);
+      /* El relleno de la píldora oscurecía el fondo bajo un número de 10 px y
+         lo dejaba en 4.15:1 en Sepia: el borde ya distingue «leyendo». */
+      background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 8%, transparent);
     }
     .pdf-indice-barra-titulo{
       font-family:'Bricolage Grotesque',sans-serif;font-size:14.5px;font-weight:800;
-      color:var(--text);letter-spacing:-.01em;
+      color:var(--lec-texto, var(--text));letter-spacing:-.01em;
     }
     .pdf-indice-colapsar{
       width:44px;height:44px;flex:none;border-radius:12px;cursor:pointer;
@@ -3447,13 +3594,14 @@
       display:grid;place-items:center;
     }
     .pdf-indice-colapsar svg{width:18px;height:18px}
-    .pdf-indice-colapsar:hover{background:var(--surface-2);color:var(--text)}
+    .pdf-indice-colapsar:hover{background:var(--lec-superficie-2, var(--surface-2));color:var(--lec-texto, var(--text))}
     .pdf-indice-colapsar:focus-visible{outline:none;box-shadow:var(--focus)}
-    /* Divisor y riel desactivados en escritorio: el índice ya no es columna
-       lateral, así que no hay nada que redimensionar. */
-    body.jg-leyendo .pdf-indice .pdf-indice-divisor{display:none}
-    .pdf-indice-divisor-linea{display:none}
-    /* Riel para volver a abrir cuando se colapsó. */
+    /* Riel para volver a abrir cuando se colapsó. Solo en pantalla completa:
+       ahí la cabecera se retira entera y es la ÚNICA forma de recuperar el
+       Contenido. Con la cabecera a la vista, el botón «Contenido» ya hace ese
+       trabajo, y un tirador pegado al borde izquierdo era un segundo mando
+       para lo mismo — encima lejos de donde la columna reaparece. */
+    body.jg-leyendo:not(.jg-pantalla) .pdf-indice-rail{display:none !important}
     body.jg-leyendo .pdf-indice-rail.mostrar{
       display:inline-flex;align-items:center;gap:8px;position:fixed;left:0;top:38%;
       z-index:60;min-height:48px;padding:10px 14px 10px 10px;cursor:pointer;
@@ -3464,19 +3612,39 @@
     .pdf-indice-rail.mostrar svg{width:16px;height:16px;color:var(--cyan)}
     .pdf-indice-rail.mostrar:hover{border-color:var(--cyan-glow)}
     .pdf-indice-rail.mostrar:focus-visible{outline:none;box-shadow:var(--focus)}
-    /* El divisor vive sobre el borde derecho: la lista le deja aire para
-       que ningún título quede debajo. */
-    .pdf-indice .pdf-indice-lista{padding-right:22px}
+  }
+  /* Ancho a medida: solo a partir de 1024 px (escritorio y tablet horizontal).
+     En tablet vertical la columna es fija — no hay ancho de sobra que repartir
+     y un divisor de 16 px al borde del texto solo sería un estorbo. */
+  @media (min-width:1024px){
+    body.jg-leyendo .pdf-indice:not([hidden]) .pdf-indice-divisor{
+      display:block;position:absolute;top:0;bottom:0;right:0;width:16px;
+      padding:0;border:0;background:none;cursor:ew-resize;touch-action:none;z-index:5;
+    }
+    .pdf-indice-divisor-linea{
+      position:absolute;top:10px;bottom:10px;left:50%;width:4px;border-radius:999px;
+      transform:translateX(-50%);background:var(--lec-linea, var(--line));transition:background-color .15s;
+    }
+    .pdf-indice-divisor:hover .pdf-indice-divisor-linea,
+    .pdf-indice-divisor[data-arrastrando="si"] .pdf-indice-divisor-linea{background:var(--cyan)}
+    .pdf-indice-divisor:focus-visible{outline:none}
+    .pdf-indice-divisor:focus-visible .pdf-indice-divisor-linea{background:var(--cyan);box-shadow:var(--focus)}
+    /* El divisor vive sobre el borde derecho: la lista y el pie le dejan aire
+       para que ningún título ni ningún botón queden debajo. */
+    body.jg-leyendo .pdf-indice:not([hidden]) .pdf-indice-lista{padding-right:22px}
+    body.jg-leyendo .pdf-indice:not([hidden]) .pdf-indice-acciones{padding-right:22px}
     /* Panel ancho: los títulos se despliegan en varias líneas en vez de
-       cortarse a la mitad. */
+       cortarse a la mitad, y el pie recupera su fila de dos. */
     .pdf-indice[data-ancho="ancho"] .pdf-cap{align-items:flex-start}
     .pdf-indice[data-ancho="ancho"] .pdf-cap-marca{margin-top:2px}
     .pdf-indice[data-ancho="ancho"] .pdf-cap-titulo{
       white-space:normal;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
     }
+    .pdf-indice[data-ancho="ancho"] .pdf-indice-acciones{flex-direction:row}
   }
   @media (prefers-reduced-motion: reduce){
     .pdf-indice-divisor-linea{transition:none}
+    .pdf-indice{animation:none}
   }
   .pdf-indice[hidden]{display:none}
   .pdf-indice-lista{list-style:none;margin:0;padding:6px}
@@ -5429,10 +5597,15 @@ body.jg-leyendo .pdf-dock-nav .tts-voice-select{flex:1;min-width:0}
 }
 body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
 .pdf-cortes-hoja:not([hidden]){position:fixed;inset:10% max(16px,calc((100vw - 720px)/2));z-index:110;max-height:80dvh;overflow:auto;background:var(--lec-bg);padding:20px;border:1px solid var(--lec-linea);border-radius:16px}
+/* En lectura el reparto lo sigue mandando el grid de `.pdf-lector-cuerpo`
+   (columna solo si el Contenido está abierto). Aquí van únicamente el aire
+   entre columnas y el respiro lateral del texto, que sí cambian por ancho. */
+@media(min-width:768px) and (max-width:1023px){
+  body.jg-leyendo .pdf-lector-cuerpo{gap:18px}
+  body.jg-leyendo .pdf-texto-col{padding-inline:20px}
+}
 @media(min-width:1024px){
-  /* Escritorio en modo lectura: sin grid de dos columnas, el texto
-     respira centrado y el índice flota como panel. */
-  body.jg-leyendo .pdf-lector-cuerpo{display:flex;flex-direction:column;gap:16px}
+  body.jg-leyendo .pdf-lector-cuerpo{gap:28px}
   body.jg-leyendo .pdf-texto-col{padding-inline:24px}
 }
 /* Este bloque repartía la cabecera en DOS columnas, y como va después del
@@ -7089,11 +7262,17 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
+              <ol class="pdf-indice-lista" id="pdfIndiceLista"></ol>
+              <!-- Las dos acciones van al PIE, después de la lista: en la
+                   columna lateral los capítulos son el protagonista y no
+                   pueden empezar 90 px más abajo; en la hoja del teléfono el
+                   pie es además donde llega el pulgar. Van en el DOM en este
+                   orden (no con `order`) para que el recorrido con Tab siga
+                   viéndose igual que se ve. -->
               <div class="pdf-indice-acciones">
                 <button type="button" class="mini-btn" id="btnPdfIndiceInicio" title="Volver a la primera sección del libro">Ir al inicio del libro</button>
                 <button type="button" class="mini-btn" id="btnPdfIndiceActual" title="Centrar la lista en la sección que estás leyendo">Volver a la sección actual</button>
               </div>
-              <ol class="pdf-indice-lista" id="pdfIndiceLista"></ol>
             </nav>
 
             <div class="pdf-texto-col">
@@ -17814,7 +17993,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v128';
+const JG_JS_V = 'v129';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
