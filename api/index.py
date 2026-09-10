@@ -4149,6 +4149,7 @@ FISH_CATALOGO_BASE = (
     ("brian-tracy", "male", "Brian Tracy", "cd803cbf78a4454fa98b601abbf8966a", "", "es"),
     ("morgan-freeman", "male", "Morgan Freeman", "7c76e349434d4f1e97078d924acea65f", "", "es"),
     ("mario-alonso-puig", "male", "Mario Alonso Puig", "b9a077022c424e89b0705cb98085e36a", "", "es"),
+    ("tatiana-mae", "female", "Tatiana Mae", "16cba2445c3749d7810a0b3f348ec0d7", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {"clara": "nico-robin", "nestor": "locutor-k"}

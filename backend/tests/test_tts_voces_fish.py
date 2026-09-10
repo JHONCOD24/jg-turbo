@@ -21,6 +21,7 @@ NUEVAS = {
     "brian-tracy": "cd803cbf78a4454fa98b601abbf8966a",
     "morgan-freeman": "7c76e349434d4f1e97078d924acea65f",
     "mario-alonso-puig": "b9a077022c424e89b0705cb98085e36a",
+    "tatiana-mae": "16cba2445c3749d7810a0b3f348ec0d7",
 }
 
 
