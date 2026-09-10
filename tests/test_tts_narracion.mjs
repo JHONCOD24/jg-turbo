@@ -189,5 +189,17 @@ try {
     'el lector de PDF expone window.jgPrepararParaVoz');
 }
 
+/* ── Secretos de Copywriting (2026-09-10): el chatter no se escucha ──
+ * Aunque la capa PDF falle o tarde en cargar, Escuchar pasa por
+ * ttsNormalizarTextoNarracion: el filtro vive en los dos caminos. */
+{
+  const frase = 'no hay texto para traducir, por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas';
+  const sale = narrar(`Hola mundo. ${frase} Siguiente párrafo.`);
+  comprobar(!sale.toLowerCase().includes('no hay texto') && !sale.toLowerCase().includes('bloque de texto'),
+    'ttsNormalizarTextoNarracion quita el chatter de traducción');
+  comprobar(sale.includes('Hola mundo') && sale.includes('Siguiente'),
+    'y conserva el texto real de alrededor');
+}
+
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);

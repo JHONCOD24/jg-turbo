@@ -100,7 +100,13 @@ export function elegirCompactoVoz(crudo, alineado, visibleCompacto) {
 function pareceTituloSuelto(linea) {
   const t = linea.trim();
   if (!t || t.length > 70) return false;
-  if (/[.!?…:;,»)]$/.test(t)) return false;      /* ya cierra: no hace falta */
+  /* Un cierre real de frase (punto, interrogación, exclamación, puntos
+   * suspensivos, dos puntos, punto y coma, coma) ya da pausa en el motor.
+   * Un paréntesis, comilla o corchete de cierre SOLO («(FRED)», «…libro»)
+   * NO da pausa: si el título viejo viene sin punto, la voz lo lee de
+   * corrido con el párrafo siguiente (Secretos de Copywriting, 2026-09-10).
+   * Por eso aquí solo valen signos que pausan de verdad. */
+  if (/[.!?…:;,]$/.test(t)) return false;
   const palabras = t.split(/\s+/).filter(Boolean);
   if (palabras.length > 10) return false;
   const letras = t.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
@@ -109,6 +115,20 @@ function pareceTituloSuelto(linea) {
   if (t === t.toUpperCase()) return true;
   if (/^(cap[íi]tulo|chapter|secreto|secret|parte|part|secci[óo]n|libro|tomo|ep[íi]logo|pr[óo]logo|introducci[óo]n|conclusi[óo]n|anexo|ap[ée]ndice|prefacio|respaldo|dedicatoria|sobre\s+el|índice|citas|preguntas|cuestionario)\b/i.test(t)) return true;
   if (/^(?:\d{1,3}|[IVXLCDM]{1,7})\s*[.\-–—:]?\s*\S*/.test(t) && palabras.length <= 6) return true;
+  /* Título breve en mayúscula inicial sin palabra clave («Una decisión
+   * radical», «El placebo eres tú», «Jim Edwards»): pocas palabras, sin
+   * coma ni conjunción inicial. Medido en la biblioteca (2026-09-10): sin
+   * esto la voz los lee de corrido con el párrafo siguiente. Incluye
+   * títulos que cierran con paréntesis («Definir a tu cliente ideal (FRED)»,
+   * Secretos de Copywriting): el «)» solo no pausa. Solo capa
+   * voz: el visible no se toca y la invariante (mismas palabras) vale. */
+  if (t.length <= 70 && palabras.length >= 2 && palabras.length <= 10
+    && /^[A-ZÁÉÍÓÚÑ]/.test(t) && !/[,;]/.test(t)
+    /* Solo las coordinantes que nunca abren un título en esta biblioteca
+     * («Y en algún momento…» es frase, no título). «Cómo», «Qué», «Cuando»,
+     * «Si» o «Porque» SÍ abren títulos reales («Cómo colaboran las historias…»,
+     * Secretos de Copywriting): excluirlos dejaba esos títulos sin pausa. */
+    && !/^(y|e|o|u|pero|aunque|mientras)\b/i.test(t)) return true;
   return false;
 }
 
@@ -360,6 +380,21 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
    * Va DESPUÉS de enmascarar URLs y correos (regla 0): el `#` de un ancla
    * web ya es «enlace web» y no llega hasta aquí. */
   salida = expandirNumeral(salida, 'número');
+
+  /* 3 sexies. Nombres propios que el origen trae en minúscula.
+   *
+   * Medido en la biblioteca (2026-09-10): «El placebo eres tú» trae
+   * «núria Martí pérez», «Hay House, california», «Jeffrey Fannin ph. D.»
+   * y «a candace». Son errores de captura del PDF adaptado, no del libro
+   * (el original trae las mayúsculas). Se corrige SOLO la caja: el
+   * compacto de la guía va en minúsculas sin tildes, así que el ancla no
+   * se mueve y el visible/guardado/exportado no se tocan. */
+  salida = salida
+    .replace(/\bcalifornia\b/g, 'California')
+    .replace(/\bn[úu]ria\b/gi, 'Núria')
+    .replace(/\bp[eé]rez\b/gi, 'Pérez')
+    .replace(/\bcandace\b/gi, 'Candace')
+    .replace(/\bph\.\s*D\./g, 'Ph. D.');
 
   // ── Reglas 4-6: conversión numérica ──
   // Edge TTS (y Azure) ya pronuncian «2024» como «dos mil veinticuatro» y

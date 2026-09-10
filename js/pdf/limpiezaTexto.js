@@ -234,10 +234,19 @@ export function pulirParaLectura(texto) {
   if (!texto || typeof texto !== 'string') return '';
   let salida = texto;
 
-  /* Filtro de seguridad contra residuos de traducción / rechazo de IA */
+  /* Filtro de seguridad contra residuos de traducción / rechazo de IA.
+   * Cubre la frase exacta reportada en Secretos de Copywriting (2026-09-10)
+   * y sus variantes: si el libro ya quedó guardado con ese chatter, la
+   * limpieza lo quita del visible/guardado/exportado, y la capa de voz lo
+   * quita al hablar. No toca CTAs legítimos del libro («suscríbete» solo
+   * se filtra como parte de la frase de rechazo, nunca suelto). */
   salida = salida
     .replace(/(?:no hay texto para traducir[,.]?\s*)?por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas[.]?/gi, '')
-    .replace(/no hay texto para traducir[.,]?/gi, '');
+    .replace(/no hay texto para traducir[.,]?/gi, '')
+    .replace(/¿qué necesitas que traduzca\?[^.!?\n]*[.!?]?/gi, '')
+    .replace(/¡?dime qué necesitas que traduzca[^.!?\n]*[.!?]?/gi, '')
+    .replace(/aquí tienes la traducción[^.!?\n]*[:.]?/gi, '')
+    .replace(/hola a todos,?\s+bienvenidos a este video[^.!?\n]*[.!?]?/gi, '');
 
   /* 1) Ligaduras tipográficas */
   for (const [patron, reemplazo] of LIGADURAS) salida = salida.replace(patron, reemplazo);

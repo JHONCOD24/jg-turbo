@@ -42,6 +42,7 @@ import {
 } from './progreso.js';
 import { construirAncla, resolverAncla } from './anclaTexto.js';
 import { limpiarNombreLibro, conseguirCaratula, buscarPortadaCanonica } from './caratula.js';
+import { procedenciaLibro } from './procedencia.js';
 import * as almacen from './biblioteca.js';
 import { crearNube } from './nube.js';
 import { musicaFondo, CATALOGO_PISTAS, ANIMOS } from './musicaFondo.js';
@@ -928,6 +929,9 @@ export function inicializarLectorPdf(deps = {}) {
     cancelarOrganizacion();
   }, true);
 
+  /* Procedencia del libro para la píldora de la tarjeta (auditoría 2026-09-10):
+   * ver ./procedencia.js (pura y con pruebas). Solo lectura de metadatos. */
+
   function tarjetaLibro(doc) {
     const tituloDoc = tituloLimpioDe(doc);
 
@@ -1137,6 +1141,18 @@ export function inicializarLectorPdf(deps = {}) {
     const titulo = document.createElement('span');
     titulo.className = 'pdf-libro-titulo';
     titulo.textContent = tituloDoc;
+
+    const proc = procedenciaLibro(doc);
+    let insignia = null;
+    if (proc === 'adaptado' || proc === 'original') {
+      insignia = document.createElement('span');
+      insignia.className = 'pdf-libro-proc';
+      insignia.dataset.proc = proc;
+      insignia.textContent = proc === 'adaptado' ? 'Adaptado' : 'Original';
+      insignia.title = proc === 'adaptado'
+        ? 'Texto refluido para JG Turbo: lectura y voz optimizadas.'
+        : 'PDF original sin adaptar: al escuchar pueden colarse cabeceras o partirse palabras.';
+    }
     titulo.title = tituloDoc;
 
     const pie = document.createElement('div');
@@ -1168,7 +1184,9 @@ export function inicializarLectorPdf(deps = {}) {
     relleno.style.width = `${porcentaje}%`;
     barra.appendChild(relleno);
 
-    cuerpo.append(titulo, pie, barra);
+    cuerpo.append(titulo);
+    if (insignia) cuerpo.append(insignia);
+    cuerpo.append(pie, barra);
     // Avance de lectura, estado de corrección y sincronización por separado.
     try {
       const sub = document.createElement('span');

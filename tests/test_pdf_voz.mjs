@@ -311,5 +311,63 @@ function comprobar(condicion, mensaje) {
     'situarBloques alinea la voz con el visible (no compacta el crudo a ciegas)');
 }
 
+/* ── Pausa tras títulos breves sin palabra clave (auditoría 2026-09-10) ──
+ * «Una decisión radical», «El placebo eres tú» o «Jim Edwards» no están en
+ * la lista de palabras clave y la voz los leía de corrido con el párrafo
+ * siguiente. Solo capa voz: el visible no se toca. */
+{
+  const t1 = prepararParaVoz('Una decisión radical\n\nA pesar de que el equipo médico me lo desaconsejara.', 'es');
+  comprobar(/Una decisión radical:/.test(t1), '«Una decisión radical» recibe pausa antes del cuerpo');
+  const t2 = prepararParaVoz('El placebo eres tú\n\nDescubre el poder de tu mente.', 'es');
+  comprobar(/El placebo eres tú:/.test(t2), '«El placebo eres tú» recibe pausa');
+  const t3 = prepararParaVoz('Jim Edwards\n\nSecretos de Copywriting.', 'es');
+  comprobar(/Jim Edwards:/.test(t3), 'el nombre del autor suelto recibe pausa');
+  /* Y no se traga una frase corta real: con conjunción inicial no es título. */
+  const frase = prepararParaVoz('Y en algún momento del recorrido me di cuenta de algo importante aquí.', 'es');
+  comprobar(!/^Y en algún momento del recorrido[^:]*:/.test(frase.split('\n\n')[0] || ''),
+    'una frase con conjunción inicial no se marca como título');
+}
+
+/* ── Nombres propios en minúscula (auditoría 2026-09-10, «El placebo») ──
+ * Solo cambia la caja: el compacto de la guía (minúsculas sin tildes) queda
+ * idéntico, así que el ancla no se mueve. */
+{
+  comprobar(prepararParaVoz('Traducción: núria Martí pérez.', 'es').includes('Núria Martí Pérez'),
+    '«núria Martí pérez» suena con mayúsculas');
+  comprobar(prepararParaVoz('Editor original: Hay House, california.', 'es').includes('California'),
+    '«california» suena «California»');
+  comprobar(prepararParaVoz('Te presentaré a candace hoy.', 'es').includes('Candace')
+    && !prepararParaVoz('Te presentaré a candace hoy.', 'es').includes('candace'),
+    '«candace» suena «Candace»');
+  comprobar(prepararParaVoz('Con la colaboración de Jeffrey Fannin ph. D.', 'es').includes('Ph. D.'),
+    '«ph. D.» suena «Ph. D.»');
+  const voz = prepararParaVoz('Te presentaré a candace hoy mismo aquí.', 'es');
+  comprobar(compactarTexto(voz).texto === compactarTexto('Te presentaré a candace hoy mismo aquí.').texto,
+    'el cambio de caja no mueve el compacto de la guía');
+}
+
+/* ── Secretos de Copywriting (2026-09-10): chatter + títulos con paréntesis ──
+ * La frase «no hay texto para traducir, por favor proporciona el bloque…»
+ * venía de párrafos dummy del Bookey y se colaba en la narración. Y los
+ * títulos viejos sin punto que cierran con «)» («Definir a tu cliente ideal
+ * (FRED)») se leían de corrido porque el «)» se tomaba por cierre. */
+{
+  const frase = 'no hay texto para traducir, por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas';
+  const vozChatter = prepararParaVoz(`Hola mundo. ${frase} Siguiente párrafo.`, 'es');
+  comprobar(!vozChatter.toLowerCase().includes('no hay texto') && !vozChatter.toLowerCase().includes('bloque de texto'),
+    'el chatter de traducción no llega a la voz');
+  comprobar(vozChatter.includes('Hola mundo') && vozChatter.includes('Siguiente párrafo'),
+    'el texto real alrededor del chatter queda intacto');
+  const tParentesis = prepararParaVoz('Definir a tu cliente ideal (FRED)\n\nConocer a tu cliente es fundamental.', 'es');
+  comprobar(/\(FRED\):/.test(tParentesis),
+    'un título que cierra con paréntesis recibe pausa antes del cuerpo');
+  const tLargo = prepararParaVoz('Cómo colaboran las historias y el texto de ventas\n\nLas historias despiertan la sed.', 'es');
+  comprobar(/ventas:/.test(tLargo),
+    'un título de sección largo sin punto recibe pausa');
+  const tConPunto = prepararParaVoz('Definir a tu cliente ideal (FRED).\n\nCuerpo.', 'es');
+  comprobar(!/\(FRED\)\.:/.test(tConPunto) && !tConPunto.includes('..'),
+    'un título que ya trae punto no recibe pausa doble');
+}
+
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);

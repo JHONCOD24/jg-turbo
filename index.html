@@ -1,4 +1,4 @@
-<!-- v2.74.0 · corrección integral de Secretos de Copywriting (Bookey adaptado) -->
+<!-- v2.74.2 · Secretos de Copywriting: chatter fuera de Escuchar + pausa en títulos con paréntesis -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -5368,6 +5368,9 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 #pdfBiblioteca[data-vista="compacta"] #pdfRejilla{grid-template-columns:1fr}
 #pdfBiblioteca[data-vista="compacta"] .pdf-libro-tapa{display:none}
 .pdf-libro-sub{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.pdf-libro-proc{font-size:12px;line-height:1.5;padding:1px 9px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.pdf-libro-proc[data-proc="adaptado"]{color:var(--cyan)}
+.pdf-libro-proc[data-proc="original"]{color:var(--muted)}
 .pdf-libro-error{font-size:12.5px;color:var(--danger,#E5484D);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pdf-cortes-hoja{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .pdf-cortes-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
@@ -14672,6 +14675,16 @@ function ttsNormalizarTextoNarracion(texto, langHint){
   const enIngles = /^en/i.test(String(langHint || ''));
   const numero = enIngles ? 'number' : 'número';
   return String(texto || '')
+    /* Chatter de traducción (Secretos de Copywriting, 2026-09-10): si un libro
+     * viejo quedó guardado con la frase «no hay texto para traducir, por favor
+     * proporciona el bloque…», Escuchar la leería. Se quita aquí también, no
+     * solo en la capa PDF: este es el camino que sí usa Escuchar/MP3. */
+    .replace(/(?:no hay texto para traducir[,.]?\s*)?por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas[.]?/gi, '')
+    .replace(/no hay texto para traducir[.,]?/gi, '')
+    .replace(/¿qué necesitas que traduzca\?[^.!?\n]*[.!?]?/gi, '')
+    .replace(/¡?dime qué necesitas que traduzca[^.!?\n]*[.!?]?/gi, '')
+    .replace(/aquí tienes la traducción[^.!?\n]*[:.]?/gi, '')
+    .replace(/hola a todos,?\s+bienvenidos a este video[^.!?\n]*[.!?]?/gi, '')
     .replace(/\[([^\]]+)\]\((?:https?:\/\/)?[^)]+\)/g, '$1')
     .replace(/```([\s\S]*?)```/g, (_, code) => String(code || '').replace(/\s+/g, ' ').trim())
     .replace(/`([^`]+)`/g, '$1')
@@ -17805,7 +17818,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v124';
+const JG_JS_V = 'v126';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

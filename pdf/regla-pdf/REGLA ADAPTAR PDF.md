@@ -349,6 +349,20 @@ No se entrega si alguno falla:
 - [ ] El PDF abre con `pdf.js` y devuelve el texto correcto (paso 6b)
 - [ ] Índice con enlaces y marcadores por capítulo
 - [ ] Sin páginas en blanco
+- [ ] **Nombres propios con mayúscula** (autor, traductor, editorial, personajes):
+  buscar en el texto extraído `california`, `núria`, `pérez`, `candace`,
+  `ph. d.` y cualquier ` [a-záéíóú]+ [A-ZÁÉÍÓÚ]` sospechoso antes de compilar
+  (auditoría 2026-09-10: «El placebo» salió con cuatro en minúscula)
+- [ ] **Títulos de capítulo con pausa para voz**: todo título sin signo final
+  lo cierra la capa de voz (`pareceTituloSuelto` en `js/pdf/vozTexto.js`,
+  probado en `tests/test_pdf_voz.mjs`); un `)`/`»` final solo NO cuenta como
+  pausa (Secretos de Copywriting, 2026-09-10). En el flujo de fidelidad
+  (texto original inmutable) en el PDF no se añade ni se quita ningún punto
+  (§12); excepción: el resumen Bookey traducido sí asegura `.`/`?`/`!` final
+  en compilación (`asegurar_punto` en `construir_bookey.py`), documentado en
+  `CAMBIOS_PDF.md` v2.74.0/v2.74.2.
+- [ ] **Prueba de escucha de 2 minutos**: índice + primera página de un
+  capítulo con voz real antes de entregar (caza run-ons que el ojo no ve)
 
 ---
 

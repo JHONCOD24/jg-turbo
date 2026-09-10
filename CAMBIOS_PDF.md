@@ -3,6 +3,85 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-10 · v2.74.2 · Secretos de Copywriting: chatter fuera de Escuchar + pausa en títulos con paréntesis (`JG_JS_V=v126`, shell-v126)
+
+Lo reportado en el libro *Secretos de Copywriting* adaptado para JG Turbo:
+1. La frase «no hay texto para traducir, por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas» aparecía de forma recurrente en la narración.
+2. Varios títulos se escuchaban de corrido, pegados al párrafo siguiente, por falta de punto/pausa final.
+
+**Medido antes de tocar nada (2026-09-10):**
+- `pdf/Secretos de Copywriting - edición adaptada para JG Turbo.pdf` y `pdf/Secretos de Copywriting .pdf`: 138 págs, 0 apariciones del chatter en el texto extraído, 9.629 átomos, 2 pendientes (`test_pdf_reales.mjs`). Los títulos H1/H2 del PDF SÍ terminan en `.`, `?` o `!` gracias a `asegurar_punto()` en `pdf/_adaptacion/construir_bookey.py` (v2.74.0). El PDF en disco estaba limpio.
+- La narración, en cambio, tenía dos huecos reales: (a) `ttsNormalizarTextoNarracion()` (el camino que SÍ usa Escuchar/MP3) no filtraba el chatter — solo lo hacía `prepararParaVoz()` (audiolibro); si la capa PDF tardaba en cargar o el libro viejo ya lo traía guardado, el chatter sonaba. (b) `pareceTituloSuelto()` tomaba el `)` y `»` final como cierre suficiente y no añadía pausa, así que un título viejo sin punto como «Definir a tu cliente ideal (FRED)» se leía de corrido; además solo cubría títulos de 2-6 palabras y excluía «Cómo/Cuando/Que/Si», dejando fuera secciones reales como «Cómo colaboran las historias y el texto de ventas».
+
+**Gramática documentada (lo pedido: correcta según el libro PDF):**
+- En el PDF adaptado los títulos terminan en `.`, `?` o `!` (`asegurar_punto()`; nunca se añade punto tras `?`/`!` ni se duplican). Es una decisión de lectura en voz alta, no de imprenta: la RAE no pone punto a los títulos en papel, pero en un PDF hecho para que `pdf.js` y el TTS lo lean sin adivinar, el punto es la marca que impide el run-on. El texto visible, guardado y exportado conserva ese punto tal cual.
+- En la app, los libros viejos ya guardados (TRAMPAS.md §1.4: arreglar el código no arregla lo guardado) pueden traer títulos sin punto. Esos NO se reescriben en disco: la pausa vive solo en la capa de voz, que añade `:` al título suelto justo antes de hablar y lo descarta. Por eso un libro viejo suena con pausa sin que su texto cambie.
+- Acción para el usuario: si su biblioteca aún muestra el chatter en el TEXTO visible, ese libro se guardó antes de v2.74.0. La voz ya lo silencia, pero el visible solo queda limpio borrando ese libro de la biblioteca y volviendo a subir el PDF adaptado de `pdf/` (el blob guardado es el PDF viejo; reextraer no descarga el nuevo).
+
+**Cambios (solo voz + limpieza, el PDF no se recompiló porque ya estaba limpio):**
+- `js/pdf/vozTexto.js` → `pareceTituloSuelto()`: `)`/`»`/`]`/`"` de cierre ya no cuentan como pausa; el rango sube a 2-10 palabras y 70 letras; la exclusión inicial queda solo en coordinantes reales (`y/e/o/u/pero/aunque/mientras`), así «Cómo…» y «(FRED)» reciben `:` antes del cuerpo. Solo capa de voz.
+- `js/pdf/limpiezaTexto.js` → `pulirParaLectura()`: mismo filtro ampliado que la voz (chatter exacto + «¿qué necesitas que traduzca?», «dime qué…», «aquí tienes la traducción», «hola a todos, bienvenidos…»), para que visible/guardado/exportado también queden limpios. No se filtra «suscríbete» suelto: en un libro de copywriting es contenido legítimo.
+- `index.html` → `ttsNormalizarTextoNarracion()`: red defensiva con el mismo filtro de chatter al inicio de la cadena. Es el camino de Escuchar/Desde aquí/MP3 (`ttsCrearCola`); sin esto, el arreglo solo existía en el audiolibro (TRAMPAS.md §6.11).
+- Pruebas: `tests/test_pdf_voz.mjs` (+5: chatter fuera de la voz con contexto intacto, pausa tras `(FRED)`, pausa en sección larga, sin doble punto) y `tests/test_tts_narracion.mjs` (+2: `ttsNormalizarTextoNarracion` quita el chatter y conserva el contexto).
+
+### Verificación
+
+- `test_pdf_voz.mjs`: 102/102 (97 previas + 5 nuevas).
+- `test_tts_narracion.mjs`: 60/60 (58 previas + 2 nuevas).
+- Batería unitaria: todos los `tests/test_*.mjs` en verde (incluye `test_pdf_guia_capcut` con `JG_JS_V=v126` y `shell-v126` sincronizados).
+- `test_pdf_reales.mjs` con el PDF adaptado: 138 págs, 9.629 átomos, 2 pendientes — idéntico al respaldo previo (sin recompilar).
+- `test_pdf_limpieza.mjs`, `test_pdf_guia_sincronia.mjs`, `test_pdf_continuidad.mjs` en verde (la guía no se movió: el cambio de caja no existe aquí y `:` no añade palabras).
+
+Pendiente (ventana de despliegue): un solo deploy agrupa esta tanda (TRAMPAS.md §«Despliegue»); verificar contra el dominio marcador v2.74.2 + v126 y luego `git push origin main`.
+
+## 2026-09-10 · v2.74.1 · Gramática para voz + píldora Adaptado/Original (`JG_JS_V=v125`, shell-v125)
+
+Auditoría de gramática de los 12 PDFs de `pdf/` (2026-09-10): los títulos sin
+punto final son correctos según la RAE (no se les pone punto en el libro); lo
+que faltaba era la pausa en la voz. Nada de lo aquí cambiado altera el texto
+guardado, visible o exportado: todo vive en la capa de voz o en metadatos.
+
+**Cambios (`js/pdf/vozTexto.js`, `tests/test_pdf_voz.mjs`):**
+- `pareceTituloSuelto()` también cierra líneas breves en mayúscula inicial
+  sin palabra clave («Una decisión radical», «El placebo eres tú»,
+  «Jim Edwards»): antes solo cubría mayúsculas totales, palabras clave y
+  numeración, y esos títulos se leían de corrido con el párrafo siguiente.
+- Nueva regla «3 sexies»: nombres propios que el origen trae en minúscula
+  («núria Martí pérez» → «Núria Martí Pérez», «california» → «California»,
+  «a candace» → «a Candace», «ph. D.» → «Ph. D.»). Solo cambia la caja: el
+  compacto de la guía va en minúsculas sin tildes, así que el ancla no se
+  mueve (probado).
+
+**Libro rebuilding (`pdf/`, `pdf/_adaptacion/`, ignorados por Git):**
+- `Edwars destaca` → `Edwards destaca` en `unidades_bookey.json`,
+  `bookey.json` y `trad_bookey.json` (1 aparición en cada uno; errata de
+  extracción que venía del resumen Bookey). `construir_bookey.py` reejecutado:
+  ambas copias del PDF quedan idénticas (138 págs, Edwars ×0, Edwards ×217).
+  Nota: el constructor escribe las dos copias a propósito (principal +
+  alternativa de sincronización); no son un duplicado accidental.
+
+**Biblioteca (`js/pdf/pdfController.js`, `js/pdf/procedencia.js`, `index.html`):**
+- La tarjeta muestra la píldora **Adaptado** (texto refluido, voz optimizada)
+  u **Original** (pueden colarse cabeceras o partirse palabras al escuchar),
+  con explicación en el tooltip. Sin señales en el nombre no se muestra nada
+  (mejor callar que etiquetar mal). Solo lectura de metadatos.
+
+**Regla permanente (`pdf/regla-pdf/REGLA ADAPTAR PDF.md` §8):** checklist de
+nombres propios, pausa de títulos por capa de voz y prueba de escucha de
+2 minutos antes de entregar un adaptado.
+
+### Verificación
+
+- `test_pdf_voz.mjs`: 97/97 (88 previas + 9 nuevas de la auditoría).
+- `test_pdf_procedencia.mjs` (nuevo): 11/11 con los títulos reales de la biblioteca.
+- `test_pdf_reales.mjs` con el PDF reconstruido: 138 págs, 9.629 átomos,
+  2 pendientes — idéntico al respaldo previo salvo +1 letra (la `d` de Edwards).
+- `test_pdf_mejora_apartado.mjs`: 65/65.
+
+Pendiente (ventana de despliegue): un solo deploy agrupa esta tanda
+(TRAMPAS.md §«Despliegue»); verificar contra el dominio marcador v2.74.1 +
+v125 y luego `git push origin main`.
+
 ## 2026-09-09 · v2.74.0 · Corrección integral «Secretos de Copywriting» (Bookey adaptado) (`JG_JS_V=v124`, shell-v124)
 
 Saneamiento profundo del libro *Secretos de Copywriting* adaptado para JG Turbo (`pdf/Secretos de Copywriting - edición adaptada para JG Turbo.pdf` y `pdf/Secretos de Copywriting .pdf`).
