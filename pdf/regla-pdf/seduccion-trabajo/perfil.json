@@ -1,0 +1,28 @@
+{
+ "ruta": "C:/Users/juanl/Documents/Proyectos/jg-turbo/pdf/El Arte de la Seducción ( PDFDrive ).pdf",
+ "paginas": 547,
+ "perfil": "editorial",
+ "fusionar_fragmentos": false,
+ "particion_silabas": false,
+ "banda_cabecera": 0.0,
+ "base": 45,
+ "sangria": 67,
+ "derecha": 551,
+ "fuente_cuerpo": "TimesNewRomanPSMT",
+ "familia_cuerpo": "TimesNewRoman",
+ "tam_cuerpo": 15.0,
+ "tam_titulos": [21.0, 18.7],
+ "jerarquia": {
+  "21.0": "capitulo",
+  "18.7": "capitulo_sub"
+ },
+ "paginas_giradas": [],
+ "paginas_con_imagen": [1, 547],
+ "paginas_omitir": [2, 3],
+ "notas_desde": null,
+ "laminas": [],
+ "esquemas": {},
+ "francesa_paginas": [543, 544, 545, 546],
+ "portada_original": true,
+ "empezar_en": 2
+}
