@@ -25,6 +25,12 @@ crudo. Los libros ya guardados lo reciben solos.
   escribió «número 1».
 - Batería: 18 archivos, 1044 comprobaciones OK, 0 fallos.
 
+Despliegue de producción: `dpl_829K9CQjHZHufQmsTKPLzRhCa365` (READY),
+alias `https://jg-turbo.vercel.app`. Verificado contra el dominio:
+marcador v2.72.0, `JG_JS_V=v122`, SW shell-v122, 4/4 SHA-256 idénticos
+(`index.html`, `sw.js`, `vozTexto.js`, `pdfController.js`),
+`textoVozParaAncla` y `elegirCompactoVoz` servidos, `/api/health` ok.
+
 ## 2026-09-09 · v2.71.0 · Escuchar ya no dice «hashtag» (`JG_JS_V=v121`, shell-v121)
 
 v2.70.0 reescribió `#1` → `número 1` en `prepararParaVoz()`, con pruebas verdes.

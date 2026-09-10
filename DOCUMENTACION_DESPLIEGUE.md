@@ -11,6 +11,13 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.72.0, 2026-09-09
+
+La guía vuelve a ir con la voz cuando `#1` suena `número 1`.
+`dpl_829K9CQjHZHufQmsTKPLzRhCa365` READY, alias `https://jg-turbo.vercel.app`.
+Marcador v2.72.0, `JG_JS_V=v122`, shell-v122. 4/4 SHA-256 idénticos.
+Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación PDF v2.71.0, 2026-09-09
 
 Escuchar dice `número` en `#1` (el arreglo v2.70.0 no llegaba al botón).
