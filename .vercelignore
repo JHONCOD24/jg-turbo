@@ -1,6 +1,7 @@
-.pytest_tmp/
-.pytest_cache/
-.venv/
+.pytest_tmp
+.pytest_cache
+.pytest_cache/**
+.venv
 backend/
 __pycache__/
 .git/

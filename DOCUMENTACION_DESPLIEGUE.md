@@ -11,6 +11,13 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación TTS v2.73.0, 2026-09-09
+
+8 voces nuevas de Fish Audio añadidas a la biblioteca (Tatiana Mae, Hilary Narrador, Palabra Bíblica, Morillo, Narrador Documental, Jim Hopper, Latina Kika, Voz Plática).
+`dpl_HGEfqavrk6MdvCPmdq3knHsJ6kk1` READY, alias `https://jg-turbo.vercel.app`.
+Marcador v2.73.0, `JG_JS_V=v123`, shell-v123.
+Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
+
 ## Publicación PDF v2.72.0, 2026-09-09
 
 La guía vuelve a ir con la voz cuando `#1` suena `número 1`.

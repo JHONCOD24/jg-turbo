@@ -41,6 +41,8 @@
 3. Pruebas ampliadas: `backend/tests/test_tts_voces_fish.py` (resolución de slugs y reference_id) y `tests/test_tts_voces_biblioteca.mjs` (catálogo y resolución en cliente).
 4. Versión: `JG_JS_V=v123`, Service Worker shell `jg-turbo-shell-v123`.
 
+**Deploy:** `dpl_HGEfqavrk6MdvCPmdq3knHsJ6kk1` · `READY` · alias `https://jg-turbo.vercel.app` · Verificado contra dominio: 8/8 slugs activos en `/api/tts-voices`, marcador `v123`, SW shell `jg-turbo-shell-v123`.
+
 ---
 
 ## Nuevo en v2.31.0 · 9 voces Fish nuevas (2026-09-03)
