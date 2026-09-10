@@ -11,6 +11,13 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.71.0, 2026-09-09
+
+Escuchar dice `número` en `#1` (el arreglo v2.70.0 no llegaba al botón).
+`dpl_5eVYcvJ6hpdahJYn327jdKna4QXD` READY, alias `https://jg-turbo.vercel.app`.
+Marcador v2.71.0, `JG_JS_V=v121`, shell-v121. 4/4 SHA-256 idénticos contra
+el dominio. Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación PDF v2.56.0, 2026-09-07
 
 Música de fondo instrumental offline para el lector de PDF (`plan-pdf-musical.md`).

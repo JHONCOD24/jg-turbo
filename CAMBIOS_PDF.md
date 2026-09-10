@@ -25,6 +25,14 @@ chino): hay que mandarle la palabra `número`.
 - `test_tts_narracion.mjs`: 58/58 (el camino de Escuchar, no solo la auxiliar).
 - `test_pdf_voz.mjs`: 81/81 (capa completa, incluido `#` de ancho completo).
 - Batería unitaria: 16/16 archivos, 1008 comprobaciones OK, 0 fallos.
+- Navegador local: al abrir la pestaña PDF, `jgPrepararParaVoz('Secreto #1')`
+  y `ttsNormalizarTextoNarracion('Secreto #1')` devuelven `número 1`.
+
+Despliegue de producción: `dpl_5eVYcvJ6hpdahJYn327jdKna4QXD` (READY),
+alias `https://jg-turbo.vercel.app`. Verificado contra el dominio:
+marcador v2.71.0, `JG_JS_V=v121`, SW shell-v121, 4/4 SHA-256 idénticos
+(`index.html`, `sw.js`, `vozTexto.js`, `pdfController.js`),
+`ttsAplicarCapaVozPdf` y `window.jgPrepararParaVoz` servidos, `/api/health` ok.
 
 ## 2026-09-10 · v2.70.0 · `#` de conteo suena `número` (`JG_JS_V=v120`, shell-v120)
 
