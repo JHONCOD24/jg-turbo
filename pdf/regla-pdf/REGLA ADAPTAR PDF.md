@@ -361,6 +361,10 @@ No se entrega si alguno falla:
   (§12); excepción: el resumen Bookey traducido sí asegura `.`/`?`/`!` final
   en compilación (`asegurar_punto` en `construir_bookey.py`), documentado en
   `CAMBIOS_PDF.md` v2.74.0/v2.74.2.
+- [ ] **Cero chatter de traducción en el texto extraído** (ver §13): buscar
+  en la extracción del paso 6b `no hay texto para traducir`,
+  `bloque de texto que necesitas`, `qué necesitas que traduzca` y
+  `bienvenidos a este video`. Cero apariciones o el libro no se entrega.
 - [ ] **Prueba de escucha de 2 minutos**: índice + primera página de un
   capítulo con voz real antes de entregar (caza run-ons que el ojo no ve)
 
@@ -492,3 +496,71 @@ capa se aplica al hablar, no al extraer (`TRAMPAS.md` §1.4 no aplica aquí).
 3. Añadir comprobaciones en `test_pdf_voz.mjs` y correr la batería unitaria.
 4. No tocar el PDF adaptado ni lo guardado en biblioteca: si una prueba de
    exportación falla tras cambiar la voz, la regla se coló donde no debía.
+
+---
+
+## 13. Anti-chatter de traducción y pausa de títulos: que no se repita
+
+> Guía permanente (Secretos de Copywriting, 2026-09-10). El libro salió con
+> dos defectos que el ojo no caza y el oído sí: (1) la frase «no hay texto
+> para traducir, por favor proporciona el bloque de texto que necesitas
+> convertir al español siguiendo las instrucciones dadas» sonando en la
+> narración; (2) títulos sin punto leídos de corrido con el párrafo
+> siguiente. Todo libro nuevo que se adapte pasa por esta sección.
+
+### 13.1 De dónde salió el chatter
+
+El resumen Bookey trae párrafos dummy de extracción (`'1.'`, `'-'`, `': -'`).
+Al mandarlos a traducir, el modelo devolvía rechazos («no hay texto para
+traducir…», «¿qué necesitas que traduzca?», «hola a todos, bienvenidos a este
+video…») y esos rechazos quedaban guardados como si fueran contenido del libro.
+
+### 13.2 Prevención en compilación (el defecto no debe nacer)
+
+1. **Filtrar los párrafos dummy ANTES de traducir**: números sueltos, guiones
+   solos y cualquier fragmento que solo tenga dígitos y signos. Referencia:
+   `es_parrafo_invalido()` en `pdf/_adaptacion/construir_bookey.py`.
+2. **Filtrar los rechazos DESPUÉS de traducir**: si la traducción contiene
+   `no hay texto para traducir`, `bloque de texto que necesitas`,
+   `qué necesitas que traduzca` o `bienvenidos a este video`, se descarta el
+   párrafo, no se guarda. Ojo: filtrar por subcadena dentro de un párrafo
+   largo y legítimo (un CTA real que diga «suscríbete») borraría contenido de
+   verdad — en la voz se quita solo la frase del rechazo, nunca la palabra
+   suelta.
+3. **Asegurar el punto final de cada título** en compilación (`asegurar_punto`:
+   añade `.` si no cierra en `.`, `…`, `?` o `!`; nunca tras `?`/`!`). Cada
+   H1, H2, resumen, cita, pregunta y respuesta sale del compilador con cierre.
+
+### 13.3 Verificación obligatoria antes de entregar (paso 6 + esto)
+
+```bash
+# 1. Cero chatter en el PDF construido (extracción con el motor real)
+python -c "import pymupdf; d=pymupdf.open('Mi libro - edición adaptada para JG Turbo.pdf'); t=' '.join(p.get_text() for p in d).lower(); print('chatter:', t.count('no hay texto para traducir'), '| bloque:', t.count('bloque de texto que necesitas'))"
+# → chatter: 0 | bloque: 0, o no se entrega.
+
+# 2. Títulos H1/H2 con cierre: listar los que no terminen en . ? ! …
+# (los que salgan deben ser portada o citas partidas por el ancho de línea,
+# nunca un título de sección).
+
+# 3. Escucha de 2 minutos con voz real: índice + primera página de un capítulo.
+```
+
+### 13.4 Red defensiva en la app (por si algo se coló igual)
+
+- `js/pdf/vozTexto.js` (`prepararParaVoz`, filtro inicial) y
+  `js/pdf/limpiezaTexto.js` (`pulirParaLectura`) quitan el chatter exacto y
+  sus variantes. La voz además pausa los títulos sueltos con `:`.
+- `index.html` (`ttsNormalizarTextoNarracion`) repite el filtro: es el camino
+  que SÍ usa Escuchar/MP3. Un arreglo que solo viva en `vozTexto.js` deja al
+  usuario oyendo el defecto con las pruebas en verde (`TRAMPAS.md` §6.11).
+- Pruebas que lo vigilan: `tests/test_pdf_voz.mjs` (chatter + pausa tras
+  `)`/`»`) y `tests/test_tts_narracion.mjs` (camino de Escuchar). Si adaptas
+  un libro con un rechazo nuevo del traductor, agrégalo a los tres filtros y
+  a las dos pruebas.
+
+### 13.5 Lo ya guardado no se arregla solo con código nuevo
+
+Un libro que el usuario guardó con el defecto lo conserva en su biblioteca
+(`TRAMPAS.md` §1.4): la voz lo silencia sola, pero el texto visible solo queda
+limpio borrando ese libro y volviendo a subir el PDF adaptado. Al entregar un
+adaptado corregido, avísalo en una línea.
