@@ -31,6 +31,18 @@
 
 ---
 
+## Nuevo en v2.73.0 · 8 voces Fish nuevas (2026-09-09)
+
+**Pedido:** agregar a la biblioteca de voces: Tatiana Mae, Hilary Narrador, Palabra Bíblica, Morillo, Narrador Documental, Jim Hopper, Latina Kika y Voz Plática (todas en español; Tatiana Mae, Latina Kika y Voz Plática femeninas, el resto masculinas).
+
+**Cambios:**
+1. Servidor (`api/index.py: FISH_CATALOGO_BASE`): 8 tuplas agregadas al final de la tupla base con sus `reference_id` oficiales de Fish Audio. Se previnieron colisiones asignando slugs limpios (`narrador-documental` para no activar la redirección histórica de `narrador`, y `latina-kika` para convivir con `latina`).
+2. Cliente (`index.html: TTS_FISH_CATALOGO_LOCAL`): las 8 voces añadidas con su id, género, nombre legible e idioma (`es`), integrándose en los grupos «Fish Audio · español · femeninas / masculinas».
+3. Pruebas ampliadas: `backend/tests/test_tts_voces_fish.py` (resolución de slugs y reference_id) y `tests/test_tts_voces_biblioteca.mjs` (catálogo y resolución en cliente).
+4. Versión: `JG_JS_V=v123`, Service Worker shell `jg-turbo-shell-v123`.
+
+---
+
 ## Nuevo en v2.31.0 · 9 voces Fish nuevas (2026-09-03)
 
 **Pedido:** agregar a la biblioteca: Julio Ciencia, Sheyla, Farick, Sabio expandido, Enrique Hoffman, Voz locutor, Brian Tracy, Morgan Freeman y Mario Alonso Puig (todas en español; Sheyla femenina, el resto masculinas).
