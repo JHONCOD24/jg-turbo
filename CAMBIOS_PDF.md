@@ -3,6 +3,34 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-10 · v2.70.0 · `#` de conteo suena `número` (`JG_JS_V=v120`, shell-v120)
+
+Medido en la biblioteca pública: `Secreto #1`…`#32`, `Principle #1`,
+`Ad Agency Secret #18`, `LF#8`, `The #1 brand`. Cero etiquetas sociales.
+Fish/Edge lo leían como «hashtag» porque aprendieron en inglés.
+
+- `js/pdf/vozTexto.js` → `expandirNumeral()`: `#` + dígitos (con o sin
+  espacio) suena `número N` (`number N` en inglés); `#` solo suena `número`;
+  `#etiqueta` pegado a letras se conserva como `hashtag etiqueta`; el `#`
+  dentro de URLs/correos no se toca (ya es `enlace web`).
+- Solo capa de voz: el texto visible, guardado y exportado queda intacto, y
+  los libros ya guardados lo reciben solos, sin reprocesar.
+- Regla permanente para futuros agentes en
+  `pdf/regla-pdf/REGLA ADAPTAR PDF.md` §12: ante un símbolo mal leído se
+  ajusta la voz, nunca el PDF.
+- Incluye trabajo terminado del otro agente en esta tanda (Aprendiz de
+  Brujo): marcador que se perdía al partir títulos (`Tit.split` hereda `_m`),
+  `/Lang` fijado con PyMuPDF tras compilar, `workerSrc` como `file://` en
+  Windows, carátula canónica registrada.
+
+### Verificación
+
+- `test_pdf_voz.mjs`: 80/80 (66 previas + 14 nuevas del `#`).
+- Batería unitaria: 16/16 archivos, 993 comprobaciones OK, 0 fallos.
+
+Despliegue de producción: `dpl_PENDIENTE` (READY),
+alias `https://jg-turbo.vercel.app`.
+
 ## 2026-09-09 · v2.69.0 · Contexto de lectura y orden directo (`JG_JS_V=v119`, shell-v119)
 
 ### Cabecera del lector

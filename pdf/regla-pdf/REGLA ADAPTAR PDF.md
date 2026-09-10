@@ -429,3 +429,46 @@ operaciones de dibujo de cada página. JG Turbo los extrae aparte con
 en `CAMBIOS_PDF.md` (entrada del 2026-09-08) y no hace falta hacer nada
 especial en el PDF para que funcione: basta con que las figuras estén donde
 les toca, que es lo que hace este procedimiento.
+
+---
+
+## 12. Símbolos que la voz dice con palabras: NO tocar el PDF
+
+> Regla permanente (2026-09-10). Si el usuario reporta que el audiolibro dice
+> mal un símbolo («hashtag» en vez de «número», «arroba» deletreada, etc.),
+> **el PDF adaptado NO se cambia**: el texto del libro es inmutable y la
+> verificación del paso 6 exige fidelidad carácter a carácter. Lo que se
+> ajusta es la **capa de voz**, que se genera justo antes de hablar y se
+> descarta (`TRAMPAS.md` §6.3).
+
+### 12.1 Dónde vive
+
+- `js/pdf/vozTexto.js` → `prepararParaVoz()` (la usa solo el audiolibro,
+  vía `pdfController.js`; exportar, traducir y guardar ni la tocan).
+- Símbolos con contexto: `expandirNumeral()` en el mismo archivo.
+- Pruebas: `tests/test_pdf_voz.mjs` (cada símbolo nuevo trae sus
+  comprobaciones: el caso real del libro + que el texto del autor se conserva).
+
+### 12.2 Tabla vigente (medida en la biblioteca pública, 2026-09-09)
+
+| Símbolo | Contexto | La voz dice | Ejemplo real |
+|---|---|---|---|
+| `#` + dígitos (`#1`, `# 12`, `LF#8`) | conteo | `número N` (`number N` en inglés) | `Secreto #1`, `Principle #1`, `The #1 brand` |
+| `#` solo | conteo | `número` | `El capítulo # cierra` |
+| `#etiqueta` (pegado a letras) | etiqueta social | `hashtag etiqueta` | futuro: libros sobre redes |
+| `#` dentro de URL/correo | ancla web | nada (ya es `enlace web`) | `page4#reference4.2` |
+| `§`, `¶`, `&`, `/`, `n.º`, `pág.`, `cf.`… | varios | ver `vozTexto.js` §3–3 quater | — |
+
+La cifra se deja en dígitos a propósito: en modo neural Fish/Edge la
+pronuncia sola (v2.25.0); solo el respaldo del navegador la expande.
+Los libros ya guardados reciben el arreglo solos, sin reprocesar: la
+capa se aplica al hablar, no al extraer (`TRAMPAS.md` §1.4 no aplica aquí).
+
+### 12.3 Cómo agregar un símbolo nuevo
+
+1. Escuchar el caso real del libro y anotar la frase exacta.
+2. Añadir la regla en `vozTexto.js` **después** de enmascarar URLs/correos
+   (si no, un `#` de ancla web se volvería conteo).
+3. Añadir comprobaciones en `test_pdf_voz.mjs` y correr la batería unitaria.
+4. No tocar el PDF adaptado ni lo guardado en biblioteca: si una prueba de
+   exportación falla tras cambiar la voz, la regla se coló donde no debía.
