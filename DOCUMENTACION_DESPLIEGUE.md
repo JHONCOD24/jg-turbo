@@ -11,6 +11,26 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación PDF v2.76.0, 2026-09-10
+
+El Contenido vuelve a ser **columna** en escritorio y tablet. La v2.75.0 lo
+había convertido en hoja inferior también en pantalla grande: flotaba sobre el
+texto, sin fondo que lo separase, y dejaba el 45 % de la pantalla vacío al lado.
+La columna vive ahora en el flujo desde 768 px (antes 1024), solo existe con el
+Contenido abierto, y la barra de scroll —el motivo real de aquel cambio— es una
+línea fina del propio tema en vez de la gris de Windows.
+De paso, tres fallos de contraste reales en los temas claros: el aviso «Listo…»
+(1,17:1 en Papel), el acento como texto sobre su propio realce en hover y estado
+activo (4,02:1), y el índice entero al vestirse con el tema. Todo el panel queda
+por encima de 4,5:1 en Noche, Papel y Sepia.
+`dpl_CKJkiS2dxQ9wj7qSLtN2AwMiWNTQ` READY, alias `https://jg-turbo.vercel.app`.
+Marcador `JG_JS_V=v129`, shell-v129.
+Verificación contra el dominio: **53 de 53** archivos idénticos por SHA-256
+(los 2 restantes, `pdf.legacy.min.mjs` y `pdf.worker.legacy.min.mjs`, los excluye
+`.vercelignore` a propósito), `/api/health` 200, y recorridos de navegador contra
+producción en 1440, 768 y 390 px —21 comprobaciones en verde, sin errores de JS—.
+Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).
+
 ## Publicación PDF v2.74.0, 2026-09-09
 
 Corrección integral de «Secretos de Copywriting» (Bookey adaptado): eliminación de chatter de traducción («no hay texto para traducir...»), puntuación en 100% de títulos/resúmenes para pausar adecuadamente en TTS, supresión de banners de cabecera residuales, y filtros defensivos en la capa de voz y lectura.
