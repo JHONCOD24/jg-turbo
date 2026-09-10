@@ -3,6 +3,60 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-10 · v2.75.0 · 3 adaptados publicados + procedencia al importar (`JG_JS_V=v127`, shell-v127)
+
+Se publican en `pdf/` tres adaptaciones que estaban terminadas y verificadas
+en sus talleres pero sin entregar (trabajo de la tanda regla-pdf 2026-09-09,
+ver `NOTAS_*.md` en cada taller):
+
+- `El Aprendiz de Brujo - edición adaptada para JG Turbo.pdf` (457 págs A5,
+  1,50 MB, 496 marcadores; portada-imagen Sirio, `es-ES`, 0 dobles/0 suaves).
+  Nota honesta: el OCR del origen deja ~15 artefactos (`produelo`,
+  `1S5`, duplicada `(imágenes) (imágenes)` en p85) y 5 «Hidden page» sin
+  contenido: no recuperables sin inventar, documentados en NOTAS_APRENDIZ.md.
+  El motor real deja **1 pendiente legítimo** («Ac-Vr- C», notación PNL de
+  movimientos oculares con guion real): se conserva fiel al libro y se
+  resuelve con un toque en Revisar cortes (Mantener separado).
+- `Conversaciones con Dios 3 - edición adaptada para JG Turbo.pdf` (400 págs,
+  1,07 MB, 22 marcadores; 6A/6B en 0, motor real en verde).
+- `El Arte de la Seducción - edición adaptada para JG Turbo.pdf` (731 págs,
+  1,90 MB, 167 marcadores; 6A/6B en 0, motor real en verde, foto del autor
+  conservada).
+- `Conversaciones con Dios 2 - Neale Donald Walsch.pdf` (adaptado con nombre
+  viejo) → `Conversaciones con Dios 2 - edición adaptada para JG Turbo.pdf`
+  con metadatos limpios + `es-ES` (solo metadatos; motor real en verde).
+  La biblioteca queda en 7 adaptados + 8 originales.
+- Pendiente real: `Cashvertising` adaptado no existe (la traducción automática
+  falló por bloques, ver `log_cash.txt`); requiere ventana con API de
+  traducción operativa. No se promete fecha.
+
+**Portadas (`js/pdf/caratula.js`, `sw.js`, `tests/test_pdf_caratula.mjs`):**
+- Nuevas canónicas `conversaciones-con-dios-3.jpg` y
+  `el-arte-de-la-seduccion.jpg` (380 px, ~22-33 KB, desde `portada.jpg` de
+  cada taller), registradas en `PORTADAS_CANONICAS` y precacheadas en el SW.
+
+**Procedencia al importar (`js/pdf/procedencia.js`, `js/pdf/biblioteca.js`,
+`js/pdf/pdfController.js`, `tests/test_pdf_procedencia.mjs`):**
+- `componerRegistroDocumento()` guarda `origenTexto` cuando hay contenido
+  nuevo: manda la evidencia del texto (marcador NUL, mención de edición
+  adaptada), si no los metadatos; sin evidencia no se inventa nada. Campo
+  aditivo (sin migración ni versión de base) y viaja gratis en el sync
+  (el paquete lleva el meta completo). La píldora prefiere el flag guardado
+  y cae a la clasificación en vivo.
+
+### Verificación
+
+- Batería unitaria: 38/38 archivos en verde (procedencia 27/27, carátula en
+  verde con las 2 canónicas nuevas, resto sin cambios).
+- Motor real: C3, Seducción y C2 en verde; Aprendiz con 1 pendiente legítimo
+  documentado arriba.
+- Geometría en navegador en verde, 0 errores JS.
+
+Despliegue de producción: `dpl_[PENDIENTE]` (READY), alias
+`https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador
+v2.75.0, `JG_JS_V=v127`, SW shell-v127, módulos con el cambio servidos,
+`/api/health` ok.
+
 ## 2026-09-10 · v2.74.2 · Secretos de Copywriting: chatter fuera de Escuchar + pausa en títulos con paréntesis (`JG_JS_V=v126`, shell-v126)
 
 Lo reportado en el libro *Secretos de Copywriting* adaptado para JG Turbo:
@@ -33,6 +87,8 @@ Lo reportado en el libro *Secretos de Copywriting* adaptado para JG Turbo:
 - `test_pdf_limpieza.mjs`, `test_pdf_guia_sincronia.mjs`, `test_pdf_continuidad.mjs` en verde (la guía no se movió: el cambio de caja no existe aquí y `:` no añade palabras).
 
 Pendiente (ventana de despliegue): un solo deploy agrupa esta tanda (TRAMPAS.md §«Despliegue»); verificar contra el dominio marcador v2.74.2 + v126 y luego `git push origin main`.
+
+Despliegue de producción: `8TeLmWtTDrKWpyRUPz5GChahC8jx` (READY), alias `https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador v2.74.2, `JG_JS_V=v126`, SW shell-v126, `vozTexto.js` servido con el fix de `)`/`»` + 2-10 palabras, `index.html` servido con el filtro de chatter en `ttsNormalizarTextoNarracion`, `/api/health` 200.
 
 ## 2026-09-10 · v2.74.1 · Gramática para voz + píldora Adaptado/Original (`JG_JS_V=v125`, shell-v125)
 
