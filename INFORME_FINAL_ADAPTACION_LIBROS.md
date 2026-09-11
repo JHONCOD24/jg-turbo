@@ -118,10 +118,17 @@ extracción ordinaria con aviso).
 
 ## 5. Despliegue y cierre de Git
 
-- Commit de cierre de esta tanda (ver `git log`).
+- Commit de cierre: `34ca3e7` (22 archivos, author JHONCOD24).
 - Despliegue único al final + verificación contra el dominio + push a
-  `origin/main` (regla vigente 2026-09-05; detalle en AGENTS.md).
-- Versión JS + caché subidas una sola vez por la tanda.
+  `origin/main` (regla vigente 2026-09-05; 0 commits pendientes).
+- Versiones de la tanda: `JG_JS_V = v134` + `CACHE_SHELL = jg-turbo-shell-v134`
+  (prod verificado: sw v134, HTML v134, `/api/health` ok, módulos nuevos
+  servidos: adjunto validado, música por libro, pausas estructurales).
+- Geometría contra producción: en orden.
+- Nota: quedan en el working tree cambios de otro escritor en curso
+  (`.gitignore`, `5_construir.py`, `test_pdf_reales.mjs`, `audio/Sandra.ogg`,
+  planes sueltos): no forman parte de esta entrega; coordinar antes del
+  próximo deploy para no revertirlos ni pisarlos.
 
 ## 6. Lo que FALTA (no está terminado al 100 %)
 
