@@ -11,6 +11,12 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación TTS v2.78.0, 2026-09-11
+
+Cuatro clones de JG Voice (Amy, Dora, Michael, Sandra Design Travel) en la biblioteca Fish del PDF.
+Marcador `JG_JS_V=v132`, shell-v132.
+Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
+
 ## Publicación TTS v2.77.0, 2026-09-10
 
 Voz clonada **Roberto** (JG Voice) en la biblioteca Fish del lector de PDF. El PDF deja de forzar Edge cuando se elige una voz Fish.

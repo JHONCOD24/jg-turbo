@@ -31,6 +31,25 @@
 
 ---
 
+## Nuevo en v2.78.0 · 4 clones más de JG Voice (2026-09-11)
+
+**Pedido:** integrar las voces que se estaban clonando en JG Voice, igual que Roberto.
+
+**Voces** (modelos privados `trained`, tag `jg-voice,es-CO`):
+
+| Nombre en la app | Slug | Género |
+|---|---|---|
+| Amy | `amy` | femenina |
+| Dora | `dora` | femenina |
+| Michael | `michael` | masculina |
+| Sandra Design Travel | `sandra-design-travel` | femenina |
+
+**Cambios:** mismas dos listas que Roberto (`FISH_CATALOGO_BASE` + `TTS_FISH_CATALOGO_LOCAL`). El PDF ya respeta Fish desde v2.77.0. El título de Fish «MIchael» se muestra como **Michael**.
+
+**Versión:** `JG_JS_V=v132`, Service Worker `jg-turbo-shell-v132`.
+
+---
+
 ## Nuevo en v2.77.0 · voz clonada Roberto en el lector de PDF (2026-09-10)
 
 **Pedido:** integrar en JG Turbo la voz **Roberto** ya clonada en JG Voice, para leer PDFs. Uso personal (no comercial).

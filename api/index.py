@@ -4157,8 +4157,12 @@ FISH_CATALOGO_BASE = (
     ("jim-hopper", "male", "Jim Hopper", "b114d46e5ed6448fa0b197258e65b8d2", "", "es"),
     ("latina-kika", "female", "Latina Kika", "2edd012fb4d14521af3f0ce245791283", "", "es"),
     ("voz-platica", "female", "Voz Plática", "eadb1a0a15f941ebb46ed73b23da765d", "", "es"),
-    # Clon privado de JG Voice (misma cuenta Fish). Uso personal, no catálogo público.
+    # Clones privados de JG Voice (misma cuenta Fish). Uso personal, no catálogo público.
     ("roberto", "male", "Roberto", "ab991f011ecf46a29c1aee96e109d8f7", "", "es"),
+    ("amy", "female", "Amy", "22f8c2742acd48f6a9c12962ae179251", "", "es"),
+    ("dora", "female", "Dora", "d0d60d228b744e2b9fc7fd00bc6f6b3a", "", "es"),
+    ("michael", "male", "Michael", "6b33f00f4d7a49d89a1c7a6f7abec6c4", "", "es"),
+    ("sandra-design-travel", "female", "Sandra Design Travel", "ffd08eb8a7424826a31aaa1f526a3762", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {"clara": "nico-robin", "nestor": "locutor-k"}

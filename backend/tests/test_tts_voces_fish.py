@@ -30,6 +30,10 @@ NUEVAS = {
     "latina-kika": "2edd012fb4d14521af3f0ce245791283",
     "voz-platica": "eadb1a0a15f941ebb46ed73b23da765d",
     "roberto": "ab991f011ecf46a29c1aee96e109d8f7",
+    "amy": "22f8c2742acd48f6a9c12962ae179251",
+    "dora": "d0d60d228b744e2b9fc7fd00bc6f6b3a",
+    "michael": "6b33f00f4d7a49d89a1c7a6f7abec6c4",
+    "sandra-design-travel": "ffd08eb8a7424826a31aaa1f526a3762",
 }
 
 
@@ -72,3 +76,19 @@ def test_roberto_es_masculina_espanol():
     assert voz["name"] == "Roberto"
     assert voz["lang"] == "es"
     assert voz["reference_id"] == "ab991f011ecf46a29c1aee96e109d8f7"
+
+
+def test_clones_nuevos_genero_y_nombre():
+    esperadas = {
+        "amy": ("female", "Amy"),
+        "dora": ("female", "Dora"),
+        "michael": ("male", "Michael"),
+        "sandra-design-travel": ("female", "Sandra Design Travel"),
+    }
+    for slug, (genero, nombre) in esperadas.items():
+        voz = api_module._tts_fish_resolver(f"fish:{slug}", "male")
+        assert voz is not None, slug
+        assert voz["id"] == slug
+        assert voz["gender"] == genero, slug
+        assert voz["name"] == nombre, slug
+        assert voz["lang"] == "es", slug

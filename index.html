@@ -1,4 +1,4 @@
-<!-- v2.77.0 · voz clonada Roberto (JG Voice) en el lector de PDF -->
+<!-- v2.78.0 · clones JG Voice: Amy, Dora, Michael, Sandra Design Travel -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -14336,6 +14336,10 @@ const TTS_FISH_CATALOGO_LOCAL = [
   { id:'latina-kika', gender:'female', name:'Latina Kika', lang:'es' },
   { id:'voz-platica', gender:'female', name:'Voz Plática', lang:'es' },
   { id:'roberto', gender:'male', name:'Roberto', lang:'es' },
+  { id:'amy', gender:'female', name:'Amy', lang:'es' },
+  { id:'dora', gender:'female', name:'Dora', lang:'es' },
+  { id:'michael', gender:'male', name:'Michael', lang:'es' },
+  { id:'sandra-design-travel', gender:'female', name:'Sandra Design Travel', lang:'es' },
 ];
 
 /* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
@@ -17989,7 +17993,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v131';
+const JG_JS_V = 'v132';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

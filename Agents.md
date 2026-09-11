@@ -431,6 +431,9 @@ reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias http
 
 ## TTS (lectura en voz alta)
 
+**Motor v2.78.0 — clones JG Voice** (2026-09-11): Roberto, Amy, Dora, Michael y
+Sandra Design Travel. El PDF usa la voz Fish elegida. Detalle: `CAMBIOS_TTS.md` §v2.78.0.
+
 **Motor v2.77.0 — voz clonada Roberto** (2026-09-10): el lector de PDF usa la
 voz Fish que elijas (incluido el clon privado **Roberto** de JG Voice). Ya no
 se fuerza Edge. Catálogo + `reference_id` en `api/index.py`. Detalle: `CAMBIOS_TTS.md` §v2.77.0.

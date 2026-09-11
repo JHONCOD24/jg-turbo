@@ -80,6 +80,7 @@ try {
     'voz-locutor', 'brian-tracy', 'morgan-freeman', 'mario-alonso-puig', 'tatiana-mae',
     'hilary-narrador', 'palabra-biblica', 'morillo', 'narrador-documental', 'jim-hopper',
     'latina-kika', 'voz-platica', 'roberto',
+    'amy', 'dora', 'michael', 'sandra-design-travel',
   ]) {
     comprobar(ids.includes(nueva), `"${nueva}" aparece en el catálogo`);
   }
@@ -87,6 +88,15 @@ try {
   comprobar(roberto && roberto.gender === 'male' && roberto.lang === 'es',
     'Roberto es masculina y en español');
   comprobar(roberto && roberto.name === 'Roberto', 'Roberto se ofrece con su nombre');
+  const amy = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'amy');
+  const dora = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'dora');
+  const michael = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'michael');
+  const sandra = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'sandra-design-travel');
+  comprobar(amy && amy.gender === 'female' && amy.name === 'Amy', 'Amy es femenina');
+  comprobar(dora && dora.gender === 'female' && dora.name === 'Dora', 'Dora es femenina');
+  comprobar(michael && michael.gender === 'male' && michael.name === 'Michael', 'Michael es masculina');
+  comprobar(sandra && sandra.gender === 'female' && sandra.name === 'Sandra Design Travel',
+    'Sandra Design Travel es femenina');
 }
 
 /* ── La lista ofrecida filtra aunque el servidor las mande ───────── */
@@ -126,6 +136,11 @@ try {
   comprobar(api.ttsFishPorId('morgan-freeman')?.id === 'morgan-freeman', 'morgan-freeman resuelve');
   comprobar(api.ttsFishPorId('roberto')?.id === 'roberto', 'roberto resuelve por su slug');
   comprobar(api.ttsFishPorId('fish:roberto')?.id === 'roberto', 'fish:roberto resuelve igual');
+  comprobar(api.ttsFishPorId('amy')?.id === 'amy', 'amy resuelve por su slug');
+  comprobar(api.ttsFishPorId('dora')?.id === 'dora', 'dora resuelve por su slug');
+  comprobar(api.ttsFishPorId('michael')?.id === 'michael', 'michael resuelve por su slug');
+  comprobar(api.ttsFishPorId('sandra-design-travel')?.id === 'sandra-design-travel',
+    'sandra-design-travel resuelve por su slug');
   comprobar(api.ttsFishPorId('') === null && api.ttsFishPorId(null) === null, 'vacío no rompe');
 }
 
