@@ -1,5 +1,26 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## El PDF que apaga Fish hace que el selector mienta
+
+**Síntoma (antes de v2.77.0):** elegías una voz Fish (luego Roberto) y el libro
+sonaba con Edge/Azure. **Causa:** `ttsHablar` y el prefetch de
+`pdfController.js` forzaban `preferFish: false` «por throughput». **Regla:** el
+PDF respeta `ttsPrefs()`. Prohibido volver a `{ preferFish: false, fishId: '' }`
+en origen `pdf`. Receta: `docs/INTEGRAR-VOZ-JG-VOICE.md`.
+
+## El MP3 del clon no es una voz del lector
+
+**Síntoma:** «ya está el audio en `audio/`». **Causa:** el lector no reproduce
+esa muestra; pide TTS a Fish con `reference_id`. **Regla:** el puente JG Voice →
+Turbo es el id del modelo `trained`, no el wav/mp3/ogg.
+
+## Desplegar voces con el WIP de PDF mezclado
+
+**Síntoma:** `npx vercel --prod` sube `index.html` / `js/pdf/` a medias.
+**Causa:** Vercel empaqueta el disco, no el índice de Git. **Regla:** `git stash
+push -u` del WIP, aplica solo el catálogo sobre `main`, despliega, restaura el
+stash archivo por archivo. No hagas `stash pop` a ciegas sobre `index.html`.
+
 ## Git puede escapar los nombres con tildes al enumerar archivos
 
 **Síntoma (preparación de v2.49):** la copia temporal intentó copiar una ruta
@@ -1147,3 +1168,68 @@ la fecha de los documentos y alteraba el orden por recientes durante el caso.
 **Regla:** toda prueba de orden que siembre documentos con portada debe guardar
 también una portada en `archivos`, o desactivar de forma explícita esa
 reconciliación. No usar metadatos incompatibles con los almacenes relacionados.
+
+## Una banda de cabecera mal calibrada traga medio libro (adaptación, 2026-09-11)
+
+**Síntoma:** Cashvertising pasó de 67.481 palabras en la fuente a 33.590 en el
+PDF entregado, con pasajes enteros ausentes. **Causa:** el perfil traía
+`banda_cabecera: 418,1` en páginas de 841,9 pt y el extractor descartaba TODA
+línea sobre la banda sin comprobar que pareciera cabecera. **Regla:** la banda
+nunca supera el 15 % superior (clamp automático); en la banda solo se tira lo
+que parece cabecera (número, romano, texto corto o título corriente repetido).
+Medido: el PDF regenerado tiene 67.268 palabras.
+
+## Un script roto a medio editar publica igual (adaptación, 2026-09-11)
+
+**Síntoma:** `2_extraer.py` tenía un `if` sin cuerpo, un `else` seguido de
+`elif` y una llave duplicada; `6_verificar.py` un `if` sin cuerpo. Nada de eso
+podía ejecutarse y aun así había 22 PDF «aprobados». **Causa:** los verificadores
+se editaron sin compilar y el lote marcaba `aprobado` sin exigir evidencias.
+**Regla:** `py_compile` a cada herramienta tras tocarla; el lote solo publica
+tras 6_verificar + 6b + prueba estricta en verde, y el estado es
+`pendiente_escucha`, nunca `aprobado` sin escucha humana.
+
+## El comentario decía «espacio» pero el código ponía pending (2026-09-11)
+
+**Síntoma:** 272 límites pendientes en un A5 generado por ReportLab entre pares
+como «Get|More»: palabras completas en salto de renglón que el léxico no conoce.
+**Causa:** la rama de `resolverLimitesDeterministas` para line-wrap con léxico
+nulo ponía `pending` aunque su propio comentario decía «espacio». **Regla:** si
+el comentario y el código discrepan, se mide cuál es correcto con un PDF real
+antes de tocar nada; un generador digital nunca parte palabras sin guion.
+
+## Unir con el primer bloque que empiece con palabra inventa palabras (2026-09-11)
+
+**Síntoma:** «Sherwin-» + (títulos intercalados) + «mejores» se unió como
+«Sherwinmejores». **Causa:** el bucle de unión entre bloques buscaba la
+continuación hasta 10 bloques adelante y tomaba la primera palabra que
+encajara. **Regla:** la continuación de un TÍTULO partido está justo después
+(ventana de 2); solo el cuerpo mira lejos (notas al pie intercaladas). Y una
+partición nunca continúa en mayúscula («respec-» + «Ki» no es «respecki»).
+
+## Comparar crudo contra bloques no ve lo perdido antes de crudo (2026-09-11)
+
+**Síntoma:** la verificación secuencial daba verde con media página ausente.
+**Causa:** compara `crudo.json` (post-extracción) con `bloques.json`
+(post-reflujo); lo descartado por bandas nunca entra a la comparación.
+**Regla:** el control de cobertura se hace contra la FUENTE (conteo de palabras
+fuente vs PDF final en el informe del lote); crudo-vs-bloques solo cubre el
+reflujo.
+
+## La hora local no es la hora UTC (adaptación, 2026-09-10)
+
+**Síntoma:** archivos recién escritos parecían «de ayer» y se concluyó una
+reversión que nunca existió. **Causa:** el entorno informa la fecha en UTC
+(11/09) pero el equipo está en UTC-5 (10/09, 19:58). **Regla:** ante fechas
+raras, `Get-Date` local primero; no se declara pérdida de trabajo sin
+comprobar hashes y `rg` del contenido.
+
+## Un `$` no ancla si hay etiquetas detrás (adaptación, 2026-09-10)
+
+**Síntoma:** el PDF mostraba «Sherwin-» suelto mientras `bloques.json` decía
+«Sherwin-Williams»: el verificador comparaba el txt (nuevo) contra el PDF
+(viejo). **Causa:** el bucle de unión entre bloques actualizaba el `txt` pero
+el `re.sub` sobre el `html` no matcheaba `<b>Sherwin-</b>` (el `$` exige fin de
+cadena y hay un `</b>` detrás). **Regla:** al editar `html` con regex, tolerar
+etiquetas de cierre con lookahead (`-(?=(?:<[^>]+>)*\s*$)`) y preservarlas;
+nunca asumir texto plano en el `html`.

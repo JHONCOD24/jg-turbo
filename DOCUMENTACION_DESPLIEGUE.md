@@ -11,6 +11,9 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+Clones de JG Voice en el PDF: receta para agentes en
+[docs/INTEGRAR-VOZ-JG-VOICE.md](docs/INTEGRAR-VOZ-JG-VOICE.md).
+
 ## Publicación TTS v2.79.0, 2026-09-11
 
 Se retira **Sandra Design Travel** del selector. Lo guardado con ese id suena Amy.

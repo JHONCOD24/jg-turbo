@@ -30,6 +30,7 @@ primera vez; después, al menos la sección que toque tu tarea:
 | Alturas, scroll, responsive | §3 (la cadena de scroll) y §4 (el estilo computado manda) |
 | `nube.js`, `sincronizacion.js`, `biblioteca.js` | §5 (cinco formas de perder datos) |
 | Texto, pulido, voz | §6 (el guardián que solo mira una dimensión) |
+| Voces clonadas de JG Voice en el PDF | `docs/INTEGRAR-VOZ-JG-VOICE.md` (receta completa) |
 | Interfaz, botones, avisos | §8 (si no da señal, está roto) |
 | Cualquier cosa | §1 (pruebas que pasan sin probar nada) y §9 (trabajar en este repo) |
 
@@ -430,6 +431,10 @@ desplegaba desde `vercel_deploy/`; esa carpeta ya no existe tras la
 reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias https://jg-turbo.vercel.app OK con TTS.
 
 ## TTS (lectura en voz alta)
+
+**Clones JG Voice → PDF:** receta para agentes en
+`docs/INTEGRAR-VOZ-JG-VOICE.md`. No armes un API entre las dos apps: el puente
+es el `reference_id` de Fish (misma cuenta). No reviertas el «PDF apaga Fish».
 
 **Motor v2.79.0 — clones JG Voice** (2026-09-11): Roberto, Amy, Dora y Michael.
 Sandra Design Travel salió del selector. Detalle: `CAMBIOS_TTS.md` §v2.79.0.

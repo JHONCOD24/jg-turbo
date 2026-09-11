@@ -22,6 +22,7 @@
 | Documento | Contenido |
 |---|---|
 | **Este archivo** (`CAMBIOS_TTS.md`) | Maestro TTS: arquitectura, historial, bugs, API, deploys, pruebas |
+| `docs/INTEGRAR-VOZ-JG-VOICE.md` | **Receta para agentes:** pasar un clon de JG Voice al selector del PDF |
 | `CAMBIOS_UX.md` | Layout UI (v3.2 franja TTS, v3.1 más acciones) |
 | `CONFIG_PERSISTENTE.md` | Claves `localStorage` `jg_tts_*` (no borrar en deploys) |
 | `DOCUMENTACION_DESPLIEGUE.md` | Cómo sincronizar y desplegar en Vercel sin 404 |
