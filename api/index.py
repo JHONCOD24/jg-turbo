@@ -4162,10 +4162,13 @@ FISH_CATALOGO_BASE = (
     ("amy", "female", "Amy", "22f8c2742acd48f6a9c12962ae179251", "", "es"),
     ("dora", "female", "Dora", "d0d60d228b744e2b9fc7fd00bc6f6b3a", "", "es"),
     ("michael", "male", "Michael", "6b33f00f4d7a49d89a1c7a6f7abec6c4", "", "es"),
-    ("sandra-design-travel", "female", "Sandra Design Travel", "ffd08eb8a7424826a31aaa1f526a3762", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
-FISH_VOCES_RETIRADAS = {"clara": "nico-robin", "nestor": "locutor-k"}
+FISH_VOCES_RETIRADAS = {
+    "clara": "nico-robin",
+    "nestor": "locutor-k",
+    "sandra-design-travel": "amy",
+}
 _fish_nombres_cache: dict[str, str] | None = None
 FISH_TTS_TIMEOUT = 25.0
 # Orígenes de la interfaz cuyo texto es del propio usuario. Se puede ampliar con

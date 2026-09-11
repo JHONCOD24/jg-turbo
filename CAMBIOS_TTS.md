@@ -31,6 +31,16 @@
 
 ---
 
+## Nuevo en v2.79.0 · se retira Sandra Design Travel (2026-09-11)
+
+**Pedido:** sacar del selector la voz **Sandra Design Travel**.
+
+**Cambios:** fuera de `FISH_CATALOGO_BASE` y de `TTS_FISH_CATALOGO_LOCAL`. Si alguien la tenía guardada, suena **Amy** (misma tanda, femenina). Quedan Roberto, Amy, Dora y Michael.
+
+**Versión:** `JG_JS_V=v133`, Service Worker `jg-turbo-shell-v133`.
+
+---
+
 ## Nuevo en v2.78.0 · 4 clones más de JG Voice (2026-09-11)
 
 **Pedido:** integrar las voces que se estaban clonando en JG Voice, igual que Roberto.

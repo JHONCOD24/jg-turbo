@@ -3,6 +3,10 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-11 · v2.79.0 · Sale Sandra Design Travel del selector (`JG_JS_V=v133`, shell-v133)
+
+La voz no gustó: se retira del listado. Lo guardado con ese id pasa a Amy. Detalle: `CAMBIOS_TTS.md` §v2.79.0.
+
 ## 2026-09-11 · v2.78.0 · Amy, Dora, Michael y Sandra Design Travel en el selector (`JG_JS_V=v132`, shell-v132)
 
 Cuatro clones nuevos de JG Voice entran al mismo selector del lector (Fish · español · femeninas/masculinas). Detalle: `CAMBIOS_TTS.md` §v2.78.0.

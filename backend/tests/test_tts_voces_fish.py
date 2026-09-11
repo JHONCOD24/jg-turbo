@@ -33,7 +33,6 @@ NUEVAS = {
     "amy": "22f8c2742acd48f6a9c12962ae179251",
     "dora": "d0d60d228b744e2b9fc7fd00bc6f6b3a",
     "michael": "6b33f00f4d7a49d89a1c7a6f7abec6c4",
-    "sandra-design-travel": "ffd08eb8a7424826a31aaa1f526a3762",
 }
 
 
@@ -83,7 +82,6 @@ def test_clones_nuevos_genero_y_nombre():
         "amy": ("female", "Amy"),
         "dora": ("female", "Dora"),
         "michael": ("male", "Michael"),
-        "sandra-design-travel": ("female", "Sandra Design Travel"),
     }
     for slug, (genero, nombre) in esperadas.items():
         voz = api_module._tts_fish_resolver(f"fish:{slug}", "male")
@@ -92,3 +90,12 @@ def test_clones_nuevos_genero_y_nombre():
         assert voz["gender"] == genero, slug
         assert voz["name"] == nombre, slug
         assert voz["lang"] == "es", slug
+
+
+def test_sandra_retirada_redirige_a_amy():
+    voz = api_module._tts_fish_resolver("sandra-design-travel", "female")
+    assert voz is not None
+    assert voz["id"] == "amy"
+    publicas = api_module._tts_fish_voces_publicas()
+    ids = {v["id"] for v in publicas["voices"]["list"]}
+    assert "sandra-design-travel" not in ids

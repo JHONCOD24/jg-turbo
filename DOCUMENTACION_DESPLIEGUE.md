@@ -11,6 +11,12 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación TTS v2.79.0, 2026-09-11
+
+Se retira **Sandra Design Travel** del selector. Lo guardado con ese id suena Amy.
+Marcador `JG_JS_V=v133`, shell-v133.
+Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
+
 ## Publicación TTS v2.78.0, 2026-09-11
 
 Cuatro clones de JG Voice (Amy, Dora, Michael, Sandra Design Travel) en la biblioteca Fish del PDF.

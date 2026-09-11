@@ -1,4 +1,4 @@
-<!-- v2.78.0 · clones JG Voice: Amy, Dora, Michael, Sandra Design Travel -->
+<!-- v2.79.0 · se retira Sandra Design Travel del selector -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -14339,7 +14339,6 @@ const TTS_FISH_CATALOGO_LOCAL = [
   { id:'amy', gender:'female', name:'Amy', lang:'es' },
   { id:'dora', gender:'female', name:'Dora', lang:'es' },
   { id:'michael', gender:'male', name:'Michael', lang:'es' },
-  { id:'sandra-design-travel', gender:'female', name:'Sandra Design Travel', lang:'es' },
 ];
 
 /* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
@@ -14349,6 +14348,7 @@ const TTS_FISH_CATALOGO_LOCAL = [
 const TTS_FISH_RETIRADAS = new Set([
   'nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo',
   'sarah', 'paula', 'adrian', 'ethan',
+  'sandra-design-travel',
 ]);
 
 /* Ids retirados → equivalente que queda (mismo género e idioma). */
@@ -14357,6 +14357,7 @@ const TTS_FISH_EQUIVALENTES = {
   'nico-robin': 'narradora', 'chica': 'narradora', 'nagi': 'narradora',
   'male': 'valentino', 'nestor': 'valentino',
   'locutor-k': 'valentino', 'narrador': 'valentino', 'loquendo': 'valentino',
+  'sandra-design-travel': 'amy',
 };
 
 let ttsFishInfo = {
@@ -17993,7 +17994,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v132';
+const JG_JS_V = 'v133';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

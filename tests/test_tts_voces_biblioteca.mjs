@@ -69,7 +69,7 @@ try {
 /* ── Fish retiradas fuera del catálogo local ──────────────────────── */
 {
   const ids = api.TTS_FISH_CATALOGO_LOCAL.map((v) => v.id);
-  for (const fuera of ['nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo', 'sarah', 'paula', 'adrian', 'ethan']) {
+  for (const fuera of ['nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo', 'sarah', 'paula', 'adrian', 'ethan', 'sandra-design-travel']) {
     comprobar(!ids.includes(fuera), `"${fuera}" ya no está en el catálogo`);
   }
   for (const queda of ['narradora', 'colombiana', 'latina', 'voz-a', 'valentino', 'sabio', 'terror', 'leonardo']) {
@@ -80,7 +80,7 @@ try {
     'voz-locutor', 'brian-tracy', 'morgan-freeman', 'mario-alonso-puig', 'tatiana-mae',
     'hilary-narrador', 'palabra-biblica', 'morillo', 'narrador-documental', 'jim-hopper',
     'latina-kika', 'voz-platica', 'roberto',
-    'amy', 'dora', 'michael', 'sandra-design-travel',
+    'amy', 'dora', 'michael',
   ]) {
     comprobar(ids.includes(nueva), `"${nueva}" aparece en el catálogo`);
   }
@@ -91,12 +91,9 @@ try {
   const amy = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'amy');
   const dora = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'dora');
   const michael = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'michael');
-  const sandra = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'sandra-design-travel');
   comprobar(amy && amy.gender === 'female' && amy.name === 'Amy', 'Amy es femenina');
   comprobar(dora && dora.gender === 'female' && dora.name === 'Dora', 'Dora es femenina');
   comprobar(michael && michael.gender === 'male' && michael.name === 'Michael', 'Michael es masculina');
-  comprobar(sandra && sandra.gender === 'female' && sandra.name === 'Sandra Design Travel',
-    'Sandra Design Travel es femenina');
 }
 
 /* ── La lista ofrecida filtra aunque el servidor las mande ───────── */
@@ -139,8 +136,8 @@ try {
   comprobar(api.ttsFishPorId('amy')?.id === 'amy', 'amy resuelve por su slug');
   comprobar(api.ttsFishPorId('dora')?.id === 'dora', 'dora resuelve por su slug');
   comprobar(api.ttsFishPorId('michael')?.id === 'michael', 'michael resuelve por su slug');
-  comprobar(api.ttsFishPorId('sandra-design-travel')?.id === 'sandra-design-travel',
-    'sandra-design-travel resuelve por su slug');
+  comprobar(api.ttsFishPorId('sandra-design-travel')?.id === 'amy',
+    'sandra-design-travel guardada → amy');
   comprobar(api.ttsFishPorId('') === null && api.ttsFishPorId(null) === null, 'vacío no rompe');
 }
 
