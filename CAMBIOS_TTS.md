@@ -49,6 +49,8 @@
 
 **Versión:** `JG_JS_V=v131`, Service Worker `jg-turbo-shell-v131`.
 
+**Deploy:** `Dq3KBxsrX817td7TG85ai3sv2xtq` · `READY` · alias `https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador v2.77.0, `JG_JS_V=v131`, SW shell-v131, `id:'roberto'` en el HTML, `/api/tts-voices` ofrece Roberto (male/es), `POST /api/tts` con `source=pdf` y `fish_voice=roberto` → `X-TTS-Engine: fish-neural-regional`, `X-TTS-Voice: fish:Roberto`, 37 615 B.
+
 ---
 
 ## Nuevo en v2.73.0 · 8 voces Fish nuevas (2026-09-09)

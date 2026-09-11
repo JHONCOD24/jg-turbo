@@ -14,7 +14,9 @@ lastUpdated: 2026-08-02
 ## Publicación TTS v2.77.0, 2026-09-10
 
 Voz clonada **Roberto** (JG Voice) en la biblioteca Fish del lector de PDF. El PDF deja de forzar Edge cuando se elige una voz Fish.
+`Dq3KBxsrX817td7TG85ai3sv2xtq` READY, alias `https://jg-turbo.vercel.app`.
 Marcador `JG_JS_V=v131`, shell-v131.
+Verificado contra el dominio: HTML v2.77.0, catálogo con Roberto, `POST /api/tts` `source=pdf` → `fish:Roberto`.
 Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
 
 ## Publicación PDF v2.76.0, 2026-09-10
