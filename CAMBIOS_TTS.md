@@ -39,6 +39,8 @@
 
 **Versión:** `JG_JS_V=v133`, Service Worker `jg-turbo-shell-v133`.
 
+**Deploy:** `EGwyK4Cx3fTkUL16WyfA3CeTBwg7` · `READY` · alias `https://jg-turbo.vercel.app`. Verificado: HTML v2.79.0 sin `sandra-design-travel`, API sin esa voz, `POST /api/tts` con el slug viejo → `fish:Amy`.
+
 ---
 
 ## Nuevo en v2.78.0 · 4 clones más de JG Voice (2026-09-11)

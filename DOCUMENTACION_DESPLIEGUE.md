@@ -14,6 +14,7 @@ lastUpdated: 2026-08-02
 ## Publicación TTS v2.79.0, 2026-09-11
 
 Se retira **Sandra Design Travel** del selector. Lo guardado con ese id suena Amy.
+`EGwyK4Cx3fTkUL16WyfA3CeTBwg7` READY, alias `https://jg-turbo.vercel.app`.
 Marcador `JG_JS_V=v133`, shell-v133.
 Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
 

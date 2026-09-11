@@ -7,6 +7,8 @@
 
 La voz no gustó: se retira del listado. Lo guardado con ese id pasa a Amy. Detalle: `CAMBIOS_TTS.md` §v2.79.0.
 
+Despliegue: `EGwyK4Cx3fTkUL16WyfA3CeTBwg7` READY. Verificado: la voz no aparece en el catálogo; el slug viejo sintetiza `fish:Amy`.
+
 ## 2026-09-11 · v2.78.0 · Amy, Dora, Michael y Sandra Design Travel en el selector (`JG_JS_V=v132`, shell-v132)
 
 Cuatro clones nuevos de JG Voice entran al mismo selector del lector (Fish · español · femeninas/masculinas). Detalle: `CAMBIOS_TTS.md` §v2.78.0.
