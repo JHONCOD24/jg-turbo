@@ -50,6 +50,18 @@ for e in ELS:
 CORTES = collections.Counter()
 DUDOSOS = []
 
+# Glosario del perfil: compuestos con guion propios del libro. Se define tras
+# limpia_pal/VOCAB pero se usa en tiempo de ejecución (une_guion y bucles).
+def _glosario():
+    out = set()
+    for g in P.get("glosario_compuestos") or []:
+        w = limpia_pal(str(g))
+        if w:
+            out.add(w)
+    return out
+
+GLOSARIO = _glosario()
+
 def une_guion(izq, der, pag):
     if not PARTE_SILABAS:
         CORTES["guion_real"] += 1
@@ -64,6 +76,11 @@ def une_guion(izq, der, pag):
         return izq + der
     junto = limpia_pal(a + b)
     conguion = limpia_pal(a + "-" + b)
+    # Glosario del perfil (nombres y términos del libro): manda sobre el
+    # vocabulario observado («Sherwin-Williams» aunque solo salga partido).
+    if conguion in GLOSARIO:
+        CORTES["guion_real"] += 1
+        return izq + der
     if VOCAB.get(junto, 0) > 0:
         CORTES["union"] += 1
         return izq[:-1] + der
@@ -73,6 +90,12 @@ def une_guion(izq, der, pag):
     CORTES["dudoso"] += 1
     if len(DUDOSOS) < 500:
         DUDOSOS.append((pag, a + "-" + b, a + b))
+    # Si AMBAS partes existen como palabras completas en el propio libro, el
+    # guion no parte una sílaba: cierra un inciso («ha dado- permite» ->
+    # «ha dado — permite»). Une solo cuando la unión tiene sentido.
+    if VOCAB.get(limpia_pal(a), 0) > 0 and VOCAB.get(limpia_pal(b), 0) > 0:
+        CORTES["inciso"] += 1
+        return izq[:-1] + " — " + der
     return izq[:-1] + der      # lo normal en un libro: era partición
 
 # ── Estilos ───────────────────────────────────────────────────────────
@@ -142,17 +165,32 @@ for e in ELS:
                 nuevo_bloque(r, ln)
             if r != "pie":
                 abierto = None      # un título corta el párrafo; un pie no
+            abierto = None      # cualquier título o pie corta el párrafo en curso
             continue
 
         salto = None
         if abierto is not None and abierto["pag"] == ln["pag"]:
             salto = ln["bbox"][1] - abierto["lineas"][-1]["bbox"][3]
+        if abierto is not None:
+            if abierto["pag"] == ln["pag"]:
+                salto = ln["bbox"][1] - abierto["lineas"][-1]["bbox"][3]
+            else:
+                prev_txt = abierto["lineas"][-1]["txt"].strip()
+                derecha_b = float(P.get("derecha") or 480)
+                prev_corta = (abierto["lineas"][-1]["bbox"][2] < derecha_b - 25)
+                if prev_corta and prev_txt and prev_txt[-1] in ".?!»”:":
+                    abierto = None
         arranca = (ln.get("arranca") or ln["txt"].lstrip().startswith("•")
                    or abierto is None
+                   or abierto is not ultimo
                    or abierto["rol"] != r
                    or abierto["lineas"][-1].get("nivel", 0) != ln.get("nivel", 0)
                    or (salto is not None and salto > UMBRAL_SALTO))
         if arranca:
+            # Una palabra cortada con guion al final de renglón nunca arranca bloque nuevo
+            if abierto is not None and abierto["lineas"][-1]["txt"].rstrip().endswith("-") and (salto is None or salto <= UMBRAL_SALTO * 1.6):
+                arranca = False
+        if arranca or abierto is not ultimo:
             abierto = nuevo_bloque(r, ln)
         else:
             abierto["lineas"].append(ln)
@@ -197,17 +235,90 @@ for b in bloques:
         continue
     fus[0][1] = fus[0][1].lstrip()
     fus[-1][1] = fus[-1][1].rstrip()
-    if NOTAS and b["pag"] >= NOTAS:
-        # «<<» es el enlace de vuelta que deja Calibre al final de cada nota.
-        # No es del libro y el lector de voz lo lee como ruido.
-        for pz in fus:
-            pz[1] = re.sub(r"\s*<<\s*", " ", pz[1])
-        fus[-1][1] = fus[-1][1].rstrip()
+    # «<<» es el enlace de vuelta que deja Calibre al final de cada nota (y a
+    # veces en el cuerpo). No es del libro y el lector de voz lo lee como
+    # ruido: se quita siempre, no solo con notas_desde.
+    for pz in fus:
+        pz[1] = re.sub(r"\s*<<\s*", " ", pz[1])
+    fus[-1][1] = fus[-1][1].rstrip()
+    for pz in fus:
+        pz[1] = re.sub(r"(?<=\s)-(?=[\wáéíóúüñÁÉÍÓÚÜÑ])", "—", pz[1])
+        pz[1] = re.sub(r"(?<=[\wáéíóúüñÁÉÍÓÚÜÑ])-(?=\s)", "—", pz[1])
     txt = re.sub(r"[ \t]{2,}", " ", "".join(t for _, t in fus)).strip()
     if not txt:
         continue
     salida.append({"rol": b["rol"], "pag": b["pag"], "nivel": b.get("nivel", 0),
                    "txt": txt, "html": a_html(fus)})
+
+# Unir palabras partidas entre páginas a través de notas al pie intercaladas.
+# También vale para títulos partidos («Sherwin-» + «Williams»): un bloque que
+# termina en guion de partición se une con el siguiente bloque de TEXTO
+# (cualquiera que sea el rol del primero), no solo cuerpo con cuerpo.
+ROLES_TEXTO = ("cuerpo", "cuerpo_min", "capitulo", "capitulo_sub", "seccion", "cita", "pie")
+
+def _cola_html(html, w1, nuevo):
+    """Reemplaza «w1-» al final del html por `nuevo`, tolerando etiquetas de
+    cierre (</b>, </i>): el `$` solo no matchea «<b>Sherwin-</b>» y el PDF
+    pintaría lo viejo mientras el txt ya cambió (medido en Posicionamiento)."""
+    return re.sub(re.escape(w1) + r"-(?=(?:<[^>]+>)*\s*$)", lambda _m: nuevo, html.rstrip())
+
+def _cabeza_html(html, w2):
+    """Quita «w2» + espacios del inicio del html, preservando etiquetas."""
+    return re.sub(r"^((?:<[^>]+>|\s)*)" + re.escape(w2) + r"\s*", r"\1", html.lstrip())
+for i in range(len(salida) - 1):
+    b1 = salida[i]
+    if b1["rol"] in ROLES_TEXTO:
+        m = re.search(r"([\wáéíóúüñÁÉÍÓÚÜÑ]+)-$", b1["txt"])
+        if m:
+            # La continuación de un TÍTULO partido está justo después; para
+            # cuerpo se mira más lejos (notas al pie intercaladas). Unir con
+            # un bloque lejano inventa palabras («Sherwinmejores»).
+            ventana = 3 if b1["rol"] in ("capitulo", "capitulo_sub", "seccion") else 10
+            for j in range(i + 1, min(i + ventana, len(salida))):
+                b2 = salida[j]
+                if b2["rol"] not in ROLES_TEXTO:
+                    continue
+                if not (b2.get("txt") or "").strip():
+                    continue
+                m2 = re.match(r"^([\wáéíóúüñÁÉÍÓÚÜÑ]+)", b2["txt"])
+                if not m2:
+                    continue      # este bloque no continúa la palabra: seguir buscando
+                w1, w2 = m.group(1), m2.group(1)
+                # Un bloque de 1-2 palabras que termina en punto («mejores.»)
+                # no es la continuación de una sílaba: es el final del párrafo
+                # anterior. Se salta para no inventar («Sherwinmejores»).
+                if len(b2["txt"].split()) <= 2 and re.search(r"[.!?…;:]$", b2["txt"].strip()):
+                    continue
+                # En español ninguna palabra partida continúa con mayúscula:
+                # si el compuesto con guion existe en el libro o el glosario
+                # («Sherwin-Williams») se conserva; si no, es inciso o título.
+                if w2[0].isupper():
+                    if (VOCAB.get(limpia_pal(w1) + "-" + limpia_pal(w2), 0) > 0
+                            or (limpia_pal(w1) + "-" + limpia_pal(w2)) in GLOSARIO):
+                        b1["txt"] = b1["txt"][: -len(w1) - 1] + w1 + "-" + w2
+                        b1["html"] = _cola_html(b1["html"], w1, w1 + "-" + w2)
+                        b2["txt"] = b2["txt"][len(w2):].lstrip()
+                        b2["html"] = _cabeza_html(b2["html"], w2)
+                    else:
+                        b1["txt"] = b1["txt"][: -len(w1) - 1] + w1 + " —"
+                        b1["html"] = _cola_html(b1["html"], w1, w1 + " —")
+                    break
+                completa1 = VOCAB.get(limpia_pal(w1), 0) > 0
+                completa2 = VOCAB.get(limpia_pal(w2), 0) > 0
+                if completa1 and completa2:
+                    # Inciso que cierra en el corte: guion real con em-dash.
+                    b1["txt"] = b1["txt"][: -len(w1) - 1] + w1 + " —"
+                    b1["html"] = _cola_html(b1["html"], w1, w1 + " —")
+                else:
+                    w_unida = w1 + w2
+                    # Actualizar txt
+                    b1["txt"] = b1["txt"][:-len(w1)-1] + w_unida
+                    b2["txt"] = b2["txt"][len(w2):].lstrip()
+                    # Actualizar html
+                    b1["html"] = _cola_html(b1["html"], w1, w_unida)
+                    b2["html"] = _cabeza_html(b2["html"], w2)
+                    print(f"   p{b1['pag']} corte entre páginas a través de notas: {w1}-{w2} -> {w_unida}")
+                break
 
 json.dump(salida, open("bloques.json", "w"), ensure_ascii=False)
 print("bloques:", len(salida))

@@ -30,7 +30,7 @@ import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndic
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
 import { initLibroVista, ordenarDocumentos, paginarDocumentos } from './libroVista.js';
-import { prepararParaVoz, textoVozParaAncla, elegirCompactoVoz } from './vozTexto.js';
+import { prepararParaVoz, conPausaDeCapitulo, textoVozParaAncla, elegirCompactoVoz } from './vozTexto.js';
 import { crearPulidor, crearAuditorPdf, tokenizarParaAuditoria, validarIntegridadEstructura, aplicarDecisiones, aplicarSignos } from './pulido.js';
 import { dividirEnBloquesSemanticos, construirHuella, estadoAuditoriaTexto, estadoCorreccionLecturaTexto } from './auditoria.js';
 /* Fase B (§4.2.2): busqueda.js y exportar.js se cargan bajo demanda */
@@ -2279,10 +2279,18 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   /** Deja el documento en pantalla, listo para leer desde donde iba. */
-  async function montarDocumento({ id, titulo, partes, totalPaginas, idioma, progreso, capitulos, bloques, fuenteRevision }) {
+  async function montarDocumento({ id, titulo, partes, totalPaginas, idioma, progreso, capitulos, bloques, fuenteRevision, perfilMusical }) {
     estado.id = id;
     estado.titulo = titulo;
     estado.partes = partes;
+    estado.perfilMusical = perfilMusical || null;
+    /* Música por libro (plan §5): prioridad manual > perfil > nada. Nunca
+     * arranca sola: aplicarPerfilLibro solo prepara (o cambia, si ya sonaba). */
+    try {
+      if (typeof musicaFondo !== 'undefined' && musicaFondo && musicaFondo.aplicarPerfilLibro) {
+        musicaFondo.aplicarPerfilLibro(estado.perfilMusical);
+      }
+    } catch (_) { /* la música nunca puede romper la apertura de un libro */ }
     if (estado.figuras && estado.figuras.length) soltarFiguras();
     estado.figuras = estado.figuras || [];
     try {
@@ -2780,6 +2788,7 @@ export function inicializarLectorPdf(deps = {}) {
       capitulos,
       bloques: bloquesRehechos,
       fuenteRevision: doc.fuenteRevision || '',
+      perfilMusical: doc.perfilMusical || null,
     });
     avisar('');
     el.resultArea.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -4039,6 +4048,39 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   /** Guarda el documento entero y lo deja abierto para leer. */
+  /* Capítulos sintéticos desde el adjunto estructurado: los bloques con rol
+   * de título se sitúan en el texto canónico (compactado: letras y números,
+   * sin ttil... sin tildes) y producen el mismo formato {titulo, posicion,
+   * pagina} que el índice del PDF. Es la estructura editorial aprobada: manda
+   * sobre el índice regenerado. */
+  function capitulosDesdeAdjunto(adjunto, texto) {
+    if (!adjunto || !Array.isArray(adjunto.bloques) || !texto) return [];
+    const compacto = [];
+    const mapa = [];
+    const s = String(texto).toLowerCase().normalize('NFD');
+    for (let i = 0; i < s.length; i += 1) {
+      const c = s[i];
+      if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+        compacto.push(c);
+        mapa.push(i);
+      }
+    }
+    const salir = [];
+    let cursor = 0;
+    for (const b of adjunto.bloques) {
+      if (b.rol !== 'capitulo' && b.rol !== 'seccion') continue;
+      const t = String(b.txt || '').trim();
+      if (!t || t.length > 120) continue;
+      const aguja = t.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '').slice(0, 60);
+      if (aguja.length < 4) continue;
+      const pos = compacto.indexOf(aguja, cursor);
+      if (pos < 0) continue;
+      cursor = pos + aguja.length;
+      salir.push({ titulo: t, posicion: mapa[pos] || 0, pagina: b.pagina || b.pag || 0 });
+    }
+    return salir.filter((c) => c.posicion > 0 || salir[0] === c);
+  }
+
   async function entregarDocumento(resultado, {
     origen = 'texto', portada = null, archivo = estado.archivo,
   } = {}) {
@@ -4058,7 +4100,12 @@ export function inicializarLectorPdf(deps = {}) {
     estado.estadoFidelidad = resultado.estadoFidelidad || null;
     estado.pendientesLimites = Number(resultado.pendientes) || 0;
     estado.needsSource = false;
-    const capitulos = prepararCapitulosLectura(resultado.texto, resultado.capitulos);
+    /* Estructura del adjunto validado: capítulos reales del libro aprobado.
+     * Manda sobre el índice del PDF cuando aporta más divisiones. */
+    const capitulosAdjunto = capitulosDesdeAdjunto(resultado.adjuntoEstructurado, resultado.texto);
+    const capitulos = capitulosAdjunto.length >= 2
+      ? prepararCapitulosLectura(resultado.texto, capitulosAdjunto)
+      : prepararCapitulosLectura(resultado.texto, resultado.capitulos);
     // dividir en bloques semánticos de 3000 para auditoría, con contexto
     const bloques = construirBloquesAuditoria(resultado.texto, resultado.bloques, capitulos);
     estado.bloques = bloques;
@@ -4113,6 +4160,17 @@ export function inicializarLectorPdf(deps = {}) {
           bytes: archivo?.size || 0,
           progreso: progresoInicial(),
           estado: 'sin-empezar',
+          /* Estructura aprobada (plan §4): se persiste para que reabrir el
+           * libro recupere voz, música y troceo sin reextraer el adjunto. */
+          ...(resultado.adjuntoEstructurado ? {
+            adjunto: {
+              id: resultado.adjuntoEstructurado.id,
+              version: resultado.adjuntoEstructurado.version,
+              revision: resultado.adjuntoEstructurado.revision,
+              bloques: resultado.adjuntoEstructurado.bloques.length,
+            },
+            perfilMusical: resultado.perfilMusical || null,
+          } : {}),
         },
         partes,
         pdf: archivo || null,
@@ -4127,7 +4185,10 @@ export function inicializarLectorPdf(deps = {}) {
       return { ok: false, error };
     }
 
-    await montarDocumento({ id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, capitulos, bloques });
+    await montarDocumento({
+      id, titulo, partes, totalPaginas: resultado.totalPaginas, idioma, capitulos, bloques,
+      perfilMusical: resultado.perfilMusical || null,
+    });
     await refrescarInicio();
     sincronizarAhora({ silencioso: true });
 
@@ -4451,10 +4512,14 @@ export function inicializarLectorPdf(deps = {}) {
         mostrarParte(idx);
         pintarBotonAudiolibro(true);
         const proximoLang = estado.vista === 'es' ? 'es' : idiomaActual();
+        /* Entre capítulos, silencio real de 1000 ms (plan §4): si el capítulo
+         * continúa la frase anterior (parte partida), sin pausa. */
+        const esContinuacion = Boolean(estado.partes[idx]?.continuation);
+        const capaHablada = prepararParaVoz(capaSig, proximoLang, { neural: true });
         return {
-          texto: prepararParaVoz(capaSig, proximoLang, { neural: true }),
+          texto: esContinuacion ? capaHablada : conPausaDeCapitulo(capaHablada),
           lang: proximoLang,
-          continuation: Boolean(estado.partes[idx]?.continuation),
+          continuation: esContinuacion,
         };
       },
       alTerminar: () => {

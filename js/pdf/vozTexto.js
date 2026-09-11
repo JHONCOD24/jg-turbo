@@ -19,6 +19,20 @@ const ROMANOS_SIGLOS = {
   XXI: 'veintiuno', XXII: 'veintidós',
 };
 
+/* Pausas estructurales (plan §4 «Voz y pausas»): marcas que el motor de voz
+ * convierte en silencio real en la cola (700 ms tras títulos, 1000 ms entre
+ * capítulos). Se generan solo para el motor neural y se descartan antes de
+ * sintetizar: nunca llegan al sintetizador ni al texto visible. */
+export const MARCA_PAUSA_TITULO = '§P0700§';
+export const MARCA_PAUSA_CAPITULO = '§P1000§';
+export const REGEX_MARCA_PAUSA = /§P(\d{3,5})§/g;
+
+/** Antepone la pausa de cambio de capítulo al texto del capítulo siguiente. */
+export function conPausaDeCapitulo(texto) {
+  const t = String(texto || '');
+  return t ? `${MARCA_PAUSA_CAPITULO}\n\n${t}` : t;
+}
+
 /* Conectores que en español piden una pausa antes: sin ella, el partidor de
  * bloques corta donde le toca y la frase se parte a mitad de idea. Se aplica
  * SOLO aquí, en la capa que se le entrega al motor de voz. */
@@ -208,6 +222,11 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   const pausarTitulos = opts.pausarTitulos !== false; // por defecto true
   const comasProsodicas = opts.comasProsodicas !== false; // por defecto true
   const limpiarReferencias = opts.limpiarReferencias !== false; // por defecto true
+  /* Pausas estructurales (plan §4 «Voz y pausas»): 700 ms tras títulos y
+   * 1000 ms entre capítulos, como silencio real en la cola de audio. Las
+   * marcas §P0700§ / §P1000§ las reconoce el motor (ttsCrearCola) y nunca
+   * llegan al sintetizador ni al texto visible. */
+  const pausasEstructurales = neural && opts.pausasEstructurales !== false;
   let salida = texto;
   /* Filtro defensivo contra alucinaciones y rechazos de traducción automática */
   salida = salida
@@ -452,9 +471,11 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
       const t = bloque.trim();
       if (!t) return '';
       /* Un título sin cierre hace que la voz siga de largo hasta el párrafo
-       * siguiente. Los dos puntos suenan mejor que el punto: dejan la
-       * entonación abierta, como cuando alguien anuncia un capítulo. */
-      return pareceTituloSuelto(t) ? `${t}:` : t;
+       * siguiente. Con motor neural, la pausa es un silencio real de 700 ms
+       * en la cola (marca §P0700§); con las voces del navegador, los dos
+       * puntos dejan la entonación abierta, como anunciando un capítulo. */
+      if (!pareceTituloSuelto(t)) return t;
+      return pausasEstructurales ? `${t}\n${MARCA_PAUSA_TITULO}` : `${t}:`;
     }).filter(Boolean).join('\n\n');
   }
 

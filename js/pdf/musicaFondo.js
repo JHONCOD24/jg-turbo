@@ -189,6 +189,11 @@ class GestorMusicaFondo {
     this.volumenMusica = 0.20; // 20% por defecto
     this.volumenVoz = 1.00;    // 100% por defecto
     this.duckingActivo = true;
+    /* Prioridad acordada (plan §5): manual del usuario > perfil del libro >
+     * música desactivada. `eleccionManual` se persiste para que sobreviva a
+     * recargas; `pistasPerfilLibro` acota la aleatoriedad a la lista aprobada. */
+    this.eleccionManual = false;
+    this.pistasPerfilLibro = null;
 
     this.estado = 'apagado'; // 'apagado' | 'cargando' | 'sonando' | 'pausado'
     this.vozHablando = false;
@@ -252,6 +257,9 @@ class GestorMusicaFondo {
 
       const duck = localStorage.getItem('jg_musica_ducking');
       if (duck !== null) this.duckingActivo = duck !== 'false';
+
+      const manual = localStorage.getItem('jg_musica_manual');
+      if (manual !== null) this.eleccionManual = manual === 'true';
     } catch (_) {}
   }
 
@@ -265,6 +273,7 @@ class GestorMusicaFondo {
       localStorage.setItem('jg_musica_volumen', String(this.volumenMusica));
       localStorage.setItem('jg_musica_voz_volumen', String(this.volumenVoz));
       localStorage.setItem('jg_musica_ducking', String(this.duckingActivo));
+      localStorage.setItem('jg_musica_manual', String(!!this.eleccionManual));
     } catch (_) {}
   }
 
@@ -426,7 +435,14 @@ class GestorMusicaFondo {
    */
   obtenerSiguienteAleatoria() {
     const animoActual = this.automatica ? resolverAnimoSegunHora() : this.animo;
-    const pistas = CATALOGO_PISTAS.filter((p) => p.animo === animoActual);
+    let pistas = CATALOGO_PISTAS.filter((p) => p.animo === animoActual);
+    /* Con perfil de libro, la aleatoriedad solo elige entre las pistas
+     * aprobadas de ese perfil (plan §5: perfil por libro, no por hora). */
+    if (Array.isArray(this.pistasPerfilLibro) && this.pistasPerfilLibro.length) {
+      const aprobadas = new Set(this.pistasPerfilLibro);
+      const filtradas = pistas.filter((p) => aprobadas.has(p.id));
+      if (filtradas.length) pistas = filtradas;
+    }
     if (!pistas.length) return CATALOGO_PISTAS[0];
 
     // Excluir la pista actual para evitar repetir la misma de forma consecutiva
@@ -689,6 +705,7 @@ class GestorMusicaFondo {
     if (!ANIMOS[animoId]) return;
     this.animo = animoId;
     this.automatica = false;
+    this.eleccionManual = true;
     this.activa = true;
 
     // Si está en modo aleatorio, seleccionar una pista al azar del ánimo
@@ -713,9 +730,50 @@ class GestorMusicaFondo {
     this.pistaId = pistaId;
     this.animo = pista.animo;
     this.automatica = false;
+    this.eleccionManual = true;
     this.activa = true;
     this.guardarPreferencias();
     this.reproducirPista(pista, { suave: true, fundidoCruzado: false });
+    this.notificarCambio();
+  }
+
+  /**
+   * Aplica el perfil musical por libro según el Plan Maestro (§5).
+   * Prioridad:
+   * 1. Elección manual del usuario (siempre preservada, persistida).
+   * 2. Perfil del libro asignado (desactiva el modo horario y acota la
+   *    aleatoriedad a las pistas aprobadas del perfil).
+   * 3. Si no existe perfil y no hay elección manual: música desactivada.
+   * Nunca inicia la reproducción por sí sola: sin interacción no hay audio.
+   */
+  aplicarPerfilLibro(perfil) {
+    if (this.eleccionManual) return;
+    if (!perfil || typeof perfil !== 'object') {
+      this.pistasPerfilLibro = null;
+      if (this.activa) this.setActiva(false);
+      return;
+    }
+    const pistas = perfil.pistas || perfil.pistas_aprobadas || perfil.pistasAprobadas;
+    const aprobadas = Array.isArray(pistas)
+      ? pistas.map((x) => String(x)).filter((x) => CATALOGO_PISTAS.some((c) => c.id === x))
+      : [];
+    this.pistasPerfilLibro = aprobadas.length ? aprobadas : null;
+    this.automatica = false;               // el perfil manda sobre la hora
+    const animo = perfil.animo || perfil.animo_recomendado;
+    if (animo && ANIMOS[animo]) {
+      this.animo = animo;
+    }
+    const candidatas = this.pistasPerfilLibro
+      ? CATALOGO_PISTAS.filter((c) => this.pistasPerfilLibro.includes(c.id) && c.animo === this.animo)
+      : [];
+    const p = (candidatas.length ? candidatas : CATALOGO_PISTAS.filter((c) => c.animo === this.animo))[0];
+    if (p) this.pistaId = p.id;
+    this.guardarPreferencias();
+    /* Si el usuario ya había encendido la música, pasa a la pista del perfil
+     * con fundido; si no, solo queda lista (sin reproducción automática). */
+    if (this.activa && p) {
+      this.reproducirPista(p, { suave: true, fundidoCruzado: true });
+    }
     this.notificarCambio();
   }
 

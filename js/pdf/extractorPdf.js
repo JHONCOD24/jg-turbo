@@ -131,6 +131,188 @@ export async function leerIndice(doc) {
 }
 
 /**
+ * Lee y valida el adjunto estructurado `jg-lectura.json` si el PDF lo incluye,
+ * según el contrato del Plan Maestro de Adaptación (§4).
+ *
+ * Aquí solo se valida LO QUE EL ADJUNTO DICE DE SÍ MISMO: versión soportada,
+ * esquema, tamaños y tipos. La correspondencia con el texto de las páginas se
+ * comprueba aparte, con las páginas ya extraídas, en
+ * `validarAdjuntoContrapaginas`. Un adjunto que no supere todo esto no se usa:
+ * el lector cae a la extracción ordinaria (auditoría 2026-09-10, hallazgo 4).
+ */
+const VERSIONES_ADJUNTO_SOPORTADAS = /^1\.\d+\.\d+$/;
+
+export async function leerAdjuntoEstructurado(doc) {
+  if (!doc) return null;
+  try {
+    if (typeof doc.getAttachments !== 'function') return null;
+    const adjuntos = await doc.getAttachments();
+    if (!adjuntos) return null;
+
+    let entrada = null;
+    if (typeof adjuntos.get === 'function') {
+      entrada = adjuntos.get('jg-lectura.json');
+    } else if (typeof adjuntos === 'object') {
+      entrada = adjuntos['jg-lectura.json'];
+    }
+    if (!entrada) return null;
+
+    let bytes = null;
+    if (entrada.content instanceof Uint8Array) {
+      bytes = entrada.content;
+    } else if (typeof doc.getAttachmentContent === 'function') {
+      bytes = await doc.getAttachmentContent('jg-lectura.json');
+    }
+    if (!bytes || !bytes.length) return null;
+
+    // Límite de seguridad: máximo 15 MB
+    if (bytes.length > 15 * 1024 * 1024) {
+      console.warn('[jg-pdf] Adjunto jg-lectura.json supera el tamaño permitido (15 MB).');
+      return null;
+    }
+
+    const decodificador = new TextDecoder('utf-8');
+    const textoJson = decodificador.decode(bytes);
+    const datos = JSON.parse(textoJson);
+
+    if (!datos || typeof datos !== 'object') return null;
+    const version = String(datos.version || '');
+    if (!VERSIONES_ADJUNTO_SOPORTADAS.test(version)) {
+      console.warn('[jg-pdf] Adjunto con versión no soportada:', version, '— se usa extracción ordinaria.');
+      return null;
+    }
+    if (!Array.isArray(datos.bloques) || !datos.bloques.length) return null;
+    if (typeof datos.total_bloques === 'number' && datos.total_bloques !== datos.bloques.length) {
+      console.warn('[jg-pdf] Adjunto truncado:', datos.bloques.length, 'de', datos.total_bloques, 'bloques.');
+      return null;
+    }
+    // Identificadores estables por bloque: sin ellos no hay trazabilidad.
+    if (!datos.bloques.every((b) => b && typeof b.id === 'string' && b.id)) return null;
+
+    const rolesValidos = new Set([
+      'cuerpo', 'capitulo', 'capitulo_sub', 'seccion',
+      'cita', 'cuerpo_min', 'pie', 'img', 'lamina', 'tabla', 'formula',
+    ]);
+
+    const bloquesSanitizados = [];
+    for (const b of datos.bloques) {
+      if (!b || typeof b !== 'object') continue;
+      const rol = rolesValidos.has(b.rol) ? b.rol : 'cuerpo';
+      // Sanitizar texto: prevenir inyección de etiquetas HTML no confiables
+      const txt = typeof b.txt === 'string' ? b.txt.replace(/<[^>]*>/g, '') : '';
+      const pie = typeof b.pie === 'string' ? b.pie.replace(/<[^>]*>/g, '') : '';
+      const img = typeof b.img === 'string'
+        ? b.img.replace(/[<>:"|?*]/g, '').replace(/\.\./g, '').slice(0, 200) : '';
+      const pagina = typeof b.pagina === 'number' ? b.pagina : (typeof b.pag === 'number' ? b.pag : null);
+
+      bloquesSanitizados.push({
+        ...b,
+        rol,
+        txt,
+        pie,
+        img,
+        pagina,
+      });
+    }
+    if (bloquesSanitizados.length !== datos.bloques.length) return null;
+
+    return {
+      version,
+      revision: Number(datos.revision) || 1,
+      id: String(datos.id || ''),
+      titulo: String(datos.titulo || '').trim(),
+      autor: String(datos.autor || '').trim(),
+      idioma: String(datos.idioma || 'es').trim(),
+      perfilMusical: normalizarPerfilMusical(datos.perfil_musical || datos.perfilMusical || null),
+      bloques: bloquesSanitizados,
+      esEstructurado: true,
+    };
+  } catch (error) {
+    console.warn('[jg-pdf] Adjunto jg-lectura.json con formato inválido o dañado, usando extracción estándar:', error);
+    return null;
+  }
+}
+
+/** El perfil musical del adjunto no es confiable: solo ids de pista reales. */
+function normalizarPerfilMusical(perfil) {
+  if (!perfil || typeof perfil !== 'object') return null;
+  const animos = new Set(['concentracion', 'relax', 'noche', 'lluvia']);
+  const animo = animos.has(perfil.animo) ? perfil.animo
+    : (animos.has(perfil.animo_recomendado) ? perfil.animo_recomendado : null);
+  const pistas = Array.isArray(perfil.pistas) || Array.isArray(perfil.pistasAprobadas)
+    ? (perfil.pistas || perfil.pistasAprobadas).filter((p) => typeof p === 'string' && /^[\w-]{3,60}$/.test(p))
+    : [];
+  if (!animo && !pistas.length) return null;
+  return { animo, pistas, estado: 'propuesto' };
+}
+
+/**
+ * Comprueba que el adjunto dice lo mismo que las páginas del PDF.
+ * Normalización documentada: se compacta a letras y números sin tildes
+ * (la misma de la guía de lectura) y los bloques deben aparecer EN ORDEN.
+ * Un adjunto que diga otra cosa no se usa (plan §4: «No aceptar un adjunto
+ * que diga algo distinto de las páginas»).
+ *
+ * @returns {{valido:boolean, cobertura:number, detalle:string}}
+ */
+export function validarAdjuntoContrapaginas(adjunto, paginas, { minimoCobertura = 0.97 } = {}) {
+  if (!adjunto || !Array.isArray(paginas) || !paginas.length) {
+    return { valido: false, cobertura: 0, detalle: 'sin datos' };
+  }
+  const dePaginas = paginas
+    .map((p) => (p.lineas || []).map((l) => l && l.texto ? l.texto : '').join('\n'))
+    .join('\n');
+  let cuerpo = '';
+  for (const b of adjunto.bloques) {
+    cuerpo += (b.txt || b.pie || '') + '\n';
+  }
+  /* Compactar es caro en libros grandes: se hace una sola vez por lado. */
+  const compactoPaginas = compactarRapido(dePaginas);
+  const totalCompacto = compactoPaginas.length;
+  const conTexto = adjunto.bloques.filter((b) => (b.txt || '').length > 8);
+  let cursor = 0;
+  let situados = 0;
+  let revisados = 0;
+  let posUltimo = 0;
+  for (const b of conTexto) {
+    revisados += 1;
+    const aguja = compactarRapido(b.txt).slice(0, 72);
+    if (!aguja) continue;
+    /* Ventana guiada por cursor (orden esperado), con respaldo global: si
+     * la aguja no está donde toca, igual vale si aparece en el documento
+     * (la app también ancla así: ver situarBloquesDetallado). */
+    let pos = compactoPaginas.indexOf(aguja, Math.max(0, cursor - 600));
+    if (pos < 0) pos = compactoPaginas.indexOf(aguja);
+    if (pos >= 0) {
+      situados += 1;
+      posUltimo = Math.max(posUltimo, pos);
+      if (pos >= cursor) cursor = pos + Math.max(24, Math.floor(aguja.length * 0.6));
+    }
+  }
+  const cobertura = revisados ? situados / revisados : 0;
+  const cubreFinal = totalCompacto > 0 && posUltimo >= totalCompacto * 0.8;
+  const valido = cobertura >= minimoCobertura && cubreFinal && situados > 0;
+  const totalPaginas = paginas[paginas.length - 1].numero || paginas.length;
+  return {
+    valido,
+    cobertura,
+    detalle: valido
+      ? `${situados}/${revisados} bloques situados en ${totalPaginas} págs.`
+      : `cobertura ${(cobertura * 100).toFixed(1)}% (${situados}/${revisados}), final ${cubreFinal ? 'sí' : 'no'}`,
+  };
+}
+
+function compactarRapido(texto) {
+  let out = '';
+  const s = String(texto || '').toLowerCase().normalize('NFD');
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s[i];
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) out += c;
+  }
+  return out;
+}
+
+/**
  * Recorre las páginas y devuelve sus líneas de texto ya ordenadas.
  *
  * @param {object} doc documento devuelto por abrirPdf
@@ -279,9 +461,22 @@ export async function renderizarPortada(doc, { ancho = 380, numero = 1 } = {}) {
 export async function procesarPdf(archivo, opciones = {}) {
   const { doc, totalPaginas, titulo } = await abrirPdf(archivo, opciones.alCargar);
   try {
+    const adjunto = await leerAdjuntoEstructurado(doc);
     const indice = opciones.usarIndice === false ? [] : await leerIndice(doc);
     const { paginas, cancelado } = await extraerPaginas(doc, opciones);
     if (cancelado) return { cancelado: true };
+
+    /* El adjunto solo se usa si dice lo mismo que las páginas (plan §4).
+     * Si no cuadra, se cae a la extracción ordinaria con aviso. */
+    let adjuntoValidado = null;
+    if (adjunto) {
+      const comprobacion = validarAdjuntoContrapaginas(adjunto, paginas);
+      if (comprobacion.valido) {
+        adjuntoValidado = adjunto;
+      } else {
+        console.warn('[jg-pdf] Adjunto inconsistente con las páginas (', comprobacion.detalle, ') — extracción ordinaria.');
+      }
+    }
 
     const resultado = componerTexto(paginas, { indice, origen: 'texto' });
     /* La portada se saca ahora, con el documento todavía abierto. */
@@ -292,11 +487,14 @@ export async function procesarPdf(archivo, opciones = {}) {
 
     return {
       cancelado: false,
-      titulo,
+      titulo: adjuntoValidado?.titulo || titulo,
+      autor: adjuntoValidado?.autor || '',
       totalPaginas,
       paginasLeidas: paginas.length,
       escaneado,
       portada,
+      adjuntoEstructurado: adjuntoValidado,
+      perfilMusical: adjuntoValidado?.perfilMusical || null,
       ...resultado,
     };
   } finally {

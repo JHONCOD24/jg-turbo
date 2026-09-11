@@ -35,12 +35,51 @@ BASE = float(P["base"])
 SANGRIA = float(P["sangria"] or (BASE + 14))
 DERECHA = float(P["derecha"])
 BANDA = float(P.get("banda_cabecera") or 0)
+BANDA_PIE = float(P.get("banda_pie") or 0)
+# Sanidad (auditoría H1): una banda de cabecera no puede ocupar más del 15%
+# superior de la página ni un pie empezar antes del 78%. Valores fuera de
+# rango (Cashvertising traía 418 pt en páginas de 842) tiran cuerpo entero.
+_altos = [DOC[i].rect.height for i in range(len(DOC))]
+_ALTO = (sum(_altos) / len(_altos)) if _altos else 842.0
+BANDA = min(BANDA, _ALTO * 0.15)
+if BANDA_PIE:
+    BANDA_PIE = max(BANDA_PIE, _ALTO * 0.78)
+
+# Textos de cabecera corrientes: los que se repiten (exactos) en una cuarta
+# parte de las páginas muestreadas. Es la señal real de «título corriente»;
+# con ella, una banda mal calibrada ya no puede tragarse cuerpo entero.
+def _cabeceras_corrientes():
+    if not BANDA:
+        return set()
+    vistas = collections.Counter()
+    npags = 0
+    paso = max(1, NPAG // 300)
+    for i in range(EMPEZAR - 1, NPAG, paso):
+        npags += 1
+        pag = DOC[i]
+        vistos_pag = set()
+        for b in pag.get_text("dict")["blocks"]:
+            if b["type"] != 0:
+                continue
+            for l in b["lines"]:
+                if l["bbox"][3] < BANDA:
+                    t = "".join(s["text"] for s in l["spans"]).strip()
+                    if t and t not in vistos_pag:
+                        vistos_pag.add(t)
+        vistas.update(vistos_pag)
+    if npags < 4:
+        return set()
+    return {t for t, n in vistas.items() if n >= max(2, npags * 0.25)}
+
 FUSIONAR = bool(P.get("fusionar_fragmentos"))
 TAM_CUERPO = float(P["tam_cuerpo"])
 TITULOS = sorted([float(t) for t in P.get("tam_titulos") or []], reverse=True)
 TAM_CAP = TITULOS[0] if TITULOS else TAM_CUERPO + 6
 TAM_SEC = TITULOS[-1] if TITULOS else TAM_CUERPO + 1.5
 # Qué papel juega cada tamaño de título (lo propone el paso 1, se ajusta a mano)
+# Títulos por patrón textual (libros sin jerarquía tipográfica, como EPUBs en
+# un solo tamaño): {"regex": "rol"}. Se comprueba antes que los tamaños.
+PATRONES_TITULO = [(re.compile(pat), rol) for pat, rol in (P.get("titulos_patron") or {}).items()]
 JERARQUIA = {float(k): v for k, v in (P.get("jerarquia") or {}).items()}
 NOTAS = P.get("notas_desde")
 OMITIR = set(P.get("paginas_omitir") or [])
@@ -50,6 +89,7 @@ for x in P.get("laminas") or []:
 ESQUEMAS = {int(k): v for k, v in (P.get("esquemas") or {}).items()}
 EMPEZAR = int(P.get("empezar_en") or 1)
 FAMILIA = P.get("familia_cuerpo") or re.sub(r"[-,].*$", "", P.get("fuente_cuerpo", ""))
+CABECERAS_CORRIENTES = _cabeceras_corrientes()
 
 # ── Normalización de caracteres ───────────────────────────────────────
 # Espacios raros, ligaduras y el guion suave (U+00AD) se van aquí. Si llegan
@@ -60,18 +100,43 @@ SUST = {
     " ": " ", " ": " ", " ": " ", " ": " ", " ": " ",
     " ": " ", " ": " ", " ": " ", " ": " ",
     "ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl",
+    "\uf0b7": "•", "\uf0a7": "•", "\uf0d8": "•", "\uf076": "•", "\uf0a8": "•",
+    "●": "•", "○": "•", "■": "•", "□": "•", "◆": "•", "◇": "•",
+    "★": "*", "☆": "*",
+    "α": "alfa", "β": "beta", "ψ": "psi",
+    "‐": "-",
+    "ı́": "í",
+    "ı": "i",
 }
 
 def norm(t):
     for a, b in SUST.items():
         t = t.replace(a, b)
+    # Corregir artefactos de OCR en mayúsculas acentuadas (AƵ -> Á, etc.)
+    t = re.sub(r"AƵ\s*", "Á", t)
+    t = re.sub(r"EƵ\s*", "É", t)
+    t = re.sub(r"IƵ\s*", "Í", t)
+    t = re.sub(r"OƵ\s*", "Ó", t)
+    t = re.sub(r"UƵ\s*", "Ú", t)
     t = "".join(c for c in t if ord(c) >= 32)
+    # Eliminar caracteres invisibles de formato (espacios de ancho cero, BOM, etc.)
+    t = re.sub(r"[\u200b-\u200f\ufeff]", "", t)
+    # Ignorar caracteres de control y PUA residual no mapeado
+    t = "".join(c for c in t if ord(c) >= 32 and not (0xE000 <= ord(c) <= 0xF8FF))
     return re.sub(r" {2,}", " ", unicodedata.normalize("NFC", t))
 
 
 def rol_linea(l):
     """Qué es esta línea. El tamaño manda; la negrita afina."""
     s = l["size"]
+    txt = l["txt"].strip()
+    if not txt:
+        return "cuerpo"
+    for pat, rol in PATRONES_TITULO:
+        if pat.search(txt):
+            return rol
+    if re.match(r"^[\s★*•\-_—–.]+$", txt):
+        return "cuerpo"         # separador ornamental entre secciones
     for tam, papel in JERARQUIA.items():
         if abs(s - tam) < 0.4:
             return papel
@@ -86,10 +151,14 @@ def rol_linea(l):
     x0, x1 = l["bbox"][0], l["bbox"][2]
     # Un título de sección va TODO en negrita y centrado. Una entradilla en
     # negrita dentro de un párrafo llega hasta el margen derecho: no lo es.
-    if neg / max(1, len(txt)) >= 0.88 and x1 <= DERECHA - 10 and x0 >= BASE + 6:
+    # Tampoco lo es una URL ni una continuación que empieza en minúscula.
+    if (neg / max(1, len(txt)) >= 0.88 and x1 <= DERECHA - 10 and x0 >= BASE + 6
+            and txt[0].isupper() and not txt.startswith("http") and "/" not in txt):
         return "seccion"
     if FAMILIA and not l["font"].startswith(FAMILIA):
         return "pie"            # otra familia tipográfica: rótulo de figura
+    if FAMILIA and not l["font"].startswith(FAMILIA) and s <= TAM_CUERPO - 1.2:
+        return "pie"            # otra familia tipográfica y letra menor: rótulo de figura
     if s <= TAM_CUERPO - 1.2:
         return "cuerpo_min"     # notas al final, créditos, letra pequeña
     return "cuerpo"
@@ -153,6 +222,13 @@ def lineas_de(pag):
                 fus[-1]["t"] += s["t"]
             else:
                 fus.append(dict(s))
+        for s in fus:
+            s["t"] = re.sub(r"AƵ\s*", "Á", s["t"])
+            s["t"] = re.sub(r"EƵ\s*", "É", s["t"])
+            s["t"] = re.sub(r"IƵ\s*", "Í", s["t"])
+            s["t"] = re.sub(r"OƵ\s*", "Ó", s["t"])
+            s["t"] = re.sub(r"UƵ\s*", "Ú", s["t"])
+            s["t"] = s["t"].replace("Ƶ", "")
         bb = [min(l["bbox"][0] for l in fila), min(l["bbox"][1] for l in fila),
               max(l["bbox"][2] for l in fila), max(l["bbox"][3] for l in fila)]
         out.append({"bbox": [round(v, 1) for v in bb], "spans": fus,
@@ -233,9 +309,28 @@ for i in range(EMPEZAR - 1, NPAG):
         imgs = [pymupdf.Rect(0, max(0, y0e - 4), pag.rect.width,
                              min(pag.rect.height, y1e))]
 
-    # --- Cabecera fuera ---
+    # --- Cabecera y pie fuera ---
+    def es_linea_cab_pie(l):
+        txt = l["txt"].strip()
+        if BANDA and l["bbox"][3] < BANDA:
+            # En la cabecera SOLO se tira lo que parece cabecera: número de
+            # página, romano, texto muy corto o el título corriente repetido.
+            # Una banda mal calibrada no debe tragar párrafos (auditoría H1).
+            if (re.match(r"^(?:p[áa]g(?:ina)?\.?\s*)?\d+(?:\s*(?:de|/)\s*\d+)?$", txt, re.IGNORECASE)
+                    or re.match(r"^[ivxlcdm]+$", txt, re.IGNORECASE)
+                    or len(txt) <= 8
+                    or txt in CABECERAS_CORRIENTES):
+                return True
+            return False
+        if BANDA_PIE and l["bbox"][1] > BANDA_PIE:
+            if (re.match(r"^(?:p[áa]g(?:ina)?\.?\s*)?\d+(?:\s*(?:de|/)\s*\d+)?$", txt, re.IGNORECASE)
+                    or re.match(r"^[ivxlcdm]+$", txt, re.IGNORECASE)
+                    or len(txt) <= 8):
+                return True
+        return False
+
     cabecera = {k for k, l in enumerate(lns)
-                if BANDA and l["bbox"][3] < BANDA and k not in en_fig}
+                if es_linea_cab_pie(l) and k not in en_fig}
     stats["lineas_cabecera"] += len(cabecera)
 
     # --- Recorte de las figuras ---
@@ -260,6 +355,11 @@ for i in range(EMPEZAR - 1, NPAG):
         continue
     for l in cuerpo:
         l["rol"] = rol_linea(l)
+        # Una línea que termina en guion de partición es párrafo, siempre:
+        # si la última línea de una página cae en otra familia o tamaño,
+        # clasificarla como pie la deja huérfana («Enton-» sin su «ces»).
+        if l["rol"] in ("pie", "cuerpo_min") and re.search(r"[\wáéíóúüñÁÉÍÓÚÜÑ]-$", l["txt"].strip()):
+            l["rol"] = "cuerpo"
         l["pag"] = npag
     cps = [l for l in cuerpo if l["rol"].startswith("cuerpo")]
 
@@ -362,6 +462,12 @@ for i in range(EMPEZAR - 1, NPAG):
                     l["arranca"] = (l["bbox"][0] - margen) <= 6
                 else:
                     l["arranca"] = (l["bbox"][0] - margen) > 6
+                # Si la línea anterior terminaba en guion de partición, NUNCA arranca párrafo nuevo
+                if t > 0 and cps[t - 1]["txt"].rstrip().endswith("-"):
+                    l["arranca"] = False
+                # Si la línea actual tiene la misma sangría que la anterior y la anterior no era corta, continúa el párrafo
+                elif t > 0 and abs(l["bbox"][0] - cps[t - 1]["bbox"][0]) <= 2.5 and (cps[t - 1]["bbox"][2] >= derecha_p - 15):
+                    l["arranca"] = False
                 if t > 0 and cita[t - 1]:
                     l["arranca"] = True
                 t += 1

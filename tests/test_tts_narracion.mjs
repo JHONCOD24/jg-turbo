@@ -181,9 +181,18 @@ try {
     'ttsHablar (Escuchar / Desde aquí) aplica la capa PDF');
   comprobar(/function ttsDescargarAudio[\s\S]{0,600}ttsAplicarCapaVozPdf/.test(html),
     'la descarga MP3 también aplica la capa PDF');
-  const cola = extraer('ttsCrearCola', 'function') || '';
+  const cola = extraer('ttsCrearColaTexto', 'function') || extraer('ttsCrearCola', 'function') || '';
   comprobar(/ttsNormalizarTextoNarracion\(\s*texto\s*,\s*langHint\s*\)/.test(cola),
     'ttsCrearCola pasa el idioma a ttsNormalizarTextoNarracion');
+  /* Pausas estructurales del plan PDF §4: marcas §P0700§/§P1000§ → silencio. */
+  const orquesta = extraer('ttsCrearCola', 'function') || '';
+  comprobar(/§P\(\\d\{3,5\}\)§/.test(orquesta) && /silencio:\s*true/.test(orquesta),
+    'ttsCrearCola convierte las marcas de pausa en bloques de silencio');
+  comprobar(/function ttsSilencioMp3/.test(html),
+    'existe el generador de silencio MP3 para la exportación');
+  const relevo = extraer('ttsBloqueTerminado', 'function') || '';
+  comprobar(/silencio/.test(relevo) && /pausaMs/.test(relevo),
+    'el relevo entre bloques respeta el silencio estructural');
   const pdfCtrl = fs.readFileSync(path.join(__dirname, '../js/pdf/pdfController.js'), 'utf8');
   comprobar(pdfCtrl.includes('window.jgPrepararParaVoz'),
     'el lector de PDF expone window.jgPrepararParaVoz');

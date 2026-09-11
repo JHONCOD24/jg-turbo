@@ -1,12 +1,11 @@
-# Regla · Adaptar un PDF para el apartado PDF de JG Turbo
+# Regla · Adaptar un PDF para el apartado PDF de JG Turbo (Regla v2)
 
-> Esto no es un tutorial: es el procedimiento. Cualquier agente que reciba
-> «adáptame este libro para la app» sigue estos seis pasos, en este orden, y
-> no entrega nada que no pase el paso 6.
+> **Referencia única y fuente de verdad oficial:** `pdf/regla-pdf/PLAN_MAESTRO_ADAPTACION.md`.
+> Cualquier adaptación de libros presentes o futuros sigue este procedimiento permanente y
+> el ciclo de vida definido en el Plan Maestro.
 >
-> Herramientas: `herramientas-pdf/` (seis scripts, se ejecutan tal cual).
-> Probado con dos libros reales de familias opuestas; los números de
-> referencia están al final.
+> Herramientas parametrizadas: `herramientas-pdf/` (conjunto único centralizado, sin copias divergentes).
+> Estructura de trabajo: `pdf/_adaptacion_v2/` y entregas en `pdf/Libros listos para JG Turbo/`.
 
 ---
 
@@ -58,17 +57,23 @@ distinguen los títulos de libros, los términos técnicos y el énfasis.
 
 ---
 
-## 3. Antes de tocar nada: pregúntale al usuario
+## 3. Decisiones permanentes (sustituyen preguntas repetidas)
 
-Cuatro preguntas. No las supongas.
+Se eliminan las consultas repetitivas. Para todo libro futuro rigen los valores acordados:
 
-1. **Imágenes y gráficos** — ¿se incluyen en su sitio, se omiten, o solo una
-   nota de referencia? *(Por defecto: incluirlas.)*
-2. **Cabeceras y números de página** — ¿se eliminan del todo? *(Por defecto:
-   sí. Es la causa número uno de contaminación del texto.)*
-3. **Cursivas y negritas** — ¿se preservan? *(Por defecto: sí.)*
-4. **Alcance** — ¿libro completo con notas e índice analítico, o solo el
-   cuerpo? *(Por defecto: completo.)*
+1. **Imágenes y gráficos:** Se conservan en su sitio exacto con su pie y proporciones originales.
+2. **Cabeceras y paginación:** Se retiran completamente del flujo para evitar contaminación.
+3. **Cursivas y negritas (énfasis):** Se preservan fielmente en todo el cuerpo.
+4. **Notas y aparato bibliográfico:** Se trasladan a un PDF complementario (`Título - Autor - Notas y bibliografía.pdf`), retirando las llamadas numéricas del cuerpo para que la narración fluya sin interrupciones.
+5. **Herramientas parametrizadas:** Un solo conjunto en `herramientas-pdf/`. Las particularidades y excepciones se configuran en el `perfil.json` del libro, nunca alterando o duplicando scripts.
+6. **Ciclo de vida de estados:** Todo libro transita estrictamente por:
+   - `inventariado`: registrado con SHA-256 en `inventario.json`.
+   - `diagnosticado`: estructura, páginas, familias y anomalías identificadas.
+   - `en_revision`: bloques extraídos y en proceso de corrección/reflujo.
+   - `pendiente_servicio`: en espera de consumo/autorización de servicios externos (traducción, OCR).
+   - `pendiente_escucha`: generado con éxito, pendiente de revisión auditiva humana.
+   - `aprobado`: verificado 100% por validadores automáticos y auditoría. **Solo los libros aprobados se copian a `Lectura/`**.
+7. **Reanudación e invalidación:** Se permite reanudar por etapa y bloque. Si cambia el archivo fuente, el texto aprobado o la versión de reglas, se invalidan automáticamente los resultados dependientes.
 
 ### 3.1 Estándar permanente de Carátula (obligatorio)
 **Todo libro adaptado debe mostrar siempre su carátula original auténtica.**
@@ -549,7 +554,9 @@ python -c "import pymupdf; d=pymupdf.open('Mi libro - edición adaptada para JG 
 
 - `js/pdf/vozTexto.js` (`prepararParaVoz`, filtro inicial) y
   `js/pdf/limpiezaTexto.js` (`pulirParaLectura`) quitan el chatter exacto y
-  sus variantes. La voz además pausa los títulos sueltos con `:`.
+  sus variantes. La voz además pausa los títulos con silencio real de 700 ms
+  en la cola (`§P0700§`, 1000 ms entre capítulos); en voces del navegador,
+  los dos puntos. Las marcas nunca llegan al sintetizador.
 - `index.html` (`ttsNormalizarTextoNarracion`) repite el filtro: es el camino
   que SÍ usa Escuchar/MP3. Un arreglo que solo viva en `vozTexto.js` deja al
   usuario oyendo el defecto con las pruebas en verde (`TRAMPAS.md` §6.11).
@@ -564,3 +571,45 @@ Un libro que el usuario guardó con el defecto lo conserva en su biblioteca
 (`TRAMPAS.md` §1.4): la voz lo silencia sola, pero el texto visible solo queda
 limpio borrando ese libro y volviendo a subir el PDF adaptado. Al entregar un
 adaptado corregido, avísalo en una línea.
+
+---
+
+## 14. El lote: publicación, adjunto, voz y música (2026-09-10)
+
+### 14.1 Ejecutar el lote
+
+```bash
+python pdf/_adaptacion_v2/lote_adaptador.py <id-libro> [<id-libro> ...]
+python pdf/_adaptacion_v2/lote_adaptador.py --catalogo   # solo regenera CATALOGO.csv
+```
+
+Por libro: diagnosticar → perfil (bandas con clamp del 15 % y detección por
+repetición) → extraer → reflujo → imágenes → separar notas → construir
+principal y anexo → 6_verificar estricto → 6b estricto → adjunto completo con
+ids → prueba estricta de la app → publicar candidata. Si un paso falla, el
+libro queda rechazado: no se publica nada a medias.
+
+### 14.2 Dónde vive cada cosa
+
+- `Libros listos para JG Turbo/Candidatas/` — pasó TODO lo automático
+  (`pendiente_escucha`). Nunca se sirve como final.
+- `Libros listos para JG Turbo/Lectura/` — SOLO `aprobado` tras escucha humana.
+- `Libros listos para JG Turbo/Anexos/` — notas separadas, o `sin_notas` con
+  motivo en el inventario.
+- `pdf/_adaptacion_v2/evidencia_v1/` — entregas rechazadas: evidencia, no uso.
+- Cada `trabajos/<id>/registro.json` vincula verificaciones al SHA-256 exacto.
+
+### 14.3 Adjunto `jg-lectura.json` (contrato v1.1.0)
+
+Todos los bloques, con `id` estable, rol, texto, página y perfil musical
+propuesto. La app lo valida (versión 1.x, esquema, cobertura ≥ 97 %) y lo
+coteja contra las páginas; si no cuadra, extracción ordinaria con aviso.
+Prueba: `tests/test_pdf_adjunto.mjs`.
+
+### 14.4 Voz y música por libro
+
+- Títulos: 700 ms de silencio en la cola; capítulos: 1000 ms. El MP3 conserva
+  las pausas como silencio. Pruebas: `tests/test_tts_pausas.mjs`.
+- Música: elección manual > perfil del libro > desactivada. La elección manual
+  persiste (`jg_musica_manual`); el perfil desactiva el modo horario y acota la
+  aleatoriedad a sus pistas.

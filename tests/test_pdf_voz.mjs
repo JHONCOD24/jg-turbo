@@ -13,6 +13,10 @@ function comprobar(condicion, mensaje) {
   if (condicion) console.log(`OK: ${mensaje}`);
   else { fallos += 1; console.error(`FALLO: ${mensaje}`); }
 }
+/* Pausa estructural (plan §4): en neural la pausa tras un título es la marca
+ * §P0700§ (silencio real en la cola); en navegador, los dos puntos. */
+const conPausaTitulo = (sale, titulo) =>
+  sale.includes('§P0700§') || new RegExp(titulo + '[.:]').test(sale);
 
 /* ── Lo que ya funcionaba debe seguir funcionando ──────────────────── */
 {
@@ -31,7 +35,7 @@ function comprobar(condicion, mensaje) {
   /* Sin punto, el motor lee «CAPITULO PRIMERO En un lugar» de corrido. */
   const entra = 'CAPITULO PRIMERO\n\nEn un lugar de la Mancha vivia un hidalgo.';
   const sale = prepararParaVoz(entra, 'es');
-  comprobar(/CAPITULO PRIMERO[.:]/.test(sale), 'cierra el titulo para que la voz haga pausa');
+  comprobar(conPausaTitulo(sale, 'CAPITULO PRIMERO'), 'cierra el titulo para que la voz haga pausa');
   comprobar(sale.includes('En un lugar'), 'el cuerpo sigue intacto');
 
   /* Un título que YA tiene punto no recibe otro. */
@@ -60,7 +64,7 @@ function comprobar(condicion, mensaje) {
   /* Las mismas palabras, en el mismo orden. Solo cambian signos y espacios. */
   const entra = 'CAPITULO II\n\nQuiso llegar temprano pero el tren se retraso.';
   const sale = prepararParaVoz(entra, 'es');
-  const palabras = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const palabras = (t) => t.replace(/§P\d+§/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
   comprobar(JSON.stringify(palabras(entra)) === JSON.stringify(palabras(sale)),
     'NO cambia ninguna palabra del texto: solo signos');
@@ -317,11 +321,11 @@ function comprobar(condicion, mensaje) {
  * siguiente. Solo capa voz: el visible no se toca. */
 {
   const t1 = prepararParaVoz('Una decisión radical\n\nA pesar de que el equipo médico me lo desaconsejara.', 'es');
-  comprobar(/Una decisión radical:/.test(t1), '«Una decisión radical» recibe pausa antes del cuerpo');
+  comprobar(conPausaTitulo(t1, 'Una decisión radical'), '«Una decisión radical» recibe pausa antes del cuerpo');
   const t2 = prepararParaVoz('El placebo eres tú\n\nDescubre el poder de tu mente.', 'es');
-  comprobar(/El placebo eres tú:/.test(t2), '«El placebo eres tú» recibe pausa');
+  comprobar(conPausaTitulo(t2, 'El placebo eres tú'), '«El placebo eres tú» recibe pausa');
   const t3 = prepararParaVoz('Jim Edwards\n\nSecretos de Copywriting.', 'es');
-  comprobar(/Jim Edwards:/.test(t3), 'el nombre del autor suelto recibe pausa');
+  comprobar(conPausaTitulo(t3, 'Jim Edwards'), 'el nombre del autor suelto recibe pausa');
   /* Y no se traga una frase corta real: con conjunción inicial no es título. */
   const frase = prepararParaVoz('Y en algún momento del recorrido me di cuenta de algo importante aquí.', 'es');
   comprobar(!/^Y en algún momento del recorrido[^:]*:/.test(frase.split('\n\n')[0] || ''),
@@ -359,10 +363,10 @@ function comprobar(condicion, mensaje) {
   comprobar(vozChatter.includes('Hola mundo') && vozChatter.includes('Siguiente párrafo'),
     'el texto real alrededor del chatter queda intacto');
   const tParentesis = prepararParaVoz('Definir a tu cliente ideal (FRED)\n\nConocer a tu cliente es fundamental.', 'es');
-  comprobar(/\(FRED\):/.test(tParentesis),
+  comprobar(conPausaTitulo(tParentesis, '\\(FRED\\)'),
     'un título que cierra con paréntesis recibe pausa antes del cuerpo');
   const tLargo = prepararParaVoz('Cómo colaboran las historias y el texto de ventas\n\nLas historias despiertan la sed.', 'es');
-  comprobar(/ventas:/.test(tLargo),
+  comprobar(conPausaTitulo(tLargo, 'ventas'),
     'un título de sección largo sin punto recibe pausa');
   const tConPunto = prepararParaVoz('Definir a tu cliente ideal (FRED).\n\nCuerpo.', 'es');
   comprobar(!/\(FRED\)\.:/.test(tConPunto) && !tConPunto.includes('..'),

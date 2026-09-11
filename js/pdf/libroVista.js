@@ -911,11 +911,17 @@ export function initLibroVista({ el, estado, api }) {
 
   /* Blancos que solo son el fin de renglón («que to» / «ma»): el extractor
    * viejo los guardó como 'space' y el botón no los veía. Se reconsideran con
-   * la misma regla; lo deshecho por la persona no resucita solo. */
+   * la misma regla; lo deshecho por la persona no resucita solo.
+   * También entran los 'space' que el motor decidió por geometría en saltos
+   * de renglón (sin espacio residual en el PDF): «sorprend|entes» se decide
+   * 'space' por defecto, pero «Unir palabras» debe poder reconsiderarlo si el
+   * vocabulario del documento respalda la unión. El filtro de decidirPorLexico
+   * que sigue más abajo solo une lo respaldado («sorprendentes» sí,
+   * «Get More» no). */
   function espaciosDeRenglon() {
     return (estado.limites || []).filter((l) => l && l.decision === 'space'
       && (l.kind === 'line-wrap' || l.kind === 'page-break' || l.kind === 'column-break')
-      && l.originalSeparator === 'space'
+      && (l.originalSeparator === 'space' || l.originalSeparator === '' || l.originalSeparator === 'eol')
       && !rechazados.has(l.id));
   }
 

@@ -362,12 +362,51 @@ export function resolverLimitesDeterministas(limites, atomosPorId, {
       }
     }
 
+    /* item-gap cruzando de renglón (gap muy negativo): el átomo derecho
+     * vive en otra línea. Nunca es una unión; al menos hay un espacio. */
+    if (lim.kind === 'item-gap' && lim.evidence.gap < -1 * (lim.evidence.fontSize || 10)) {
+      lim.decision = 'space';
+      lim.source = 'geometry';
+      continue;
+    }
+
+    /* Pegados físicos (gap < 0.8 pt): el generador parte interjecciones por
+     * kerning («¡A»+«h!») o plurales extranjeros («soirée»+«s»). Sin hueco no
+     * hay espacio real: se une. Solo con evidencia de 3 letras entre ambos
+     * lados, o cuando uno de los lados es una sola letra, para no pisar las
+     * uniones que exigen vocabulario. */
+    if (lim.kind === 'item-gap'
+        && lim.evidence.gap < 0.8
+        && lim.leftFragment && lim.rightFragment
+        && (lim.leftFragment.replace(/[^\p{L}\p{N}]/gu, '').length
+            + lim.rightFragment.replace(/[^\p{L}\p{N}]/gu, '').length) <= 3) {
+      lim.decision = 'join';
+      lim.source = 'lexicon';
+      continue;
+    }
+    if (lim.kind === 'item-gap'
+        && lim.evidence.gap < 0.8
+        && lim.leftFragment && lim.rightFragment
+        && (lim.leftFragment.replace(/[^\p{L}\p{N}]/gu, '').length <= 1
+            || lim.rightFragment.replace(/[^\p{L}\p{N}]/gu, '').length <= 1)
+        && lim.leftFragment.length + lim.rightFragment.length <= 12) {
+      lim.decision = 'join';
+      lim.source = 'lexicon';
+      continue;
+    }
+
     if ((lim.kind === 'line-wrap' || lim.kind === 'page-break' || lim.kind === 'column-break')
         && lim.leftFragment && lim.rightFragment) {
-      /* Palabras completas a ambos lados: espacio. Fragmentos: léxico ya actuó. */
+      /* Palabras completas a ambos lados del salto de renglón: espacio.
+       * El léxico ya intentó unir (combo respaldado) más arriba; si devolvió
+       * null es que la unión no existe en el documento ni en el léxico. Un
+       * generador de texto digital nunca parte palabras sin guion, así que
+       * quedarse en pending aquí solo inflaba «Revisar cortes» (medido: 272
+       * en un A5 de ReportLab entre pares como «Get|More», y 31 más con
+       * funcionales de una letra: «a|subir», «y|español»). */
       if (lex === null && lim.leftFragment && lim.rightFragment) {
-        lim.decision = 'pending';
-        lim.source = 'lexicon';
+        lim.decision = 'space';
+        lim.source = 'geometry';
         continue;
       }
     }
