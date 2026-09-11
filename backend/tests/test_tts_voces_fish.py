@@ -29,6 +29,7 @@ NUEVAS = {
     "jim-hopper": "b114d46e5ed6448fa0b197258e65b8d2",
     "latina-kika": "2edd012fb4d14521af3f0ce245791283",
     "voz-platica": "eadb1a0a15f941ebb46ed73b23da765d",
+    "roberto": "ab991f011ecf46a29c1aee96e109d8f7",
 }
 
 
@@ -61,3 +62,13 @@ def test_catalogo_publico_las_ofrece():
 def test_desconocida_sigue_cayendo_a_una_valida():
     voz = api_module._tts_fish_resolver("no-existe", "female")
     assert voz is not None and voz.get("reference_id")
+
+
+def test_roberto_es_masculina_espanol():
+    voz = api_module._tts_fish_resolver("roberto", "female")
+    assert voz is not None
+    assert voz["id"] == "roberto"
+    assert voz["gender"] == "male"
+    assert voz["name"] == "Roberto"
+    assert voz["lang"] == "es"
+    assert voz["reference_id"] == "ab991f011ecf46a29c1aee96e109d8f7"

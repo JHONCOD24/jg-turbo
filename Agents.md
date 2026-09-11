@@ -431,6 +431,10 @@ reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias http
 
 ## TTS (lectura en voz alta)
 
+**Motor v2.77.0 — voz clonada Roberto** (2026-09-10): el lector de PDF usa la
+voz Fish que elijas (incluido el clon privado **Roberto** de JG Voice). Ya no
+se fuerza Edge. Catálogo + `reference_id` en `api/index.py`. Detalle: `CAMBIOS_TTS.md` §v2.77.0.
+
 **Motor v2.16.3 — 18 voces Fish, agrupadas** (2026-08-19): el listado de Fish
 Audio se parte por idioma y género (español/inglés × femeninas/masculinas).
 Hay 14 en español y 4 en inglés. Se eligen igual que Salomé: no se aplican

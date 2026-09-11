@@ -79,10 +79,14 @@ try {
     'julio-ciencia', 'sheyla', 'farick', 'sabio-expandido', 'enrique-hoffman',
     'voz-locutor', 'brian-tracy', 'morgan-freeman', 'mario-alonso-puig', 'tatiana-mae',
     'hilary-narrador', 'palabra-biblica', 'morillo', 'narrador-documental', 'jim-hopper',
-    'latina-kika', 'voz-platica',
+    'latina-kika', 'voz-platica', 'roberto',
   ]) {
     comprobar(ids.includes(nueva), `"${nueva}" aparece en el catálogo`);
   }
+  const roberto = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'roberto');
+  comprobar(roberto && roberto.gender === 'male' && roberto.lang === 'es',
+    'Roberto es masculina y en español');
+  comprobar(roberto && roberto.name === 'Roberto', 'Roberto se ofrece con su nombre');
 }
 
 /* ── La lista ofrecida filtra aunque el servidor las mande ───────── */
@@ -120,7 +124,20 @@ try {
   comprobar(api.ttsFishPorId('latina-kika')?.id === 'latina-kika', 'latina-kika resuelve');
   comprobar(api.ttsFishPorId('voz-platica')?.id === 'voz-platica', 'voz-platica resuelve');
   comprobar(api.ttsFishPorId('morgan-freeman')?.id === 'morgan-freeman', 'morgan-freeman resuelve');
+  comprobar(api.ttsFishPorId('roberto')?.id === 'roberto', 'roberto resuelve por su slug');
+  comprobar(api.ttsFishPorId('fish:roberto')?.id === 'roberto', 'fish:roberto resuelve igual');
   comprobar(api.ttsFishPorId('') === null && api.ttsFishPorId(null) === null, 'vacío no rompe');
+}
+
+/* ── El PDF no puede apagar Fish: si eligieron Roberto, tiene que sonar Roberto.
+ * Antes ttsHablar y el prefetch del lector forzaban preferFish:false en source
+ * pdf, así que el selector mentía (decía Fish y sonaba Edge). */
+{
+  comprobar(!/sourceId === 'pdf'[\s\S]{0,180}preferFish:\s*false/.test(html),
+    'ttsHablar no apaga Fish cuando el origen es el PDF');
+  const controlador = fs.readFileSync(path.join(__dirname, '../js/pdf/pdfController.js'), 'utf8');
+  comprobar(!/preferFish:\s*false,\s*fishId:\s*''/.test(controlador),
+    'el prefetch del PDF no sustituye Fish por neural');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

@@ -1,4 +1,4 @@
-<!-- v2.75.0 · 3 adaptados publicados (Aprendiz, C3, Seducción) + C2 normalizado + procedencia al importar -->
+<!-- v2.77.0 · voz clonada Roberto (JG Voice) en el lector de PDF -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -14335,6 +14335,7 @@ const TTS_FISH_CATALOGO_LOCAL = [
   { id:'jim-hopper', gender:'male', name:'Jim Hopper', lang:'es' },
   { id:'latina-kika', gender:'female', name:'Latina Kika', lang:'es' },
   { id:'voz-platica', gender:'female', name:'Voz Plática', lang:'es' },
+  { id:'roberto', gender:'male', name:'Roberto', lang:'es' },
 ];
 
 /* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
@@ -16348,12 +16349,7 @@ function ttsHablar(texto, opts){
     if(typeof _mostrarToastMejora === 'function') _mostrarToastMejora('No hay texto para leer', false);
     return false;
   }
-  const prefsRaw = ttsPrefs();
-  // Para PDF largo, forzar motor neural (más fluido y estable que Fish/bloques pequeños).
-  // Fish es expresivo pero más lento y con más cortes; para 40 capítulos necesitamos throughput.
-  const prefs = (opts.sourceId === 'pdf' && prefsRaw.preferFish)
-    ? { ...prefsRaw, preferFish: false, fishId: '' }
-    : prefsRaw;
+  const prefs = ttsPrefs();
   const token = ++ttsState._speakToken;
   ttsPararElementos();
   ttsLiberarBloques();
@@ -17993,7 +17989,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v129';
+const JG_JS_V = 'v131';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

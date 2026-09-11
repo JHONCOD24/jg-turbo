@@ -31,6 +31,26 @@
 
 ---
 
+## Nuevo en v2.77.0 · voz clonada Roberto en el lector de PDF (2026-09-10)
+
+**Pedido:** integrar en JG Turbo la voz **Roberto** ya clonada en JG Voice, para leer PDFs. Uso personal (no comercial).
+
+**Qué era:** JG Voice ya tenía el modelo Fish entrenado y privado (`Roberto`, `reference_id` `ab991f011ecf46a29c1aee96e109d8f7`). JG Turbo y JG Voice comparten la misma cuenta Fish, así que no hace falta un API entre apps. El bloqueo real: el lector de PDF **apagaba Fish** (`preferFish: false`) y leía con Edge/Azure aunque el selector dijera otra voz.
+
+**Cambios:**
+1. Servidor (`api/index.py: FISH_CATALOGO_BASE`): tupla `roberto` / male / español, al final del catálogo. El `reference_id` es el del clon privado; no se publica al cliente.
+2. Cliente (`index.html: TTS_FISH_CATALOGO_LOCAL`): `{ id:'roberto', gender:'male', name:'Roberto', lang:'es' }` en «Fish Audio · español · masculinas».
+3. `ttsHablar` ya no fuerza neural en `sourceId === 'pdf'`. Si eliges Roberto, suena Roberto.
+4. Prefetch de capítulos (`js/pdf/pdfController.js`): calienta con la misma voz elegida, no con Edge.
+5. `FISH_TTS_TIMEOUT` 15 s → 25 s: un bloque de ~900 caracteres con Fish a veces se pasaba de 15 s y caía en silencio a Edge.
+6. Pruebas: `backend/tests/test_tts_voces_fish.py` y `tests/test_tts_voces_biblioteca.mjs` (catálogo, resolución `fish:roberto`, y que el PDF no apague Fish).
+
+**Verificado en local:** síntesis Fish directa con el modelo Roberto → `200`, MP3 53 KB, encabezado MPEG `FF FB 90 C4`.
+
+**Versión:** `JG_JS_V=v131`, Service Worker `jg-turbo-shell-v131`.
+
+---
+
 ## Nuevo en v2.73.0 · 8 voces Fish nuevas (2026-09-09)
 
 **Pedido:** agregar a la biblioteca de voces: Tatiana Mae, Hilary Narrador, Palabra Bíblica, Morillo, Narrador Documental, Jim Hopper, Latina Kika y Voz Plática (todas en español; Tatiana Mae, Latina Kika y Voz Plática femeninas, el resto masculinas).

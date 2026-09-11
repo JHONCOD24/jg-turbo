@@ -4157,11 +4157,13 @@ FISH_CATALOGO_BASE = (
     ("jim-hopper", "male", "Jim Hopper", "b114d46e5ed6448fa0b197258e65b8d2", "", "es"),
     ("latina-kika", "female", "Latina Kika", "2edd012fb4d14521af3f0ce245791283", "", "es"),
     ("voz-platica", "female", "Voz Plática", "eadb1a0a15f941ebb46ed73b23da765d", "", "es"),
+    # Clon privado de JG Voice (misma cuenta Fish). Uso personal, no catálogo público.
+    ("roberto", "male", "Roberto", "ab991f011ecf46a29c1aee96e109d8f7", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {"clara": "nico-robin", "nestor": "locutor-k"}
 _fish_nombres_cache: dict[str, str] | None = None
-FISH_TTS_TIMEOUT = 15.0
+FISH_TTS_TIMEOUT = 25.0
 # Orígenes de la interfaz cuyo texto es del propio usuario. Se puede ampliar con
 # FISH_ALLOWED_SOURCES, pero el valor por defecto es el prudente.
 FISH_ORIGENES_PERMITIDOS = {

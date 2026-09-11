@@ -4413,15 +4413,12 @@ export function inicializarLectorPdf(deps = {}) {
           // Calentar el primer bloque (~500 caracteres) en caché GET del servidor/CDN
           const primerChunk = textoPrefetch.slice(0, 500);
           if (primerChunk.length > 40) {
-            // No bloquear: si el usuario eligió Fish, igualmente calienta neural (más rápido y estable para PDF largo)
             setTimeout(() => {
               try {
                 const prefs = typeof ttsPrefs === 'function' ? ttsPrefs() : { preferFish: false };
-                // Forzar neural para prefetch PDF
-                const prefsPdf = { ...prefs, preferFish: false, fishId: '' };
-                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, prefsPdf.bilingualMode || 'regional') : [];
+                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, prefs.bilingualMode || 'regional') : [];
                 if (probe && probe[0] && typeof window.ttsFetchNeuralChunk === 'function') {
-                  window.ttsFetchNeuralChunk(probe[0], prefsPdf, 1, 'pdf').catch(()=>{});
+                  window.ttsFetchNeuralChunk(probe[0], prefs, 1, 'pdf').catch(()=>{});
                 }
               } catch (_) {}
             }, 1200);
@@ -6789,10 +6786,9 @@ export function inicializarLectorPdf(deps = {}) {
             setTimeout(() => {
               try {
                 const prefs = typeof ttsPrefs === 'function' ? ttsPrefs() : { preferFish: false };
-                const prefsPdf = { ...prefs, preferFish: false, fishId: '' };
-                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, prefsPdf.bilingualMode || 'regional') : [];
+                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, prefs.bilingualMode || 'regional') : [];
                 if (probe && probe[0] && typeof window.ttsFetchNeuralChunk === 'function') {
-                  window.ttsFetchNeuralChunk(probe[0], prefsPdf, 1, 'pdf').catch(()=>{});
+                  window.ttsFetchNeuralChunk(probe[0], prefs, 1, 'pdf').catch(()=>{});
                 }
               } catch (_) {}
             }, 1500);

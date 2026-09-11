@@ -11,6 +11,12 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Publicación TTS v2.77.0, 2026-09-10
+
+Voz clonada **Roberto** (JG Voice) en la biblioteca Fish del lector de PDF. El PDF deja de forzar Edge cuando se elige una voz Fish.
+Marcador `JG_JS_V=v131`, shell-v131.
+Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
+
 ## Publicación PDF v2.76.0, 2026-09-10
 
 El Contenido vuelve a ser **columna** en escritorio y tablet. La v2.75.0 lo
