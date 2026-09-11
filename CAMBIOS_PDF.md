@@ -7,6 +7,8 @@
 
 Cuatro clones nuevos de JG Voice entran al mismo selector del lector (Fish · español · femeninas/masculinas). Detalle: `CAMBIOS_TTS.md` §v2.78.0.
 
+Despliegue: `7bNZsaZF9MDmvC79THGUdjGVHYYH` READY. Verificado contra el dominio: Amy, Dora, Michael y Sandra Design Travel responden `fish:<nombre>` con origen PDF.
+
 ## 2026-09-10 · v2.77.0 · El PDF ya puede leer con la voz clonada Roberto (`JG_JS_V=v131`, shell-v131)
 
 La voz **Roberto** (clon de JG Voice, modelo Fish privado) entra al selector del lector. Antes el PDF apagaba Fish y leía con Edge aunque eligieras una voz Fish: el listado mentía. `ttsHablar` y el prefetch de capítulos ahora respetan la voz guardada. Detalle TTS: `CAMBIOS_TTS.md` §v2.77.0.

@@ -48,6 +48,8 @@
 
 **Versión:** `JG_JS_V=v132`, Service Worker `jg-turbo-shell-v132`.
 
+**Deploy:** `7bNZsaZF9MDmvC79THGUdjGVHYYH` · `READY` · alias `https://jg-turbo.vercel.app`. Verificado: marcador v2.78.0, v132, las 4 voces en `/api/tts-voices`, y `POST /api/tts` con `source=pdf` → `fish:Amy`, `fish:Dora`, `fish:Michael`, `fish:Sandra Design Travel`.
+
 ---
 
 ## Nuevo en v2.77.0 · voz clonada Roberto en el lector de PDF (2026-09-10)

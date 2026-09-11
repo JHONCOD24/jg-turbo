@@ -14,7 +14,9 @@ lastUpdated: 2026-08-02
 ## Publicación TTS v2.78.0, 2026-09-11
 
 Cuatro clones de JG Voice (Amy, Dora, Michael, Sandra Design Travel) en la biblioteca Fish del PDF.
+`7bNZsaZF9MDmvC79THGUdjGVHYYH` READY, alias `https://jg-turbo.vercel.app`.
 Marcador `JG_JS_V=v132`, shell-v132.
+Verificado: las 4 voces sintetizan con origen PDF (`fish:Amy`, `fish:Dora`, `fish:Michael`, `fish:Sandra Design Travel`).
 Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
 
 ## Publicación TTS v2.77.0, 2026-09-10
