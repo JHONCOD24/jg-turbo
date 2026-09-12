@@ -40,7 +40,11 @@ re-subir el mismo PDF duplicaba.
 - Batería unitaria: 41/41 archivos en verde, 0 fallos.
 - `node --check` en los 4 módulos + verificación de exports.
 
-Despliegue: pendiente (ventana única al final de la tanda).
+Despliegue de producción: `Bfa7DT9UUayx7WdXRs2upUFeDSJu` (READY), alias
+`https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador v2.80.0,
+`JG_JS_V=v136`, SW shell-v136, `biblioteca.js` con `buscarPorHuella` +
+`eliminarDuplicadosLocales` + `purgarLapidasAntiguas`, `sincronizacion.js` con
+`agruparDuplicados`, `nube.js` con `remotos: alla`, `/api/health` 200.
 
 ## 2026-09-11 · v2.79.0 · Sale Sandra Design Travel del selector (`JG_JS_V=v133`, shell-v133)
 
