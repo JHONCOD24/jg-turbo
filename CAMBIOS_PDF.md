@@ -45,7 +45,10 @@ sin remedio: poder chulear y deschulear capítulos a mano.
   `INFORME_FINAL_ADAPTACION_LIBROS.md:110`, y continuidad-tras-recarga,
   reproducido idéntico con `git stash`).
 
-Despliegue: pendiente (ventana única al final de la tanda).
+Despliegue de producción: `GQ1CATwCuxWV4DMNuRTZBoBDxnEJ` (READY), alias
+`https://jg-turbo.vercel.app`. Verificado contra el dominio: marcador v2.81.0,
+`JG_JS_V=v137`, SW shell-v137, `pdfController.js` con `alternarMarcaCapitulo`
++ `pdf-cap-cuerpo`, `progreso.js` con `fijarMarcaCapitulo`, `/api/health` 200.
 
 ## 2026-09-12 · v2.80.0 · Un PDF, un solo registro: fin de los duplicados (`JG_JS_V=v136`, shell-v136)
 
