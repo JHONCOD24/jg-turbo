@@ -36,12 +36,16 @@ SANGRIA = float(P["sangria"] or (BASE + 14))
 DERECHA = float(P["derecha"])
 BANDA = float(P.get("banda_cabecera") or 0)
 BANDA_PIE = float(P.get("banda_pie") or 0)
-# Sanidad (auditoría H1): una banda de cabecera no puede ocupar más del 15%
-# superior de la página ni un pie empezar antes del 78%. Valores fuera de
-# rango (Cashvertising traía 418 pt en páginas de 842) tiran cuerpo entero.
+# Sanidad (auditoría H1): por defecto una banda de cabecera no puede ocupar
+# más del 15% superior de la página ni un pie empezar antes del 78%.
+# Valores fuera de rango (Cashvertising traía 418 pt en páginas de 842)
+# tiran cuerpo entero. Si la medición por repetición/patrón demuestra que la
+# cabecera vive más abajo, el perfil puede ampliarlo explícitamente
+# (`banda_max_porcentaje`), con evidencia en decisiones.json.
 _altos = [DOC[i].rect.height for i in range(len(DOC))]
 _ALTO = (sum(_altos) / len(_altos)) if _altos else 842.0
-BANDA = min(BANDA, _ALTO * 0.15)
+_TOPE_BANDA = _ALTO * float(P.get("banda_max_porcentaje") or 15) / 100.0
+BANDA = min(BANDA, _TOPE_BANDA)
 if BANDA_PIE:
     BANDA_PIE = max(BANDA_PIE, _ALTO * 0.78)
 
@@ -72,6 +76,25 @@ def _cabeceras_corrientes():
     return {t for t, n in vistas.items() if n >= max(2, npags * 0.25)}
 
 FUSIONAR = bool(P.get("fusionar_fragmentos"))
+# Fusión colineal (perfil editorial con tracking de diseño): algunas fuentes
+# componen frases enfáticas con espaciado expandido y PyMuPDF devuelve cada
+# palabra como línea propia. N líneas consecutivas de 1-2 palabras en la misma
+# línea base son UNA línea: se fusionan antes de clasificar. Solo actúa sobre
+# fragmentos colineales (misma baseline), así que un final de párrafo nunca se
+# pega con el inicio del siguiente (distinta Y). Se activa por libro en el
+# perfil (`fusionar_colineales: true`); por defecto no cambia nada.
+FUSIONAR_COLINEAL = bool(P.get("fusionar_colineales"))
+# Patrones de cabecera corriente con parte variable (p. ej. "Cialdini: 113",
+# "14: Introducción"): el texto exacto cambia en cada página y la detección
+# por repetición no los caza. Se tiran solo sobre la banda superior y solo si
+# matchean: la banda nunca muerde prosa por este concepto.
+CABECERA_REGEX = [re.compile(p) for p in (P.get("cabecera_regex") or [])]
+# Folios impresos al pie (números de página de la edición en papel): cuando el
+# cuerpo baja hasta la misma franja, la banda ciega mordería prosa. Se tiran
+# solo si matchean el patrón Y están bajo el umbral (`folio_pie_regex`,
+# `folio_pie_y0` en el perfil). Por defecto, desactivado.
+FOLIO_REGEX = [re.compile(p) for p in (P.get("folio_pie_regex") or [])]
+FOLIO_Y0 = float(P.get("folio_pie_y0") or 0)
 TAM_CUERPO = float(P["tam_cuerpo"])
 TITULOS = sorted([float(t) for t in P.get("tam_titulos") or []], reverse=True)
 TAM_CAP = TITULOS[0] if TITULOS else TAM_CUERPO + 6
@@ -240,7 +263,57 @@ def lineas_de(pag):
         out.sort(key=lambda l: (round(l["bbox"][0] / 3), -l["bbox"][3]))
     else:
         out.sort(key=lambda l: (round(l["bbox"][1] / 3), l["bbox"][0]))
+    if FUSIONAR_COLINEAL:
+        out = fusionar_colineales(out)
     return out
+
+
+def fusionar_colineales(lineas):
+    """Une fragmentos de 1-2 palabras que comparten línea base.
+
+    Condiciones (todas): misma baseline (|Δy0|<2,5 y |Δy1|<2,5), sin solape
+    horizontal (la siguiente empieza donde termina la anterior), hueco < 60 pt,
+    mismo tamaño de letra y cada fragmento con ≤2 palabras. La secuencia se
+    cierra al volver al margen o al cambiar de estilo: lo fusionado es una
+    sola línea lista para clasificar.
+    """
+    res = []
+    i = 0
+    n = len(lineas)
+    while i < n:
+        j = i
+        while (j + 1 < n
+               and len(lineas[j]["txt"].split()) <= 2
+               and len(lineas[j + 1]["txt"].split()) <= 2
+               and abs(lineas[j + 1]["bbox"][1] - lineas[j]["bbox"][1]) < 2.5
+               and abs(lineas[j + 1]["bbox"][3] - lineas[j]["bbox"][3]) < 2.5
+               and lineas[j + 1]["bbox"][0] >= lineas[j]["bbox"][2] - 1
+               and lineas[j + 1]["bbox"][0] - lineas[j]["bbox"][2] < 60
+               and lineas[j + 1]["size"] == lineas[j]["size"]):
+            j += 1
+        if j > i:
+            spans = []
+            for k in range(i, j + 1):
+                for s in lineas[k]["spans"]:
+                    if spans and spans[-1]["f"] == s["f"] and spans[-1]["s"] == s["s"]:
+                        st = spans[-1]["t"]
+                        # El espacio final del span YA separa: se concatena tal
+                        # cual; si no lo trae, se pone uno. (Si se descarta el
+                        # texto cuando hay espacio final, se pierden palabras.)
+                        spans[-1]["t"] = st + s["t"] if st.endswith(" ") else st + " " + s["t"]
+                    else:
+                        spans.append(dict(s))
+            bb = [lineas[i]["bbox"][0], min(l["bbox"][1] for l in lineas[i:j + 1]),
+                  lineas[j]["bbox"][2], max(l["bbox"][3] for l in lineas[i:j + 1])]
+            gorda = None
+            res.append({"bbox": [round(v, 1) for v in bb], "spans": spans,
+                        "txt": "".join(s["t"] for s in spans),
+                        "size": lineas[i]["size"],
+                        "font": max(spans, key=lambda s: len(s["t"]))["f"] if spans else lineas[i]["font"]})
+        else:
+            res.append(lineas[i])
+        i = j + 1
+    return res
 
 
 def cajas_imagen(pag, minimo=18):
@@ -319,7 +392,8 @@ for i in range(EMPEZAR - 1, NPAG):
             if (re.match(r"^(?:p[áa]g(?:ina)?\.?\s*)?\d+(?:\s*(?:de|/)\s*\d+)?$", txt, re.IGNORECASE)
                     or re.match(r"^[ivxlcdm]+$", txt, re.IGNORECASE)
                     or len(txt) <= 8
-                    or txt in CABECERAS_CORRIENTES):
+                    or txt in CABECERAS_CORRIENTES
+                    or any(pat.match(txt) for pat in CABECERA_REGEX)):
                 return True
             return False
         if BANDA_PIE and l["bbox"][1] > BANDA_PIE:
@@ -332,6 +406,13 @@ for i in range(EMPEZAR - 1, NPAG):
     cabecera = {k for k, l in enumerate(lns)
                 if es_linea_cab_pie(l) and k not in en_fig}
     stats["lineas_cabecera"] += len(cabecera)
+    if FOLIO_REGEX and FOLIO_Y0:
+        folios = {k for k, l in enumerate(lns)
+                  if l["bbox"][1] >= FOLIO_Y0
+                  and any(pat.match(l["txt"].strip()) for pat in FOLIO_REGEX)
+                  and k not in en_fig}
+        stats["lineas_cabecera"] += len(folios)
+        cabecera |= folios
 
     # --- Recorte de las figuras ---
     figs = []

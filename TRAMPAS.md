@@ -1216,6 +1216,23 @@ partición nunca continúa en mayúscula («respec-» + «Ki» no es «respecki�
 fuente vs PDF final en el informe del lote); crudo-vs-bloques solo cubre el
 reflujo.
 
+## Dar por verificado un adaptado sin mirarlo (2026-09-11)
+
+**Síntoma:** Pre-suasión rev4 con 57 oraciones rotas en vertical, 126
+cabeceras y el índice original dentro del cuerpo, entregado como «verificado»
+en `PDFs Listos/`. Todas las puertas automáticas estaban en verde.
+**Causa:** la verificación fue solo numérica y contra derivados: 6_verificar
+compara crudo (post-extracción) contra bloques (post-reflujo), así que lo
+perdido o roto ANTES no existe para él; la hoja de contacto a 30 DPI no deja
+leer nada; y no se hizo balance fuente-vs-final. Es la trampa §1 aplicada a
+adaptación: verde con el libro roto.
+**Regla:** ninguna adaptación se da por verificada sin (1) leer páginas a
+resolución legible (portada, índice, inicios/fines, figuras, cierre),
+(2) detectores Fase 4 sobre bloques (rachas verticales, cabeceras, folios),
+(3) balance de cobertura fuente = cuerpo + anexo + descartes contados, y
+(4) diff de vocabulario. Si el usuario dice que está roto y tus números dicen
+que no, el usuario tiene razón: vuelve a mirar.
+
 ## La hora local no es la hora UTC (adaptación, 2026-09-10)
 
 **Síntoma:** archivos recién escritos parecían «de ayer» y se concluyó una
