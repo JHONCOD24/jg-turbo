@@ -102,7 +102,7 @@ export function crearNube({ pedir, biblioteca }) {
 
     /**
      * Sincroniza en las dos direcciones.
-     * @returns {{subidos:number, bajados:number, reparados:number, caratulas:number, pedidos:{id:string,titulo:string,de:string,cuando:number}[]}}
+     * @returns {{subidos:number, bajados:number, reparados:number, caratulas:number, unificados:number, purgadas:number, pedidos:{id:string,titulo:string,de:string,cuando:number}[]}}
      */
     async sincronizar({ alProgresar } = {}) {
       if (!this.estaVinculada()) throw new Error('Este dispositivo no está sincronizando.');
@@ -149,7 +149,11 @@ export function crearNube({ pedir, biblioteca }) {
       let bajados = 0;
       for (const documento of aplicar) {
         avisar(`Trayendo ${bajados + 1} de ${aplicar.length}…`);
-        await biblioteca.importarDeSincronizacion(documento);
+        /* Devuelve el id local real: si lo que llegó era el mismo PDF con
+         * otro id (renombrado), se fusionó al registro existente y las
+         * partes deben entrar ahí, no en un duplicado nuevo. */
+        const destino = await biblioteca.importarDeSincronizacion(documento);
+        const idLocal = (typeof destino === 'string' && destino) || documento.id;
         if (!documento.borrado) {
           /* El texto viene aparte: se pide capítulo a capítulo, sin límite
            * de tamaño de libro. */
@@ -157,7 +161,7 @@ export function crearNube({ pedir, biblioteca }) {
             `/api/sync/partes?documento=${encodeURIComponent(documento.id)}`
           );
           const partes = respuesta?.partes || [];
-          if (partes.length) await biblioteca.importarPartes(documento.id, partes);
+          if (partes.length) await biblioteca.importarPartes(idLocal, partes, { actualizado: documento.actualizado });
         }
         bajados += 1;
       }
@@ -288,8 +292,28 @@ export function crearNube({ pedir, biblioteca }) {
        * grande, quedan a medias. La marca de tiempo del documento no cambia,
        * así que sin esto los capítulos que faltan NO llegarían nunca. Se
        * comparan las cuentas y se completa lo que falte, en los dos sentidos.
+       *
+       * Límite: solo repara dentro de la MISMA versión. Si los metadatos
+       * difieren (un lado re-subió el PDF con otro troceo), los conteos no
+       * son comparables y completar mezclaría las dos versiones en un solo
+       * libro. Esos casos los resuelve el flujo normal (gana el más
+       * reciente) en la próxima sincronización.
        */
-      const reparados = await completarCapitulos(avisar);
+      const reparados = await completarCapitulos(avisar, { remotos: alla });
+
+      /* ── Unificar duplicados y purgar lápidas ───────────────────────
+       * El mismo PDF con distinto id (renombrados, « (1)» de Windows) se une
+       * al registro más reciente; las lápidas viejas ya propagadas se borran
+       * del aparato para que borrar no deje rastro. Silencioso y barato. */
+      let unificados = 0;
+      let purgadas = 0;
+      try {
+        unificados = await biblioteca.eliminarDuplicadosLocales();
+        if (unificados) avisar(`Unificando ${unificados} duplicado(s)…`);
+      } catch (_) { /* la próxima vez se reintenta */ }
+      try {
+        purgadas = await biblioteca.purgarLapidasAntiguas(30);
+      } catch (_) { /* sin purga se vive */ }
       return {
         subidos,
         bajados: bajados + reparados.bajados,
@@ -298,6 +322,8 @@ export function crearNube({ pedir, biblioteca }) {
          * sería mentir justo cuando el usuario está esperando verlas. */
         caratulas,
         pedidos,
+        unificados,
+        purgadas,
       };
     },
 
@@ -307,8 +333,9 @@ export function crearNube({ pedir, biblioteca }) {
   /**
    * Compara cuántos capítulos tiene cada libro aquí y en la nube, y completa
    * lo que falte de cada lado. Es la red de seguridad de los libros grandes.
+   * Solo actúa dentro de la misma versión (ver nota en `sincronizar`).
    */
-  async function completarCapitulos(avisar) {
+  async function completarCapitulos(avisar, { remotos = null } = {}) {
     let subidos = 0;
     let bajados = 0;
     try {
@@ -318,6 +345,11 @@ export function crearNube({ pedir, biblioteca }) {
 
       for (const documento of locales) {
         if (estaBorrado(documento)) continue;
+        const remoto = remotos ? remotos.get(documento.id) : null;
+        /* Versiones distintas: no tocar. El flujo normal ya decidió quién
+         * gana por marca de tiempo; mezclar conteos de dos troceos
+         * distintos partiría el libro en dos versiones pegadas. */
+        if (remoto && Number(remoto.actualizado) !== Number(documento.actualizado)) continue;
         const partes = await biblioteca.partesParaSubir(documento.id);
         const alla = Number(enLaNube[documento.id] || 0);
 
@@ -354,16 +386,23 @@ export function crearNube({ pedir, biblioteca }) {
           }
         }
 
-        /* Faltan capítulos aquí: se traen todos los del documento. */
+        /* Faltan capítulos aquí: se traen todos los del documento, pero
+         * solo si lo local no tiene cambios sin subir (si los tiene, esos
+         * cambios son más nuevos y la próxima subida los pone al día; bajar
+         * ahora los pisaría con la versión vieja de la nube). */
         if (alla > partes.length) {
+          const pendienteSubir = (Number(documento.actualizado) || 0) > (Number(documento.sincronizado) || 0);
+          if (pendienteSubir && !remoto) continue;
           avisar(`Completando «${documento.titulo || 'documento'}»…`);
           const respuesta = await llamar(
             `/api/sync/partes?documento=${encodeURIComponent(documento.id)}`
           );
           const llegadas = respuesta?.partes || [];
           if (llegadas.length > partes.length) {
-            await biblioteca.importarPartes(documento.id, llegadas);
-            bajados += 1;
+            const ok = await biblioteca.importarPartes(documento.id, llegadas, {
+              actualizado: remoto ? remoto.actualizado : 0,
+            });
+            if (ok) bajados += 1;
           }
         }
       }

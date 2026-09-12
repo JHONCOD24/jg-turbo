@@ -9,6 +9,7 @@ import { readFileSync } from 'fs';
 import {
   fusionar, decidir, aplicarRemotos, marcarBorrado, esMasNuevo, necesitaSubirContenido,
   debeSubir, puedeFaltarPortada, portadasARescatar, esSincronizable, estaBorrado,
+  normalizarHuella, tituloBaseParaDedup, claveIdentidad, agruparDuplicados, elegirCanonico,
 } from '../js/pdf/sincronizacion.js';
 import { componerRegistroDocumento } from '../js/pdf/biblioteca.js';
 
@@ -397,6 +398,88 @@ const doc = (id, actualizado, extra = {}) => ({
 
   const compuestoConLapida = componerRegistroDocumento(lapida, { ...metaVivo, borrado: 4000 }, { ahora: 4000 });
   comprobar(compuestoConLapida.borrado === 4000, 'si se pide borrar de verdad, la lápida se conserva');
+}
+
+/* ── Un PDF, un solo registro (deduplicación por huella) ────────────
+ *
+ * Caso real: el mismo PDF subido con otro nombre («libro (1).pdf» de
+ * Windows, o renombrado en otro aparato) creaba otra tarjeta y el duplicado
+ * se sincronizaba a todos lados. Borrar uno dejaba el otro, como si el
+ * borrado «no sirviera».
+ */
+{
+  const H = 'a'.repeat(64);
+  comprobar(normalizarHuella(H.toUpperCase()) === H, 'la huella se compara sin importar mayúsculas');
+  comprobar(normalizarHuella('corta') === '', 'una huella inválida no agrupa nada');
+  comprobar(normalizarHuella(null) === '', 'sin huella no hay clave fuerte');
+
+  comprobar(tituloBaseParaDedup('Mi Libro (1).pdf') === tituloBaseParaDedup('Mi Libro.pdf'),
+    '« (1)» de Windows no crea un libro distinto');
+  comprobar(tituloBaseParaDedup('Mi Libro - copia.pdf') === tituloBaseParaDedup('Mi Libro.pdf'),
+    '«- copia» tampoco');
+  comprobar(tituloBaseParaDedup('Otro Libro.pdf') !== tituloBaseParaDedup('Mi Libro.pdf'),
+    'libros distintos siguen distintos');
+
+  const mismoArchivoOtroNombre = [
+    { id: 'mi-libro-pdf-1000', titulo: 'Mi Libro', nombreArchivo: 'Mi Libro.pdf', bytes: 1000, caracteres: 500, actualizado: 1000, huella: H },
+    { id: 'mi-libro-1-pdf-1000', titulo: 'Mi Libro', nombreArchivo: 'Mi Libro (1).pdf', bytes: 1000, caracteres: 500, actualizado: 2000, huella: H },
+  ];
+  comprobar(claveIdentidad(mismoArchivoOtroNombre[0]) === claveIdentidad(mismoArchivoOtroNombre[1]),
+    'mismo archivo con distinto nombre comparte identidad');
+  const grupos = agruparDuplicados(mismoArchivoOtroNombre);
+  comprobar(grupos.length === 1 && grupos[0].length === 2, 'el duplicado por renombrado se detecta');
+
+  const { conservar, eliminar } = elegirCanonico(mismoArchivoOtroNombre);
+  comprobar(conservar.actualizado === 2000 && eliminar.length === 1,
+    'sobrevive el más reciente (conserva el progreso más nuevo)');
+
+  const distintos = [
+    { id: 'a', titulo: 'Libro A', bytes: 1000, caracteres: 500, actualizado: 1000, huella: 'b'.repeat(64) },
+    { id: 'b', titulo: 'Libro B', bytes: 2000, caracteres: 900, actualizado: 1000, huella: 'c'.repeat(64) },
+  ];
+  comprobar(agruparDuplicados(distintos).length === 0, 'libros distintos no se agrupan');
+  comprobar(agruparDuplicados([]).length === 0, 'biblioteca vacía sin grupos');
+
+  /* Sin huella (libros viejos que llegaron por la nube): mismo tamaño,
+   * mismo largo y mismo título base también agrupan. */
+  const sinHuella = [
+    { id: 'x-100', titulo: 'Placeo', nombreArchivo: 'Placeo.pdf', bytes: 5000, caracteres: 800, actualizado: 100 },
+    { id: 'x-1-100', titulo: 'Placeo', nombreArchivo: 'Placeo (1).pdf', bytes: 5000, caracteres: 800, actualizado: 200 },
+  ];
+  comprobar(agruparDuplicados(sinHuella).length === 1, 'duplicado sin huella también se detecta');
+
+  /* Mismo título pero distinto contenido: NO son duplicados. */
+  const mismoTituloDistinto = [
+    { id: 't1', titulo: 'Diario', bytes: 1000, caracteres: 500, actualizado: 100 },
+    { id: 't2', titulo: 'Diario', bytes: 9999, caracteres: 12345, actualizado: 200 },
+  ];
+  comprobar(agruparDuplicados(mismoTituloDistinto).length === 0,
+    'mismo título con distinto tamaño no se une (no se come libros)');
+
+  /* Las lápidas no participan: un libro borrado no «duplica» al vivo. */
+  const conLapida = [
+    { id: 'v1', titulo: 'Vivo', bytes: 1000, caracteres: 500, actualizado: 2000, contenidoActualizado: 2000, huella: H },
+    { id: 'v1', titulo: '', borrado: 1000, actualizado: 1000, contenidoActualizado: 0 },
+  ];
+  comprobar(agruparDuplicados(conLapida).length === 0, 'una lápida no forma grupo con el libro vivo');
+
+  /* Guardián de versiones: importarPartes con versión vieja se descarta
+   * (lo local más nuevo gana). Se verifica por código: la función recibe
+   * `actualizado` y retorna false sin tocar nada si lo local es mayor. */
+  const fuenteBiblio2 = readFileSync(new URL('../js/pdf/biblioteca.js', import.meta.url), 'utf8');
+  comprobar(fuenteBiblio2.includes('Number(doc.actualizado) > Number(actualizado)'),
+    'importarPartes descarta capítulos de una versión más vieja que lo local');
+  comprobar(fuenteBiblio2.includes('buscarPorHuella'),
+    'la biblioteca sabe buscar por huella antes de crear un registro');
+  comprobar(fuenteBiblio2.includes('eliminarDuplicadosLocales'),
+    'existe limpieza de duplicados locales');
+  comprobar(fuenteBiblio2.includes('purgarLapidasAntiguas'),
+    'las lápidas viejas se purgan para no dejar rastro');
+  const fuenteNube2 = readFileSync(new URL('../js/pdf/nube.js', import.meta.url), 'utf8');
+  comprobar(fuenteNube2.includes('remotos: alla'),
+    'completarCapitulos conoce las versiones remotas antes de reparar');
+  comprobar(fuenteNube2.includes('Number(remoto.actualizado) !== Number(documento.actualizado)'),
+    'completarCapitulos no mezcla versiones con distinto actualizado');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas de sincronización pasaron.' : `\n${fallos} prueba(s) fallaron.`);

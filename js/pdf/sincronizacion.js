@@ -162,6 +162,88 @@ export function esSincronizable(documento) {
   return Boolean(documento) && documento.sincronizar !== false;
 }
 
+/* ── Duplicados: un PDF, un solo registro ────────────────────────────
+ *
+ * La identidad de un libro era nombre+tamaño. El mismo archivo con otro
+ * nombre («libro (1).pdf» que crea Windows al descargar dos veces, o un
+ * renombrado en otro aparato) generaba otro id y otra tarjeta: el duplicado
+ * se sincronizaba a todos los aparatos y borrar uno dejaba el otro, como si
+ * «no se borrara». La huella SHA-256 del archivo sí es estable: a igual
+ * contenido, igual huella, aunque cambie el nombre.
+ *
+ * Estas funciones son puras (sin IndexedDB) para poder probarlas.
+ */
+
+/** Normaliza una huella para comparar: minúsculas, solo hex de 64. */
+export function normalizarHuella(huella) {
+  const texto = String(huella || '').toLowerCase().trim();
+  return /^[a-f0-9]{64}$/.test(texto) ? texto : '';
+}
+
+/**
+ * Título base para cazar duplicados sin huella: quita los sufijos que ponen
+ * Windows y Drive al descargar dos veces (« (1)», « - copia», «_1»).
+ */
+export function tituloBaseParaDedup(titulo) {
+  return String(titulo || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\.(pdf|epub|txt)$/i, '')
+    .replace(/\s*(\(\d+\)|[-\s_]*copia(\s*\(\d+\))?|[-\s_]*\d+)\s*$/i, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+/**
+ * Clave de identidad estable de un documento. Manda la huella del archivo;
+ * sin ella, tamaño + caracteres + título base (caza el « (1)» de Windows).
+ * Sin nada útil, null: mejor no agrupar que unir libros distintos.
+ */
+export function claveIdentidad(documento) {
+  if (!documento || typeof documento !== 'object') return null;
+  const huella = normalizarHuella(documento.huella);
+  if (huella) return `h:${huella}`;
+  const bytes = Number(documento.bytes) || 0;
+  const caracteres = Number(documento.caracteres) || 0;
+  if (!bytes && !caracteres) return null;
+  const base = tituloBaseParaDedup(
+    documento.nombreArchivo || documento.titulo || ''
+  );
+  if (!base) return null;
+  return `b:${bytes}|${caracteres}|${base}`;
+}
+
+/**
+ * Agrupa documentos que son el mismo PDF con distinto id.
+ * @returns {object[][]} grupos de 2+ documentos (los solitarios no salen).
+ */
+export function agruparDuplicados(documentos) {
+  const grupos = new Map();
+  for (const documento of documentos || []) {
+    if (!documento || !documento.id || estaBorrado(documento)) continue;
+    const clave = claveIdentidad(documento);
+    if (!clave) continue;
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(documento);
+  }
+  return [...grupos.values()].filter((grupo) => grupo.length > 1);
+}
+
+/**
+ * De un grupo duplicado elige el registro que sobrevive: el de cambio más
+ * reciente (conserva el progreso más nuevo). Los demás se borran con lápida
+ * para que el borrado viaje a los otros aparatos.
+ * @returns {{conservar:object, eliminar:object[]}}
+ */
+export function elegirCanonico(grupo) {
+  const ordenados = [...grupo].sort(
+    (a, b) => (Number(b.actualizado) || 0) - (Number(a.actualizado) || 0)
+  );
+  return { conservar: ordenados[0], eliminar: ordenados.slice(1) };
+}
+
 /**
  * ¿Hay que enviar este libro a la nube?
  *

@@ -14,7 +14,7 @@
  *   traducciones → el español de cada capítulo, para no pagarlo dos veces.
  */
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
-import { esSincronizable, estaBorrado } from './sincronizacion.js';
+import { esSincronizable, estaBorrado, agruparDuplicados, elegirCanonico, normalizarHuella } from './sincronizacion.js';
 import { paqueteCorreccionSync, correccionSyncValida } from './manifiesto.js';
 import { origenTextoRegistro } from './procedencia.js';
 
@@ -1156,6 +1156,33 @@ export async function importarDeSincronizacion(documento) {
    * rebotaría de un lado al otro sin fin. */
   const pideFuente = meta.pideFuente && typeof meta.pideFuente === 'object' ? meta.pideFuente : null;
   if (!pideFuente) delete meta.pideFuente;
+  /* Un PDF, un solo registro: si lo que llega es el mismo archivo (misma
+   * huella) que un libro local con OTRO id —típico del « (1)» de Windows o
+   * de un renombrado en otro aparato—, se fusiona al id local en vez de
+   * crear una segunda tarjeta. El duplicado de la nube se marca para borrar
+   * en la próxima subida (su lápida viaja y lo limpia en todos lados). */
+  let idDestino = id;
+  try {
+    const huellaLlegada = normalizarHuella(meta.huella);
+    if (huellaLlegada) {
+      const gemelo = await buscarPorHuella(huellaLlegada, { excluirId: id });
+      if (gemelo && Number(actualizado) >= Number(gemelo.actualizado || 0)) {
+        idDestino = gemelo.id;
+        meta.huella = huellaLlegada;
+      } else if (gemelo) {
+        /* Lo local es más nuevo: se conserva el id local y el duplicado
+         * remoto se pedirá borrar devolviendo su lápida al sincronizar. */
+        idDestino = gemelo.id;
+      }
+      if (idDestino !== id) {
+        await borrarDocumento(id);
+        await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+          const lapida = await esperar(docs.get(id));
+          if (lapida) await esperar(docs.put({ ...lapida, actualizado, sincronizado: lapida.sincronizado || 0 }));
+        }).catch(() => {});
+      }
+    }
+  } catch (_) { idDestino = id; }
   /* La carátula viaja como texto dentro de `datos` porque la sincronización
    * solo mueve JSON. Al llegar se vuelve imagen y se guarda con el libro:
    * así la biblioteca se ve igual en el celular, la tablet y el escritorio. */
@@ -1164,17 +1191,17 @@ export async function importarDeSincronizacion(documento) {
     portada = await dataURLABlob(datos?.portadaMini || null);
   } catch (_) { portada = null; }
   await guardarDocumento({
-    meta: { ...meta, id, actualizado, sincronizado: actualizado },
+    meta: { ...meta, id: idDestino, actualizado, sincronizado: actualizado },
     ...(portada ? { portada } : {}),
   });
   /* Lo que llegó con carátula no necesita reenviarla: ya la tienen los dos. */
-  if (portada) await marcarPortadaSincronizada(id, actualizado);
+  if (portada) await marcarPortadaSincronizada(idDestino, actualizado);
   /* Limpieza explícita: `guardarDocumento` mezcla con lo previo, así que un
    * pedido ya atendido sobreviviría. Sin esto, el aviso rebotaría sin fin. */
   if (!pideFuente) {
     try {
       await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
-        const doc = await esperar(docs.get(id));
+        const doc = await esperar(docs.get(idDestino));
         if (doc && doc.pideFuente) {
           delete doc.pideFuente;
           await esperar(docs.put(doc));
@@ -1188,10 +1215,12 @@ export async function importarDeSincronizacion(documento) {
   try {
     const correccion = datos?.correccion || null;
     if (correccionSyncValida(correccion)) {
-      await guardarManifiestoRecibido(id, correccion);
+      await guardarManifiestoRecibido(idDestino, correccion);
     }
   } catch (_) { /* sin manifiesto se vive: se pide como antes */ }
-  return true;
+  /* Devuelve el id local real (puede diferir del remoto si se fusionó un
+   * duplicado): quien llama importa las partes ahí, no en un registro nuevo. */
+  return idDestino;
 }
 
 /**
@@ -1295,11 +1324,22 @@ export async function marcarMigracionCorreccion() {
   }
 }
 
-/** Guarda los capítulos que llegaron de otro dispositivo. */
-export async function importarPartes(id, partes) {
+/**
+ * Guarda los capítulos que llegaron de otro dispositivo.
+ *
+ * Con versión: un texto viejo nunca pisa uno más nuevo. Sin `actualizado`
+ * (llamadas antiguas o reparación sin contexto) se conserva el
+ * comportamiento de antes para no dejar libros sin texto.
+ */
+export async function importarPartes(id, partes, { actualizado = 0 } = {}) {
   if (!id || !Array.isArray(partes) || !partes.length) return false;
   const ordenadas = [...partes].sort((a, b) => (a.indice || 0) - (b.indice || 0));
   const doc = await cargarDocumento(id);
+  /* Si se conoce la versión remota y lo local es más nuevo (p. ej. se
+   * re-subió el PDF aquí mientras la nube aún tiene la versión vieja), los
+   * capítulos viejos se descartan: antes entraban igual y mezclaban las dos
+   * versiones en un solo libro. */
+  if (actualizado && doc && Number(doc.actualizado) > Number(actualizado)) return false;
   const sincronizado = doc?.sincronizado || doc?.actualizado || Date.now();
   await guardarDocumento({
     meta: {
@@ -1347,6 +1387,89 @@ export async function marcarSincronizado(id, marca) {
     });
   } catch (_) {
     return false;
+  }
+}
+
+/* ── Un PDF, un solo registro (deduplicación) ────────────────────────
+ *
+ * El id histórico es nombre+tamaño, así que el mismo archivo con otro nombre
+ * («libro (1).pdf») creaba otro registro. Estas ayudas usan la huella
+ * SHA-256 del archivo (estable ante renombrados) para que subir, recibir o
+ * volver a subir el mismo PDF conserve UN solo registro.
+ */
+
+/** Busca un libro vivo con la misma huella de archivo (otro id, mismo PDF). */
+export async function buscarPorHuella(huella, { excluirId = null } = {}) {
+  const normal = normalizarHuella(huella);
+  if (!normal) return null;
+  try {
+    const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
+    return (todos || []).find((doc) =>
+      doc && doc.id !== excluirId && !estaBorrado(doc) &&
+      normalizarHuella(doc.huella) === normal
+    ) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Une los duplicados locales: por cada grupo con la misma identidad se
+ * conserva el más reciente y los demás se borran (con lápida, para que el
+ * borrado del duplicado viaje a los otros aparatos). Devuelve cuántos unió.
+ */
+export async function eliminarDuplicadosLocales() {
+  try {
+    const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
+    const grupos = agruparDuplicados(todos || []);
+    let unidos = 0;
+    for (const grupo of grupos) {
+      const { conservar, eliminar } = elegirCanonico(grupo);
+      /* El canónico hereda la huella si le faltaba (llegó por la nube sin
+       * ella y aquí sí se conoce por el duplicado). */
+      if (!normalizarHuella(conservar.huella)) {
+        const conHuella = eliminar.find((d) => normalizarHuella(d.huella));
+        if (conHuella) {
+          await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+            const doc = await esperar(docs.get(conservar.id));
+            if (doc) {
+              doc.huella = normalizarHuella(conHuella.huella);
+              await esperar(docs.put(doc));
+            }
+          }).catch(() => {});
+        }
+      }
+      for (const duplicado of eliminar) {
+        await borrarDocumento(duplicado.id);
+        unidos += 1;
+      }
+    }
+    return unidos;
+  } catch (_) {
+    return 0;
+  }
+}
+
+/**
+ * Borra las lápidas viejas del aparato (más de `dias` días). Ya se
+ * propagaron a la nube al sincronizar; guardarlas para siempre es el
+ * «rastro» que queda después de borrar. Las recientes se conservan para
+ * que el borrado alcance a los aparatos apagados.
+ */
+export async function purgarLapidasAntiguas(dias = 30) {
+  try {
+    const tope = Date.now() - dias * 24 * 60 * 60 * 1000;
+    const todos = await conAlmacenes([DOCUMENTOS], 'readonly', (docs) => esperar(docs.getAll()));
+    const viejas = (todos || []).filter((doc) =>
+      doc && doc.borrado && estaBorrado(doc) && (Number(doc.borrado) || 0) < tope
+    );
+    if (!viejas.length) return 0;
+    await conAlmacenes([DOCUMENTOS], 'readwrite', async (docs) => {
+      for (const lapida of viejas) docs.delete(lapida.id);
+    });
+    return viejas.length;
+  } catch (_) {
+    return 0;
   }
 }
 

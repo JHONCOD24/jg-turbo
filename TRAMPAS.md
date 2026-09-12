@@ -1233,3 +1233,23 @@ el `re.sub` sobre el `html` no matcheaba `<b>Sherwin-</b>` (el `$` exige fin de
 cadena y hay un `</b>` detrás). **Regla:** al editar `html` con regex, tolerar
 etiquetas de cierre con lookahead (`-(?=(?:<[^>]+>)*\s*$)`) y preservarlas;
 nunca asumir texto plano en el `html`.
+
+## El mismo PDF con otro nombre es otro libro (sync, 2026-09-12)
+
+**Síntoma:** libros duplicados en la biblioteca («2 versiones muy distintas»,
+la anterior que vuelve y la nueva que sube); borrar uno dejaba el otro, como
+si el borrado no sirviera; re-subir el mismo PDF duplicaba en vez de unir.
+**Causa (triple):** 1) el id era nombre+tamaño, así que «libro (1).pdf» de
+Windows o un renombrado en otro aparato creaba otro registro, y nada dedup
+al subir ni al importar; 2) `completarCapitulos` comparaba solo conteos de
+capítulos y `importarPartes` pisaba sin mirar `actualizado`: con dos troceos
+distintos mezclaba la versión vieja con la nueva en un solo libro;
+3) re-subir reseteaba el progreso a cero, así que la «nueva» parecía otra
+versión. **Regla:** la identidad estable es la huella SHA-256 del archivo
+(`claveIdentidad`/`agruparDuplicados`/`elegirCanonico` en
+`sincronizacion.js`, puras y con pruebas); al subir se reutiliza el registro
+con la misma huella y se conserva el progreso salvo resurrección; la
+reparación de capítulos solo actúa dentro de la misma versión
+(`remoto.actualizado === local.actualizado`) y `importarPartes` descarta lo
+más viejo que lo local; cada sync unifica duplicados y purga lápidas de
++30 días (`eliminarDuplicadosLocales`, `purgarLapidasAntiguas`).

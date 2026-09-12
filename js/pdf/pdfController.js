@@ -4073,7 +4073,7 @@ export function inicializarLectorPdf(deps = {}) {
       if (!t || t.length > 120) continue;
       const aguja = t.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '').slice(0, 60);
       if (aguja.length < 4) continue;
-      const pos = compacto.indexOf(aguja, cursor);
+      const pos = compacto.join('').indexOf(aguja, cursor);
       if (pos < 0) continue;
       cursor = pos + aguja.length;
       salir.push({ titulo: t, posicion: mapa[pos] || 0, pagina: b.pagina || b.pag || 0 });
@@ -4126,17 +4126,45 @@ export function inicializarLectorPdf(deps = {}) {
     /* El id sale del nombre y el tamaño a propósito: volver a extraer el
      * mismo archivo actualiza el mismo registro y, si estaba borrado, lo
      * resucita. Un id aleatorio dejaría lápidas huérfanas en la nube. */
-    const id = archivo
+    let id = archivo
       ? `${(archivo.name || 'doc').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${archivo.size || 0}`
       : `doc-${Date.now().toString(36)}`;
 
     /* La primera vez que se guarda algo, se pide al navegador que no lo borre. */
     const permiso = await almacen.pedirPersistencia();
 
+    let huellaArchivo = '';
     try {
-      const huellaArchivo = archivo
-        ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', await archivo.arrayBuffer()))].map(b => b.toString(16).padStart(2, '0')).join('')
-        : '';
+      if (archivo?.arrayBuffer && crypto?.subtle) {
+        huellaArchivo = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await archivo.arrayBuffer()))].map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch (_) { huellaArchivo = ''; }
+    /* Un PDF, un solo registro: si este mismo archivo (misma huella) ya vive
+     * en la biblioteca con otro id —se subió con otro nombre, llegó por la
+     * nube, o es el « (1)» de Windows—, se reutiliza ese registro en vez de
+     * crear una segunda tarjeta. Así re-subir nunca duplica, aunque el
+     * nombre o el tamaño aparente hayan cambiado. */
+    if (huellaArchivo) {
+      try {
+        const existente = await almacen.buscarPorHuella(huellaArchivo);
+        if (existente?.id && existente.id !== id) id = existente.id;
+      } catch (_) { /* sin dedup se vive: queda el id por nombre */ }
+    }
+
+    try {
+      /* Re-subir conserva dónde ibas: el registro reutilizado trae su
+       * progreso y solo se reinicia si el libro estaba borrado (resurrección)
+       * o es nuevo de verdad. Sin esto, re-subir parecía «otra versión»
+       * (misma portada, lectura en cero). */
+      let progresoPrevio = null;
+      let estadoPrevio = '';
+      try {
+        const previoVivo = await almacen.cargarDocumento(id);
+        if (previoVivo && !previoVivo.borrado) {
+          progresoPrevio = previoVivo.progreso || null;
+          estadoPrevio = previoVivo.estado || '';
+        }
+      } catch (_) { /* sin previo se vive: libro nuevo */ }
       await almacen.guardarDocumento({
         meta: {
           ...(huellaArchivo ? { huella: huellaArchivo } : {}),
@@ -4158,8 +4186,8 @@ export function inicializarLectorPdf(deps = {}) {
           sincronizar: true,
           capitulos,
           bytes: archivo?.size || 0,
-          progreso: progresoInicial(),
-          estado: 'sin-empezar',
+          progreso: progresoPrevio || progresoInicial(),
+          estado: estadoPrevio || 'sin-empezar',
           /* Estructura aprobada (plan §4): se persiste para que reabrir el
            * libro recupere voz, música y troceo sin reextraer el adjunto. */
           ...(resultado.adjuntoEstructurado ? {
@@ -6291,11 +6319,12 @@ export function inicializarLectorPdf(deps = {}) {
       limpiarFalloSync();
       await refrescarInicio();
       await pintarNube();
-      const nada = !resultado.subidos && !resultado.bajados && !resultado.caratulas;
+      const nada = !resultado.subidos && !resultado.bajados && !resultado.caratulas && !resultado.unificados;
       const partes = [];
       if (resultado.bajados) partes.push(`llegaron ${contar(resultado.bajados, 'libro', 'libros')}`);
       if (resultado.caratulas) partes.push(`${contar(resultado.caratulas, 'carátula nueva', 'carátulas nuevas')}`);
       if (resultado.subidos) partes.push(`se enviaron ${contar(resultado.subidos, 'libro', 'libros')}`);
+      if (resultado.unificados) partes.push(`se unificaron ${contar(resultado.unificados, 'duplicado', 'duplicados')}`);
       const mensaje = nada ? 'Todo al día.' : `Listo: ${partes.join(' · ')}.`;
       avisoNube(mensaje, 'ok');
       /* Arriba también, para quien pulsó arriba. */

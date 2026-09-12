@@ -3,6 +3,45 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-12 · v2.80.0 · Un PDF, un solo registro: fin de los duplicados (`JG_JS_V=v136`, shell-v136)
+
+Lo reportado: libros duplicados («2 versiones muy distintas», la anterior que
+volvía y la nueva que subía); borrar dejaba el otro como si no sirviera;
+re-subir el mismo PDF duplicaba.
+
+**Causas medidas (tres, todas en identidad/versiones):**
+1. El id era nombre+tamaño: «libro (1).pdf» de Windows o un renombrado en otro
+   aparato creaba otro registro, sin dedup al subir ni al importar.
+2. `completarCapitulos` comparaba solo conteos e `importarPartes` pisaba sin
+   mirar `actualizado`: con dos troceos distintos mezclaba vieja + nueva.
+3. Re-subir reseteaba el progreso a cero: la «nueva» parecía otra versión.
+
+**Cambios (aditivos, sin migración ni claves nuevas):**
+- `js/pdf/sincronizacion.js` → identidad estable por huella SHA-256
+  (`normalizarHuella`, `tituloBaseParaDedup`, `claveIdentidad`,
+  `agruparDuplicados`, `elegirCanonico`: sobrevive el más reciente).
+- `js/pdf/biblioteca.js` → `buscarPorHuella`, `eliminarDuplicadosLocales`
+  (conserva el más nuevo, borra el resto con lápida para que viaje),
+  `purgarLapidasAntiguas(30)` (borrar no deja rastro); `importarPartes`
+  descarta capítulos más viejos que lo local; `importarDeSincronizacion`
+  fusiona al id local si llega el mismo archivo con otro id y devuelve el id
+  real para que las partes no creen un duplicado.
+- `js/pdf/nube.js` → `completarCapitulos` solo repara dentro de la misma
+  versión (`remoto.actualizado === local.actualizado`); cada sync unifica
+  duplicados y purga lápidas, avisando «se unificaron N duplicados».
+- `js/pdf/pdfController.js` → al subir se reutiliza el registro con la misma
+  huella (re-subir nunca duplica) y se conserva el progreso salvo resurrección.
+
+**Regla nueva:** `TRAMPAS.md` §«El mismo PDF con otro nombre es otro libro».
+
+### Verificación
+
+- `test_pdf_sincronizacion.mjs`: 115 comprobaciones OK (17 nuevas de dedup).
+- Batería unitaria: 41/41 archivos en verde, 0 fallos.
+- `node --check` en los 4 módulos + verificación de exports.
+
+Despliegue: pendiente (ventana única al final de la tanda).
+
 ## 2026-09-11 · v2.79.0 · Sale Sandra Design Travel del selector (`JG_JS_V=v133`, shell-v133)
 
 La voz no gustó: se retira del listado. Lo guardado con ese id pasa a Amy. Detalle: `CAMBIOS_TTS.md` §v2.79.0.

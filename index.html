@@ -1,4 +1,4 @@
-<!-- v2.77.0 · voz clonada Roberto (JG Voice) en el lector de PDF -->
+<!-- v2.80.0 · un PDF, un solo registro: fin de los duplicados -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -14296,6 +14296,10 @@ const ttsState = {
   _speakToken: 0,
   engineUsed: 'neural',
   arrastrando: false,
+  silencioTimer: null,
+  silencioHasta: 0,
+  silencioRestanteMs: 0,
+  silencioContinuar: null,
 };
 /* Visible desde la consola del navegador, igual que jgAudiolibro: es lo que
  * permite diagnosticar una lectura cortada —y a las pruebas comprobar el
@@ -14336,6 +14340,9 @@ const TTS_FISH_CATALOGO_LOCAL = [
   { id:'latina-kika', gender:'female', name:'Latina Kika', lang:'es' },
   { id:'voz-platica', gender:'female', name:'Voz Plática', lang:'es' },
   { id:'roberto', gender:'male', name:'Roberto', lang:'es' },
+  { id:'amy', gender:'female', name:'Amy', lang:'es' },
+  { id:'dora', gender:'female', name:'Dora', lang:'es' },
+  { id:'michael', gender:'male', name:'Michael', lang:'es' },
 ];
 
 /* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
@@ -14345,6 +14352,7 @@ const TTS_FISH_CATALOGO_LOCAL = [
 const TTS_FISH_RETIRADAS = new Set([
   'nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo',
   'sarah', 'paula', 'adrian', 'ethan',
+  'sandra-design-travel',
 ]);
 
 /* Ids retirados → equivalente que queda (mismo género e idioma). */
@@ -14353,6 +14361,7 @@ const TTS_FISH_EQUIVALENTES = {
   'nico-robin': 'narradora', 'chica': 'narradora', 'nagi': 'narradora',
   'male': 'valentino', 'nestor': 'valentino',
   'locutor-k': 'valentino', 'narrador': 'valentino', 'loquendo': 'valentino',
+  'sandra-design-travel': 'amy',
 };
 
 let ttsFishInfo = {
@@ -15455,6 +15464,7 @@ function ttsDetener(){
   // Parar es parar: si había un audiolibro encadenando partes, se cancela.
   jgAudiolibro.activo = false;
   ttsState._speakToken++;
+  ttsCancelarSilencio(false);
   ttsPararElementos();
   ttsLiberarBloques();
   ttsState.queue = [];
@@ -15471,9 +15481,37 @@ function ttsDetener(){
   try{ document.dispatchEvent(new CustomEvent('jg-tts-detener')); }catch(_){}
 }
 
+function ttsCancelarSilencio(conservar){
+  if(ttsState.silencioTimer !== null){
+    clearTimeout(ttsState.silencioTimer);
+    ttsState.silencioTimer = null;
+  }
+  if(conservar && ttsState.silencioHasta){
+    ttsState.silencioRestanteMs = Math.max(0, ttsState.silencioHasta - Date.now());
+  }else if(!conservar){
+    ttsState.silencioRestanteMs = 0;
+    ttsState.silencioContinuar = null;
+  }
+  ttsState.silencioHasta = 0;
+}
+
+function ttsProgramarSilencio(ms, continuar){
+  ttsCancelarSilencio(false);
+  ttsState.silencioRestanteMs = Math.max(0, Number(ms) || 0);
+  ttsState.silencioContinuar = continuar;
+  ttsState.silencioHasta = Date.now() + ttsState.silencioRestanteMs;
+  ttsState.silencioTimer = setTimeout(()=>{
+    const siguiente = ttsState.silencioContinuar;
+    ttsCancelarSilencio(false);
+    if(ttsState.status === 'playing' && typeof siguiente === 'function') siguiente();
+  }, ttsState.silencioRestanteMs);
+}
+
 function ttsPausar(){
   if(ttsState.status !== 'playing' && ttsState.status !== 'buffering') return;
-  if(ttsState.engineUsed === 'browser' && ttsSupportedBrowser()){
+  if(ttsState.silencioTimer !== null){
+    ttsCancelarSilencio(true);
+  }else if(ttsState.engineUsed === 'browser' && ttsSupportedBrowser()){
     try{ speechSynthesis.pause(); }catch(_){}
   }else{
     try{ ttsElActivo().pause(); }catch(_){}
@@ -15487,6 +15525,14 @@ function ttsPausar(){
 function ttsReanudar(){
   if(ttsState.status !== 'paused') return;
   try{ document.dispatchEvent(new CustomEvent('jg-tts-reanudar')); }catch(_){}
+  if(ttsState.silencioRestanteMs > 0 && typeof ttsState.silencioContinuar === 'function'){
+    const restante = ttsState.silencioRestanteMs;
+    const continuar = ttsState.silencioContinuar;
+    ttsState.status = 'playing';
+    ttsActualizarUI();
+    ttsProgramarSilencio(restante, continuar);
+    return;
+  }
   if(ttsState.engineUsed === 'browser' && ttsSupportedBrowser()){
     ttsState.status = 'playing';
     ttsActualizarUI();
@@ -16019,10 +16065,10 @@ async function ttsReproducirDesde(indice, desde, token){
   if(bloque && bloque.silencio && bloque.pausaMs > 0){
     ttsState.status = 'playing';
     ttsActualizarUI();
-    setTimeout(()=>{
+    ttsProgramarSilencio(bloque.pausaMs, ()=>{
       if(token !== ttsState._speakToken) return;
       ttsReproducirDesde(indice + 1, 0, token);
-    }, bloque.pausaMs);
+    });
     return;
   }
   if(bloque.estado !== 'listo'){
@@ -16090,10 +16136,10 @@ function ttsBloqueTerminado(el){
     ttsState.idx = siguiente;
     ttsState.status = 'playing';
     ttsActualizarUI();
-    setTimeout(()=>{
+    ttsProgramarSilencio(bloque.pausaMs, ()=>{
       if(token !== ttsState._speakToken) return;
       ttsReproducirDesde(siguiente + 1, 0, token);
-    }, bloque.pausaMs);
+    });
     return;
   }
   const espera = ttsElEspera();
@@ -16316,7 +16362,8 @@ function ttsHablarBrowserDesde(startIdx, token){
      * espera real (las marcas nunca llegan aquí: las quitó ttsCrearCola). */
     if(item && item.silencio && item.pausaMs > 0){
       ttsState.idx += 1;
-      setTimeout(()=>{ if(token === ttsState._speakToken) speakNext(); }, item.pausaMs);
+      ttsState.status = 'playing';
+      ttsProgramarSilencio(item.pausaMs, ()=>{ if(token === ttsState._speakToken) speakNext(); });
       return;
     }
     const chunk = ttsQueueText(item);
@@ -18061,7 +18108,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v134';
+const JG_JS_V = 'v136';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
