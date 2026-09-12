@@ -1,4 +1,4 @@
-<!-- v2.80.0 · un PDF, un solo registro: fin de los duplicados -->
+<!-- v2.81.0 · Contenido con scroll agarrable y chuleado manual -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -3503,33 +3503,53 @@
       padding:8px;border-top:1px solid var(--lec-linea, var(--line));
     }
     .pdf-indice-acciones .mini-btn{justify-content:center;text-align:center}
-    /* La barra de desplazamiento de la lista era la que ensuciaba el costado
-       del texto: la nativa de Windows son 17 px grises que no pertenecen a
-       ningún tema. Aquí es una línea fina del propio tema de lectura, que se
-       afirma al pasar el cursor. */
+    /* La barra de desplazamiento de la lista tiene que VERSE y AGARRARSE
+       con el ratón: la versión fina casi invisible (4 px efectivos) no se
+       podía apuntar en escritorio. Ahora es una pista ancha con pulgar
+       sólido del tema, que se afirma al pasar el cursor y al arrastrar. */
     .pdf-indice-lista{
-      scrollbar-width:thin;
-      scrollbar-color:var(--lec-linea, var(--line)) transparent;
+      scrollbar-width:auto;
+      scrollbar-color:var(--lec-suave, var(--muted)) transparent;
     }
-    .pdf-indice-lista::-webkit-scrollbar{width:10px}
+    .pdf-indice-lista::-webkit-scrollbar{width:14px}
     .pdf-indice-lista::-webkit-scrollbar-track{background:transparent}
     .pdf-indice-lista::-webkit-scrollbar-thumb{
-      background:var(--lec-linea, var(--line));border-radius:999px;
+      background:var(--lec-suave, var(--muted-2));border-radius:999px;
       border:3px solid transparent;background-clip:padding-box;
     }
-    .pdf-indice:hover .pdf-indice-lista::-webkit-scrollbar-thumb{
-      background:var(--lec-suave, var(--muted-2));background-clip:padding-box;
+    .pdf-indice:hover .pdf-indice-lista::-webkit-scrollbar-thumb,
+    .pdf-indice-lista::-webkit-scrollbar-thumb:hover{
+      background:var(--lec-acento, var(--cyan));background-clip:padding-box;border-width:2px;
+    }
+    .pdf-indice-lista::-webkit-scrollbar-thumb:active{
+      background:var(--lec-acento, var(--cyan));background-clip:padding-box;border-width:2px;
     }
     /* En una columna de 200 px el título y la página no caben en la misma
        línea: el título se comía en «CAPIT…» y un índice cuyos títulos no se
        leen no es un índice. El número manda la sangría, el título ocupa dos
-       líneas y la página baja a una segunda fila, más pequeña y apagada. */
+       líneas y la página baja a una segunda fila, más pequeña y apagada.
+       La fila es un marco con dos botones hermanos: la marca (44 px, tamaño
+       de dedo) chulea/deschulea sin navegar; el cuerpo navega al capítulo. */
     .pdf-indice .pdf-cap{
-      display:grid;grid-template-columns:22px minmax(0,1fr);
-      grid-template-areas:'marca titulo' 'marca datos';
-      align-items:start;column-gap:10px;row-gap:1px;padding:9px 10px 11px;
+      display:grid;grid-template-columns:44px minmax(0,1fr);
+      grid-template-areas:'marca cuerpo';
+      align-items:stretch;column-gap:10px;row-gap:1px;padding:9px 10px 11px;
     }
-    .pdf-indice .pdf-cap-marca{grid-area:marca;margin-top:1px}
+    .pdf-indice .pdf-cap-marca,
+    .pdf-indice .pdf-cap-cuerpo{
+      background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;
+    }
+    .pdf-indice .pdf-cap-marca{
+      grid-area:marca;align-self:stretch;min-width:44px;min-height:44px;
+      display:flex;align-items:center;justify-content:center;border-radius:10px;
+    }
+    .pdf-indice .pdf-cap-marca:hover{background:var(--lec-superficie-2, var(--surface))}
+    .pdf-indice .pdf-cap-marca-icono{display:inline-block;padding:0 3px;border-radius:6px;line-height:1.5}
+    /* Anillo punteado: «esto lo marqué yo a mano», distinto del ✓ automático. */
+    .pdf-indice .pdf-cap-marca[aria-pressed="true"] .pdf-cap-marca-icono{box-shadow:0 0 0 1.5px currentColor}
+    .pdf-indice .pdf-cap-cuerpo{
+      grid-area:cuerpo;display:block;min-width:0;min-height:44px;text-align:left;border-radius:10px;
+    }
     .pdf-indice .pdf-cap-titulo{
       grid-area:titulo;white-space:normal;line-height:1.35;
       display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
@@ -3560,8 +3580,9 @@
       color:color-mix(in srgb, var(--lec-texto, var(--text)) 78%, transparent);
     }
     .pdf-indice .pdf-cap:hover{background:var(--lec-superficie-2, var(--surface))}
-    .pdf-indice .pdf-cap:active{background:var(--lec-superficie-2, var(--surface-2))}
-    .pdf-indice .pdf-cap:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:-2px}
+    .pdf-indice .pdf-cap-cuerpo:active{background:var(--lec-superficie-2, var(--surface-2))}
+    .pdf-indice .pdf-cap-marca:focus-visible,
+    .pdf-indice .pdf-cap-cuerpo:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:-2px}
     /* El acento PURO sobre su propio realce no llega a AA en los temas claros:
        el realce acerca el fondo al texto y «CAPITULO I» se quedaba en 3.79:1.
        Tirando el acento un 28 % hacia el color del texto se conserva el matiz
@@ -3636,7 +3657,7 @@
     /* Panel ancho: los títulos se despliegan en varias líneas en vez de
        cortarse a la mitad, y el pie recupera su fila de dos. */
     .pdf-indice[data-ancho="ancho"] .pdf-cap{align-items:flex-start}
-    .pdf-indice[data-ancho="ancho"] .pdf-cap-marca{margin-top:2px}
+    .pdf-indice[data-ancho="ancho"] .pdf-cap-marca{align-self:stretch;margin-top:0}
     .pdf-indice[data-ancho="ancho"] .pdf-cap-titulo{
       white-space:normal;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
     }
@@ -18108,7 +18129,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v136';
+const JG_JS_V = 'v137';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

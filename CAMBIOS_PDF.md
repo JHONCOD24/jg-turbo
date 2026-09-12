@@ -3,6 +3,50 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-12 · v2.81.0 · Contenido con scroll agarrable y chuleado manual (`JG_JS_V=v137`, shell-v137)
+
+Lo pedido: 1) en escritorio la lista de Contenido casi no se podía desplazar
+con el ratón (barra invisible); 2) saltar a la página 7 chulea las anteriores
+sin remedio: poder chulear y deschulear capítulos a mano.
+
+**Scroll (`index.html`, solo CSS, el divisor redimensionable intacto):**
+- La pista pasa a 14 px con pulgar sólido siempre visible (antes: línea de
+  4 px efectivos que solo se afirmaba al pasar el cursor). En hover/arrastre
+  toma el acento del tema. La rueda ya funcionaba y sigue igual.
+
+**Chuleado manual (marca por capítulo, sin moverse del sitio):**
+- `js/pdf/progreso.js` → `fijarMarcaCapitulo(progreso, i, total, marca)`:
+  `leido` chulea, `no-leido` deschulea, `null` borra la marca (vuelve lo
+  automático). Viaja dentro de `progreso`: se guarda y se sincroniza como el
+  avance. `avanzarProgreso` conserva las marcas (si no, el primer guardado
+  las borraría). `progresoDeCapitulo` consulta la marca, salvo donde estás
+  parado, que siempre muestra «leyendo».
+- `js/pdf/pdfController.js` → cada fila del índice trae dos botones hermanos:
+  la marca (44 px, `aria-pressed`, anillo punteado cuando es manual)
+  chulea/deschulea; el cuerpo navega. Visitar el capítulo borra su marca
+  (estar ahí manda). En la columna de tablet/escritorio el Contenido se queda
+  abierto al saltar (antes se cerraba siempre); en el teléfono (hoja) se
+  sigue cerrando. El foco se conserva al repintar (teclado) y al abrir se
+  enfoca el cuerpo del capítulo actual (era un `li` no enfocable).
+- El porcentaje y «Seguir leyendo» no cambian: siguen saliendo de por dónde
+  vas, no de los chulos (el chulo es lista de control visual).
+
+### Verificación
+
+- `test_pdf_progreso.mjs`: 20 comprobaciones nuevas de marcas, en verde.
+- Nuevo `tests/verificar_pdf_indice_marcas.mjs` (17): estructura, marca 44 px,
+  rueda del ratón, barra ancha, saltar→chulea, tocar→deschulea sin moverse,
+  retocar→chulea, chulear pendiente, visitar→borra marca, 0 errores JS.
+- `verificar_pdf_indice_panel.mjs` (redimensionar intacto),
+  `verificar_pdf_tiempo_real.mjs` y batería unitaria 41/41 en verde.
+- `verificar_pdf_navegador.mjs`: secciones 1–7 en verde con los selectores
+  nuevos (`.pdf-cap-cuerpo`); quedan los 2 preexistentes ya documentados
+  (OCR `avisa que el texto salió de un reconocimiento`, ver
+  `INFORME_FINAL_ADAPTACION_LIBROS.md:110`, y continuidad-tras-recarga,
+  reproducido idéntico con `git stash`).
+
+Despliegue: pendiente (ventana única al final de la tanda).
+
 ## 2026-09-12 · v2.80.0 · Un PDF, un solo registro: fin de los duplicados (`JG_JS_V=v136`, shell-v136)
 
 Lo reportado: libros duplicados («2 versiones muy distintas», la anterior que

@@ -167,6 +167,10 @@ export function etiquetaReanudar(progreso, partes, ahora = Date.now()) {
  * `caracter`, `cita` y `antes` describen el punto exacto (ver anclaTexto.js).
  * Si quien llama no los pasa, se conservan los anteriores en vez de borrarlos:
  * un guardado por scroll no debe perder el punto exacto que dejó la voz.
+ *
+ * Las marcas manuales por capítulo (`marcas`, ver fijarMarcaCapitulo) también
+ * se conservan: moverse no desmarca lo que la persona chuleó o deschuleó a
+ * mano. Solo visitar el capítulo las limpia (ver mostrarParte).
  */
 export function avanzarProgreso(progreso, { parte, desplazamiento, caracter, cita, antes } = {}) {
   const anterior = progreso || progresoInicial();
@@ -182,15 +186,46 @@ export function avanzarProgreso(progreso, { parte, desplazamiento, caracter, cit
     cita: cita != null ? String(cita) : (cambioDeParte ? '' : (anterior.cita ?? '')),
     antes: antes != null ? String(antes) : (cambioDeParte ? '' : (anterior.antes ?? '')),
     maxParte: Math.max(anterior.maxParte ?? 0, parteLimpia),
+    /* Copia propia (no la referencia): quien guarda no debe mutar lo andado. */
+    marcas: { ...(anterior.marcas || {}) },
     actualizado: Date.now(),
   };
+}
+
+/**
+ * Marca manual de un capítulo en el índice («chuleado» a mano).
+ *
+ * El estado normal sale solo de por dónde vas (`parte`/`maxParte`): saltar a
+ * la página 7 chulea las anteriores sin preguntar. Con esto la persona puede
+ * corregirlo tocando la marca: `leido` la chulea aunque no la haya visitado,
+ * `no-leido` la deschulea aunque el avance la dé por vista, y `null` borra la
+ * marca manual (vuelve a mandar lo automático). Viaja dentro de `progreso`,
+ * así que se guarda y se sincroniza como el resto del avance.
+ *
+ * @param {number} totalCapitulos – fuera de rango no hace nada
+ */
+export function fijarMarcaCapitulo(progreso, indice, totalCapitulos, marca) {
+  const anterior = progreso || progresoInicial();
+  const total = Math.max(0, Math.floor(Number(totalCapitulos) || 0));
+  const i = Math.floor(Number(indice) || 0);
+  const marcas = { ...(anterior.marcas || {}) };
+  if (i >= 0 && i < total) {
+    if (marca === 'leido' || marca === 'no-leido') marcas[i] = marca;
+    else delete marcas[i];
+  }
+  return { ...anterior, marcas, actualizado: Date.now() };
 }
 
 /** Estado de un capítulo concreto, para pintarlo en el índice. */
 export function progresoDeCapitulo(indice, progreso) {
   const actual = progreso?.parte ?? 0;
   const maximo = Math.max(progreso?.maxParte ?? 0, actual);
+  /* Donde estás parado manda: aunque lo hayas marcado «no leído», estando
+   * dentro se muestra en curso (la marca valdrá al salir del capítulo). */
   if (indice === actual) return 'leyendo';
+  const manual = progreso?.marcas?.[indice];
+  if (manual === 'leido') return 'leido';
+  if (manual === 'no-leido') return 'pendiente';
   if (indice < actual || indice <= maximo) return 'leido';
   return 'pendiente';
 }

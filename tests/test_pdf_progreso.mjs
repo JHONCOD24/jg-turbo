@@ -5,6 +5,7 @@
 import {
   calcularPorcentaje, estadoDeLectura, etiquetaProgreso, etiquetaEstado,
   progresoInicial, avanzarProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
+  fijarMarcaCapitulo,
 } from '../js/pdf/progreso.js';
 
 let fallos = 0;
@@ -156,6 +157,60 @@ const PARTES = [
     'sin progreso no dice nada');
   comprobar(etiquetaReanudar(progresoInicial(), PARTES, AHORA) === '',
     'un libro sin empezar no dice nada');
+}
+
+/* ── Marcas manuales por capítulo (chulear/deschulear a mano) ────────
+ *
+ * Caso real: saltar a la página 7 chulea las anteriores en automático y no
+ * había forma de corregirlo. Tocando la marca del índice se fija una marca
+ * manual que manda sobre lo automático hasta que se visita el capítulo.
+ */
+{
+  /* Saltó a la 7 (índice 6): las anteriores cuentan como leídas. */
+  const trasSalto = { parte: 6, desplazamiento: 0, maxParte: 6 };
+  comprobar(progresoDeCapitulo(3, trasSalto) === 'leido', 'saltar adelante chulea las anteriores');
+
+  /* Toca la marca de la 4 (índice 3): se deschulea sin moverse del sitio. */
+  const deschuleado = fijarMarcaCapitulo(trasSalto, 3, 10, 'no-leido');
+  comprobar(progresoDeCapitulo(3, deschuleado) === 'pendiente', 'deschulear muestra pendiente');
+  comprobar(progresoDeCapitulo(2, deschuleado) === 'leido', 'las demás siguen chuleadas');
+  comprobar(deschuleado.parte === 6 && deschuleado.maxParte === 6,
+    'deschulear no mueve la posición ni el avance');
+
+  /* La vuelve a tocar: vuelve a chulearse. */
+  const rechuleado = fijarMarcaCapitulo(deschuleado, 3, 10, 'leido');
+  comprobar(progresoDeCapitulo(3, rechuleado) === 'leido', 'volver a tocar chulea de nuevo');
+
+  /* Chulear una pendiente (no la ha visitado pero ya la leyó en papel). */
+  const pendiente = { parte: 1, desplazamiento: 0, maxParte: 1 };
+  const marcada = fijarMarcaCapitulo(pendiente, 5, 10, 'leido');
+  comprobar(progresoDeCapitulo(5, marcada) === 'leido', 'se puede chulear un capítulo pendiente');
+
+  /* Donde estás parado manda: aunque lo marques «no leído», dentro se ve en
+   * curso y la marca vale al salir. */
+  const enSitio = fijarMarcaCapitulo({ parte: 2, desplazamiento: 0.3, maxParte: 2 }, 2, 10, 'no-leido');
+  comprobar(progresoDeCapitulo(2, enSitio) === 'leyendo', 'el capítulo actual siempre se muestra en curso');
+
+  /* Moverse conserva las marcas manuales (si no, el primer guardado las
+   * borraría y el toggle no serviría de nada). */
+  const movido = avanzarProgreso(deschuleado, { parte: 6, desplazamiento: 0.5 });
+  comprobar(progresoDeCapitulo(3, movido) === 'pendiente', 'moverse dentro del libro conserva lo deschuleado');
+  comprobar(movido.marcas?.[3] === 'no-leido', 'avanzarProgreso no pierde las marcas');
+
+  /* Visitar el capítulo limpia su marca (se vuelve a contar lo leído ahí).
+   * Se modela como fijar null, que es lo que hace mostrarParte al entrar. */
+  const visitado = fijarMarcaCapitulo(deschuleado, 3, 10, null);
+  comprobar(progresoDeCapitulo(3, visitado) === 'leido', 'al visitarlo vuelve a contar como leído');
+  comprobar(!visitado.marcas?.[3], 'visitar borra la marca manual');
+
+  /* Robustez: índices imposibles no hacen nada ni rompen. */
+  const base = { parte: 0, desplazamiento: 0, maxParte: 0 };
+  comprobar(progresoDeCapitulo(0, fijarMarcaCapitulo(base, 99, 10, 'leido')) === 'leyendo',
+    'un índice fuera de rango no crea marcas');
+  comprobar(progresoDeCapitulo(0, fijarMarcaCapitulo(base, -1, 10, 'leido')) === 'leyendo',
+    'un índice negativo tampoco');
+  comprobar(progresoDeCapitulo(0, { parte: 0, desplazamiento: 0, maxParte: 0 }) === 'leyendo',
+    'sin marcas todo sigue como antes (compatibilidad)');
 }
 
 console.log(fallos === 0 ? '\nTodas las pruebas de progreso pasaron.' : `\n${fallos} prueba(s) fallaron.`);

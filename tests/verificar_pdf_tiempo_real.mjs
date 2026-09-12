@@ -242,7 +242,7 @@ try {
       btnCapNext.click();
       await new Promise(r => setTimeout(r, 200));
     } else {
-      const botonesIndice = document.querySelectorAll('#pdfIndiceLista button');
+      const botonesIndice = document.querySelectorAll('#pdfIndiceLista .pdf-cap-cuerpo');
       if (botonesIndice.length > 1) {
         botonesIndice[1].click();
         await new Promise(r => setTimeout(r, 200));

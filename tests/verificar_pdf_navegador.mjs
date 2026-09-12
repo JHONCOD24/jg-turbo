@@ -348,7 +348,7 @@ console.log('\n── Documento corto con capítulos ─────────
   comprobar(capitulos > 1, `un libro corto con capítulos sí muestra su índice (${capitulos})`);
   comprobar(await pagina.locator('#pdfNavbar').isVisible(), 'y su navegación entre capítulos');
 
-  await pagina.locator('#pdfIndiceLista .pdf-cap').nth(2).click();
+  await pagina.locator('#pdfIndiceLista .pdf-cap-cuerpo').nth(2).click();
   await pagina.waitForTimeout(600);
   comprobar(
     numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 3,
@@ -402,7 +402,7 @@ console.log('\n── Libro de 300 páginas ────────────
     'el índice marca el capítulo actual'
   );
 
-  await pagina.locator('#pdfIndiceLista .pdf-cap').nth(4).click();
+  await pagina.locator('#pdfIndiceLista .pdf-cap-cuerpo').nth(4).click();
   await pagina.waitForTimeout(700);
   comprobar(
     numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 5,
@@ -645,7 +645,7 @@ console.log('\n── Biblioteca y continuidad ───────────
     await pagina.locator('#btnPdfIndice').click();
     await pagina.waitForTimeout(400);
   }
-  await pagina.locator('#pdfIndiceLista .pdf-cap').nth(5).click();
+  await pagina.locator('#pdfIndiceLista .pdf-cap-cuerpo').nth(5).click();
   await pagina.waitForTimeout(1500);   /* deja que se guarde el progreso */
 
   await abrirPestana(pagina);          /* recarga completa: como cerrar la app */

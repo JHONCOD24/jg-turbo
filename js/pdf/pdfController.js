@@ -38,7 +38,7 @@ import { crearTraductor, necesitaTraduccion } from './traduccion.js';
 import {
   progresoInicial, avanzarProgreso, calcularPorcentaje, estadoDeLectura,
   etiquetaEstado, etiquetaProgreso, progresoDeCapitulo, formatearTamano, etiquetaReanudar,
-  etiquetaSeccion,
+  etiquetaSeccion, fijarMarcaCapitulo,
 } from './progreso.js';
 import { construirAncla, resolverAncla } from './anclaTexto.js';
 import { limpiarNombreLibro, conseguirCaratula, buscarPortadaCanonica } from './caratula.js';
@@ -1479,21 +1479,54 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   function pintarIndice() {
+    /* Repintar destruye los botones: si el foco estaba en una marca o un
+     * cuerpo (p. ej. chuleando con el teclado), se devuelve al equivalente
+     * nuevo para no mandar a la persona al principio de la página. */
+    const activo = document.activeElement;
+    const filaFoco = activo?.closest?.('#pdfIndiceLista .pdf-cap');
+    const focoPrevio = filaFoco ? {
+      cap: filaFoco.dataset.cap,
+      marca: activo.classList?.contains('pdf-cap-marca'),
+    } : null;
     el.indiceLista.innerHTML = '';
     estado.partes.forEach((parte, i) => {
+      /* La fila es un marco (conserva .pdf-cap, data-estado y aria-current
+       * para no mover el CSS ni las pruebas) con DOS botones hermanos: la
+       * marca chulea/deschulea sin navegar, el cuerpo navega al capítulo.
+       * Antes era un solo botón y no había forma de corregir el chuleado
+       * automático sin moverse del sitio. */
       const fila = document.createElement('li');
-      const boton = document.createElement('button');
-      boton.type = 'button';
-      boton.className = 'pdf-cap';
-      boton.dataset.cap = String(i);
+      fila.className = 'pdf-cap';
+      fila.dataset.cap = String(i);
       const situacion = progresoDeCapitulo(i, estado.progreso);
-      boton.dataset.estado = situacion;
-      if (i === estado.parteActual) boton.setAttribute('aria-current', 'true');
+      fila.dataset.estado = situacion;
+      if (i === estado.parteActual) fila.setAttribute('aria-current', 'true');
 
-      const marca = document.createElement('span');
+      const hayMarcaManual = Boolean(estado.progreso?.marcas?.[i]);
+      const marca = document.createElement('button');
+      marca.type = 'button';
       marca.className = 'pdf-cap-marca';
-      marca.setAttribute('aria-hidden', 'true');
-      marca.textContent = situacion === 'leido' ? '✓' : String(i + 1);
+      marca.setAttribute('aria-pressed', hayMarcaManual ? 'true' : 'false');
+      marca.setAttribute('aria-label',
+        `${etiquetaSeccion(estado.partes, i)}: ${
+          situacion === 'leido' ? 'marcar como no leído' : 'marcar como leído'}`);
+      const marcaIcono = document.createElement('span');
+      marcaIcono.className = 'pdf-cap-marca-icono';
+      marcaIcono.setAttribute('aria-hidden', 'true');
+      marcaIcono.textContent = situacion === 'leido' ? '✓' : String(i + 1);
+      marca.appendChild(marcaIcono);
+      marca.addEventListener('click', (evento) => {
+        evento.stopPropagation();
+        alternarMarcaCapitulo(i);
+      });
+
+      const cuerpo = document.createElement('button');
+      cuerpo.type = 'button';
+      cuerpo.className = 'pdf-cap-cuerpo';
+      /* El texto accesible dice todo lo que el color y la marca cuentan. */
+      cuerpo.setAttribute('aria-label',
+        `${etiquetaSeccion(estado.partes, i)}${parte.pagina ? `, página ${parte.pagina} del PDF` : ''}, ${
+          { leido: 'leído', leyendo: 'leyendo ahora', pendiente: 'pendiente' }[situacion]}`);
 
       const titulo = document.createElement('span');
       titulo.className = 'pdf-cap-titulo';
@@ -1524,20 +1557,46 @@ export function inicializarLectorPdf(deps = {}) {
       relleno.className = 'pdf-cap-avance-relleno';
       avance.appendChild(relleno);
 
-      boton.append(marca, titulo, datos, avance);
-      boton.addEventListener('click', () => {
+      cuerpo.append(titulo, datos, avance);
+      cuerpo.addEventListener('click', () => {
         mostrarParte(i);
-        cerrarHojas();
+        /* En la columna de tablet/escritorio el Contenido se queda abierto
+         * para seguir chuleando o saltar a otro capítulo sin reabrirlo; en
+         * el teléfono (hoja inferior) se cierra como siempre para ver el
+         * texto que quedó debajo. */
+        if (window.matchMedia?.('(max-width:767px)').matches) cerrarHojas();
       });
-      /* El texto accesible dice todo lo que el color y la marca cuentan. */
-      boton.setAttribute('aria-label',
-        `${etiquetaSeccion(estado.partes, i)}${parte.pagina ? `, página ${parte.pagina} del PDF` : ''}, ${
-          { leido: 'leído', leyendo: 'leyendo ahora', pendiente: 'pendiente' }[situacion]}`);
 
-      fila.appendChild(boton);
+      fila.append(marca, cuerpo);
       el.indiceLista.appendChild(fila);
     });
+    /* Foco donde estaba antes del repintado (ver nota al inicio). */
+    if (focoPrevio) {
+      try {
+        el.indiceLista.querySelector(
+          `.pdf-cap[data-cap="${focoPrevio.cap}"] ${focoPrevio.marca ? '.pdf-cap-marca' : '.pdf-cap-cuerpo'}`
+        )?.focus({ preventScroll: true });
+      } catch (_) { /* si ya no existe, el foco queda donde esté */ }
+    }
     actualizarAvanceIndice();
+  }
+
+  /**
+   * Chulea o deschulea un capítulo sin moverse del sitio.
+   *
+   * Saltar a la página 7 chulea las anteriores en automático; tocando la
+   * marca se corrige: lo chuleado pasa a pendiente y lo pendiente a chuleado.
+   * Estando DENTRO del capítulo, la marca queda anotada y vale al salir
+   * (ahí dentro siempre se muestra «leyendo»). Visitar el capítulo borra la
+   * marca manual: tu presencia manda sobre lo anotado.
+   */
+  function alternarMarcaCapitulo(i) {
+    if (!hayDocumento() || !estado.partes[i]) return;
+    const situacion = progresoDeCapitulo(i, estado.progreso);
+    const nueva = situacion === 'leido' ? 'no-leido' : (i === estado.parteActual ? 'no-leido' : 'leido');
+    estado.progreso = fijarMarcaCapitulo(estado.progreso, i, estado.partes.length, nueva);
+    guardarProgresoPronto();
+    pintarIndice();
   }
 
   /**
@@ -1851,7 +1910,7 @@ export function inicializarLectorPdf(deps = {}) {
         /* Foco en la sección actual al abrir (PDF-10): orienta sin recorrer
          * todo el índice. El cierre devuelve el foco al disparador, como en
          * Apariencia. */
-        try { actual.focus({ preventScroll: true }); focoYaEnHoja = true; } catch (_) {}
+        try { actual.querySelector('.pdf-cap-cuerpo')?.focus({ preventScroll: true }); focoYaEnHoja = true; } catch (_) {}
       }
     } else if (cual === 'apariencia') {
       el.aparienciaHoja.hidden = false;
@@ -2149,6 +2208,9 @@ export function inicializarLectorPdf(deps = {}) {
        * ancla que conservar: se entra por el principio. */
       ...(indiceEsElGuardado ? {} : { caracter: 0, cita: '', antes: '' }),
     });
+    /* Entrar al capítulo borra su marca manual: estar ahí es la verdad más
+     * fresca (si lo habías deschuleado y vuelves a leerlo, vuelve a contar). */
+    estado.progreso = fijarMarcaCapitulo(estado.progreso, nuevo, estado.partes.length, null);
     restaurarPosicionGuardada();
     actualizarBarraDoc();
     pintarIndice();
