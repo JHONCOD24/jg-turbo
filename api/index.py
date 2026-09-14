@@ -4106,7 +4106,25 @@ _azure_estilos_cache: dict[str, set[str]] | None = None
 # YouTube). Las transcripciones de archivos de audio traen voz de terceros que
 # no dieron su consentimiento, así que esas siempre van por Azure o edge-tts.
 FISH_API_KEY = (os.environ.get("FISH_API_KEY") or "").strip()
-FISH_MODEL = (os.environ.get("FISH_MODEL") or "s2.1-pro-free").strip()
+# Modelo pagado por defecto: gasta los créditos del plan ($15 = 1M bytes UTF-8)
+# con garantías de latencia/rendimiento. Sin créditos, la síntesis cae sola al
+# gratuito (misma voz, sin garantías) y después a Edge: la lectura nunca se
+# queda muda, pero un bloque puntual puede cambiar de timbre (ver §v2.84.0).
+FISH_MODEL = (os.environ.get("FISH_MODEL") or "s2.1-pro").strip()
+FISH_MODEL_GRATIS = "s2.1-pro-free"
+# Narración estable: temperatura baja = misma voz entre bloques (0.7 varía más).
+# chunk_length al máximo (300) = menos cortes internos por bloque.
+try:
+    FISH_TEMPERATURA = max(0.0, min(1.0, float(os.environ.get("FISH_TEMPERATURE") or "0.35")))
+except ValueError:
+    FISH_TEMPERATURA = 0.35
+FISH_TOP_P = 0.7
+FISH_CHUNK_LENGTH = 300
+FISH_LATENCIA = (os.environ.get("FISH_LATENCY") or "normal").strip() or "normal"
+if FISH_LATENCIA not in ("normal", "balanced", "low"):
+    FISH_LATENCIA = "normal"
+# Reintentos del MISMO bloque ante 429/503/timeout antes de ceder a otra voz.
+FISH_REINTENTOS = 2
 # Las dos voces históricas se pueden sustituir por env. El resto del catálogo
 # son fichas públicas de fish.audio (español, trained, sin DMCA): no hace
 # falta una variable nueva por cada una.
@@ -4121,18 +4139,13 @@ FISH_VOICE_NAMES = {
 # id, género, nombre en la app, reference_id público, alias histórico, idioma
 FISH_CATALOGO_BASE = (
     ("nico-robin", "female", "Nico Robin", "e7e72305af4949b3ac95b75db790e254", "female", "es"),
-    ("narradora", "female", "Narradora", "bfed5c0810a347dbb62e8ccce7f59c48", "", "es"),
     ("chica", "female", "Chica", "35929683c49c4ec0bf779dc07d22620b", "", "es"),
     ("nagi", "female", "Nagi", "70fb19852a484f3eb1d040423e2a8be7", "", "es"),
     ("colombiana", "female", "Colombiana", "e296306da5d449999f6e35c2b9f60aea", "", "es"),
-    ("latina", "female", "Latina", "13d17017d63340a0b9751ffb04561c8d", "", "es"),
-    ("voz-a", "female", "Voz A", "b8a36bb02e7f41c1b75a2909bbb04393", "", "es"),
     ("locutor-k", "male", "Locutor K", "3f45a7fd7a614655a61eb7027b955783", "male", "es"),
     ("narrador", "male", "Narrador", "35199d5438854f5d9157c500479ab684", "", "es"),
     ("loquendo", "male", "Loquendo", "bcdc2d4b044d4a6992d9260ce16715eb", "", "es"),
     ("valentino", "male", "Valentino", "a1fe2e1b6f324e27929d5088f2d09be3", "", "es"),
-    ("sabio", "male", "Sabio", "60a33602dacc4d899cb671b024e66d8c", "", "es"),
-    ("terror", "male", "Terror", "867d389fc01f4310bc381ff9429e6052", "", "es"),
     ("leonardo", "male", "Leonardo", "f765b445ca784776b1d444bd5f418050", "", "es"),
     ("sarah", "female", "Sarah", "933563129e564b19a115bedd57b7406a", "", "en"),
     ("paula", "female", "Paula", "c2623f0c075b4492ac367989aee1576f", "", "en"),
@@ -4141,33 +4154,42 @@ FISH_CATALOGO_BASE = (
     # Voces nuevas pedidas por el usuario (2026-09): el slug es corto para la
     # app y el reference_id es la ficha pública de fish.audio.
     ("julio-ciencia", "male", "Julio Ciencia", "49143b926e1043c491cfe386758d09a0", "", "es"),
-    ("sheyla", "female", "Sheyla", "c42d566a928a4049a01262e4f63a1efb", "", "es"),
     ("farick", "male", "Farick", "dfa5b230c8054f429e434f4a6e9bbdec", "", "es"),
-    ("sabio-expandido", "male", "Sabio expandido", "60a33602dacc4d899cb671b024e66d8c", "", "es"),
     ("enrique-hoffman", "male", "Enrique Hoffman", "8926506428ad4ae898d35ede47524240", "", "es"),
     ("voz-locutor", "male", "Voz locutor", "4110ff39a33e46b8bac2a9e7f8e00ced", "", "es"),
-    ("brian-tracy", "male", "Brian Tracy", "cd803cbf78a4454fa98b601abbf8966a", "", "es"),
-    ("morgan-freeman", "male", "Morgan Freeman", "7c76e349434d4f1e97078d924acea65f", "", "es"),
     ("mario-alonso-puig", "male", "Mario Alonso Puig", "b9a077022c424e89b0705cb98085e36a", "", "es"),
     ("tatiana-mae", "female", "Tatiana Mae", "16cba2445c3749d7810a0b3f348ec0d7", "", "es"),
     ("hilary-narrador", "male", "Hilary Narrador", "937314c424504d10912e5eef334993a7", "", "es"),
-    ("palabra-biblica", "male", "Palabra Bíblica", "ca4d3745aa454def9161b48efb268577", "", "es"),
-    ("morillo", "male", "Morillo", "71f4cfa46fc64cdbadafaa3fdda6f6b4", "", "es"),
-    ("narrador-documental", "male", "Narrador Documental", "6bf6af3e27c044ce839e1d43004ac8e6", "", "es"),
     ("jim-hopper", "male", "Jim Hopper", "b114d46e5ed6448fa0b197258e65b8d2", "", "es"),
-    ("latina-kika", "female", "Latina Kika", "2edd012fb4d14521af3f0ce245791283", "", "es"),
-    ("voz-platica", "female", "Voz Plática", "eadb1a0a15f941ebb46ed73b23da765d", "", "es"),
     # Clones privados de JG Voice (misma cuenta Fish). Uso personal, no catálogo público.
     ("roberto", "male", "Roberto", "ab991f011ecf46a29c1aee96e109d8f7", "", "es"),
     ("amy", "female", "Amy", "22f8c2742acd48f6a9c12962ae179251", "", "es"),
     ("dora", "female", "Dora", "d0d60d228b744e2b9fc7fd00bc6f6b3a", "", "es"),
     ("michael", "male", "Michael", "6b33f00f4d7a49d89a1c7a6f7abec6c4", "", "es"),
+    # Creadas con Voice Design (plan Plus). Slug con «jg-»: «narrador» es alias histórico.
+    ("jg-narradora", "female", "JG Narradora", "31cdd5b542c64e26be8aba2d9ee62ca2", "", "es"),
+    ("jg-narrador", "male", "JG Narrador", "88d6dac3d12a402f9aa87ccf3a6c94b2", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {
     "clara": "nico-robin",
     "nestor": "locutor-k",
     "sandra-design-travel": "amy",
+    # Retiradas el 2026-09-12 (v2.83.0): femeninas → JG Narradora, masculinas → Valentino.
+    "narradora": "jg-narradora",
+    "latina": "jg-narradora",
+    "voz-a": "jg-narradora",
+    "sheyla": "jg-narradora",
+    "latina-kika": "jg-narradora",
+    "voz-platica": "jg-narradora",
+    "sabio": "valentino",
+    "terror": "valentino",
+    "sabio-expandido": "valentino",
+    "brian-tracy": "valentino",
+    "morgan-freeman": "valentino",
+    "palabra-biblica": "valentino",
+    "morillo": "valentino",
+    "narrador-documental": "valentino",
 }
 _fish_nombres_cache: dict[str, str] | None = None
 FISH_TTS_TIMEOUT = 25.0
@@ -4378,33 +4400,83 @@ async def _tts_azure_synthesize(
     return respuesta.content, estilo
 
 
+def _tts_fish_cuerpo(texto: str, reference_id: str, speed: float, tone: str) -> dict:
+    """Cuerpo estable para narración: misma voz entre bloques.
+
+    Puro (sin red): se prueba sin sintetizar. La temperatura baja fija el
+    timbre; el resto deja los valores de mejor calidad de la API.
+    """
+    etiqueta = TTS_FISH_ETIQUETAS.get(tone, "")
+    return {
+        "text": f"{etiqueta} {texto}".strip(),
+        "reference_id": reference_id,
+        "format": "mp3",
+        "temperature": FISH_TEMPERATURA,
+        "top_p": FISH_TOP_P,
+        "chunk_length": FISH_CHUNK_LENGTH,
+        "normalize": True,
+        "latency": FISH_LATENCIA,
+        "sample_rate": 44100,
+        "mp3_bitrate": 128,
+        "prosody": {
+            "speed": max(0.5, min(2.0, speed)),
+            "volume": 0,
+            "normalize_loudness": True,
+        },
+    }
+
+
 async def _tts_fish_synthesize(
     text: str, gender: str, speed: float, tone: str, fish_voice: str = ""
-) -> tuple[bytes, str]:
-    """Sintetiza con Fish Audio. Devuelve (audio, etiqueta aplicada)."""
+) -> tuple[bytes, str, str]:
+    """Sintetiza con Fish Audio. Devuelve (audio, etiqueta, modelo_usado).
+
+    Ante un fallo transitorio (429/503/timeout) reintenta el MISMO bloque con
+    espera 1s/2s antes de ceder: antes un solo tropiezo mandaba ese bloque a
+    Edge y el timbre cambiaba por segundos a media frase. Si el modelo pagado
+    responde 402 (sin créditos), prueba el gratuito antes que Edge.
+    """
+    import asyncio
+
     import httpx
 
     voz = _tts_fish_resolver(fish_voice, gender)
     if not voz:
         raise RuntimeError("No hay una voz Fish configurada.")
     etiqueta = TTS_FISH_ETIQUETAS.get(tone, "")
-    async with httpx.AsyncClient(timeout=FISH_TTS_TIMEOUT) as cliente:
-        respuesta = await cliente.post(
-            "https://api.fish.audio/v1/tts",
-            json={
-                "text": f"{etiqueta} {text}".strip(),
-                "reference_id": voz["reference_id"],
-                "format": "mp3",
-                "prosody": {"speed": max(0.5, min(2.0, speed))},
-            },
-            headers={
-                "Authorization": f"Bearer {FISH_API_KEY}",
-                "Content-Type": "application/json",
-                "model": FISH_MODEL,
-            },
-        )
-    respuesta.raise_for_status()
-    return respuesta.content, etiqueta
+    modelos = [FISH_MODEL]
+    if FISH_MODEL_GRATIS not in modelos:
+        modelos.append(FISH_MODEL_GRATIS)
+    ultimo_error: Exception | None = None
+    for modelo in modelos:
+        cuerpo = _tts_fish_cuerpo(text, voz["reference_id"], speed, tone)
+        for intento in range(FISH_REINTENTOS + 1):
+            try:
+                async with httpx.AsyncClient(timeout=FISH_TTS_TIMEOUT) as cliente:
+                    respuesta = await cliente.post(
+                        "https://api.fish.audio/v1/tts",
+                        json=cuerpo,
+                        headers={
+                            "Authorization": f"Bearer {FISH_API_KEY}",
+                            "Content-Type": "application/json",
+                            "model": modelo,
+                        },
+                    )
+                if respuesta.status_code == 402 and modelo != FISH_MODEL_GRATIS:
+                    ultimo_error = RuntimeError(f"Fish {modelo}: sin créditos (402)")
+                    break  # pasa al gratuito, no reintenta el pagado
+                respuesta.raise_for_status()
+                if respuesta.content:
+                    return respuesta.content, etiqueta, modelo
+                ultimo_error = RuntimeError(f"Fish {modelo}: respuesta vacía")
+            except Exception as error:
+                ultimo_error = error
+                estado = getattr(getattr(error, "response", None), "status_code", None)
+                if estado == 401:
+                    raise  # clave mala: reintentar da lo mismo
+            if intento < FISH_REINTENTOS:
+                await asyncio.sleep(1.0 * (intento + 1))
+    raise ultimo_error or RuntimeError("Fish no devolvió audio.")
 
 
 async def _tts_edge_synthesize(text: str, voice_id: str, rate: str, pitch: str, volume: str) -> bytes:
@@ -4436,29 +4508,31 @@ async def _tts_synthesize(
     gender: str = "female",
     prefer_fish: bool = False,
     fish_voice: str = "",
-) -> tuple[bytes, str, str]:
-    """Sintetiza un fragmento. Devuelve (audio, motor usado, estilo aplicado).
+) -> tuple[bytes, str, str, str]:
+    """Sintetiza un fragmento. Devuelve (audio, motor usado, estilo, modelo).
 
-    Si la persona eligió Fish, se intenta primero esa voz. Si no, Azure y
-    después edge-tts. Un fallo baja al siguiente: el navegador no oye un corte.
+    Si la persona eligió Fish, se intenta primero esa voz (con reintentos del
+    mismo bloque). Si no, Azure y después edge-tts. Un fallo baja al siguiente:
+    el navegador no oye un corte, pero un bloque aislado sí puede cambiar de
+    timbre: el cliente lo detecta y lo reintenta (ver ttsDescargarBloque).
     """
     if _tts_fish_activo(source, gender, prefer_fish, fish_voice):
         try:
-            audio, etiqueta = await _tts_fish_synthesize(
+            audio, etiqueta, modelo = await _tts_fish_synthesize(
                 text, gender, speed, tone, fish_voice
             )
             if audio:
-                return audio, "fish", etiqueta
+                return audio, "fish", etiqueta, modelo
         except Exception:
             pass
     if _tts_azure_activo():
         try:
             audio, estilo = await _tts_azure_synthesize(text, voice_id, rate, pitch, tone)
             if audio:
-                return audio, "azure", estilo
+                return audio, "azure", estilo, ""
         except Exception:
             pass
-    return await _tts_edge_synthesize(text, voice_id, rate, pitch, volume), "edge", ""
+    return await _tts_edge_synthesize(text, voice_id, rate, pitch, volume), "edge", "", ""
 
 
 async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
@@ -4498,7 +4572,7 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
     last_error = None
     for candidate in candidates:
         try:
-            audio, motor, estilo = await _tts_synthesize(
+            audio, motor, estilo, modelo = await _tts_synthesize(
                 text, candidate, rate, pitch, volume, tone,
                 source=req.source, speed=req.rate, gender=gender,
                 prefer_fish=bool(req.prefer_fish),
@@ -4531,6 +4605,9 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
                     "X-TTS-Language": language,
                     "X-TTS-Locale": actual_locale,
                     "X-TTS-Engine": f"{motor}-neural-{modo}",
+                    # Modelo Fish que sonó (pagado o gratuito): la app lo usa
+                    # para avisar si un bloque cayó al respaldo con otro timbre.
+                    "X-TTS-Model": modelo or FISH_MODEL,
                     # Estilo de interpretación aplicado (solo con motor Azure)
                     "X-TTS-Style": estilo or "none",
                 },

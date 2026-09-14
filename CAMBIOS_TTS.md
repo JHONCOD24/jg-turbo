@@ -32,6 +32,165 @@
 
 ---
 
+## Nuevo en v2.84.0 · la voz Fish ya no cambia a media frase en el PDF (2026-09-14)
+
+**Pedido:** en el lector de PDF, casi todas las voces Fish cambian por
+segundos a otro timbre (a veces más agudo) y vuelven; la guía/progreso se
+desincroniza en ese momento.
+
+**Causa medida (de raíz, no era la voz):** el relevo silencioso Fish→Edge por
+bloque. Cada bloque se sintetiza en una petición aparte; si UNA fallaba
+(timeout 25 s, 429/503 puntual del nivel gratuito, microcorte de red), el
+servidor devolvía ese bloque con Edge sin avisar (`_tts_synthesize` hacía
+`except: pass` y seguía). Ese bloque de 5-15 s sonaba con otro timbre (y otra
+frecuencia de muestreo: Fish 44,1 kHz, Edge 24 kHz) y el siguiente volvía a
+Fish. Tres agravantes: (1) la app pedía el modelo **gratuito**
+`s2.1-pro-free` (sin garantías de latencia) aunque hay plan pagado; (2) no se
+enviaba `temperature` (0,7 = timbre más variable entre bloques); (3) el
+prefetch del PDF calentaba en modo `regional` mientras la lectura va en
+`unified`, así que la caché no servía y se gastaba una síntesis de más.
+
+**Cambios:**
+1. Servidor (`api/index.py`): modelo por defecto `s2.1-pro` (pagado, con
+   garantías; gasta los créditos del plan). Sin créditos (402) cae solo al
+   gratuito y después a Edge: nunca se queda mudo. Cuerpo estable de
+   narración (`_tts_fish_cuerpo`: temperatura 0,35, `top_p` 0,7,
+   `chunk_length` 300, `normalize` true, latencia `normal`, 44,1 kHz/128 kbps,
+   `normalize_loudness`). Reintentos del MISMO bloque (2, con espera 1s/2s)
+   ante 429/503/timeout antes de ceder a otra voz. Cabecera nueva `X-TTS-Model`.
+2. Cliente (`index.html`): si se pidió Fish y el bloque llegó con otra voz, la
+   cola lo reintenta hasta 2 veces antes de aceptarlo; si aun así suena el
+   respaldo, avisa una vez con toast en vez de callar. Cada lectura reinicia
+   el aviso. `ttsFetchNeuralChunk` expone `modelHdr`.
+3. PDF (`js/pdf/pdfController.js`): los dos prefetch calientan en `unified`,
+   igual que la lectura (la caché sí sirve, una síntesis menos por capítulo).
+
+**El plan de $15 (medido en la documentación oficial de Fish, 2026-09-14):**
+el plan es pago por uso ($15 = 1M bytes UTF-8), no suscripción de calidad: la
+misma voz suena igual en gratis y en pagado. Lo que compra es **estabilidad**
+(latencia ~100 ms, sin límites de uso justo) y el estudio web (Voice Design,
+cupos privados). Como referencia: un libro de 300 páginas (~650 KB) cuesta
+~$9-10 narrado entero; un bloque de 900 caracteres, menos de $0,02.
+
+**Versión:** `JG_JS_V=v141`, Service Worker `jg-turbo-shell-v141`.
+
+**Pruebas:** `backend/tests/test_tts_fish_estable.py` nuevo 4/4 (modelo
+pagado, cuerpo estable, tono/velocidad, reintentos) + `test_tts_voces_fish.py`
+10/10; `tests/test_tts_voz_estable.mjs` nuevo 10/10; regresión
+`test_tts_voces_biblioteca` + `test_pdf_voz` + `test_tts_narracion` en verde;
+`py_compile` OK; `node --check` del JS incrustado y de `pdfController.js` OK.
+
+**Deploy:** pendiente (esta rama trae WIP de PDF sin commitear: se despliega
+una sola vez al cerrar la tanda completa, según `Agents.md`).
+
+---
+
+## Nuevo en v2.83.0 · JG Narradora y JG Narrador, creadas con Voice Design (2026-09-12)
+
+**Pedido:** con el plan Plus de Fish Audio, crear dos voces de narración con
+Voice Design (una femenina con cuerpo, una masculina) y sumarlas a la
+biblioteca del lector de PDF.
+
+**Qué cambia el plan Plus (investigado):** nada por sí solo. La app sintetiza
+por la API con `s2.1-pro-free`, que se cobra aparte (pago por uso) de los
+créditos del estudio web. El Plus sirve para **crear** voces (Voice Design,
+cupos privados y 1 Professional); su `reference_id` funciona con la misma
+`FISH_API_KEY`.
+
+**Voces** (Fish `GET /model/{id}`: `trained`, idioma `es`, visibilidad `public`):
+
+| Nombre en la app | Slug | Género | `reference_id` |
+|---|---|---|---|
+| JG Narradora | `jg-narradora` | femenina | `31cdd5b542c64e26be8aba2d9ee62ca2` |
+| JG Narrador | `jg-narrador` | masculina | `88d6dac3d12a402f9aa87ccf3a6c94b2` |
+
+Slug con `jg-` a propósito: `narrador` es alias histórico (redirige a
+Valentino) y `narradora` ya existe. La resolución es por coincidencia exacta,
+no hay choque.
+
+**Cambios:** `FISH_CATALOGO_BASE` + `TTS_FISH_CATALOGO_LOCAL` (al final, sin
+reordenar). Pruebas en `test_tts_voces_fish.py` y `test_tts_voces_biblioteca.mjs`
+(rojo confirmado antes del código).
+
+**Retiro de 14 voces (mismo pedido, misma versión):** salen del selector
+Narradora, Latina, Voz A, Sheyla, Latina Kika, Voz Plática, Sabio, Terror,
+Sabio expandido, Brian Tracy, Morgan Freeman, Palabra Bíblica, Morillo y
+Narrador Documental. Patrón Sandra (receta §6): fuera de `FISH_CATALOGO_BASE` y
+`TTS_FISH_CATALOGO_LOCAL`, dentro de `TTS_FISH_RETIRADAS`, y el slug viejo se
+redirige en `TTS_FISH_EQUIVALENTES` + `FISH_VOCES_RETIRADAS`: femeninas →
+**JG Narradora**, masculinas → **Valentino**. Como `narradora` era la femenina
+por defecto, todos sus respaldos del cliente (`ttsFishInfo.voices`,
+`ttsNombreFish`, `ttsParseVoz`, `ttsClaveVoz`, guardados) apuntan ahora a
+`jg-narradora`; una prueba vigila que no quede ningún `'narradora'` de respaldo.
+El alias histórico `female` del servidor sigue en Nico Robin (sin cambio).
+
+**Base:** el disco local, no `HEAD`. Producción estaba en v2.82.0/v138 sin
+commit; se comprobó byte a byte contra el dominio antes de tocar nada.
+
+**Versión:** `JG_JS_V=v139`, Service Worker `jg-turbo-shell-v139`.
+
+**Verificado en local:** síntesis directa `s2.1-pro-free` → `200`, MP3
+`FF FB 90` (Narradora 76 903 B en 2,6 s; Narrador 61 021 B en 1,6 s). Batería
+`test_pdf_*`/`test_tts_*` 40/40, pytest 9/9, `py_compile` OK.
+
+**Deploy:** `dpl_DCNMet8V4ydcbqQL8A2KohgDjfMt` · `READY` · alias
+`https://jg-turbo.vercel.app` (desde copia limpia, tras confirmar que producción
+seguía en el deploy anterior y sin cambios ajenos). Verificado contra el dominio:
+HTML v2.83.0 + `v139`, SW shell-v139, `id:'jg-narradora'` presente e `id:'sheyla'`
+ausente; `/api/tts-voices` lista `jg-narradora`/`jg-narrador`, ninguna de las 14
+retiradas y sin `reference_id`; `POST /api/tts` `source=pdf` → `200`
+`fish-neural-regional`: `jg-narradora` → `fish:JG Narradora`, `jg-narrador` →
+`fish:JG Narrador`, `sheyla` → `fish:JG Narradora`, `morgan-freeman` → `fish:Valentino`.
+
+**Pruebas del servidor completas (fuera de voces):** 14 fallos + 5 errores de
+colección preexistentes (YouTube, traducción/doblaje; módulo `subtitulos_limpieza`
+inexistente). 12 fallan igual en `HEAD` limpio; los otros 2 pasan aislados en ambos
+lados (dependen del orden de la suite). No los introdujo esta versión.
+
+**Sin commit:** `index.html` lleva también la tanda v2.82.0, que aún no se había
+commiteado; se deja para cerrar las dos juntas.
+
+---
+
+## Nuevo en v2.80.0 · saneado previo: lo roto del extractor no llega al motor (2026-09-12)
+
+**Pedido:** palabras normales sonaban deletreadas por letras («petición» →
+P-E-T-I-C-I-Ó-N) y el timbre cambiaba a media frase en el lector de PDF.
+
+**Causa medida:** no era la voz, era la copia que oye el motor. El PDF deja
+cosidas al texto: tildes desarmadas (`o` + acento suelto en vez de `ó`),
+guiones blandos e invisibles, títulos con tracking ancho (`P E T I C I O N`)
+y guiones de fin de renglón. Cada uno parte la palabra en fichas sueltas y el
+sintetizador las deletrea o las manda a otra voz.
+
+**Cambios (`js/pdf/vozTexto.js` → `sanearTextoParaVoz`, solo capa voz: el
+visible, el guardado y el exportado no se tocan):**
+- Normaliza a NFC, quita invisibles (`U+00AD`, ancho cero, `U+FEFF`,
+  `U+2060`, `U+180E`) y controles sueltos del extractor.
+- Une `palabra-\ncontinuación` (con salto real; `autor - lector` se conserva).
+- Junta letras espaciadas con 4+ letras (`P E T I C I O N` → `PETICION`).
+- Límites deliberados: con 3 letras o menos no se junta (sigla: deletrear es
+  lo correcto) y las iniciales con puntos no se tocan (otra regla las junta
+  conservando los puntos; una prueba vieja lo exige, §2 de `TRAMPAS.md`).
+- Se aplica al entrar a `prepararParaVoz`: cubre Escuchar, Desde aquí,
+  audiolibro y MP3 (todos pasan por `ttsAplicarCapaVozPdf`). El PDF sigue en
+  `unified` (una sola voz). Nota: si un bloque puntual suena con otro timbre,
+  es el relevo Fish→Edge ante un fallo de red de ese bloque, no un cambio de
+  idioma: la continuidad manda sobre el timbre en ese caso.
+
+**Versión:** `JG_JS_V=v138`, Service Worker `jg-turbo-shell-v138` (tanda PDF
+v2.82.0).
+
+**Deploy:** `HDmcgGmYvqfvKUA5syDQdBP7LyV6` · `READY` · alias
+`https://jg-turbo.vercel.app`. Verificado: `vozTexto.js` en prod idéntico al
+local con `sanearTextoParaVoz` servido.
+
+**Pruebas:** 10 casos nuevos en `tests/test_pdf_voz.mjs` (espaciadas, guion
+blando, tilde desarmada, guion+renglón, inciso, iniciales, sigla corta,
+vacío/null), archivo completo en verde; batería unitaria 17/17 en verde.
+
+---
+
 ## Nuevo en v2.79.0 · se retira Sandra Design Travel (2026-09-11)
 
 **Pedido:** sacar del selector la voz **Sandra Design Travel**.

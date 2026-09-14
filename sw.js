@@ -4,7 +4,7 @@
  */
 /* v2: sube CACHE_SHELL al desplegar UI nueva para que el rediseño no quede
  * atrapado en el shell viejo. Network-first en HTML/navegación. */
-const CACHE_SHELL = 'jg-turbo-shell-v137';
+const CACHE_SHELL = 'jg-turbo-shell-v141';
 const CACHE_SHARE = 'jg-turbo-share-v1';
 const SHARE_KEY = 'shared-audio';
 
@@ -21,6 +21,8 @@ self.addEventListener('install', (event) => {
         '/img/portadas/el-placebo-eres-tu.jpg',
         '/img/portadas/cashvertising.jpg',
         '/img/portadas/aprendiz-de-brujo.jpg',
+        '/img/portadas/esto-es-marketing.jpg',
+        '/img/portadas/pre-suasion.jpg',
       ]).catch(() => {})
     ).then(() => self.skipWaiting())
   );

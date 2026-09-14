@@ -204,6 +204,14 @@ arquitectura, validación y guía de activación).
 ## PDF (leer antes de tocar `js/pdf/`)
 
 Documento maestro: **`CAMBIOS_PDF.md`** (v1.0, 2026-08-31).
+Procedimiento para adaptar libros: **`pdf/regla-pdf/PLAN_OPERATIVO_DEFINITIVO_PDF_JG_TURBO.md`**.
+Para fuentes en inglés, aplica además **`pdf/regla-pdf/PLAN_TRADUCCION_LIBROS_INGLES_JG_TURBO.md`** antes de construir la candidata en español.
+
+**Regla de entrada PDF:** ningún archivo se considera adaptado por su nombre,
+carpeta, inventario o informe anterior. Cada asignación exige una auditoría nueva
+del hash actual según la sección 0 del plan. Si un validador imprime
+`fidelidad=pendiente_revision`, el libro falla aunque el proceso termine con
+código 0 o también imprima un mensaje de éxito.
 
 **La decisión que no se revierte:** el texto se extrae **en el navegador** con
 pdf.js, nunca en el servidor. Vercel rechaza peticiones de más de ~4,5 MB, así que
@@ -435,6 +443,16 @@ reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias http
 **Clones JG Voice → PDF:** receta para agentes en
 `docs/INTEGRAR-VOZ-JG-VOICE.md`. No armes un API entre las dos apps: el puente
 es el `reference_id` de Fish (misma cuenta). No reviertas el «PDF apaga Fish».
+
+**v2.84.0 — voz Fish estable en PDF** (2026-09-14): el bloque que tropieza
+se reintenta con Fish (servidor 2 + cliente 2) en vez de salir por Edge con
+otro timbre; modelo pagado `s2.1-pro` por defecto, temperatura 0,35, prefetch
+en `unified`. Detalle: `CAMBIOS_TTS.md` §v2.84.0.
+
+**v2.83.0 — voces Voice Design** (2026-09-12): JG Narradora (`jg-narradora`) y
+JG Narrador (`jg-narrador`). Slug con `jg-` porque `narrador` redirige a
+Valentino. Salen 14 voces del selector; la femenina por defecto es ahora
+`jg-narradora` (antes `narradora`, retirada). Detalle: `CAMBIOS_TTS.md` §v2.83.0.
 
 **Motor v2.79.0 — clones JG Voice** (2026-09-11): Roberto, Amy, Dora y Michael.
 Sandra Design Travel salió del selector. Detalle: `CAMBIOS_TTS.md` §v2.79.0.

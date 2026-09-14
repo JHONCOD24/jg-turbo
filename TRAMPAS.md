@@ -880,6 +880,41 @@ distintas. Si la capa de voz inserta palabras (`número`, `number`,
 prueba de pronunciación no cubre la guía: hace falta una que ancle
 `#1` transformado contra el visible.
 
+### 6.13 Los invisibles se escriben con escapes, nunca literales
+
+**Síntoma** (v2.82.0, desarrollo): tras añadir el saneado de invisibles a
+`js/pdf/vozTexto.js`, la herramienta de lectura dejó de ver el archivo
+(«binary file») y `node --check` era la única forma de tocarlo.
+
+**Causa:** los caracteres (`U+00AD`, ancho cero, controles) se pegaron
+**literales** en el fuente en vez de escapes (`\u00AD`). Un literal invisible
+no se ve en el editor, no se puede buscar ni revisar, y los controles
+rompen la detección de texto de varias herramientas.
+
+**Regla:** en el fuente, todo invisible va con escape `\uXXXX` (ASCII puro).
+En las pruebas, igual: el caso se escribe `'peti\u00ADción'`, no con el
+carácter pegado. Si un diff muestra un cambio «vacío» en una línea de
+regex, es un invisible literal: revertirlo y reescribirlo con escape.
+
+### 6.14 Un relevo silencioso a otra voz suena a «la voz cambia por segundos»
+
+**Síntoma** (2026-09-14, PDF + Fish): a media frase la voz cambiaba de timbre
+(a veces más aguda) por segundos y volvía; la guía se desincronizaba con ella.
+
+**Causa:** cada bloque se sintetiza en una petición aparte y `_tts_synthesize`
+hacía `except: pass` ante el primer tropiezo (timeout, 429/503 del nivel
+gratuito): ese bloque salía por Edge con otro timbre y otra frecuencia de
+muestreo (24 kHz frente a 44,1 kHz de Fish). Tres agravantes: se pedía el
+modelo gratuito aunque había plan pagado, no se fijaba `temperature` (0,7
+varía entre bloques) y el prefetch calentaba en modo `regional` mientras la
+lectura va en `unified`.
+
+**Regla:** un bloque que cambia de voz a mitad de lectura es un fallo, no una
+continuidad: se reintenta el MISMO bloque (servidor 2 + cliente 2) antes de
+ceder, y si cede se avisa con toast. Fijar `temperature` baja (0,35) para
+narrar y calentar la caché en el mismo modo que se lee. Pruebas:
+`backend/tests/test_tts_fish_estable.py`, `tests/test_tts_voz_estable.mjs`.
+
 ---
 
 ## 7. Caché y despliegue

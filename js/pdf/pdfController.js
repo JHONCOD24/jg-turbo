@@ -525,7 +525,7 @@ export function inicializarLectorPdf(deps = {}) {
         d.origenPortada === 'dibujada' ||
         !d.titulo ||
         d.titulo.trim().toLowerCase() === '(anonymous)' ||
-        (buscarPortadaCanonica(d.titulo || d.nombreArchivo) && d.origenPortada !== 'real' && d.origenPortada !== 'pdf')
+        (buscarPortadaCanonica(d.titulo || d.nombreArchivo) && d.origenPortada !== 'real')
       )
     );
     if (!candidatos.length) return;
@@ -552,6 +552,16 @@ export function inicializarLectorPdf(deps = {}) {
   let ordenTemporal = [];
   let previoOrganizar = null;
   let arrastreOrg = null;
+
+  /** Portada oficial empaquetada en la app: igual en celular, tablet y escritorio. */
+  function aplicarTapaCanonica(elTapa, doc, tituloDoc) {
+    if (!elTapa || !doc) return false;
+    const ruta = buscarPortadaCanonica(tituloDoc || doc.titulo || doc.nombreArchivo);
+    if (!ruta) return false;
+    elTapa.style.backgroundImage = `url("${ruta}")`;
+    elTapa.dataset.sinPortada = '0';
+    return true;
+  }
 
   /** Título de verdad del documento (sin «(anonymous)» ni «untitled»). */
   function tituloLimpioDe(doc) {
@@ -649,7 +659,9 @@ export function inicializarLectorPdf(deps = {}) {
     tapa.className = 'pdf-org-tapa';
     tapa.dataset.sinPortada = doc.tienePortada ? '0' : '1';
     tapa.dataset.inicial = (tituloDoc || '?').trim().charAt(0).toUpperCase();
-    if (doc.tienePortada) {
+    if (aplicarTapaCanonica(tapa, doc, tituloDoc)) {
+      /* La tapa oficial ya está: no tapa un blob vacío de otro aparato. */
+    } else if (doc.tienePortada) {
       almacen.cargarPortada(doc.id).then((blob) => {
         if (blob && blob.size > 0) {
           const url = URL.createObjectURL(blob);
@@ -959,6 +971,7 @@ export function inicializarLectorPdf(deps = {}) {
     tapa.className = 'pdf-libro-tapa';
     tapa.dataset.sinPortada = doc.tienePortada ? '0' : '1';
     tapa.dataset.inicial = (tituloDoc || '?').trim().charAt(0).toUpperCase();
+    const tapaCanonica = aplicarTapaCanonica(tapa, doc, tituloDoc);
 
     const estadoEl = document.createElement('span');
     estadoEl.className = 'pdf-libro-estado';
@@ -1222,8 +1235,10 @@ export function inicializarLectorPdf(deps = {}) {
     abrir.append(tapa, cuerpo);
     item.appendChild(abrir);
 
-    /* La portada se pide aparte: la lista se pinta sin esperar por las tapas. */
-    if (doc.tienePortada) {
+    /* La portada se pide aparte: la lista se pinta sin esperar por las tapas.
+     * Si hay tapa canónica (catálogo de la app), se muestra ya y no se deja
+     * tapar por un blob vacío o blanco que llegó de otro aparato. */
+    if (!tapaCanonica && doc.tienePortada) {
       almacen.cargarPortada(doc.id).then((blob) => {
         if (blob && blob.size > 0) {
           const url = URL.createObjectURL(blob);
@@ -1246,7 +1261,7 @@ export function inicializarLectorPdf(deps = {}) {
           }).catch(() => {});
         }
       }).catch(() => { /* sin tapa se vive */ });
-    } else {
+    } else if (!tapaCanonica) {
       tapa.dataset.sinPortada = '1';
       ponerCaratula(doc, { buscarReal: true }).then((origen) => {
         if (origen !== 'ninguna') {
@@ -1430,11 +1445,8 @@ export function inicializarLectorPdf(deps = {}) {
     el.btnContinuar.onclick = () => abrirDocumento(doc.id);
 
     el.continuarTapa.style.backgroundImage = '';
-    const canonica = buscarPortadaCanonica(tituloDoc || doc.nombreArchivo);
-    if (canonica) {
-      el.continuarTapa.style.backgroundImage = `url("${canonica}")`;
-    }
-    if (doc.tienePortada) {
+    const tapaCanonicaContinuar = aplicarTapaCanonica(el.continuarTapa, doc, tituloDoc);
+    if (!tapaCanonicaContinuar && doc.tienePortada) {
       almacen.cargarPortada(doc.id).then((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
@@ -2398,15 +2410,20 @@ export function inicializarLectorPdf(deps = {}) {
       el.docTapa.hidden = true;
       el.docTapa.style.backgroundImage = '';
       el.docTapa.title = titulo || '';
-      // Cargar portada sin bloquear la apertura del texto
-      almacen.cargarPortada(id).then((blob) => {
-        if (!blob || !el.docTapa) return;
-        const url = URL.createObjectURL(blob);
-        estado.urlsPortada.push(url);
-        el.docTapa.style.backgroundImage = `url("${url}")`;
+      const docTapaCanon = { titulo: titulo || '', nombreArchivo: '' };
+      if (aplicarTapaCanonica(el.docTapa, docTapaCanon, titulo)) {
         el.docTapa.hidden = false;
         el.docTapa.title = titulo || 'Portada del libro';
-      }).catch(() => {});
+      } else {
+        almacen.cargarPortada(id).then((blob) => {
+          if (!blob || !el.docTapa) return;
+          const url = URL.createObjectURL(blob);
+          estado.urlsPortada.push(url);
+          el.docTapa.style.backgroundImage = `url("${url}")`;
+          el.docTapa.hidden = false;
+          el.docTapa.title = titulo || 'Portada del libro';
+        }).catch(() => {});
+      }
     }
 
     prepararPulidor();
@@ -4567,7 +4584,9 @@ export function inicializarLectorPdf(deps = {}) {
             setTimeout(() => {
               try {
                 const prefs = typeof ttsPrefs === 'function' ? ttsPrefs() : { preferFish: false };
-                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, prefs.bilingualMode || 'regional') : [];
+                /* El PDF lee en modo 'unified' (una sola voz): el precalentado
+                 * usa el mismo modo para que la caché sirva a la cola real. */
+                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, 'unified') : [];
                 if (probe && probe[0] && typeof window.ttsFetchNeuralChunk === 'function') {
                   window.ttsFetchNeuralChunk(probe[0], prefs, 1, 'pdf').catch(()=>{});
                 }
@@ -6942,7 +6961,9 @@ export function inicializarLectorPdf(deps = {}) {
             setTimeout(() => {
               try {
                 const prefs = typeof ttsPrefs === 'function' ? ttsPrefs() : { preferFish: false };
-                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, prefs.bilingualMode || 'regional') : [];
+                /* El PDF lee en modo 'unified' (una sola voz): el precalentado
+                 * usa el mismo modo para que la caché sirva a la cola real. */
+                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, 'unified') : [];
                 if (probe && probe[0] && typeof window.ttsFetchNeuralChunk === 'function') {
                   window.ttsFetchNeuralChunk(probe[0], prefs, 1, 'pdf').catch(()=>{});
                 }
