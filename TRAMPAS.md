@@ -1048,7 +1048,19 @@ Solo debería salir la carpeta viva (`jg-turbo/`).
 (`JG Turbo_OLD/node_modules/playwright`), porque no está instalado en el proyecto nuevo. Para poder
 borrarla, antes `npm i -D playwright` en `jg-turbo`.
 
-### 9.4 Diagnostica midiendo, no leyendo
+### 9.4 `robocopy /XD` excluye por nombre en TODOS los niveles
+
+**Síntoma** (2026-09-14): el deploy v2.85.0 salió `READY` con el marcador
+nuevo, pero `js/pdf/*.js` daban **404** en producción. **Causa:** la copia
+limpia excluía `/XD 'pdf'` para no llevarse los 1,2 GB de libros de `pdf/`…
+y robocopy también descartó `js/pdf/` (34 archivos del lector). Se detectó
+comparando tamaños local↔dominio, se repuso con `Copy-Item` y se redesplegó.
+**Regla:** `/XD` filtra cualquier carpeta que se llame así, no solo la de la
+raíz. Para excluir solo la raíz, copiar en dos pasos (excluir el nombre y
+reponer la ruta buena) y **verificar el conteo de archivos por carpeta**
+antes de publicar, además de los tamaños en el dominio.
+
+### 9.5 Diagnostica midiendo, no leyendo
 
 En esta sesión, tres hipótesis razonables leyendo el código resultaron falsas y se corrigieron
 midiendo: el filtro del cursor de sincronización (el servidor usa `sello`, no `actualizado`, y se

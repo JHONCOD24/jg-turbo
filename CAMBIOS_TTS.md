@@ -80,8 +80,22 @@ pagado, cuerpo estable, tono/velocidad, reintentos) + `test_tts_voces_fish.py`
 `test_tts_voces_biblioteca` + `test_pdf_voz` + `test_tts_narracion` en verde;
 `py_compile` OK; `node --check` del JS incrustado y de `pdfController.js` OK.
 
-**Deploy:** pendiente (esta rama trae WIP de PDF sin commitear: se despliega
-una sola vez al cerrar la tanda completa, según `Agents.md`).
+**Deploy:** `GRjuSGfWKfz5yKXdBEsowQpM6i3X` · `READY` · alias
+`https://jg-turbo.vercel.app` (desde copia limpia en `%TEMP%\opencode\jg-deploy`,
+138 archivos + `js/pdf/` repuesto: ver trampa en `TRAMPAS.md` §9.4). Verificado
+contra el dominio: HTML v2.85.0 + `JG_JS_V=v141`, SW `jg-turbo-shell-v141`,
+`/api/tts-voices` con modelo `s2.1-pro` y 27 voces sin `reference_id`,
+`js/pdf/{pdfController,libroVista,vozTexto,caratula}.js` byte a byte iguales al
+disco, prefetch `unified` ×2 en prod, `POST /api/tts` (`source=pdf`,
+`fish_voice=jg-narradora`) → `200` `fish-neural-regional` `fish:JG Narradora`
+con MP3 válido (`FF FB 90`, 42 630 B).
+
+**Hallazgo del deploy:** el `X-TTS-Model` respondió `s2.1-pro-free` aunque el
+env es `s2.1-pro`: el intento pagado falló y la cadena cayó al gratuito (tal
+como se diseñó). Causa probable: el plan Plus del estudio NO carga créditos
+de API (se recargan aparte en Billing de fish.audio) y sin saldo el pagado
+responde 402. Con saldo en cero, la mejora de estabilidad por reintentos y
+temperatura sí aplica; las garantías de latencia del pagado, no.
 
 ---
 
