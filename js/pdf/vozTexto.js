@@ -33,6 +33,41 @@ export function conPausaDeCapitulo(texto) {
   return t ? `${MARCA_PAUSA_CAPITULO}\n\n${t}` : t;
 }
 
+/**
+ * Sanea lo que el PDF deja cosido al texto y el motor no sabe decir.
+ *
+ * Medido en lectura real (2026-09-12): una palabra normal («petición») sonaba
+ * deletreada por letras y algunos tramos cambiaban de timbre a media frase.
+ * Las causas viven en la extracción, no en la voz:
+ * - el PDF trae tildes desarmadas (`o` + acento suelto) en vez de `ó`;
+ * - guiones blandos e invisibles (`\u00AD`, ancho cero) partidos en la palabra;
+ * - títulos con tracking ancho que llegan como `P E T I C I O N`;
+ * - cortes de renglón con guion (`palabra-\ncontinuación`).
+ * Cada uno convierte una palabra en fichas sueltas, y el sintetizador las
+ * deletrea o las manda a otra voz. Se juntan aquí, solo en la copia que se
+ * habla: el visible, el guardado y el exportado no se tocan.
+ */
+export function sanearTextoParaVoz(texto) {
+  let t = String(texto || '');
+  if (!t) return t;
+  if (typeof t.normalize === 'function') t = t.normalize('NFC');
+  /* Invisibles: guion blando, ancho cero, juntador de palabras, BOM. */
+  t = t.replace(/[\u00AD\u200B-\u200D\uFEFF\u2060\u180E]/g, '');
+  /* Controles sueltos que a veces deja el extractor. */
+  t = t.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  /* Palabra partida al final del renglón: «palabra-\ncontinuación» → una sola.
+   * Solo con salto real en medio: un guion con espacios («autor - lector»)
+   * es un inciso del autor y se conserva. */
+  t = t.replace(/(\p{L})-\s*\n\s*(\p{L})/gu, '$1$2');
+  /* Letras espaciadas («P E T I C I O N»): el tracking del título las separó y
+   * el motor las deletrea. Se juntan solo con 4+ letras: con 3 o menos son
+   * iniciales o sigla («U S A», «a b c») y deletrearlas es lo correcto. Las
+   * iniciales con puntos («J. R. R.») no se tocan: otra regla las junta
+   * conservando los puntos para que suenen de corrido. */
+  t = t.replace(/\b(?:\p{L}\s){3,}\p{L}\b/gu, (m) => m.replace(/\s/g, ''));
+  return t;
+}
+
 /* Conectores que en español piden una pausa antes: sin ella, el partidor de
  * bloques corta donde le toca y la frase se parte a mitad de idea. Se aplica
  * SOLO aquí, en la capa que se le entrega al motor de voz. */
@@ -218,6 +253,10 @@ export function numeroAPalabras(n) {
  */
 export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   if (!texto || typeof texto !== 'string') return '';
+  /* Primero lo que el extractor deja roto (tildes desarmadas, invisibles,
+   * letras espaciadas): si no, el motor deletrea o cambia de voz. */
+  texto = sanearTextoParaVoz(texto);
+  if (!texto) return '';
   const neural = opts.neural !== false; // por defecto true
   const pausarTitulos = opts.pausarTitulos !== false; // por defecto true
   const comasProsodicas = opts.comasProsodicas !== false; // por defecto true
@@ -227,7 +266,8 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
    * marcas §P0700§ / §P1000§ las reconoce el motor (ttsCrearCola) y nunca
    * llegan al sintetizador ni al texto visible. */
   const pausasEstructurales = neural && opts.pausasEstructurales !== false;
-  let salida = texto;
+  let salida = texto.replace(/§P(\d{3,5})§/g, 'ZZJGPAUSA$1ZZ');
+  const restaurarPausas = (valor) => valor.replace(/ZZJGPAUSA(\d{3,5})ZZ/gi, '§P$1§');
   /* Filtro defensivo contra alucinaciones y rechazos de traducción automática */
   salida = salida
     .replace(/(?:no hay texto para traducir[,.]?\s*)?por favor proporciona el bloque de texto que necesitas convertir al español siguiendo las instrucciones dadas[.]?/gi, '')
@@ -250,7 +290,7 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
      * entregar dobles espacios al motor. */
     salida = salida.replace(/[ \t]{2,}/g, ' ').trim();
     if (!neural) salida = salida.replace(/(\d+)\s*%/g, '$1 percent');
-    return salida;
+    return restaurarPausas(salida);
   }
 
   /* ── 0. El aparato crítico no se lee ────────────────────────────────
@@ -265,6 +305,10 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
    * texto que se ve en pantalla y el que se exporta conservan cada marca.
    */
   if (limpiarReferencias) {
+    /* Foliación y cabeceras heredadas de la fuente, aisladas en su renglón. */
+    salida = salida
+      .replace(/^\s*\d{1,4}\s*$/gmu, '')
+      .replace(/^\s*[\p{L}'’. -]{2,50}:\s*\d{1,4}\s*$/gmu, '');
     /* Primero las direcciones: llevan puntos y barras que confundirían a las
      * reglas de abreviaturas que vienen después. */
     salida = salida
@@ -514,5 +558,5 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   salida = salida.replace(/([.!?…]\s+)([a-záéíóúüñ])/g,
     (_, signo, letra) => signo + letra.toUpperCase());
 
-  return salida;
+  return restaurarPausas(salida);
 }

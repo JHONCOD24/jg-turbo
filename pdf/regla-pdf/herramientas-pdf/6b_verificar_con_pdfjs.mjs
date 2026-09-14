@@ -95,6 +95,22 @@ if (fs.existsSync(rutaBloques)) {
       defectos += 1;
     }
 
+    // Prueba de fidelidad completa. Portadilla e índice pueden estar antes del
+    // cuerpo, pero todas las letras y cifras de bloques.json deben aparecer
+    // contiguas y en el mismo orden. Esto detecta una palabra cambiada en el
+    // centro, bloques invertidos y duplicaciones que los anclajes de extremos
+    // no podían detectar.
+    const compactar = (valor) => String(valor || '').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const cuerpoCompleto = compactar(textosBloques.join('\n'));
+    const pdfCompleto = compactar(textoRecompuesto);
+    const posicionCuerpoCompleto = cuerpoCompleto ? pdfCompleto.indexOf(cuerpoCompleto) : -1;
+    console.log(`cuerpo completo y contiguo  : ${posicionCuerpoCompleto >= 0 ? 'sí' : 'NO'}`);
+    if (posicionCuerpoCompleto < 0) {
+      console.log('FALLO: el cuerpo aprobado no aparece completo, contiguo y en orden ✘');
+      defectos += 1;
+    }
+
     // Anclar bloque por bloque, de forma INDEPENDIENTE (sin cursor global que
     // arrastre errores ante repeticiones: la bibliografía repite autores y
     // títulos). Cada bloque debe tener su inicio y su final en el leído, en

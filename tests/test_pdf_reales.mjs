@@ -11,8 +11,15 @@ import { reconstruirDocumento, invarianteLetras } from '../js/pdf/reconstruccion
 import { extraerAtomosDeTextContent } from '../js/pdf/atomos.js';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
-const ruta = process.env.JG_PDF_REAL;
+const args = process.argv.slice(2);
+const esEstricto = process.env.JG_STRICT === '1' || process.env.JG_LOTE === '1' || args.includes('--strict');
+const ruta = process.env.JG_PDF_REAL || args.find((a) => !a.startsWith('--'));
+
 if (!ruta) {
+  if (esEstricto) {
+    console.error('FALLO: en modo estricto/lote una prueba omitida cuenta como NO REALIZADA y rechaza la aceptación.');
+    process.exit(1);
+  }
   console.log('omitido: define JG_PDF_REAL para probar un PDF privado');
   process.exit(0);
 }
@@ -113,6 +120,9 @@ for (const [patron, motivo] of patrones) {
 }
 
 const fallos = [];
+if (r.pendientes > 0) {
+  fallos.push(`hay ${r.pendientes} pendientes o decisiones sin resolver`);
+}
 /* El invariante mira los átomos que sí entraron al texto: los números de
  * página omitidos no cuentan (si se pasa la lista cruda, fallan 27 letras
  * que el motor descartó a propósito). */

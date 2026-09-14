@@ -74,8 +74,12 @@ pdf/*.json
 pdf/*.py
 pdf/*.png
 pdf/_adaptacion/
+pdf/_adaptacion_v2/
+pdf/Libros PDF/
+pdf/Libros listos para JG Turbo/
 pdf/regla-pdf/c3-trabajo/
 pdf/regla-pdf/aprendiz-trabajo/
+pdf/regla-pdf/seduccion-trabajo/
 
 .commandcode/
 .cursor/

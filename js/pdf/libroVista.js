@@ -1582,6 +1582,18 @@ export function initLibroVista({ el, estado, api }) {
         miniPausa.setAttribute('aria-label', colapsado ? 'Mostrar controles de voz' : (sonando ? 'Pausar la lectura' : 'Seguir leyendo'));
         miniPausa.dataset.estado = sonando ? 'sonando' : 'pausa';
       }
+      /* Botón ▶/⏸ de la cabecera: refleja lo mismo que el Escuchar del dock.
+       * En reposo ofrece iniciar; sonando ofrece pausar; en pausa, seguir.
+       * No decide solo: al pulsarlo se pulsa el dock por dentro. */
+      const topVoz = document.getElementById('btnPdfTopVoz');
+      if (topVoz) {
+        const enPausa = boton.classList.contains('is-paused');
+        topVoz.dataset.estado = sonando && !enPausa ? 'sonando' : 'quieto';
+        topVoz.setAttribute('aria-pressed', sonando && !enPausa ? 'true' : 'false');
+        const nombreTop = !sonando ? 'Escuchar el capítulo' : (enPausa ? 'Seguir leyendo' : 'Pausar la lectura');
+        topVoz.setAttribute('aria-label', nombreTop);
+        topVoz.setAttribute('title', nombreTop);
+      }
     };
     new MutationObserver(pintar).observe(boton, { attributes: true, attributeFilter: ['aria-pressed', 'class'] });
     if (parar) new MutationObserver(pintar).observe(parar, { attributes: true, attributeFilter: ['style', 'hidden'] });
@@ -1715,6 +1727,17 @@ export function initLibroVista({ el, estado, api }) {
   if (vozMiniPausa) {
     vozMiniPausa.addEventListener('click', () => {
       if (vozMini && vozMini.dataset.mini === 'no') { fijarMiniAbierto(true); return; }
+      const toggle = document.querySelector('#pdfDockNav [data-tts-action="toggle"]');
+      if (toggle) toggle.click();
+    });
+  }
+
+  /* Cabecera: el cuadrito ▶/⏸ no lee solo. Pulsa por dentro el Escuchar del
+   * dock, que ya sabe iniciar, pausar y reanudar el capítulo. Una sola vía,
+   * dos botones: no se pueden desincronizar. */
+  const topVoz = $$('btnPdfTopVoz');
+  if (topVoz) {
+    topVoz.addEventListener('click', () => {
       const toggle = document.querySelector('#pdfDockNav [data-tts-action="toggle"]');
       if (toggle) toggle.click();
     });

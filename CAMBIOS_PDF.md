@@ -3,6 +3,84 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-14 · v2.84.0 · Carátula de *Esto es marketing* en todos los aparatos (`JG_JS_V=v140`, shell-v140)
+
+**Lo pedido:** la portada de *Esto es marketing* (Seth Godin) no aparecía; las carátulas debían verse igual en celular, tablet y escritorio.
+
+**Causa:** el libro no estaba en `PORTADAS_CANONICAS`. La cuadrícula y el lector solo pintaban el JPEG guardado en ese aparato. Si el PDF se sincronizó sin imagen, o la página 1 no viajó, el otro dispositivo veía el recuadro vacío o la inicial dibujada.
+
+**Corrección:**
+- Portada oficial empaquetada en `/img/portadas/esto-es-marketing.jpg` (380 px, ~36 KB) y también Pre-suasión (`pre-suasion.jpg`), que estaba en el mismo hueco.
+- Claves en `caratula.js`: `esto es marketing`, `this is marketing`, `pre suasion`.
+- Precache en `sw.js` para que la PWA las tenga sin red.
+- `aplicarTapaCanonica` pinta esa URL de inmediato en biblioteca, Organizar, «Seguir leyendo» y lector. No espera IndexedDB ni la nube, y no deja que un blob vacío de otro aparato tape la tapa real.
+- `completarCaratulasQueFaltan` ya sustituye también las extraídas del PDF (`origenPortada === 'pdf'`) cuando hay tapa canónica, para unificar los tres aparatos.
+
+**Pruebas:** `node tests/test_pdf_caratula.mjs` (títulos ES/EN, con autor y sello JG Turbo).
+**Deploy:** `dpl_8wP3iWsWmpMtHwZwEMzyocqYnPRp` → https://jg-turbo.vercel.app (HTML v140, SW v140, ambas JPEG 200).
+
+## 2026-09-12 · v2.83.0 · Voces JG Narradora y JG Narrador en el selector (`JG_JS_V=v139`, shell-v139)
+
+Dos voces nuevas creadas con Fish Voice Design entran a «Fish Audio · español ·
+femeninas/masculinas» del lector, y salen 14 del selector (lo guardado con ellas
+suena JG Narradora o Valentino). Sin cambios al lector ni al motor. Detalle y
+deploy: `CAMBIOS_TTS.md` §v2.83.0.
+
+## 2026-09-12 · v2.82.0 · Botón ▶/⏸ en la cabecera + la voz ya no deletrea (`JG_JS_V=v138`, shell-v138)
+
+Lo pedido (lectura en vertical, capítulos largos): 1) para pausar había que
+bajar hasta el dock; 2) palabras normales sonaban deletreadas por letras
+(«petición» → P-E-T-I-C-I-Ó-N); 3) el timbre cambiaba a media frase.
+
+**Botón de voz en la cabecera (`index.html` + `js/pdf/libroVista.js`):**
+- `#btnPdfTopVoz` en `.pdf-doc-acciones`: cuadrito solo-icono (⏸ sonando,
+  ▶ en reposo/pausa), mismas clases que Buscar/Pantalla para no romper la fila.
+- No lee solo: pulsa por dentro el Escuchar del dock
+  (`#pdfDockNav [data-tts-action="toggle"]`), que ya sabe iniciar, pausar y
+  reanudar. Una sola vía, dos botones: no se pueden desincronizar.
+- El estado se refleja observando el toggle del dock (`is-paused`,
+  `aria-pressed`), igual que el mini flotante. Sin cambios al motor TTS.
+
+**La voz ya no deletrea (`js/pdf/vozTexto.js` → `sanearTextoParaVoz`, motor
+TTS v2.80.0, detalle en `CAMBIOS_TTS.md`):**
+- Causas medidas en la copia que oye el motor (el visible no se toca):
+  tildes desarmadas (`o` + acento suelto), guiones blandos e invisibles,
+  títulos con tracking ancho (`P E T I C I O N`) y guion de fin de renglón.
+  Cada uno partía la palabra en fichas y el sintetizador la deletreaba o la
+  mandaba a otra voz.
+- Se sanea al entrar a `prepararParaVoz`, así que cubre Escuchar, Desde aquí,
+  audiolibro y MP3 (todos pasan por `ttsAplicarCapaVozPdf`). El PDF sigue en
+  modo `unified` (una sola voz, sin cortes ES/EN por frase).
+- Límites deliberados (los puso una prueba vieja, §2 de `TRAMPAS.md`): con 3
+  letras o menos no se junta («U S A» se deletrea, y está bien: es sigla); las
+  iniciales con puntos («J. R. R.») no se tocan (otra regla las junta con
+  puntos para que suenen de corrido).
+
+### Verificación
+
+- `tests/test_pdf_voz.mjs`: 10 comprobaciones nuevas del saneado, en verde
+  (total del archivo en verde, 0 fallos).
+- Batería unitaria 17/17 archivos en verde (`test_pdf_*`, `test_tts_*`).
+- `tests/verificar_pdf_geometria.mjs`: en verde en las 6 pantallas (el botón
+  nuevo no desborda, mide ≥44 px, 0 errores JS).
+- `tests/verificar_pdf_navegador.mjs`: 92 OK + 1 FALLO + corte en el mismo
+  punto **con y sin** estos cambios (verificado con `git stash`): son los 2
+  preexistentes ya documentados en v2.81.0 (OCR `avisa que el texto salió de
+  un reconocimiento` y continuidad-tras-recarga). Cero regresiones.
+- Pendiente (cierre de tanda): commitear y `git push origin main` (GitHub no
+  está conectado a Vercel: solo respalda, no despliega).
+
+Despliegue de producción: `HDmcgGmYvqfvKUA5syDQdBP7LyV6` (READY), alias
+`https://jg-turbo.vercel.app`. Verificado contra el dominio (con `?nocache`,
+no solo el marcador): HTML 200 con `v2.82.0` + `btnPdfTopVoz` + `v138`, SW
+shell-v138, `vozTexto.js`/`libroVista.js`/`pdfController.js` idénticos byte a
+byte al local con `sanearTextoParaVoz` y `btnPdfTopVoz` servidos,
+`/api/health` ok (`youtube_auto:true`), humo en navegador contra prod (botón
+y dock presentes, 0 errores JS). Nota: `.pytest_cache` ilegible en este
+equipo, así que se desplegó desde copia limpia con `.vercel/` (caso
+documentado en `TRAMPAS.md`); el primer deploy de la tanda quedó sin el
+marcador v2.82.0 en la línea 1 y se redesplegó en la misma tanda.
+
 ## 2026-09-12 · v2.81.0 · Contenido con scroll agarrable y chuleado manual (`JG_JS_V=v137`, shell-v137)
 
 Lo pedido: 1) en escritorio la lista de Contenido casi no se podía desplazar
@@ -230,9 +308,10 @@ guardado, visible o exportado: todo vive en la capa de voz o en metadatos.
   con explicación en el tooltip. Sin señales en el nombre no se muestra nada
   (mejor callar que etiquetar mal). Solo lectura de metadatos.
 
-**Regla permanente (`pdf/regla-pdf/REGLA ADAPTAR PDF.md` §8):** checklist de
-nombres propios, pausa de títulos por capa de voz y prueba de escucha de
-2 minutos antes de entregar un adaptado.
+**Regla permanente:** consulta
+`pdf/regla-pdf/PLAN_OPERATIVO_DEFINITIVO_PDF_JG_TURBO.md`, fases 11 y 15. Exige
+comprobación de nombres propios, pausas por capa de voz y escucha humana completa
+antes de aprobar un libro.
 
 ### Verificación
 
@@ -331,8 +410,9 @@ Fish/Edge lo leían como «hashtag» porque aprendieron en inglés.
 - Solo capa de voz: el texto visible, guardado y exportado queda intacto, y
   los libros ya guardados lo reciben solos, sin reprocesar.
 - Regla permanente para futuros agentes en
-  `pdf/regla-pdf/REGLA ADAPTAR PDF.md` §12: ante un símbolo mal leído se
-  ajusta la voz, nunca el PDF.
+  `pdf/regla-pdf/PLAN_OPERATIVO_DEFINITIVO_PDF_JG_TURBO.md`, fase 11 y apéndice
+  A.6: ante un símbolo mal leído se ajusta la voz cuando el texto visible es
+  correcto.
 - Incluye trabajo terminado del otro agente en esta tanda (Aprendiz de
   Brujo): marcador que se perdía al partir títulos (`Tit.split` hereda `_m`),
   `/Lang` fijado con PyMuPDF tras compilar, `workerSrc` como `file://` en

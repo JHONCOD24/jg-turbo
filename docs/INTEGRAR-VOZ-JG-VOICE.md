@@ -267,6 +267,10 @@ Fuente de verdad: `FISH_CATALOGO_BASE` en `origin/main`, no un `index.html` suci
 | Dora | `dora` | female | `d0d60d228b744e2b9fc7fd00bc6f6b3a` | en el selector |
 | Michael | `michael` | male | `6b33f00f4d7a49d89a1c7a6f7abec6c4` | en el selector |
 | Sandra Design Travel | `sandra-design-travel` | female | `ffd08eb8a7424826a31aaa1f526a3762` | retirada → Amy |
+| JG Narradora (Voice Design) | `jg-narradora` | female | `31cdd5b542c64e26be8aba2d9ee62ca2` | en el selector (v2.83.0) |
+| JG Narrador (Voice Design) | `jg-narrador` | male | `88d6dac3d12a402f9aa87ccf3a6c94b2` | en el selector (v2.83.0) |
+
+Las de Voice Design no vienen de JG Voice: se crean en el estudio de fish.audio con la misma cuenta. La receta es idéntica (sección 5); solo cambia de dónde sale el id.
 
 Clones viejos de JG Voice (Jhon, Jesús Narrador, Angelica, …) **no** están en Turbo a propósito: solo se meten los que el usuario pide.
 

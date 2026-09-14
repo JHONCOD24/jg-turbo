@@ -66,21 +66,29 @@ try {
     'la lista de acentos regionales queda vacía');
 }
 
+/* Retiradas el 2026-09-12 (v2.83.0) → equivalente del mismo género que queda. */
+const RETIRADAS_0912 = {
+  'narradora': 'jg-narradora', 'latina': 'jg-narradora', 'voz-a': 'jg-narradora',
+  'sheyla': 'jg-narradora', 'latina-kika': 'jg-narradora', 'voz-platica': 'jg-narradora',
+  'sabio': 'valentino', 'terror': 'valentino', 'sabio-expandido': 'valentino',
+  'brian-tracy': 'valentino', 'morgan-freeman': 'valentino', 'palabra-biblica': 'valentino',
+  'morillo': 'valentino', 'narrador-documental': 'valentino',
+};
+
 /* ── Fish retiradas fuera del catálogo local ──────────────────────── */
 {
   const ids = api.TTS_FISH_CATALOGO_LOCAL.map((v) => v.id);
-  for (const fuera of ['nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo', 'sarah', 'paula', 'adrian', 'ethan', 'sandra-design-travel']) {
+  for (const fuera of ['nico-robin', 'chica', 'nagi', 'locutor-k', 'narrador', 'loquendo', 'sarah', 'paula', 'adrian', 'ethan', 'sandra-design-travel', ...Object.keys(RETIRADAS_0912)]) {
     comprobar(!ids.includes(fuera), `"${fuera}" ya no está en el catálogo`);
   }
-  for (const queda of ['narradora', 'colombiana', 'latina', 'voz-a', 'valentino', 'sabio', 'terror', 'leonardo']) {
+  for (const queda of ['colombiana', 'valentino', 'leonardo']) {
     comprobar(ids.includes(queda), `"${queda}" se conserva`);
   }
   for (const nueva of [
-    'julio-ciencia', 'sheyla', 'farick', 'sabio-expandido', 'enrique-hoffman',
-    'voz-locutor', 'brian-tracy', 'morgan-freeman', 'mario-alonso-puig', 'tatiana-mae',
-    'hilary-narrador', 'palabra-biblica', 'morillo', 'narrador-documental', 'jim-hopper',
-    'latina-kika', 'voz-platica', 'roberto',
-    'amy', 'dora', 'michael',
+    'julio-ciencia', 'farick', 'enrique-hoffman',
+    'voz-locutor', 'mario-alonso-puig', 'tatiana-mae',
+    'hilary-narrador', 'jim-hopper', 'roberto',
+    'amy', 'dora', 'michael', 'jg-narradora', 'jg-narrador',
   ]) {
     comprobar(ids.includes(nueva), `"${nueva}" aparece en el catálogo`);
   }
@@ -94,6 +102,12 @@ try {
   comprobar(amy && amy.gender === 'female' && amy.name === 'Amy', 'Amy es femenina');
   comprobar(dora && dora.gender === 'female' && dora.name === 'Dora', 'Dora es femenina');
   comprobar(michael && michael.gender === 'male' && michael.name === 'Michael', 'Michael es masculina');
+  const jgNarradora = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'jg-narradora');
+  const jgNarrador = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'jg-narrador');
+  comprobar(jgNarradora && jgNarradora.gender === 'female' && jgNarradora.name === 'JG Narradora' && jgNarradora.lang === 'es',
+    'JG Narradora es femenina y en español');
+  comprobar(jgNarrador && jgNarrador.gender === 'male' && jgNarrador.name === 'JG Narrador' && jgNarrador.lang === 'es',
+    'JG Narrador es masculina y en español');
 }
 
 /* ── La lista ofrecida filtra aunque el servidor las mande ───────── */
@@ -101,41 +115,43 @@ try {
   api.ttsFishInfo.list = [
     { id: 'nico-robin', gender: 'female', name: 'Nico Robin', lang: 'es' },
     { id: 'sarah', gender: 'female', name: 'Sarah', lang: 'en' },
-    { id: 'narradora', gender: 'female', name: 'Narradora', lang: 'es' },
+    { id: 'jg-narradora', gender: 'female', name: 'JG Narradora', lang: 'es' },
     { id: 'valentino', gender: 'male', name: 'Valentino', lang: 'es' },
   ];
   const ids = api.ttsFishLista().map((v) => v.id);
   comprobar(!ids.includes('nico-robin') && !ids.includes('sarah'),
     'las retiradas se filtran aunque vengan del servidor');
-  comprobar(ids.includes('narradora') && ids.includes('valentino'),
+  comprobar(ids.includes('jg-narradora') && ids.includes('valentino'),
     'las que quedan se siguen ofreciendo');
   api.ttsFishInfo.list = api.TTS_FISH_CATALOGO_LOCAL.slice();
 }
 
 /* ── Lo guardado se redirige, no se rompe ─────────────────────────── */
 {
-  comprobar(api.ttsFishPorId('nico-robin')?.id === 'narradora', 'nico-robin → narradora');
-  comprobar(api.ttsFishPorId('female')?.id === 'narradora', 'fish:female histórico → narradora');
+  comprobar(api.ttsFishPorId('nico-robin')?.id === 'jg-narradora', 'nico-robin → jg-narradora');
+  comprobar(api.ttsFishPorId('female')?.id === 'jg-narradora', 'fish:female histórico → jg-narradora');
   comprobar(api.ttsFishPorId('locutor-k')?.id === 'valentino', 'locutor-k → valentino');
   comprobar(api.ttsFishPorId('male')?.id === 'valentino', 'fish:male histórico → valentino');
   comprobar(api.ttsFishPorId('narrador')?.id === 'valentino', 'narrador → valentino');
   comprobar(api.ttsFishPorId('sarah') === null, 'las inglesas no resuelven a nada');
-  comprobar(api.ttsFishPorId('narradora')?.id === 'narradora', 'las que quedan resuelven igual');
-  comprobar(api.ttsFishPorId('sheyla')?.id === 'sheyla', 'las nuevas resuelven por su slug');
+  comprobar(api.ttsFishPorId('colombiana')?.id === 'colombiana', 'las que quedan resuelven igual');
   comprobar(api.ttsFishPorId('tatiana-mae')?.id === 'tatiana-mae', 'tatiana-mae resuelve por su slug');
   comprobar(api.ttsFishPorId('hilary-narrador')?.id === 'hilary-narrador', 'hilary-narrador resuelve');
-  comprobar(api.ttsFishPorId('palabra-biblica')?.id === 'palabra-biblica', 'palabra-biblica resuelve');
-  comprobar(api.ttsFishPorId('morillo')?.id === 'morillo', 'morillo resuelve');
-  comprobar(api.ttsFishPorId('narrador-documental')?.id === 'narrador-documental', 'narrador-documental resuelve');
   comprobar(api.ttsFishPorId('jim-hopper')?.id === 'jim-hopper', 'jim-hopper resuelve');
-  comprobar(api.ttsFishPorId('latina-kika')?.id === 'latina-kika', 'latina-kika resuelve');
-  comprobar(api.ttsFishPorId('voz-platica')?.id === 'voz-platica', 'voz-platica resuelve');
-  comprobar(api.ttsFishPorId('morgan-freeman')?.id === 'morgan-freeman', 'morgan-freeman resuelve');
+  for (const [viejo, destino] of Object.entries(RETIRADAS_0912)) {
+    comprobar(api.ttsFishPorId(viejo)?.id === destino, `${viejo} guardada → ${destino}`);
+    comprobar(api.ttsFishPorId('fish:' + viejo)?.id === destino, `fish:${viejo} guardada → ${destino}`);
+  }
+  comprobar(!/[?:|]\s*'narradora'/.test(html) && !/'Narradora'/.test(html),
+    'ningún respaldo del código apunta a la Narradora retirada');
   comprobar(api.ttsFishPorId('roberto')?.id === 'roberto', 'roberto resuelve por su slug');
   comprobar(api.ttsFishPorId('fish:roberto')?.id === 'roberto', 'fish:roberto resuelve igual');
   comprobar(api.ttsFishPorId('amy')?.id === 'amy', 'amy resuelve por su slug');
   comprobar(api.ttsFishPorId('dora')?.id === 'dora', 'dora resuelve por su slug');
   comprobar(api.ttsFishPorId('michael')?.id === 'michael', 'michael resuelve por su slug');
+  comprobar(api.ttsFishPorId('jg-narradora')?.id === 'jg-narradora', 'jg-narradora resuelve por su slug');
+  comprobar(api.ttsFishPorId('fish:jg-narrador')?.id === 'jg-narrador', 'fish:jg-narrador resuelve igual');
+  comprobar(api.ttsFishPorId('narrador')?.id === 'valentino', 'narrador a secas sigue yendo a valentino, no a jg-narrador');
   comprobar(api.ttsFishPorId('sandra-design-travel')?.id === 'amy',
     'sandra-design-travel guardada → amy');
   comprobar(api.ttsFishPorId('') === null && api.ttsFishPorId(null) === null, 'vacío no rompe');

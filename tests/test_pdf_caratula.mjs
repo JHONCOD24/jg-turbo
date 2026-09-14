@@ -175,6 +175,18 @@ function comprobar(condicion, mensaje) {
     'reconoce la portada canónica de Conversaciones con Dios 3');
   comprobar(buscarPortadaCanonica('El Arte de la Seducción') === '/img/portadas/el-arte-de-la-seduccion.jpg',
     'reconoce la portada canónica de El Arte de la Seducción');
+  comprobar(buscarPortadaCanonica('El aprendiz de brujo') === '/img/portadas/aprendiz-de-brujo.jpg',
+    'reconoce la portada canónica de El aprendiz de brujo');
+  comprobar(buscarPortadaCanonica('Esto es marketing') === '/img/portadas/esto-es-marketing.jpg',
+    'reconoce la portada canónica de Esto es marketing');
+  comprobar(buscarPortadaCanonica('Esto es marketing - Seth Godin - JG Turbo') === '/img/portadas/esto-es-marketing.jpg',
+    'reconoce Esto es marketing aunque el título traiga autor y sello');
+  comprobar(buscarPortadaCanonica('This Is Marketing') === '/img/portadas/esto-es-marketing.jpg',
+    'reconoce el título original en inglés This Is Marketing');
+  comprobar(buscarPortadaCanonica('Pre-suasión') === '/img/portadas/pre-suasion.jpg',
+    'reconoce la portada canónica de Pre-suasión');
+  comprobar(buscarPortadaCanonica('Pre-suasión - Un método revolucionario para influir y persuadir') === '/img/portadas/pre-suasion.jpg',
+    'reconoce Pre-suasión con el subtítulo');
   comprobar(buscarPortadaCanonica('Un libro cualquiera sin portada') === null,
     'devuelve null para libros no canónicos');
 }

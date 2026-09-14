@@ -44,6 +44,13 @@ def preparar(ruta, ancho_pt, giro=0):
         salida = dst + ".jpg"
     return salida, im.width, im.height
 
+def es_imagen_vacia(ruta):
+    """Descarta páginas/recortes sin información visible."""
+    im = Image.open(ruta).convert("L")
+    mini = im.resize((120, 120))
+    claros = sum(1 for px in mini.getdata() if px >= 250)
+    return claros / (120 * 120) >= 0.997
+
 # ── Coser esquemas partidos entre dos páginas ─────────────────────────
 COSER = [tuple(x) for x in (P.get("coser") or [])]
 cosidos = {}
@@ -94,10 +101,18 @@ for x in B:
             x["alto"] = im.height * 72 / 300
             x["ruta"] = ruta
         if ruta not in mapa:
-            mapa[ruta] = preparar(ruta, min(ANCHO_MARCO, x["ancho"] * 1.4))
+            preparado = preparar(ruta, min(ANCHO_MARCO, x["ancho"] * 1.4))
+            if es_imagen_vacia(preparado[0]):
+                print(f"  omitida imagen vacía: {ruta}")
+                continue
+            mapa[ruta] = preparado
     elif x["rol"] == "lamina":
         if x["img"] not in mapa:
-            mapa[x["img"]] = preparar(x["img"], ANCHO_MARCO, x.get("giro", 0))
+            preparado = preparar(x["img"], ANCHO_MARCO, x.get("giro", 0))
+            if es_imagen_vacia(preparado[0]):
+                print(f"  omitida lámina vacía: {x['img']}")
+                continue
+            mapa[x["img"]] = preparado
     bloques.append(x)
 
 json.dump(mapa, open("mapa_img.json", "w"))

@@ -393,6 +393,9 @@ export const PORTADAS_CANONICAS = [
   { clave: 'el placebo eres tu', ruta: '/img/portadas/el-placebo-eres-tu.jpg' },
   { clave: 'cashvertising', ruta: '/img/portadas/cashvertising.jpg' },
   { clave: 'el aprendiz de brujo', ruta: '/img/portadas/aprendiz-de-brujo.jpg' },
+  { clave: 'esto es marketing', ruta: '/img/portadas/esto-es-marketing.jpg' },
+  { clave: 'this is marketing', ruta: '/img/portadas/esto-es-marketing.jpg' },
+  { clave: 'pre suasion', ruta: '/img/portadas/pre-suasion.jpg' },
 ];
 
 /**

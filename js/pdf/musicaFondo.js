@@ -702,6 +702,7 @@ class GestorMusicaFondo {
   }
 
   setAnimo(animoId) {
+    this.pistasPerfilLibro = null;
     if (!ANIMOS[animoId]) return;
     this.animo = animoId;
     this.automatica = false;
@@ -725,6 +726,7 @@ class GestorMusicaFondo {
   }
 
   setPista(pistaId) {
+    this.pistasPerfilLibro = null;
     const pista = CATALOGO_PISTAS.find((p) => p.id === pistaId);
     if (!pista) return;
     this.pistaId = pistaId;

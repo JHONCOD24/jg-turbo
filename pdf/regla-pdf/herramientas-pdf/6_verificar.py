@@ -192,8 +192,16 @@ if ARGV_PDF:
         inter = tt[10:-10]
         signos = sum(1 for c in inter if c in ".,;:¿?¡!")
         return signos >= 2
-    primer = next((x["txt"] for x in B
-                   if x["rol"] == "cuerpo" and _es_narrativo(x.get("txt"))), None)
+    if SOLO_B:
+        # En anexos la bibliografía usa cuerpo_min. Buscar un cuerpo narrativo
+        # posterior podía caer en una cita repetida y declarar miles de
+        # palabras perdidas aunque sí estuvieran presentes.
+        primer = next((x.get("txt") for x in B
+                       if x.get("rol") in ("cuerpo_min", "cuerpo")
+                       and len(x.get("txt", "")) > 80), None)
+    else:
+        primer = next((x["txt"] for x in B
+                       if x["rol"] == "cuerpo" and _es_narrativo(x.get("txt"))), None)
     if primer is None:
         primer = next((x["txt"] for x in B
                        if x["rol"] == "cuerpo" and len(x.get("txt", "")) > 60), None)

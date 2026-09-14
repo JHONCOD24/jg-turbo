@@ -1,7 +1,7 @@
 /* Pruebas de la capa de voz: pausas que suenan bien SIN tocar el texto real.
  * Ejecutar: node tests/test_pdf_voz.mjs
  */
-import { prepararParaVoz, textoVozParaAncla, elegirCompactoVoz } from '../js/pdf/vozTexto.js';
+import { prepararParaVoz, sanearTextoParaVoz, textoVozParaAncla, elegirCompactoVoz } from '../js/pdf/vozTexto.js';
 import { compactarTexto } from '../js/pdf/guiaAnclas.js';
 import fs from 'fs';
 import path from 'path';
@@ -371,6 +371,40 @@ const conPausaTitulo = (sale, titulo) =>
   const tConPunto = prepararParaVoz('Definir a tu cliente ideal (FRED).\n\nCuerpo.', 'es');
   comprobar(!/\(FRED\)\.:/.test(tConPunto) && !tConPunto.includes('..'),
     'un título que ya trae punto no recibe pausa doble');
+}
+
+{
+  const vozSinFolios = prepararParaVoz('Texto anterior.\nCialdini: 281\n282\nTexto posterior.', 'es');
+  comprobar(!/Cialdini|\b281\b|\b282\b/.test(vozSinFolios),
+    'las cabeceras y números de página aislados no llegan a la voz');
+  comprobar(vozSinFolios.includes('Texto anterior') && vozSinFolios.includes('Texto posterior'),
+    'quitar la foliación conserva el texto narrativo alrededor');
+}
+
+/* ── Saneado previo: lo roto del extractor no llega al motor (2026-09-12) ──
+ * Una palabra normal llegaba deletreada por letras y algunos tramos cambiaban
+ * de timbre: tildes desarmadas, guiones blandos, tracking espaciado y guion
+ * de fin de renglón. Todo se junta en la copia de voz; el visible no se toca. */
+{
+  comprobar(sanearTextoParaVoz('P E T I C I O N fue clara.') === 'PETICION fue clara.',
+    'las letras espaciadas por tracking se juntan en la palabra');
+  comprobar(sanearTextoParaVoz('peti\u00ADción lista.') === 'petición lista.',
+    'el guion blando cosido a la palabra se quita');
+  comprobar(sanearTextoParaVoz('evolucio\u0301n lenta.') === 'evolución lenta.',
+    'la tilde desarmada del PDF se recompone');
+  comprobar(sanearTextoParaVoz('palabra-\ncontinuación.') === 'palabracontinuación.',
+    'el guion de fin de renglón une sin dejar hueco');
+  comprobar(sanearTextoParaVoz('La relación autor - lector cambia.') === 'La relación autor - lector cambia.',
+    'un inciso con guion y espacios se conserva');
+  comprobar(sanearTextoParaVoz('U. S. A. grande.') === 'U. S. A. grande.',
+    'las iniciales con puntos no se tocan (otra regla las junta con puntos)');
+  comprobar(sanearTextoParaVoz('U S A grande.') === 'U S A grande.',
+    'con 3 letras o menos se conserva el espaciado (sigla: deletrear es correcto)');
+  const vozEspaciada = prepararParaVoz('La P E T I C I O N fue clara y justa.', 'es');
+  comprobar(!/P E T I C I O N/.test(vozEspaciada) && vozEspaciada.includes('PETICION'),
+    'prepararParaVoz entrega la palabra junta al motor');
+  comprobar(sanearTextoParaVoz('') === '' && sanearTextoParaVoz(null) === '',
+    'el saneado no rompe con vacío ni null');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

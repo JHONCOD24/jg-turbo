@@ -19,6 +19,7 @@ Si una palabra no cabe de ancho (URLs larguísimas de las notas), ese párrafo
 parte, que es lo que la app leería mal.
 """
 import json, os, re, sys
+from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import A5
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
@@ -31,12 +32,21 @@ from reportlab.platypus import (BaseDocTemplate, PageTemplate, Frame, Paragraph,
 
 TITULO = sys.argv[1] if len(sys.argv) > 1 else "Libro"
 AUTOR = sys.argv[2] if len(sys.argv) > 2 else ""
-SALIDA = re.sub(r"[^\w áéíóúñÁÉÍÓÚÑ-]", "", TITULO)[:60] + " - adaptado para lectura.pdf"
+_titulo_archivo = re.sub(r'[<>:"/\\|?*]', " - ", TITULO)
+_titulo_archivo = re.sub(r"\s+", " ", _titulo_archivo).strip(" .")
+SALIDA = _titulo_archivo[:90].rstrip(" .") + " - adaptado para lectura.pdf"
 
 F = "/usr/share/fonts/truetype/crosextra/"
+posibles_fuentes = [
+    os.path.join(os.path.dirname(__file__), "fonts"),
+    os.path.abspath("fonts"),
+    r"c:\Users\juanl\Documents\Proyectos\jg-turbo\pdf\regla-pdf\herramientas-pdf\fonts",
+    "/usr/share/fonts/truetype/crosextra/"
+]
+F = next((d for d in posibles_fuentes if os.path.exists(os.path.join(d, "Caladea-Regular.ttf"))), "/usr/share/fonts/truetype/crosextra/")
 for n, f in [("Cal", "Caladea-Regular"), ("Cal-B", "Caladea-Bold"),
              ("Cal-I", "Caladea-Italic"), ("Cal-BI", "Caladea-BoldItalic")]:
-    pdfmetrics.registerFont(TTFont(n, F + f + ".ttf"))
+    pdfmetrics.registerFont(TTFont(n, os.path.join(F, f + ".ttf")))
 registerFontFamily("Cal", normal="Cal", bold="Cal-B", italic="Cal-I", boldItalic="Cal-BI")
 
 ANCHO, ALTO = A5
@@ -122,6 +132,7 @@ def ajusta(plano, est):
     if largo <= anc or largo == 0:
         return st
     f = max(6.0, st.fontSize * anc / largo * 0.97)
+    f = max(4.5, st.fontSize * anc / largo * 0.95)
     return ParagraphStyle(st.name + "_aj", parent=st, fontSize=f, leading=f * 1.45)
 
 def Pa(txt, est, m=None, plano=None):
@@ -193,7 +204,12 @@ while i < len(B):
         continue
     if r in ("cuerpo", "cuerpo_min"):
         est = "cita" if x.get("nivel") == 1 else ("cuerpo_min" if r == "cuerpo_min" else "cuerpo")
-        hist.append(Pa(x["html"], est, plano=x["txt"]))
+        # El aparato bibliográfico llega con cursivas fragmentadas entre
+        # bloques. Algunas fuentes dejan etiquetas sin pareja y ReportLab
+        # descarta silenciosamente todo lo posterior. En cuerpo_min manda el
+        # texto canónico escapado: conserva el 100 % y evita ese truncamiento.
+        contenido = escape(x["txt"]) if r == "cuerpo_min" else x["html"]
+        hist.append(Pa(contenido, est, plano=x["txt"]))
         i += 1
         continue
     if r == "pie":

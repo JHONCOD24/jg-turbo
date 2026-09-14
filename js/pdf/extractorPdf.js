@@ -140,7 +140,7 @@ export async function leerIndice(doc) {
  * `validarAdjuntoContrapaginas`. Un adjunto que no supere todo esto no se usa:
  * el lector cae a la extracción ordinaria (auditoría 2026-09-10, hallazgo 4).
  */
-const VERSIONES_ADJUNTO_SOPORTADAS = /^1\.\d+\.\d+$/;
+const VERSIONES_ADJUNTO_SOPORTADAS = new Set(['1.1.0']);
 
 export async function leerAdjuntoEstructurado(doc) {
   if (!doc) return null;
@@ -177,7 +177,7 @@ export async function leerAdjuntoEstructurado(doc) {
 
     if (!datos || typeof datos !== 'object') return null;
     const version = String(datos.version || '');
-    if (!VERSIONES_ADJUNTO_SOPORTADAS.test(version)) {
+    if (!VERSIONES_ADJUNTO_SOPORTADAS.has(version)) {
       console.warn('[jg-pdf] Adjunto con versión no soportada:', version, '— se usa extracción ordinaria.');
       return null;
     }
@@ -188,6 +188,11 @@ export async function leerAdjuntoEstructurado(doc) {
     }
     // Identificadores estables por bloque: sin ellos no hay trazabilidad.
     if (!datos.bloques.every((b) => b && typeof b.id === 'string' && b.id)) return null;
+    const ids = datos.bloques.map((b) => b.id);
+    if (new Set(ids).size !== ids.length) {
+      console.warn('[jg-pdf] Adjunto con identificadores de bloque duplicados.');
+      return null;
+    }
 
     const rolesValidos = new Set([
       'cuerpo', 'capitulo', 'capitulo_sub', 'seccion',
@@ -255,50 +260,28 @@ function normalizarPerfilMusical(perfil) {
  *
  * @returns {{valido:boolean, cobertura:number, detalle:string}}
  */
-export function validarAdjuntoContrapaginas(adjunto, paginas, { minimoCobertura = 0.97 } = {}) {
+export function validarAdjuntoContrapaginas(adjunto, paginas) {
   if (!adjunto || !Array.isArray(paginas) || !paginas.length) {
     return { valido: false, cobertura: 0, detalle: 'sin datos' };
   }
   const dePaginas = paginas
     .map((p) => (p.lineas || []).map((l) => l && l.texto ? l.texto : '').join('\n'))
     .join('\n');
-  let cuerpo = '';
-  for (const b of adjunto.bloques) {
-    cuerpo += (b.txt || b.pie || '') + '\n';
-  }
-  /* Compactar es caro en libros grandes: se hace una sola vez por lado. */
+  const cuerpo = adjunto.bloques.map((b) => b.txt || b.pie || '').join('\n');
+  /* El cuerpo aprobado debe aparecer completo, contiguo y en el mismo orden.
+   * La portadilla y el índice regenerados pueden rodearlo, pero no partirlo. */
   const compactoPaginas = compactarRapido(dePaginas);
-  const totalCompacto = compactoPaginas.length;
-  const conTexto = adjunto.bloques.filter((b) => (b.txt || '').length > 8);
-  let cursor = 0;
-  let situados = 0;
-  let revisados = 0;
-  let posUltimo = 0;
-  for (const b of conTexto) {
-    revisados += 1;
-    const aguja = compactarRapido(b.txt).slice(0, 72);
-    if (!aguja) continue;
-    /* Ventana guiada por cursor (orden esperado), con respaldo global: si
-     * la aguja no está donde toca, igual vale si aparece en el documento
-     * (la app también ancla así: ver situarBloquesDetallado). */
-    let pos = compactoPaginas.indexOf(aguja, Math.max(0, cursor - 600));
-    if (pos < 0) pos = compactoPaginas.indexOf(aguja);
-    if (pos >= 0) {
-      situados += 1;
-      posUltimo = Math.max(posUltimo, pos);
-      if (pos >= cursor) cursor = pos + Math.max(24, Math.floor(aguja.length * 0.6));
-    }
-  }
-  const cobertura = revisados ? situados / revisados : 0;
-  const cubreFinal = totalCompacto > 0 && posUltimo >= totalCompacto * 0.8;
-  const valido = cobertura >= minimoCobertura && cubreFinal && situados > 0;
+  const compactoCuerpo = compactarRapido(cuerpo);
+  const pos = compactoCuerpo.length ? compactoPaginas.indexOf(compactoCuerpo) : -1;
+  const cobertura = compactoPaginas.length ? compactoCuerpo.length / compactoPaginas.length : 0;
+  const valido = pos >= 0 && cobertura >= 0.90;
   const totalPaginas = paginas[paginas.length - 1].numero || paginas.length;
   return {
     valido,
     cobertura,
     detalle: valido
-      ? `${situados}/${revisados} bloques situados en ${totalPaginas} págs.`
-      : `cobertura ${(cobertura * 100).toFixed(1)}% (${situados}/${revisados}), final ${cubreFinal ? 'sí' : 'no'}`,
+      ? `${adjunto.bloques.length}/${adjunto.bloques.length} bloques completos y contiguos en ${totalPaginas} págs.`
+      : `el cuerpo completo no aparece contiguo/en orden o cubre solo ${(cobertura * 100).toFixed(1)}% de las páginas`,
   };
 }
 

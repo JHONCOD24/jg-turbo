@@ -1,10 +1,15 @@
 # INFORME DE ENTREGA: ADAPTACIÓN DE LIBROS PDF PARA JG TURBO (v2, post-auditoría)
 
+> **INFORME HISTÓRICO.** Los planes citados abajo fueron retirados para evitar
+> instrucciones duplicadas. La única regla general vigente es
+> `pdf/regla-pdf/PLAN_OPERATIVO_DEFINITIVO_PDF_JG_TURBO.md`, versión 4.0.0; las
+> traducciones usan además `PLAN_TRADUCCION_LIBROS_INGLES_JG_TURBO.md`.
+
 **Proyecto:** JG Turbo
 **Fecha:** 10 de septiembre de 2026
-**Plan ejecutado:** `pdf/regla-pdf/PLAN_MAESTRO_ADAPTACION.md`
+**Plan ejecutado entonces:** documento maestro histórico, retirado
 **Auditoría atendida:** `output/auditoria-adaptacion/AUDITORIA_IMPLEMENTACION.md` (2026-09-10)
-**Regla ejecutable:** `pdf/regla-pdf/REGLA ADAPTAR PDF.md` (§3 valores permanentes, §14 lote)
+**Regla ejecutable entonces:** regla v3 histórica, retirada
 
 > Este informe sustituye a `INFORME_FINAL_ADAPTACION_LIBROS.md` v1 (conservado
 > como evidencia en `pdf/_adaptacion_v2/evidencia_v1/` junto a los 22 PDF
@@ -84,8 +89,8 @@ Las diferencias ±1 % restantes son cabeceras/pies retirados y portadilla.
 | — | Música sin conectar | `aplicarPerfilLibro` llamado al abrir, `eleccionManual` persistente, aleatoriedad acotada | `musicaFondo.js`, prueba 53/53 |
 | — | Sin despliegue, sin commit | Despliegue único + verificación + push (ver §5) | `DOCUMENTACION_DESPLIEGUE.md` |
 
-Además: `REGLA ADAPTAR PDF.md` actualizada como referencia ejecutable única
-(§3 valores permanentes, §14 lote/adjunto/voz/música); `TRAMPAS.md` con 7
+Además: la entonces regla v3 se actualizó como referencia ejecutable única
+(valores permanentes, lote, adjunto, voz y música); `TRAMPAS.md` con 7
 trampas nuevas de esta sesión; `CATALOGO.csv` regenerado con estados honestos;
 entregas v1 movidas a `evidencia_v1/`; `Lectura/` reservada a futuros aprobados.
 

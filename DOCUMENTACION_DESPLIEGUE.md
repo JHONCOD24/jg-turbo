@@ -14,6 +14,22 @@ lastUpdated: 2026-08-02
 Clones de JG Voice en el PDF: receta para agentes en
 [docs/INTEGRAR-VOZ-JG-VOICE.md](docs/INTEGRAR-VOZ-JG-VOICE.md).
 
+## Publicación PDF v2.84.0, 2026-09-14
+
+Carátula canónica de *Esto es marketing* (y Pre-suasión) en biblioteca, «Seguir leyendo» y lector, en todos los aparatos.
+`dpl_8wP3iWsWmpMtHwZwEMzyocqYnPRp` READY, alias `https://jg-turbo.vercel.app`.
+Marcador `JG_JS_V=v140`, shell-v140.
+Verificado: HTML v140, `sw.js` v140 con precache de `/img/portadas/esto-es-marketing.jpg` y `pre-suasion.jpg` (HTTP 200).
+Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md) §v2.84.0.
+
+## Publicación TTS v2.83.0, 2026-09-12
+
+**JG Narradora** y **JG Narrador** (Fish Voice Design) en la biblioteca Fish del PDF; salen 14 voces (femeninas → JG Narradora, masculinas → Valentino).
+`dpl_DCNMet8V4ydcbqQL8A2KohgDjfMt` READY, alias `https://jg-turbo.vercel.app`. Desde copia limpia (`.pytest_cache`).
+Verificado: `POST /api/tts` `source=pdf` → `fish:JG Narradora`, `fish:JG Narrador`; `sheyla` → JG Narradora, `morgan-freeman` → Valentino.
+Marcador `JG_JS_V=v139`, shell-v139.
+Detalle: [CAMBIOS_TTS.md](CAMBIOS_TTS.md).
+
 ## Publicación TTS v2.79.0, 2026-09-11
 
 Se retira **Sandra Design Travel** del selector. Lo guardado con ese id suena Amy.

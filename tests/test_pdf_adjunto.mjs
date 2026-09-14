@@ -70,6 +70,26 @@ const falsoSinIds = {
 const rSinId = await leerAdjuntoEstructurado(falsoSinIds);
 (rSinId === null ? bien : mal)('adjunto sin ids por bloque se rechaza');
 
+const falsoIdsDuplicados = {
+  getAttachments: async () => ({ 'jg-lectura.json': { content: new TextEncoder().encode(JSON.stringify({
+    version: '1.1.0', id: 'x', bloques: [
+      { id: 'repetido', rol: 'cuerpo', txt: 'primer bloque' },
+      { id: 'repetido', rol: 'cuerpo', txt: 'segundo bloque' },
+    ],
+  })) } }),
+};
+((await leerAdjuntoEstructurado(falsoIdsDuplicados)) === null ? bien : mal)('adjunto con ids duplicados se rechaza');
+
+const paginasFalsas = [{ numero: 1, lineas: [{ texto: 'Primero segundo tercero cuarto' }] }];
+const adjBase = { bloques: [
+  { id: 'a', rol: 'cuerpo', txt: 'Primero segundo' },
+  { id: 'b', rol: 'cuerpo', txt: 'tercero cuarto' },
+] };
+(validarAdjuntoContrapaginas(adjBase, paginasFalsas).valido ? bien : mal)('adjunto completo y ordenado se acepta');
+(!validarAdjuntoContrapaginas({ bloques: adjBase.bloques.slice(0, 1) }, paginasFalsas).valido ? bien : mal)('subconjunto incompleto se rechaza');
+(!validarAdjuntoContrapaginas({ bloques: [...adjBase.bloques].reverse() }, paginasFalsas).valido ? bien : mal)('bloques invertidos se rechazan');
+(!validarAdjuntoContrapaginas({ bloques: [{ ...adjBase.bloques[0], txt: 'Primero adulterado' }, adjBase.bloques[1]] }, paginasFalsas).valido ? bien : mal)('texto interior alterado se rechaza');
+
 /* ── Marcas de pausa estructural ── */
 const vozTitulo = voz.prepararParaVoz('Capítulo uno\n\nEl contenido sigue aquí con más texto.', 'es', { neural: true });
 (/§P0700§/.test(vozTitulo) ? bien : mal)('título suelto genera pausa de 700 ms en neural');
@@ -77,6 +97,8 @@ const vozNavegador = voz.prepararParaVoz('Capítulo uno\n\nEl contenido sigue.',
 (!/§P\d+§/.test(vozNavegador) && /[.:]$/.test(vozNavegador.split('\n\n')[0]) ? bien : mal)('navegador sin marcas (pausa con signo)');
 const vozCap = voz.conPausaDeCapitulo('El cuerpo del capítulo.');
 (vozCap.startsWith('§P1000§') ? bien : mal)('cambio de capítulo antepone pausa de 1000 ms');
+const vozDosVeces = voz.prepararParaVoz(vozTitulo, 'es', { neural: true });
+((vozDosVeces.match(/§P0700§/g) || []).length === 1 && !/sección P0700/i.test(vozDosVeces) ? bien : mal)('preparación de voz conserva la pausa al aplicarse dos veces');
 
 /* ── Candidata real ── */
 const ruta = RUTAS.find((r) => r && existsSync(resolve(AQUI, '..', r)));
@@ -97,7 +119,7 @@ const doc = await tarea.promise;
 
 const adj = await leerAdjuntoEstructurado(doc);
 (adj && adj.esEstructurado ? bien : mal)('candidata: adjunto leído y marcado esEstructurado');
-(adj && /^1\.\d+\.\d+$/.test(adj.version) ? bien : mal)('candidata: versión soportada (' + (adj && adj.version) + ')');
+(adj && adj.version === '1.1.0' ? bien : mal)('candidata: versión soportada (' + (adj && adj.version) + ')');
 if (adj) {
   (adj.bloques.every((b) => typeof b.id === 'string' && b.id) ? bien : mal)('candidata: todos los bloques con id');
   (adj.titulo && adj.autor ? bien : mal)(`candidata: título «${adj.titulo}» y autor «${adj.autor}»`);

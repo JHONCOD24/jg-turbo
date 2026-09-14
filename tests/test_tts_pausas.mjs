@@ -58,7 +58,7 @@ const fns = fabrica({}, ...Object.values(sandbox));
 const cola = fns.ttsCrearCola('Título del capítulo\n§P0700§\nEl cuerpo sigue aquí con calma.', 'es', 900, 'unified');
 const silencios = cola.filter((b) => b.silencio);
 comprobar(silencios.length === 1 && silencios[0].pausaMs === 700, 'una marca §P0700§ produce un silencio de 700 ms');
-comprobar(cola.length >= 3 && cola[0].text.includes('Título') === false || true, 'la cola conserva los segmentos de voz');
+comprobar(cola.length >= 3 && cola[0].text.includes('Título') && cola.at(-1).text.includes('cuerpo'), 'la cola conserva ambos segmentos de voz');
 const orden = cola.map((b) => (b.silencio ? 'S' : 'V')).join('');
 comprobar(/^V+S+V+$/.test(orden), 'orden voz → silencio → voz (' + orden + ')');
 
@@ -68,6 +68,15 @@ comprobar(s2.length === 1 && s2[0].pausaMs === 1000, '§P1000§ produce silencio
 
 const cola3 = fns.ttsCrearCola('Un texto normal sin marcas de pausa.', 'es', 900, 'unified');
 comprobar(!cola3.some((b) => b.silencio), 'sin marcas no hay silencios');
+
+comprobar(/function ttsProgramarSilencio\([\s\S]*?silencioTimer\s*=\s*setTimeout/.test(html),
+  'el silencio usa un temporizador controlado por el estado TTS');
+comprobar(/function ttsPausar\([\s\S]*?silencioTimer[\s\S]*?ttsCancelarSilencio\(true\)/.test(html),
+  'Pausar congela el tiempo restante del silencio');
+comprobar(/function ttsReanudar\([\s\S]*?silencioRestanteMs[\s\S]*?ttsProgramarSilencio\(restante/.test(html),
+  'Reanudar continúa el silencio restante antes de avanzar');
+comprobar(/function ttsDetener\([\s\S]*?ttsCancelarSilencio\(false\)/.test(html),
+  'Detener cancela el temporizador de silencio');
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);
