@@ -4160,6 +4160,64 @@ if FISH_LATENCIA not in ("normal", "balanced", "low"):
     FISH_LATENCIA = "normal"
 # Reintentos del MISMO bloque ante 429/503/timeout antes de ceder a otra voz.
 FISH_REINTENTOS = 2
+# ── Fusible de Fish ─────────────────────────────────────────────────────────
+# Medido (2026-09-17): con la cuenta sin créditos (pagado = 402) y el nivel
+# gratuito saturado (peticiones que se cuelgan hasta el timeout), CADA bloque
+# quemaba los 22 s de su presupuesto antes de caer a Edge: la lectura avanzaba
+# a trompicones y el aviso de respaldo sonaba cada 30 s. El fusible corta la
+# racha: tras FISH_FUSIBLE_UMBRAL bloques seguidos sin audio de Fish, el
+# servicio queda fuera FISH_FUSIBLE_SEG segundos y los bloques salen por Edge
+# en 1-2 s. Pasado el descanso se vuelve a probar (el servicio se recupera).
+# Estado por instancia (serverless): cada instancia lo aprende a su costa una
+# vez; es «mejor esfuerzo», como cualquier memoria de función.
+FISH_FUSIBLE_UMBRAL = 3
+FISH_FUSIBLE_SEG = 120.0
+# Un 402 (sin créditos) no se cura reintentando: mientras dure la memoria, no
+# se vuelve a probar el modelo pagado en cada bloque. Solo consume tiempo.
+FISH_402_SEG = 600.0
+_fish_fallos_seguidos = 0
+_fish_fusible_hasta = 0.0
+_fish_pagado_hasta = 0.0
+
+
+def _tts_fish_fusible_abierto(ahora: float | None = None) -> bool:
+    """True si Fish está en cuarentena por fallos consecutivos."""
+    t = time.monotonic() if ahora is None else ahora
+    return t < _fish_fusible_hasta
+
+
+def _tts_fish_registrar_exito() -> None:
+    """Un bloque bien sintetizado rearma el contador de fallos."""
+    global _fish_fallos_seguidos
+    _fish_fallos_seguidos = 0
+
+
+def _tts_fish_registrar_fallo(ahora: float | None = None) -> None:
+    """Un bloque que Fish no pudo sintetizar suma al fusible."""
+    global _fish_fallos_seguidos, _fish_fusible_hasta
+    t = time.monotonic() if ahora is None else ahora
+    _fish_fallos_seguidos += 1
+    if _fish_fallos_seguidos >= FISH_FUSIBLE_UMBRAL:
+        _fish_fusible_hasta = t + FISH_FUSIBLE_SEG
+        _fish_fallos_seguidos = 0
+
+
+def _tts_fish_registrar_402(ahora: float | None = None) -> None:
+    """El modelo pagado respondió 402: se salta un rato, no se reintenta."""
+    global _fish_pagado_hasta
+    t = time.monotonic() if ahora is None else ahora
+    _fish_pagado_hasta = t + FISH_402_SEG
+
+
+def _tts_fish_modelos(ahora: float | None = None) -> list[str]:
+    """Modelos a intentar, en orden: el pagado solo si su 402 no está fresco."""
+    t = time.monotonic() if ahora is None else ahora
+    modelos = []
+    if t >= _fish_pagado_hasta:
+        modelos.append(FISH_MODEL)
+    if FISH_MODEL_GRATIS not in modelos:
+        modelos.append(FISH_MODEL_GRATIS)
+    return modelos
 # Las dos voces históricas se pueden sustituir por env. El resto del catálogo
 # son fichas públicas de fish.audio (español, trained, sin DMCA): no hace
 # falta una variable nueva por cada una.
@@ -4308,7 +4366,14 @@ def _tts_fish_activo(
     prefer_fish: bool = False,
     fish_voice: str = "",
 ) -> bool:
-    """Fish solo entra si la persona eligió esa voz y hay clave + modelo."""
+    """Fish solo entra si la persona eligió esa voz y hay clave + modelo.
+
+    Con el fusible abierto (racha de fallos medida en 2026-09-17) Fish queda
+    fuera: insistir solo quemaba 22 s por bloque mientras el gratuito colgado
+    no contestaba, y la lectura iba a trompicones.
+    """
+    if _tts_fish_fusible_abierto():
+        return False
     return bool(prefer_fish and FISH_API_KEY and _tts_fish_resolver(fish_voice, gender))
 
 
@@ -4500,9 +4565,7 @@ async def _tts_fish_synthesize(
     if not voz:
         raise RuntimeError("No hay una voz Fish configurada.")
     etiqueta = TTS_FISH_ETIQUETAS.get(tone, "")
-    modelos = [FISH_MODEL]
-    if FISH_MODEL_GRATIS not in modelos:
-        modelos.append(FISH_MODEL_GRATIS)
+    modelos = _tts_fish_modelos()
     ultimo_error: Exception | None = None
     limite = (fin if fin is not None else time.monotonic() + FISH_PRESUPUESTO_SEG)
 
@@ -4528,6 +4591,7 @@ async def _tts_fish_synthesize(
                         },
                     )
                 if respuesta.status_code == 402 and modelo != FISH_MODEL_GRATIS:
+                    _tts_fish_registrar_402()
                     ultimo_error = RuntimeError(f"Fish {modelo}: sin créditos (402)")
                     break  # pasa al gratuito, no reintenta el pagado
                 respuesta.raise_for_status()
@@ -4610,9 +4674,11 @@ async def _tts_synthesize(
                     timeout=margen,
                 )
                 if audio:
+                    _tts_fish_registrar_exito()
                     return audio, "fish", etiqueta, modelo
+                _tts_fish_registrar_fallo()
             except Exception:
-                pass
+                _tts_fish_registrar_fallo()
     if _tts_azure_activo():
         margen = min(AZURE_TTS_TIMEOUT, queda(reserva=6.0))
         if margen > 2.0:

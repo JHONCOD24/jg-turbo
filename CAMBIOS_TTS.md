@@ -32,7 +32,61 @@
 
 ---
 
-## Nuevo en v2.84.0 · la voz Fish ya no cambia a media frase en el PDF (2026-09-14)
+## Nuevo en v2.88.0 · fusible de Fish: caída sostenida ≠ 22 s por bloque (2026-09-17)
+
+**Pedido:** leyendo *El placer eres tú* con la voz Roberto, a media página la
+voz cambiaba a otra («un tramo sonó con voz de respaldo · revisa tu conexión»
+aparecía constante) y al elegir otra voz Fish sonaba una «genérica» que no era
+la elegida.
+
+**Causa medida (contra producción y contra la API de Fish, 2026-09-17):** Fish
+estaba caído por completo para esta cuenta. (1) El modelo pagado `s2.1-pro`
+responde **402**: la cuenta no tiene créditos de API (el plan Plus del estudio
+NO los incluye; se recargan aparte en Billing — ya sospechado en §v2.84.0).
+(2) El gratuito `s2.1-pro-free` se **cuelga sin contestar** (6/6 timeouts de
+45 s; una petición aislada inicial sí contestó). Resultado: cada bloque quemaba
+los 22 s de presupuesto en reintentos muertos y salía por Edge
+(`es-CO-GonzaloNeural`, la «voz genérica»), 3/3 peticiones de prueba tardaron
+~23 s. El aviso del cliente se rearma a los 30 s y con Fish caído sonaba cada
+30 s; el texto culpaba a la conexión del usuario, que estaba bien.
+
+**Cambios:**
+1. Servidor (`api/index.py`): **fusible** (circuit breaker) por instancia.
+   Tras `FISH_FUSIBLE_UMBRAL` (3) bloques seguidos sin audio de Fish,
+   `_tts_fish_activo` devuelve False durante `FISH_FUSIBLE_SEG` (120 s): los
+   bloques salen por Edge en 1-2 s y la lectura fluye. Un éxito rearma el
+   contador; pasado el descanso se vuelve a probar (el servicio se recupera).
+   Además, el **402 se recuerda** (`FISH_402_SEG`, 600 s): mientras esté
+   fresco, `_tts_fish_modelos` no vuelve a intentar el pagado en cada bloque.
+   Éxito/fallo se registran en `_tts_synthesize` (un fallo = Fish no entregó
+   el bloque, agotara presupuesto o excepción).
+2. Cliente (`index.html`): el toast de respaldo dice la verdad («La voz Fish
+   no responde (sin créditos o saturada) · suena el respaldo de Edge») y solo
+   se rearma a los **15 minutos** (antes 30 s = spam constante). Sigue
+   reiniciándose en cada lectura nueva.
+3. Versiones: `JG_JS_V=v144`, SW `jg-turbo-shell-v144`, marcador HTML v2.88.0.
+
+**La solución de fondo es del usuario, no del código:** recargar créditos de
+API en fish.audio → Billing. Sin saldo, el pagado da 402 y el gratuito no
+tiene garantías (hoy ni contesta): cualquier voz Fish (Roberto incluida)
+sonará con el respaldo de Edge elijas la que elijas. Con saldo, `s2.1-pro`
+entra primero con garantías de latencia y los reintentos de §v2.84.0 sostienen
+el timbre. Referencia de coste: 300 páginas ≈ $9-10 (ver §v2.84.0).
+
+**Pruebas:** `backend/tests/test_tts_fish_estable.py` 8/8 (nuevas: fusible se
+abre a los 3 fallos y se cierra tras el descanso, un éxito rearma, fusible
+abierto apaga Fish, el 402 salta el pagado y expira) + `test_tts_voces_fish.py`
+10/10; `tests/test_tts_respaldo.py` + `test_tts_presupuesto.py` 11/11;
+`tests/test_tts_voz_estable.mjs` 13/13 (aviso honesto, sin «revisa tu
+conexión», rearme 15 min, v144+juntas); `test_tts_voces_biblioteca.mjs`,
+`test_tts_narracion.mjs`, `test_tts_pausas.mjs`, `test_pdf_voz.mjs` en verde;
+`py_compile` OK. Corregido además el test de `chunk_length` que quedó
+desactualizado en v2.86.0 (esperaba 300 fijo; ahora acompaña al texto, ver
+TRAMPAS §6.15).
+
+**Deploy:** (anotar tras publicar).
+
+---
 
 **Pedido:** en el lector de PDF, casi todas las voces Fish cambian por
 segundos a otro timbre (a veces más agudo) y vuelven; la guía/progreso se

@@ -444,6 +444,13 @@ reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias http
 `docs/INTEGRAR-VOZ-JG-VOICE.md`. No armes un API entre las dos apps: el puente
 es el `reference_id` de Fish (misma cuenta). No reviertas el «PDF apaga Fish».
 
+**v2.88.0 — fusible de Fish** (2026-09-17): con Fish caído (pagado 402 sin
+créditos + gratuito colgado), cada bloque quemaba 22 s antes de caer a Edge y
+el aviso «revisa tu conexión» sonaba cada 30 s. Ahora: 3 fallos seguidos dejan
+Fish en cuarentena 120 s (bloques por Edge en 1-2 s), el 402 se recuerda 10
+min y el aviso dice la verdad una vez cada 15 min. La cura definitiva es
+recargar créditos de API en fish.audio → Billing. Detalle: `CAMBIOS_TTS.md` §v2.88.0.
+
 **v2.84.0 — voz Fish estable en PDF** (2026-09-14): el bloque que tropieza
 se reintenta con Fish (servidor 2 + cliente 2) en vez de salir por Edge con
 otro timbre; modelo pagado `s2.1-pro` por defecto, temperatura 0,35, prefetch

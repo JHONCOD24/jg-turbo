@@ -897,7 +897,6 @@ carácter pegado. Si un diff muestra un cambio «vacío» en una línea de
 regex, es un invisible literal: revertirlo y reescribirlo con escape.
 
 ### 6.14 Un relevo silencioso a otra voz suena a «la voz cambia por segundos»
-
 **Síntoma** (2026-09-14, PDF + Fish): a media frase la voz cambiaba de timbre
 (a veces más aguda) por segundos y volvía; la guía se desincronizaba con ella.
 
@@ -914,6 +913,39 @@ continuidad: se reintenta el MISMO bloque (servidor 2 + cliente 2) antes de
 ceder, y si cede se avisa con toast. Fijar `temperature` baja (0,35) para
 narrar y calentar la caché en el mismo modo que se lee. Pruebas:
 `backend/tests/test_tts_fish_estable.py`, `tests/test_tts_voz_estable.mjs`.
+
+### 6.15 Un servicio caído no es «revisa tu conexión»
+
+**Síntoma** (2026-09-17, PDF + Fish): voz Roberto, a media página cambiaba a
+otra voz; el toast «Un tramo sonó con voz de respaldo · revisa tu conexión»
+aparecía cada 30 s; cualquier voz Fish elegida sonaba igual («genérica»).
+
+**Causa medida (contra el dominio y contra api.fish.audio):** Fish caído por
+completo — pagado `s2.1-pro` en 402 (sin créditos de API) y gratuito
+`s2.1-pro-free` colgado sin contestar (timeouts de 45 s). Cada bloque quemaba
+los 22 s de su presupuesto en reintentos muertos y salía por Edge
+(`es-CO-GonzaloNeural` = la «genérica»): medido 3/3 peticiones a ~23 s. El
+toast rearmaba a los 30 s: con caída sostenida era spam, y encima culpaba a
+la conexión del usuario, que estaba perfecta.
+
+**Regla:** cuando el proveedor falla de forma sostenida, reintentar por
+bloque solo añade silencio: hace falta un fusible (3 fallos seguidos →
+servicio fuera 120 s → respaldo en 1-2 s, un éxito rearma). Un 402 no se
+reintenta: se recuerda (10 min). Y el aviso al usuario nombra la causa real
+(proveedor caído / sin créditos), nunca su conexión, ni se repite más que
+cada cuarto de hora. La cura definitiva de ESTE caso era de billing, no de
+código: recargar créditos de API en fish.audio. Pruebas:
+`backend/tests/test_tts_fish_estable.py` (fusible), `tests/test_tts_voz_estable.mjs`.
+
+### 6.16 La prueba que describe el cuerpo de una petición envejece al cambiarlo
+
+**Síntoma** (detectado 2026-09-17): `test_cuerpo_estable_misma_voz_entre_bloques`
+fallaba esperando `chunk_length == 300` fijo. **Causa:** v2.86.0 cambió
+`chunk_length` para que acompañe al texto (un bloque = una generación interna,
+tope 300) y actualizó el código, el comentario… pero no la prueba, que quedó
+roja dos versiones sin que nadie la corriera. **Regla:** quien cambia el
+cuerpo/contrato de una petición actualiza SUS pruebas en el mismo commit; una
+batería que no se corre en cada entrega enseña a ignorar el rojo.
 
 ---
 

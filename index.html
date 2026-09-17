@@ -1,4 +1,4 @@
-<!-- v2.87.0 · PDF: la lectura no se reinicia al volver al libro, un toque en el párrafo sigue desde ahí, flecha para bajar al final y vigilante que destraba la voz -->
+<!-- v2.88.0 · TTS: fusible de Fish (racha de fallos = respaldo rápido, sin 22 s por bloque) y aviso honesto sin spam -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -16039,8 +16039,12 @@ function ttsDescargarBloque(indice, token){
         }
         if(esRespaldo && !ttsState._avisoRespaldo && typeof _mostrarToastMejora === 'function'){
           ttsState._avisoRespaldo = true;
-          _mostrarToastMejora('Un tramo sonó con voz de respaldo · revisa tu conexión', false);
-          setTimeout(()=>{ ttsState._avisoRespaldo = false; }, 30000);
+          /* Antes decía «revisa tu conexión» y se repetía cada 30 s: mentía
+           * (la conexión del usuario estaba bien) y era puro ruido cuando Fish
+           * lleva una racha caída (sin créditos o servicio saturado). Ahora dice
+           * la verdad, suena UNA vez y solo se rearma a los 15 minutos. */
+          _mostrarToastMejora('La voz Fish no responde (sin créditos o saturada) · suena el respaldo de Edge', false);
+          setTimeout(()=>{ ttsState._avisoRespaldo = false; }, 900000);
         }
         if(!esRespaldo && res.modelHdr && !ttsState._modeloVoz) ttsState._modeloVoz = res.modelHdr;
         const url = URL.createObjectURL(res.blob);
@@ -18373,7 +18377,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v143';
+const JG_JS_V = 'v144';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

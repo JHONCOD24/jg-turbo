@@ -29,6 +29,14 @@ comprobar(html.includes('ttsHablar') && html.includes('ttsState._avisoRespaldo =
   'cada lectura nueva reinicia el aviso de respaldo');
 comprobar(html.includes("resp.headers.get('X-TTS-Model')"),
   'el cliente lee el modelo Fish que sonó (pagado o gratuito)');
+/* El aviso dice la verdad y no spamea (2026-09-17: «revisa tu conexión» cada
+ * 30 s con Fish caído era mentira + ruido; la conexión del usuario estaba bien). */
+comprobar(html.includes('La voz Fish no responde (sin créditos o saturada)'),
+  'el aviso de respaldo dice la causa real (Fish caído, no la conexión)');
+comprobar(!html.includes('voz de respaldo · revisa tu conexión'),
+  'ya no se culpa de la conexión del usuario');
+comprobar(html.includes('}, 900000);'),
+  'el aviso de respaldo solo se rearma a los 15 minutos');
 
 /* El prefetch calienta lo mismo que se va a oír. */
 comprobar(!controlador.includes("prefs.bilingualMode || 'regional'"),
@@ -46,8 +54,8 @@ comprobar(!/sourceId === 'pdf'[\s\S]{0,180}preferFish:\s*false/.test(html),
 {
   const js = (html.match(/const JG_JS_V = '(v\d+)'/) || [])[1];
   const shell = (sw.match(/CACHE_SHELL = '(jg-turbo-shell-v\d+)'/) || [])[1];
-  comprobar(js === 'v143' && shell === 'jg-turbo-shell-v143',
-    'JG_JS_V y CACHE_SHELL suben juntas a v143');
+  comprobar(js === 'v144' && shell === 'jg-turbo-shell-v144',
+    'JG_JS_V y CACHE_SHELL suben juntas a v144');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
