@@ -1,4 +1,4 @@
-<!-- v2.85.0 · Voz Fish estable en el PDF: sin cambios de timbre a media frase -->
+<!-- v2.86.0 · PDF: una sola voz de principio a fin, números y rangos bien dichos, Contenido con más capítulos a la vista -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -3501,16 +3501,23 @@
     .pdf-indice-barra{
       display:flex;align-items:center;justify-content:space-between;gap:8px;
       flex:none;background:var(--lec-superficie, var(--surface));
-      padding:6px 6px 6px 14px;border-bottom:1px solid var(--lec-linea, var(--line));
+      padding:2px 4px 2px 12px;border-bottom:1px solid var(--lec-linea, var(--line));
       border-radius:var(--pdf-r) var(--pdf-r) 0 0;
     }
     /* El pie no se desplaza con la lista: queda anclado abajo, separado por su
        propia línea, y a esta anchura los dos rótulos se apilan sin apretarse. */
+    /* El pie va en UNA fila. Apilado ocupaba 105 px fijos; con la barra (57 px)
+       se iba un tercio del panel en un portátil, y por eso la lista «tenía
+       poco scroll»: solo cabían siete capítulos de ochenta. En fila son 52 px
+       y caben dos más, sin quitarle tamaño de dedo a los botones. */
     .pdf-indice-acciones{
-      flex:none;flex-direction:column;gap:6px;
-      padding:8px;border-top:1px solid var(--lec-linea, var(--line));
+      flex:none;flex-direction:row;gap:6px;
+      padding:6px;border-top:1px solid var(--lec-linea, var(--line));
     }
-    .pdf-indice-acciones .mini-btn{justify-content:center;text-align:center}
+    .pdf-indice-acciones .mini-btn{
+      justify-content:center;text-align:center;flex:1 1 0;min-width:0;
+      padding-inline:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
     /* La barra de desplazamiento de la lista tiene que VERSE y AGARRARSE
        con el ratón: la versión fina casi invisible (4 px efectivos) no se
        podía apuntar en escritorio. Ahora es una pista ancha con pulgar
@@ -3541,7 +3548,7 @@
     .pdf-indice .pdf-cap{
       display:grid;grid-template-columns:44px minmax(0,1fr);
       grid-template-areas:'marca cuerpo';
-      align-items:stretch;column-gap:10px;row-gap:1px;padding:9px 10px 11px;
+      align-items:stretch;column-gap:8px;row-gap:0;padding:5px 8px 6px;
     }
     .pdf-indice .pdf-cap-marca,
     .pdf-indice .pdf-cap-cuerpo{
@@ -3553,8 +3560,10 @@
     }
     .pdf-indice .pdf-cap-marca:hover{background:var(--lec-superficie-2, var(--surface))}
     .pdf-indice .pdf-cap-marca-icono{display:inline-block;padding:0 3px;border-radius:6px;line-height:1.5}
-    /* Anillo punteado: «esto lo marqué yo a mano», distinto del ✓ automático. */
-    .pdf-indice .pdf-cap-marca[aria-pressed="true"] .pdf-cap-marca-icono{box-shadow:0 0 0 1.5px currentColor}
+    /* Anillo: «esto lo marqué yo a mano», distinto del ✓ automático. Cuelga de
+       la fila (data-manual) y no de aria-pressed, que ahora dice otra cosa:
+       «este capítulo está marcado como leído». */
+    .pdf-indice .pdf-cap[data-manual="si"] .pdf-cap-marca-icono{box-shadow:0 0 0 1.5px currentColor}
     .pdf-indice .pdf-cap-cuerpo{
       grid-area:cuerpo;display:block;min-width:0;min-height:44px;text-align:left;border-radius:10px;
     }
@@ -3618,8 +3627,14 @@
       color:var(--lec-texto, var(--text));letter-spacing:-.01em;
     }
     .pdf-indice-colapsar{
-      width:44px;height:44px;flex:none;border-radius:12px;cursor:pointer;
-      border:0;background:none;color:var(--muted);
+      width:40px;height:40px;flex:none;border-radius:12px;cursor:pointer;
+      /* El gris de la app (#9098AC) sobre la crema del tema Papel se quedaba en
+         2,6:1: la flecha de cerrar casi no se veía. Con `--lec-suave` sube a
+         5,9:1 en Papel pero solo a 4,3:1 en Sepia; rebajando el propio texto
+         del tema un 28 % pasa de 6:1 en los tres fondos, que es el mismo
+         recurso que ya usa la línea de datos del capítulo. */
+      border:0;background:none;
+      color:color-mix(in srgb, var(--lec-texto, var(--text)) 72%, transparent);
       display:grid;place-items:center;
     }
     .pdf-indice-colapsar svg{width:18px;height:18px}
@@ -7303,8 +7318,13 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                    orden (no con `order`) para que el recorrido con Tab siga
                    viéndose igual que se ve. -->
               <div class="pdf-indice-acciones">
-                <button type="button" class="mini-btn" id="btnPdfIndiceInicio" title="Volver a la primera sección del libro">Ir al inicio del libro</button>
-                <button type="button" class="mini-btn" id="btnPdfIndiceActual" title="Centrar la lista en la sección que estás leyendo">Volver a la sección actual</button>
+                <!-- Rótulos cortos a propósito: con los largos, el pie ocupaba dos
+                     filas de 44 px (105 px) y en un portátil de 720 px se comía
+                     una cuarta parte del alto de la lista de capítulos. El texto
+                     completo sigue estando en el título y en la etiqueta que lee
+                     el lector de pantalla. -->
+                <button type="button" class="mini-btn" id="btnPdfIndiceInicio" title="Volver a la primera sección del libro" aria-label="Ir al inicio del libro">Al inicio</button>
+                <button type="button" class="mini-btn" id="btnPdfIndiceActual" title="Centrar la lista en la sección que estás leyendo" aria-label="Volver a la sección que estás leyendo">Donde voy</button>
               </div>
             </nav>
 
@@ -14191,6 +14211,12 @@ const TTS_NOMBRES_NEURAL = {
 // v2.24.2: escalón ampliado para PDF (lectura larga = más fluido con menos cortes).
 const TTS_ESCALON = [340, 520, 720];
 const TTS_NEURAL_MAX = 900;
+// Las voces de Fish se generan con un modelo que «va escribiendo» el audio: si
+// el bloque es más largo que su trozo interno (300 caracteres), lo parte y en
+// cada corte vuelve a arrancar la entonación. Ahí es donde el tono se disparaba
+// hacia arriba durante unos segundos y luego volvía a su sitio. Con bloques que
+// caben en un solo trozo, un bloque = una sola generación y el timbre no salta.
+const TTS_FISH_MAX = 290;
 const TTS_BROWSER_MAX = 240;
 // Cuántos bloques se generan a la vez. Más de 3 no acelera (el cuello de
 // botella es la síntesis en el servidor) y sí satura conexiones móviles.
@@ -15210,6 +15236,13 @@ function ttsResolveNeuralLocale(prefs, idioma){
 /* Pausas estructurales del plan PDF §4: las marcas §P0700§ (títulos) y
  * §P1000§ (capítulos) que pone la capa de voz se convierten aquí en bloques
  * de silencio real dentro de la cola. Nunca llegan al sintetizador. */
+/** Caracteres por bloque según la voz elegida (ver TTS_FISH_MAX). */
+function ttsMaxBloque(prefs){
+  const p = prefs || ttsPrefs();
+  if(p.engine !== 'neural') return TTS_BROWSER_MAX;
+  return p.preferFish ? TTS_FISH_MAX : TTS_NEURAL_MAX;
+}
+
 function ttsCrearCola(texto, langHint, maxLen, mode){
   const partes = String(texto || '').split(/§P(\d{3,5})§/);
   if(partes.length === 1) return ttsCrearColaTexto(texto, langHint, maxLen, mode);
@@ -15757,7 +15790,7 @@ function ttsForzarIdiomaSiInglesPuro(text, language){
   return language;
 }
 
-async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId){
+async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintento = 0){
   let text = ttsQueueText(item);
   let language = ttsQueueLang(item, ttsState.langHint || 'es');
   const locale = ttsResolveNeuralLocale(prefs, language === 'multi' ? null : language);
@@ -15795,7 +15828,7 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId){
     prefer_fish: !!prefs.preferFish,
     fish_voice: prefs.preferFish ? (prefs.fishId || '') : '',
   };
-  const resp = await ttsPedirAudio(cuerpo);
+  const resp = await ttsPedirAudio(cuerpo, reintento);
   if(!resp.ok){
     let detail = resp.statusText || 'Error TTS';
     try{
@@ -15813,6 +15846,10 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId){
     languageHdr: resp.headers.get('X-TTS-Language') || language,
     localeHdr: resp.headers.get('X-TTS-Locale') || locale,
     modelHdr: resp.headers.get('X-TTS-Model') || '',
+    /* El servidor avisa cuando el bloque NO sonó con la voz pedida. Es más
+     * fiable que deducirlo del nombre de la voz, y además cubre el caso de
+     * caer del modelo de pago al gratuito (mismo nombre, otro timbre). */
+    respaldoHdr: resp.headers.get('X-TTS-Fallback') === '1',
   };
 }
 
@@ -15821,7 +15858,7 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId){
  * y el CDN lo guardan y la segunda vez suena al instante) y por POST cuando es
  * largo. Si el GET falla por lo que sea, reintenta por POST.
  */
-async function ttsPedirAudio(cuerpo){
+async function ttsPedirAudio(cuerpo, reintento = 0){
   const params = new URLSearchParams({
     text: cuerpo.text,
     voice: cuerpo.voice,
@@ -15834,7 +15871,11 @@ async function ttsPedirAudio(cuerpo){
     prefer_fish: cuerpo.prefer_fish ? 'true' : 'false',
     fish_voice: cuerpo.fish_voice || '',
   }).toString();
-  if(params.length <= 1600){
+  /* Reintentar el MISMO bloque por GET no servía de nada: la dirección era
+   * idéntica y el navegador devolvía al instante la respuesta guardada, que es
+   * justo la que había sonado mal. Desde el segundo intento se va por POST y
+   * sin caché, para que la petición llegue de verdad al servicio. */
+  if(reintento === 0 && params.length <= 1600){
     try{
       const resp = await fetchApi('/tts?' + params, { method: 'GET' }, 90000);
       if(resp.ok) return resp;
@@ -15842,6 +15883,7 @@ async function ttsPedirAudio(cuerpo){
   }
   return fetchApi('/tts', {
     method: 'POST',
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cuerpo),
   }, 90000);
@@ -15912,35 +15954,54 @@ function ttsDescargarBloque(indice, token){
   }
 
   bloque.estado = 'cargando';
-  /* Si se pidió Fish y el bloque llegó con otra voz (relevo silencioso del
-   * servidor ante un tropiezo de red), se reintenta el MISMO bloque hasta 2
-   * veces antes de aceptarlo: antes ese bloque sonaba con otro timbre por
-   * segundos a media frase. Solo entonces se avisa una vez (no por bloque). */
+  /* Un bloque tiene que sonar con la MISMA voz que el resto de la lectura.
+   *
+   * El servidor, ante un tropiezo (timeout, 429, sin créditos), sirve el
+   * bloque con otra voz en vez de dejarlo mudo. Eso es lo que se oía como
+   * «la voz de Roberto se intercala con otras»: un tramo suelto, a media
+   * lectura, con otro timbre. Aquí se detecta y se reintenta el MISMO bloque
+   * hasta 2 veces (ya sin caché: ver ttsPedirAudio) antes de aceptarlo, y un
+   * bloque de respaldo NUNCA se guarda en el caché de la sesión — si se
+   * guardara, ese pasaje volvería a sonar mal cada vez que se repitiera. */
   bloque.promesa = (async ()=>{
     try{
       for(let intento = 0; ; intento++){
-        const res = await ttsFetchNeuralChunk(bloque, prefs);
+        const res = await ttsFetchNeuralChunk(bloque, prefs, 1, ttsState.sourceId, intento);
         if(token !== ttsState._speakToken) return null;
         const queriaFish = !!prefs.preferFish;
         const sonoFish = /^fish:/.test(res.voiceHdr || '');
-        if(queriaFish && !sonoFish && intento < 2){
+        /* Referencia de la lectura: el motor y el modelo del primer bloque que
+         * salió bien. Caer del modelo de pago al gratuito conserva el nombre de
+         * la voz pero cambia el timbre, así que el nombre solo no basta. */
+        const modeloRef = ttsState._modeloVoz || '';
+        const esRespaldo = Boolean(res.respaldoHdr)
+          || (queriaFish && !sonoFish)
+          || (modeloRef && res.modelHdr && res.modelHdr !== modeloRef);
+        if(esRespaldo && intento < 2){
           await new Promise(r => setTimeout(r, 800 * (intento + 1)));
           if(token !== ttsState._speakToken) return null;
           continue;
         }
-        if(queriaFish && !sonoFish && !ttsState._avisoRespaldo && typeof _mostrarToastMejora === 'function'){
+        if(esRespaldo && !ttsState._avisoRespaldo && typeof _mostrarToastMejora === 'function'){
           ttsState._avisoRespaldo = true;
           _mostrarToastMejora('Un tramo sonó con voz de respaldo · revisa tu conexión', false);
           setTimeout(()=>{ ttsState._avisoRespaldo = false; }, 30000);
         }
+        if(!esRespaldo && res.modelHdr && !ttsState._modeloVoz) ttsState._modeloVoz = res.modelHdr;
         const url = URL.createObjectURL(res.blob);
         bloque.url = url;
-        bloque.desdeCache = true; // la referencia vive en el caché, no la revocamos aquí
         bloque.estado = 'listo';
         bloque.voz = res.voiceHdr;
         bloque.idiomaReal = res.languageHdr;
         bloque.localeReal = res.localeHdr;
-        ttsGuardarEnCache(clave, url, res.blob);
+        bloque.respaldo = esRespaldo;
+        if(esRespaldo){
+          // No entra al caché: la referencia es solo del bloque y se revoca al parar.
+          bloque.desdeCache = false;
+        }else{
+          bloque.desdeCache = true; // la referencia vive en el caché, no la revocamos aquí
+          ttsGuardarEnCache(clave, url, res.blob);
+        }
         if(indice === ttsState.idx) ttsMostrarVoz(bloque);
         return bloque;
       }
@@ -16131,6 +16192,19 @@ async function ttsReproducirDesde(indice, desde, token){
     if(token !== ttsState._speakToken) return;
   }
   if(bloque.estado === 'error'){
+    /* Un tropiezo suelto (un timeout, un 429) no puede condenar el RESTO del
+     * capítulo a las voces del navegador: eso es lo que se oía como un cambio
+     * de voz que ya no volvía atrás. Se reintenta el bloque una vez, limpio y
+     * sin caché; solo si vuelve a fallar se baja al respaldo. */
+    bloque.estado = 'pendiente';
+    bloque.promesa = null;
+    bloque.error = null;
+    ttsState.status = 'buffering';
+    ttsActualizarUI();
+    await ttsDescargarBloque(indice, token);
+    if(token !== ttsState._speakToken) return;
+  }
+  if(bloque.estado === 'error'){
     ttsCaerANavegador(indice, token, bloque.error);
     return;
   }
@@ -16256,7 +16330,7 @@ function ttsFinLectura(){
       if (proximo.continuation && ttsState.queue && ttsState.queue.length) {
         const token = ttsState._speakToken;
         const desde = ttsState.queue.length;
-        const maxChunk = ttsState.engineUsed === 'browser' ? TTS_BROWSER_MAX : TTS_NEURAL_MAX;
+        const maxChunk = ttsState.engineUsed === 'browser' ? TTS_BROWSER_MAX : ttsMaxBloque();
         const extras = ttsCrearCola(proximo.texto, proximo.lang || ttsState.langHint, maxChunk, ttsState.modo);
         if (extras.length) {
           ttsState.queue.push(...extras);
@@ -16504,7 +16578,7 @@ function ttsHablar(texto, opts){
   ttsLiberarBloques();
   if(ttsSupportedBrowser()){ try{ speechSynthesis.cancel(); }catch(_){} }
 
-  const maxChunk = prefs.engine === 'neural' ? TTS_NEURAL_MAX : TTS_BROWSER_MAX;
+  const maxChunk = ttsMaxBloque(prefs);
   // El idioma lo decide el texto, no solo el desplegable: así una traducción al
   // portugués nunca se lee con voz española.
   const hint = opts.langHint || 'es';
@@ -16530,6 +16604,8 @@ function ttsHablar(texto, opts){
   ttsState.queue = ttsCrearCola(text, ttsState.langHint, maxChunk, modo);
   ttsState.idx = 0;
   ttsState._avisoRespaldo = false;
+  ttsState._modeloVoz = '';
+  ttsState._fallosNeural = 0;
   ttsState.sourceId = opts.sourceId || null;
   ttsState.status = 'loading';
   ttsActualizarUI();
@@ -16634,7 +16710,7 @@ async function ttsDescargarAudio(sourceEl, sourceId, langHint, boton){
 
   const idioma = ttsIdiomaParaNarrar(texto, langHint || 'es');
   const modo = (idioma === 'es' || idioma === 'en') ? prefs.bilingualMode : 'off';
-  const cola = ttsCrearCola(texto, idioma, TTS_NEURAL_MAX, modo);
+  const cola = ttsCrearCola(texto, idioma, ttsMaxBloque(prefs), modo);
   if(!cola.length) return;
 
   const etiqueta = boton.querySelector('[data-tts-download-label]');
@@ -18162,7 +18238,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v141';
+const JG_JS_V = 'v142';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

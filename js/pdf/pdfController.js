@@ -1515,17 +1515,22 @@ export function inicializarLectorPdf(deps = {}) {
       if (i === estado.parteActual) fila.setAttribute('aria-current', 'true');
 
       const hayMarcaManual = Boolean(estado.progreso?.marcas?.[i]);
+      const chuleado = capituloChuleado(i);
+      if (hayMarcaManual) fila.dataset.manual = 'si';
       const marca = document.createElement('button');
       marca.type = 'button';
       marca.className = 'pdf-cap-marca';
-      marca.setAttribute('aria-pressed', hayMarcaManual ? 'true' : 'false');
+      /* «Pulsado» = está marcado como leído. Antes decía «tengo una marca
+       * manual», que no es lo que la persona ve ni lo que el botón hace: un
+       * capítulo chuleado por el avance se anunciaba como no pulsado. */
+      marca.setAttribute('aria-pressed', chuleado ? 'true' : 'false');
       marca.setAttribute('aria-label',
         `${etiquetaSeccion(estado.partes, i)}: ${
-          situacion === 'leido' ? 'marcar como no leído' : 'marcar como leído'}`);
+          chuleado ? 'marcar como no leído' : 'marcar como leído'}`);
       const marcaIcono = document.createElement('span');
       marcaIcono.className = 'pdf-cap-marca-icono';
       marcaIcono.setAttribute('aria-hidden', 'true');
-      marcaIcono.textContent = situacion === 'leido' ? '✓' : String(i + 1);
+      marcaIcono.textContent = chuleado ? '✓' : String(i + 1);
       marca.appendChild(marcaIcono);
       marca.addEventListener('click', (evento) => {
         evento.stopPropagation();
@@ -1602,10 +1607,24 @@ export function inicializarLectorPdf(deps = {}) {
    * (ahí dentro siempre se muestra «leyendo»). Visitar el capítulo borra la
    * marca manual: tu presencia manda sobre lo anotado.
    */
+  /**
+   * ¿Este capítulo cuenta como leído AHORA MISMO?
+   *
+   * En el capítulo en curso, `progresoDeCapitulo` siempre responde «leyendo»
+   * —da igual lo que diga la marca—, así que allí la única verdad es la marca
+   * manual. Sin esta distinción el botón del capítulo en curso no cambiaba
+   * nada al pulsarlo: se quedaba fijo en «no leído» y ni ponía el ✓ ni volvía
+   * atrás. Es lo que se veía como «hizo algo diferente».
+   */
+  function capituloChuleado(i) {
+    if (i === estado.parteActual) return estado.progreso?.marcas?.[i] === 'leido';
+    return progresoDeCapitulo(i, estado.progreso) === 'leido';
+  }
+
+  /** Chulea o deschulea un capítulo sin moverse del sitio. */
   function alternarMarcaCapitulo(i) {
     if (!hayDocumento() || !estado.partes[i]) return;
-    const situacion = progresoDeCapitulo(i, estado.progreso);
-    const nueva = situacion === 'leido' ? 'no-leido' : (i === estado.parteActual ? 'no-leido' : 'leido');
+    const nueva = capituloChuleado(i) ? 'no-leido' : 'leido';
     estado.progreso = fijarMarcaCapitulo(estado.progreso, i, estado.partes.length, nueva);
     guardarProgresoPronto();
     pintarIndice();

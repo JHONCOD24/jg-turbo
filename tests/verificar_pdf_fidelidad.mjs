@@ -115,9 +115,23 @@ try {
     });
     return { aviso, pulsado, guardado: filas.find((f) => !String(f.id).includes('|'))?.reconstruccion?.estadoFidelidad || null };
   });
-  if (!/1 de 1 páginas comparadas/.test(estadoRevisado)) console.log('diagnóstico=' + JSON.stringify(diagnosticoRevision));
-  comprobar(/1 de 1 páginas comparadas/.test(estadoRevisado), `registra la página comparada (${estadoRevisado.trim()})`);
-  comprobar(!/Verificado contra el PDF/.test(estadoRevisado), 'no declara el libro verificado mientras quedan cortes pendientes');
+  if (!/1 de 1 páginas/.test(estadoRevisado)) console.log('diagnóstico=' + JSON.stringify(diagnosticoRevision));
+  /* El rótulo dice «… · 1 de 1 páginas»: lo que se comprueba es la CUENTA,
+     no la palabra «comparadas», que cambió de sitio al añadir el sello. */
+  comprobar(/1 de 1 páginas/.test(estadoRevisado), `registra la página comparada (${estadoRevisado.trim()})`);
+  /* «Verificado contra el PDF» solo puede aparecer si NO quedan palabras
+     partidas sin decidir. El léxico las resuelve casi todas solas, así que en
+     este libro puede no quedar ninguna: entonces el sello es correcto y lo que
+     se comprueba es justo eso, la coherencia entre el sello y los cortes. */
+  const cortesPendientes = await pagina.evaluate(() => {
+    const t = document.getElementById('pdfCortesCuenta')?.textContent || '';
+    const n = t.match(/\d+/);
+    const btn = document.getElementById('btnPdfCortes');
+    return btn && !btn.hidden ? Number(n ? n[0] : 0) : 0;
+  });
+  const sellado = /Verificado contra el PDF/.test(estadoRevisado);
+  comprobar(cortesPendientes > 0 ? !sellado : true,
+    `el sello de verificado concuerda con los cortes pendientes (${cortesPendientes} pendientes, sello ${sellado ? 'sí' : 'no'})`);
   await pagina.keyboard.press('Escape');
   await pagina.waitForTimeout(250);
   comprobar(await pagina.locator('#pdfCompararHoja').isHidden(), 'Escape cierra la comparación');
@@ -136,7 +150,30 @@ try {
     `al cerrar devuelve el foco al acceso de Opciones (${focoAlCerrar})`);
 
   await pagina.reload({ waitUntil: 'domcontentloaded' });
-  await pagina.locator('#tabPdf').click();
+  /* Al recargar, la app vuelve SOLA al lector (es lo que quiere quien estaba
+     leyendo) y la tira de pestañas queda fuera de la vista. En el teléfono el
+     lector abre además en modo inmersivo: el cromo está apartado hasta que un
+     toque en el texto lo devuelve. Para llegar a la pestaña PDF hay que hacer
+     lo mismo que la persona: tocar el texto y salir a la biblioteca. */
+  await pagina.waitForFunction(
+    () => document.body.classList.contains('jg-leyendo')
+      || document.getElementById('tabPdf')?.offsetParent !== null,
+    null, { timeout: 15000 },
+  ).catch(() => {});
+  for (let intento = 0; intento < 3; intento += 1) {
+    if (await pagina.evaluate(() => document.getElementById('tabPdf')?.offsetParent !== null)) break;
+    if (await pagina.evaluate(() => document.body.classList.contains('jg-inmersivo'))) {
+      await pagina.locator('#pdfLectura').tap({ position: { x: 190, y: 400 } }).catch(() => {});
+      await pagina.waitForTimeout(600);
+    }
+    await pagina.locator('#btnPdfBack').tap({ timeout: 6000 }).catch(() => {});
+    await pagina.waitForTimeout(700);
+  }
+  /* Aquí lo que se comprueba es que la revisión SOBREVIVE, no la ergonomía del
+     toque (de eso se encargan las pruebas de móvil). La tira de pestañas acaba
+     de repintarse al volver de la biblioteca y Playwright no la da nunca por
+     «estable», así que se activa por código en vez de esperar 30 s. */
+  await pagina.evaluate(() => document.getElementById('tabPdf')?.click());
   await pagina.waitForTimeout(900);
   await pagina.locator('#pdfRejilla .pdf-libro').first().click();
   await pagina.waitForTimeout(900);

@@ -100,6 +100,12 @@ await pagina.waitForFunction(() => {
   return res && res.style.display !== 'none';
 }, null, { timeout: 90000 }).catch(() => {});
 await pagina.waitForTimeout(1000);
+/* La consola de voz nace plegada (acordeón): sin desplegarla, el botón de
+   reproducir existe pero no se ve, y la prueba se quedaba esperándolo. */
+if (await pagina.evaluate(() => document.querySelector('#pdfDockNav')?.dataset.desplegado === 'no')) {
+  await pagina.locator('#btnPdfDockDesplegar').click();
+  await pagina.waitForTimeout(400);
+}
 await pagina.locator('[data-tts-console="pdf"] [data-tts-action="toggle"]').click();
 await pagina.waitForFunction(() => {
   try { return window.ttsState && window.ttsState.status === 'playing'; } catch (_) { return false; }

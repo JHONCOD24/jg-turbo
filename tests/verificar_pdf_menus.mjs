@@ -117,7 +117,23 @@ try {
         return d.dataset.abierto === 'no' && (r.top >= alto - 2 || getComputedStyle(d).visibility === 'hidden');
       }, 844);
       check(`${width}: panel de voz cerrado no tapa el texto`, vozCerrada);
+      /* El libro abre en modo inmersivo: la barra inferior está retirada
+         fuera de la pantalla y el botón de Voz no se puede tocar hasta que
+         un toque en el texto devuelve el cromo (que es lo que hace una
+         persona). Antes esta prueba tocaba el botón a ciegas y se quedaba
+         esperando 30 s. */
+      if (await page.evaluate(() => document.body.classList.contains('jg-inmersivo'))) {
+        await page.locator('#pdfLectura').tap({ position: { x: 180, y: 300 } });
+        await page.waitForTimeout(500);
+      }
       await page.locator('#btnPdfBmVoz').tap();
+      await page.waitForTimeout(300);
+      /* Dentro de la hoja, voz y velocidad viven en un acordeón: abrir la hoja
+         no despliega los ajustes. */
+      if (await page.evaluate(() => document.querySelector('#pdfDockNav')?.dataset.desplegado === 'no')) {
+        await page.locator('#btnPdfDockDesplegar').tap();
+        await page.waitForTimeout(300);
+      }
       await page.locator('#pdfDockNav select').first().tap({ trial: true });
       await page.locator('#btnPdfBmVoz').tap();
       await page.waitForTimeout(250);

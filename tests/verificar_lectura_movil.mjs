@@ -131,6 +131,10 @@ const medirLectura = (p) => p.evaluate(() => {
     contraste: Math.round(contraste * 100) / 100,
     pieVisible: !!pie && pie.offsetParent !== null,
     pieTexto: pie ? pie.innerText.replace(/\s+/g, ' ').trim() : '',
+    /* El tiempo que queda ya no vive en el pie: acompaña a la sección y a la
+     * página en la cabecera (el pie del teléfono se quedó solo con el avance
+     * del libro, que es la cifra que no cambia de significado). */
+    refTexto: (document.getElementById('pdfDocRef')?.innerText || '').replace(/\s+/g, ' ').trim(),
     desbordeH: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     pagina: document.querySelector('#pdfPagPos')?.textContent || '',
   };
@@ -169,8 +173,10 @@ try {
     comprobar(`${nombre}: usa la tipografía editorial`, /Literata/i.test(m.familia), m.familia);
     comprobar(`${nombre}: el contraste del texto es holgado (≥7:1)`, m.contraste >= 7, `${m.contraste}:1`);
     comprobar(`${nombre}: sin desbordamiento horizontal`, m.desbordeH <= 1, `${m.desbordeH} px`);
-    comprobar(`${nombre}: el pie dice cuánto queda y el porcentaje`,
-      m.pieVisible && /\d+\s*%/.test(m.pieTexto) && /min/i.test(m.pieTexto), m.pieTexto);
+    comprobar(`${nombre}: el pie dice cuánto llevas del libro`,
+      m.pieVisible && /\d+\s*%/.test(m.pieTexto), m.pieTexto);
+    comprobar(`${nombre}: la cabecera dice cuánto queda de la sección`,
+      /min|h/i.test(m.refTexto), m.refTexto);
 
     if (nombre === 'iPhone 14') {
       /* La fuente tiene que estar de verdad cargada, no solo declarada. */

@@ -61,13 +61,24 @@ const conPausaTitulo = (sale, titulo) =>
 
 /* ── La invariante que no se puede romper ──────────────────────────── */
 {
-  /* Las mismas palabras, en el mismo orden. Solo cambian signos y espacios. */
-  const entra = 'CAPITULO II\n\nQuiso llegar temprano pero el tren se retraso.';
+  /* EL CUERPO del texto conserva sus palabras, en el mismo orden: la capa de
+   * voz solo mueve signos y espacios. Lo único que SÍ se dice distinto es la
+   * numeración de las divisiones del libro («Capítulo II» → «Capítulo dos»),
+   * porque en romanos el motor deletrea las letras («equis i uve») y el
+   * rótulo del capítulo se vuelve ininteligible. Ese cambio se limita al
+   * rótulo; el párrafo nunca se toca. */
+  const entra = 'Quiso llegar temprano pero el tren se retraso una hora entera.';
   const sale = prepararParaVoz(entra, 'es');
   const palabras = (t) => t.replace(/§P\d+§/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
   comprobar(JSON.stringify(palabras(entra)) === JSON.stringify(palabras(sale)),
-    'NO cambia ninguna palabra del texto: solo signos');
+    'el CUERPO del texto no cambia ninguna palabra: solo signos');
+
+  /* Y el rótulo, la única excepción, cambia solo el número. */
+  const conRotulo = prepararParaVoz('CAPITULO II\n\nQuiso llegar temprano pero el tren se retraso.', 'es');
+  comprobar(/CAPITULO dos/.test(conRotulo), 'el romano del rotulo se dice como numero');
+  comprobar(/Quiso llegar temprano, pero el tren se retraso\./.test(conRotulo),
+    'y el parrafo que le sigue llega intacto');
 }
 
 /* ── Se puede desactivar ───────────────────────────────────────────── */

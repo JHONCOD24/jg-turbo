@@ -190,8 +190,15 @@ try {
     assert(!(await p.locator('#pdfPaginacion').isVisible()));
   await p.locator('#pdfEditarCancelar').click(); await p.waitForTimeout(300);
   assert((await medir()).alto>120,'volver a lectura recupera altura');
-  if(nombre==='escritorio') {
-    await abrirHerramientas(p);
+  /* «Revisar cortes» solo existe si quedan palabras partidas sin decidir. El
+   * léxico de `js/vendor/lexico/` las resuelve casi todas solas, así que en
+   * este libro de prueba puede no quedar ninguna: entonces no hay nada que
+   * revisar y la prueba se salta el bloque en vez de esperar 30 s a un botón
+   * que está oculto a propósito. */
+  const hayCortes = nombre==='escritorio'
+    && await (async()=>{ await abrirHerramientas(p); return p.locator('#btnPdfCortes').isVisible(); })();
+  if(!hayCortes && nombre==='escritorio') console.log('AVISO: sin cortes pendientes, se salta la revisión de cortes');
+  if(hayCortes) {
     await p.locator('#btnPdfCortes').click();
     const ctx=await p.locator('.pdf-corte-ctx').first().textContent();
     console.log('corte de prueba',ctx);

@@ -139,8 +139,13 @@ await pagina.waitForTimeout(500);
   const estado3 = await pagina.locator('#pdfIndiceLista .pdf-cap').nth(3).getAttribute('data-estado');
   comprobar(estado3 === 'pendiente', 'tocar la marca deschulea el capítulo');
   comprobar(await seccion() === 7, 'y no te mueve del capítulo donde estabas');
+  /* `aria-pressed` dice ahora lo que el botón hace («este capítulo está
+   * marcado como leído»), no si hay una anotación a mano. La anotación vive
+   * en la fila, que es lo que pinta el anillo. */
   const pressed = await pagina.locator('#pdfIndiceLista .pdf-cap-marca').nth(3).getAttribute('aria-pressed');
-  comprobar(pressed === 'true', 'la marca queda anotada como manual');
+  comprobar(pressed === 'false', 'deschuleado, el botón se anuncia como no pulsado');
+  const manual = await pagina.locator('#pdfIndiceLista .pdf-cap').nth(3).getAttribute('data-manual');
+  comprobar(manual === 'si', 'la marca queda anotada como manual');
 }
 
 /* ── Volver a tocarla la chulea de nuevo ── */
@@ -164,8 +169,30 @@ await pagina.locator('#pdfIndiceLista .pdf-cap-cuerpo').nth(3).click();
 await pagina.waitForTimeout(700);
 {
   comprobar(await seccion() === 4, 'el cuerpo navega al capítulo elegido');
-  const pressed = await pagina.locator('#pdfIndiceLista .pdf-cap-marca').nth(3).getAttribute('aria-pressed');
-  comprobar(pressed === 'false', 'visitar el capítulo borra la marca manual');
+  const manual = await pagina.locator('#pdfIndiceLista .pdf-cap').nth(3).getAttribute('data-manual');
+  comprobar(manual === null, 'visitar el capítulo borra la marca manual');
+}
+
+/* ── El capítulo EN CURSO también se puede chulear y deschulear ──
+ *
+ * Aquí estaba el fallo que se veía como «el botón no hace nada»: dentro del
+ * capítulo, el estado siempre es «leyendo», y la vuelta atrás se calculaba
+ * sobre ese estado, así que las dos pulsaciones anotaban «no leído» y el ✓
+ * no aparecía nunca. */
+{
+  const actual = Number(await pagina.locator('#pdfIndiceLista .pdf-cap[aria-current="true"]').getAttribute('data-cap'));
+  const marcaActual = pagina.locator(`#pdfIndiceLista .pdf-cap[data-cap="${actual}"] .pdf-cap-marca`);
+  const icono = () => pagina.locator(`#pdfIndiceLista .pdf-cap[data-cap="${actual}"] .pdf-cap-marca-icono`).textContent();
+  comprobar((await icono()).trim() !== '✓', 'el capítulo en curso empieza sin chulear');
+  await marcaActual.click();
+  await pagina.waitForTimeout(400);
+  comprobar((await icono()).trim() === '✓', 'chulear el capítulo en curso pone el ✓');
+  comprobar(await pagina.locator(`#pdfIndiceLista .pdf-cap[data-cap="${actual}"] .pdf-cap-marca`).getAttribute('aria-pressed') === 'true',
+    'y se anuncia como pulsado');
+  await pagina.locator(`#pdfIndiceLista .pdf-cap[data-cap="${actual}"] .pdf-cap-marca`).click();
+  await pagina.waitForTimeout(400);
+  comprobar((await icono()).trim() !== '✓', 'volver a tocarlo lo deschulea');
+  comprobar(await seccion() === actual + 1, 'y en ningún momento te mueve de capítulo');
 }
 
 comprobar(errores.length === 0, `sin errores de JavaScript (${errores.length})`);

@@ -46,8 +46,8 @@ comprobar(!/sourceId === 'pdf'[\s\S]{0,180}preferFish:\s*false/.test(html),
 {
   const js = (html.match(/const JG_JS_V = '(v\d+)'/) || [])[1];
   const shell = (sw.match(/CACHE_SHELL = '(jg-turbo-shell-v\d+)'/) || [])[1];
-  comprobar(js === 'v141' && shell === 'jg-turbo-shell-v141',
-    'JG_JS_V y CACHE_SHELL suben juntas a v141');
+  comprobar(js === 'v142' && shell === 'jg-turbo-shell-v142',
+    'JG_JS_V y CACHE_SHELL suben juntas a v142');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

@@ -127,7 +127,11 @@ console.log('\n--- 2b) Modo navegador (neural=false): conversión completa ---')
 {
   const res = prepararParaVoz('El 45 % de los casos entre 1914-1918', 'es', { neural: false });
   comprobar(res.includes('cuarenta y cinco por ciento'), `Browser: porcentajes expandidos (obtenido: "${res}")`);
-  comprobar(res.includes('de mil novecientos catorce a mil novecientos dieciocho'), `Browser: rangos de años expandidos (obtenido: "${res}")`);
+  /* «entre de mil… a mil…» no era castellano: detrás de «entre», un rango se
+   * dice «… y …». Sin preposición delante sí se dice «de … a …». */
+  comprobar(res.includes('entre mil novecientos catorce y mil novecientos dieciocho'), `Browser: rango tras «entre» (obtenido: "${res}")`);
+  const sinPrep = prepararParaVoz('Duró 1914-1918', 'es', { neural: false });
+  comprobar(sinPrep.includes('de mil novecientos catorce a mil novecientos dieciocho'), `Browser: rango sin preposición (obtenido: "${sinPrep}")`);
 }
 
 // Con neural=false, los párrafos SÍ reciben punto

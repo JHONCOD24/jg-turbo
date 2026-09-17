@@ -49,6 +49,15 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    # Sin esto, un navegador que hable con el servidor desde OTRO origen (el
+    # modo «servidor propio» de la app) no puede LEER estas cabeceras: el
+    # cliente creía que ningún bloque había sonado con la voz pedida y
+    # reintentaba los tres intentos en cada bloque, con su espera y su coste.
+    expose_headers=[
+        "X-TTS-Voice", "X-TTS-Language", "X-TTS-Locale", "X-TTS-Model",
+        "X-TTS-Engine", "X-TTS-Style", "X-TTS-Rate", "X-TTS-Pitch",
+        "X-TTS-Tone", "X-TTS-Fallback",
+    ],
 )
 
 TEMP_DIR = Path(tempfile.gettempdir()) / "jg_turbo_vercel"
@@ -4053,6 +4062,32 @@ def _tts_pick_voice(voice: str, language: str, locale: str) -> tuple[str, str, s
     return TTS_VOICE_CATALOG[selected_locale][gender], selected_locale, gender
 
 
+def _tts_unified_candidates(
+    gender: str, language: str, locale: str, prefer_fish: bool = False
+) -> list[str]:
+    """Voces del modo «misma voz» y su orden de respaldo.
+
+    Quien elige «misma voz» en la app pide justo eso: una voz multilingüe que
+    pronuncie los términos en inglés en inglés. Ese orden no se toca.
+
+    Distinto es el RESPALDO de una voz de Fish. El lector de PDF fuerza el modo
+    unificado, así que cuando Fish tropieza en un bloque suelto ese bloque
+    salía por una multilingüe `en-US-*`: lee español, pero con timbre y
+    cadencia estadounidenses, y a media lectura se oye a OTRA PERSONA — el
+    fallo que se notaba como «la voz se intercambia». Para ese caso va primero
+    la voz nativa del acento pedido (es-CO, es-MX…), que se parece mucho más a
+    la que venía sonando; las multilingües quedan detrás, por si acaso.
+    """
+    unificadas = list(TTS_UNIFIED_VOICES[gender])
+    base = _tts_language(language)
+    if not prefer_fish or base == "en":
+        return unificadas
+    acento = _tts_locale(locale, base)
+    nativas = [TTS_VOICE_CATALOG[acento][gender]]
+    nativas += [v for v in TTS_FALLBACK_VOICES[base][gender] if v not in nativas]
+    return nativas + [v for v in unificadas if v not in nativas]
+
+
 def _tts_prosody(rate: float, tone: str) -> tuple[str, str, str, str]:
     value = max(0.75, min(2.0, float(rate or 1.0)))
     rate_pct = int(round((value - 1.0) * 100))
@@ -4413,7 +4448,13 @@ def _tts_fish_cuerpo(texto: str, reference_id: str, speed: float, tone: str) -> 
         "format": "mp3",
         "temperature": FISH_TEMPERATURA,
         "top_p": FISH_TOP_P,
-        "chunk_length": FISH_CHUNK_LENGTH,
+        # Fish parte el texto en trozos de `chunk_length` y genera cada uno por
+        # separado: en cada corte reinicia la prosodia y el tono puede subir de
+        # golpe (los «chillidos» que se oían a media lectura y luego se
+        # normalizaban). Pidiendo un trozo tan grande como el texto, un bloque
+        # = una sola generación y el timbre no salta. El cliente ya envía
+        # bloques cortos cuando la voz es de Fish (TTS_FISH_MAX).
+        "chunk_length": max(100, min(FISH_CHUNK_LENGTH, len(texto) + 1)),
         "normalize": True,
         "latency": FISH_LATENCIA,
         "sample_rate": 44100,
@@ -4558,7 +4599,9 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
         # No aplica force-EN: la propia voz detecta y pronuncia el inglés.
         language = "multi"
         modo = "unified"
-        candidates = list(TTS_UNIFIED_VOICES[gender])
+        candidates = _tts_unified_candidates(
+            gender, req.language, req.locale, bool(req.prefer_fish)
+        )
     else:
         language = _tts_resolve_language(req.language, text)
         modo = "regional"
@@ -4581,6 +4624,30 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
             if not audio:
                 raise RuntimeError("El servicio no devolvió audio.")
             actual_locale = candidate.split("-")[0] + "-" + candidate.split("-")[1]
+            # ¿Sonó la voz que se pidió, o un respaldo?
+            #
+            # Un respaldo NO se puede cachear. El GET lleva `max-age=86400,
+            # immutable`, así que el navegador y el CDN se quedaban con el
+            # tramo malo pegado a esa dirección durante un día: el cliente
+            # reintentaba el mismo bloque y le devolvían el MISMO audio con la
+            # voz equivocada. De ahí que siempre fueran los mismos pasajes los
+            # que «cambiaban de voz». Con `no-store` el reintento sí llega al
+            # servicio y puede salir bien.
+            # Respaldo es que NO haya sonado el motor que se pidió. El modelo
+            # concreto de Fish (pagado o gratuito) no se juzga aquí: el
+            # servidor no sabe con cuál venían sonando los bloques anteriores,
+            # y si la cuenta se quedó sin créditos TODOS van por el gratuito —
+            # que es consistente, y marcarlos todos como respaldo dejaría la
+            # lectura entera sin caché y con tres intentos por bloque. Quien
+            # compara es el cliente, que sí recuerda el modelo del primer
+            # bloque bueno y solo se alarma si cambia a media lectura
+            # (ver ttsDescargarBloque y la cabecera X-TTS-Model).
+            respaldo = False
+            if req.prefer_fish and motor != "fish":
+                respaldo = True
+            elif not req.prefer_fish and candidate != candidates[0]:
+                respaldo = True
+            cache_efectivo = 0 if respaldo else cache_seconds
             return Response(
                 content=audio,
                 media_type="audio/mpeg",
@@ -4588,8 +4655,8 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
                     # El mismo texto con la misma voz siempre suena igual: se puede
                     # cachear en el CDN y ahorrar la síntesis completa al repetir.
                     "Cache-Control": (
-                        f"public, max-age={cache_seconds}, s-maxage={cache_seconds}, immutable"
-                        if cache_seconds > 0
+                        f"public, max-age={cache_efectivo}, s-maxage={cache_efectivo}, immutable"
+                        if cache_efectivo > 0
                         else "no-store"
                     ),
                     # Con Fish la voz real no es la del catálogo de Edge: se
@@ -4610,6 +4677,9 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
                     "X-TTS-Model": modelo or FISH_MODEL,
                     # Estilo de interpretación aplicado (solo con motor Azure)
                     "X-TTS-Style": estilo or "none",
+                    # «1» = este bloque NO sonó con la voz que se pidió. El
+                    # cliente lo usa para reintentarlo antes de dejarlo pasar.
+                    "X-TTS-Fallback": "1" if respaldo else "0",
                 },
             )
         except Exception as error:

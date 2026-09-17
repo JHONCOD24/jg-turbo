@@ -224,10 +224,29 @@ export function numeroAPalabras(n) {
     const u = restoCentenas % 10;
     if (d > 0) palabras += DECENAS[d];
     if (d > 0 && u > 0) palabras += ' y ';
-    if (u > 0) palabras += (u === 1 && (miles > 0 || centenas > 0 || d > 0) ? 'uno' : UNIDADES[u]);
+    /* «uno», nunca «un»: aquí el número se dice, no acompaña a un sustantivo.
+     * Antes «pág. 1» sonaba «página un». */
+    if (u > 0) palabras += (u === 1 ? 'uno' : UNIDADES[u]);
   }
 
   return palabras.trim();
+}
+
+const ROMANO_VALOR = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+
+/** «XIV» → 14. Devuelve 0 si la cadena no es un romano bien formado. */
+export function romanoANumero(romano) {
+  const t = String(romano || '').toUpperCase();
+  /* Forma canónica: así «VV» o «IIII» no cuelan como números, y un renglón
+   * que solo trae iniciales no se convierte en una cifra inventada. */
+  if (!t || !/^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/.test(t)) return 0;
+  let total = 0;
+  for (let i = 0; i < t.length; i += 1) {
+    const actual = ROMANO_VALOR[t[i]];
+    const siguiente = ROMANO_VALOR[t[i + 1]] || 0;
+    total += actual < siguiente ? -actual : actual;
+  }
+  return total > 0 && total < 4000 ? total : 0;
 }
 
 /**
@@ -434,7 +453,12 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     .replace(/§\s*/g, 'sección ')
     .replace(/¶\s*/g, 'párrafo ')
     .replace(/\s*&\s*/g, ' y ')
-    .replace(/(\p{L})\/(\p{L})/gu, '$1 o $2')   /* autor/lector → autor o lector */
+    .replace(/(\d\s*)km\s*\/\s*h\b/gi, '$1kilómetros por hora')
+    .replace(/(\d\s*)m\s*\/\s*s\b/g, '$1metros por segundo')
+    .replace(/\by\s*\/\s*o\b/gi, 'y o')      /* «y/o»: no es «y o o» */
+    /* Dos palabras de verdad («autor/lector»), no siglas ni unidades: con una
+     * sola letra a un lado, «km/h» sonaba «km o h». */
+    .replace(/(\p{L}{2,})\/(\p{L}{2,})/gu, '$1 o $2')
     .replace(/[~|_]+/g, ' ')
     .replace(/[†‡]/g, '');
 
@@ -459,6 +483,46 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     .replace(/\bcandace\b/gi, 'Candace')
     .replace(/\bph\.\s*D\./g, 'Ph. D.');
 
+  /* 3 septies. Cifras que el motor lee mal aunque «sepa» números.
+   *
+   * Medido en la biblioteca (libros traducidos del inglés): el separador de
+   * millares inglés («10,000 dólares», «$1,500») lo lee una voz española como
+   * lo que es en español, un decimal: «diez coma cero cero cero». Eso es el
+   * «la voz dice coma» que se oía. Quitando la coma del grupo de millares, el
+   * motor vuelve a decir «diez mil».
+   *
+   * A cambio, un decimal español escrito con TRES decimales exactos («3,141»)
+   * se leería como millar. Es mucho más raro en prosa que un precio en miles,
+   * y el error que produce es mucho menos molesto que el actual. */
+  salida = salida.replace(/\b\d{1,3}(?:,\d{3})+\b/g, (m) => m.replace(/,/g, ''));
+
+  /* Rango de cifras («1914-1918», «páginas 20 – 25»). El guion se lee «guion»
+   * o «menos»; en voz alta un rango se dice «de … a …», y detrás de «entre»
+   * se dice «… y …» («entre de 1914 a 1918» no es castellano). Se piden 2-4
+   * dígitos a cada lado y ningún guion pegado, para no tocar fechas completas
+   * («12-05-2024») ni códigos («978-84-…»). */
+  salida = salida.replace(
+    /(\b(?:entre|desde|del|de)\s+)?(?<![\d–—-])(\d{2,4})\s*[–—-]\s*(\d{2,4})(?![\d–—-])/gi,
+    (m, prep, uno, dos) => {
+      const previo = (prep || '').trim().toLowerCase();
+      if (previo === 'entre') return `${prep}${uno} y ${dos}`;
+      if (prep) return `${prep}${uno} a ${dos}`;
+      return `de ${uno} a ${dos}`;
+    },
+  );
+
+  /* Numeración romana de las divisiones del libro: «Capítulo XIV» sale como
+   * «capítulo equis i uve», porque son letras y el motor las deletrea. Solo
+   * se convierte detrás de la palabra que la nombra; el renglón que ES el
+   * número entero se convierte más abajo, cuando ya tiene su pausa. */
+  salida = salida.replace(
+    /\b(cap[íi]tulos?|partes?|secci[óo]n(?:es)?|libros?|tomos?|actos?|escenas?|lecci[óo]n(?:es)?|unidades?|volumen|vol[úu]menes|cantos?)\s+([IVXLCDM]{1,8})\b/gi,
+    (m, palabra, romano) => {
+      const n = romanoANumero(romano);
+      return n ? `${palabra} ${numeroAPalabras(n)}` : m;
+    },
+  );
+
   // ── Reglas 4-6: conversión numérica ──
   // Edge TTS (y Azure) ya pronuncian «2024» como «dos mil veinticuatro» y
   // «45 %» como «cuarenta y cinco por ciento» con prosodia natural. Expandir
@@ -468,15 +532,9 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   // pronuncia los dígitos uno por uno.
   // ── Reglas 4-6: conversión numérica ── solo en fallback navegador
   if (!neural) {
-    // 4. Rangos de años o números: «1914-1918» → «de mil ... a mil ...»
-    salida = salida.replace(/\b(\d{1,4})\s*[-–—]\s*(\d{1,4})\b/g, (match, n1, n2) => {
-      const num1 = parseInt(n1, 10);
-      const num2 = parseInt(n2, 10);
-      if (num1 <= 9999 && num2 <= 9999) {
-        return `de ${numeroAPalabras(num1)} a ${numeroAPalabras(num2)}`;
-      }
-      return match;
-    });
+    /* Los rangos ya se dijeron con palabras («de … a …», «entre … y …») en la
+     * regla 3 septies, que vale para los dos motores. Aquí solo quedan las
+     * cifras sueltas, que expande la regla 6. */
     // 5. Porcentajes
     salida = salida.replace(/\b(\d+)\s*%/g, (_, num) => {
       const n = parseInt(num, 10);
@@ -522,6 +580,18 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
       return pausasEstructurales ? `${t}\n${MARCA_PAUSA_TITULO}` : `${t}:`;
     }).filter(Boolean).join('\n\n');
   }
+
+  /* Un renglón que es SOLO un romano es el rótulo del capítulo («XVII»). Se
+   * convierte aquí, después de marcar la pausa de título: mientras sigue en
+   * letras mayúsculas, pareceTituloSuelto lo reconoce y le pone su silencio;
+   * si se cambiara antes, «Diecisiete» ya no parecería un título y el capítulo
+   * empezaría pegado al primer párrafo. */
+  salida = salida.replace(/^[ \t]*([IVXLCDM]{1,8})\.?[ \t]*$/gm, (m, romano) => {
+    const n = romanoANumero(romano);
+    if (!n) return m;
+    const palabra = numeroAPalabras(n);
+    return palabra.charAt(0).toUpperCase() + palabra.slice(1);
+  });
 
   if (comasProsodicas) {
     /* Coma antes del conector solo si no había ya un signo delante. */

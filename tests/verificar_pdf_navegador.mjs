@@ -97,9 +97,27 @@ writeFileSync(NO_PDF, 'esto es un texto suelto, no un pdf');
 
 const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
+/* Al cargar con un libro guardado, la app vuelve SOLA al lector (es lo que
+   quiere quien estaba leyendo) y la tira de pestañas queda fuera de la vista.
+   Para llegar a la pestaña PDF hay que salir antes a la biblioteca, igual que
+   haría la persona. Sin esto, la prueba esperaba 30 s a un botón escondido. */
+async function volverALasPestanas(pagina) {
+  const enLector = await pagina.evaluate(() => document.body.classList.contains('jg-leyendo'));
+  if (!enLector) return;
+  /* En el teléfono el lector abre en modo inmersivo: el cromo está apartado
+     hasta que un toque en el texto lo devuelve. */
+  if (await pagina.evaluate(() => document.body.classList.contains('jg-inmersivo'))) {
+    await pagina.locator('#pdfLectura').click({ position: { x: 100, y: 200 } }).catch(() => {});
+    await pagina.waitForTimeout(500);
+  }
+  await pagina.locator('#btnPdfBack').click({ timeout: 8000 }).catch(() => {});
+  await pagina.waitForTimeout(600);
+}
+
 async function abrirPestana(pagina) {
   await pagina.goto(BASE, { waitUntil: 'domcontentloaded' });
-  await pagina.waitForTimeout(600);
+  await pagina.waitForTimeout(900);
+  await volverALasPestanas(pagina);
   await pagina.locator('#tabPdf').click();
   await pagina.waitForTimeout(400);
 }
