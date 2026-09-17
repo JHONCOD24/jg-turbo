@@ -19,6 +19,32 @@ JG Voice **entrena** un modelo privado en Fish y guarda su id (`provider_voice_i
 
 No se pega el MP3/OGG de muestra en `audio/`. Ese archivo es la fuente del clon, no la voz del lector.
 
+### 1.1 Por qué NO «bajar las voces a local» ni cambiar de proveedor (investigado 2026-09-17)
+
+Preguntas ya respondidas con medición — no las repitas:
+
+- **«Roberto no viene de Fish, viene de JG Voice»** → Falso a efectos de
+  síntesis: JG Voice lo clonó, pero el modelo entrenado vive en la nube de
+  Fish y **ambas apps sintetizan contra `api.fish.audio/v1/tts` con la misma
+  cuenta** (ver `FishAudioProvider.synthesize` en JG Voice). Fish caído =
+  sin clones en las dos apps a la vez.
+- **«Pasemos las voces a JG Voice y que Turbo pida ahí»** → No quita la
+  dependencia: JG Voice no tiene motor propio de síntesis, usa Fish.
+- **«Descarguemos el modelo entrenado»** → Fish no exporta los pesos de los
+  modelos entrenados. No hay archivo que bajar.
+- **«Clonemos local con un modelo abierto»** → Descartado por hardware: el PC
+  del usuario tiene **Intel Iris Xe integrada, sin GPU dedicada** (16 GB
+  RAM); síntesis en CPU es inviable para horas de audio. Además JG Turbo
+  vive en Vercel y se usa en el teléfono: un servidor local exigiría túnel
+  expuesto a internet.
+- **«ElevenLabs entonces»** → Descartado por costo (decisión del usuario de
+  no pagar): Starter $6 ≈ 30 min/mes; Pro $99 ≈ 10 h/mes. Un libro de 300
+  págs ≈ 11 h. Tabla completa y precios: `CAMBIOS_TTS.md` §Estrategia de voz
+  vigente.
+
+La solución adoptada a la inestabilidad del Fish gratuito fue el **fusible**
+(§v2.88.0) + **Azure F0 oficial** como respaldo gratuito (§v2.88.1).
+
 ---
 
 ## 2. Condiciones que tienen que cumplirse

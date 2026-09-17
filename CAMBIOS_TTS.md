@@ -4,17 +4,12 @@
 
 | Campo | Valor |
 |---|---|
-| **Versión app** | **2.24.0** (18 voces Fish agrupadas por idioma y género · 2026-08-19) · SW `jg-turbo-shell-v31` |
-| **Versión motor** | **2.16.3** (18 voces Fish · español/inglés × femeninas/masculinas) |
-| **UI consola** | **compacta horizontal · 2026-08-01** (ver §0 y `CAMBIOS_UX.md` v3.2) |
+| **Versión app** | **2.88.1** (respaldo oficial Azure F0 · 2026-09-17) · SW `jg-turbo-shell-v144` |
+| **Motor principal** | Fish Audio gratuito (`s2.1-pro-free`, voces clonadas: Roberto, Amy…) |
+| **Respaldo 1** | **Azure Speech F0 oficial** (500k chars/mes gratis; ver §Estrategia) |
+| **Respaldo 2** | `edge-tts` (gratis, no oficial) → `speechSynthesis` del navegador |
 | **Fecha UI** | 2026-08-01 |
 | **Producción** | https://jg-turbo.vercel.app |
-| **Deploy UI franja TTS** | `CD7GVazANst7gZCovnGZRrYAq1A3` · Ready (alias jg-turbo) |
-| **Deploy código 2.7.0 (motor)** | `dpl_BXHP9gGYRWjcSfkW37sxoBk9rpME` · Ready |
-| **Deploy código 2.9.0 (motor)** | `dpl_6y86RK1e9XNkacbkGEdrmXAYQwic` · Ready · production |
-| **Deploy código 2.10.0 (motor)** | `dpl_8S22tkseGhuyC9LcMJoqN9pCikzW` · Ready · production |
-| **Motor** | Azure → Fish (solo textos propios) → `edge-tts`. Sin claves, todo por `edge-tts` |
-| **Respaldo** | `edge-tts` → `speechSynthesis` del navegador |
 | **Consola del navegador** | `JG Turbo v2.24.0 · Fish Audio por idioma y género · 18 voces` |
 
 ### Mapa de documentación relacionada
@@ -29,6 +24,99 @@
 | `FICHA_TECNICA.md` | Manual de producto (sección lectura en voz alta) |
 | `Agents.md` (app) | Reglas cortas para agentes + voces actuales |
 | `Agents.md` / `AGENTS.md` (raíz monorepo) | Deploy siempre desde `vercel_deploy/` |
+
+---
+
+## Estrategia de voz vigente (definida 2026-09-17): 100 % gratuita
+
+**Decisión del usuario, inamovible salvo que él cambie de parecer:** no pagar
+créditos de Fish ni suscripciones (ElevenLabs u otras). La meta es la **máxima
+estabilidad posible con opciones gratuitas**. Un agente que sugiera «recarga
+créditos» o «pasa a ElevenLabs» como solución está contradiciendo esta
+decisión: puede mencionarlas como alternativa conocida, pero el trabajo es
+gratuito.
+
+### La cadena de voz (orden de intento por bloque)
+
+1. **Fish gratuito** (`s2.1-pro-free`) — la única casa de los clones (Roberto,
+   Amy, Dora, Michael, JG Narrador/a…). Medido: ~4,6-8 s por bloque cuando
+   está sano; **se cuelga por rachas de minutos a ~1 h sin garantías** (es
+   su nivel gratuito). El fusible de §v2.88.0 lo protege.
+2. **Azure Speech F0 oficial** — mismo timbre de voz del respaldo histórico
+   (Gonzalo/Salome), pero por la vía OFICIAL de Microsoft, con SSML y estilos.
+   Medido: **1,2 s por bloque**. Free F0 = 500 000 caracteres/mes gratis para
+   siempre (≈ 8 h de audio); si se excede, rechaza con 429 — **no puede
+   facturar por diseño**.
+3. **edge-tts** — gratis e ilimitado, pero usa una vía NO oficial de Microsoft
+   (endpoint de demo del navegador): podría romperse algún día sin aviso. Por
+   eso existe el nivel 2.
+4. **`speechSynthesis` del navegador** — última red (calidad menor).
+
+Con Fish caído, la persona oye el nivel 2/3 con un aviso honesto una vez cada
+15 min; **Roberto regresa solo** cuando Fish recupera (el fusible re-prueba
+cada 2 min). Nada que reiniciar.
+
+### Azure F0: datos operativos
+
+| Campo | Valor |
+|---|---|
+| Cuenta | La del usuario (portal.azure.com, cuenta gratuita) |
+| Recurso | `jg-turbo-voz` · región `eastus` · plan **Free F0** |
+| Cuota | 500 000 caracteres/mes (≈ 8 h de audio). Al pasarla: 429, sin cargo |
+| Claves | `.env` local (`AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`) + Vercel (Production). **Nunca en código ni Git** |
+| Rotación | Azure → Claves y punto de conexión → Regenerar → actualizar `.env` y Vercel → redesplegar (Vercel entrega el env en el DESPLIEGUE siguiente) |
+| Panel de costos | `portal.azure.com` → Administración de costos + facturación → Análisis de costos. Datos con 24-48 h de retraso; para F0 debe mostrar $0.00 siempre |
+| Límite de ritmo | F0 ≈ 20 peticiones/min: el lector usa ~6-12/min máx, sobra |
+
+### Diagnóstico medido de Fish (2026-09-17, para no repetirlo)
+
+- Modelo pagado `s2.1-pro` → **402** (sin créditos; el plan Plus del estudio
+  NO incluye créditos de API: van aparte en Billing). No es un bug: es el
+  estado elegido de la cuenta.
+- Modelo gratuito `s2.1-pro-free` → **intermitente**: la mañana del 17-sep se
+  colgó sin contestar (6/6 timeouts de 45 s); al mediodía recuperado (200 en
+  segundos). No hay SLA; asumir rachas y diseñar alrededor (hecho: fusible).
+- **Roberto NO viene «de otro proyecto»**: JG Voice lo CLONÓ, pero el modelo
+  entrenado vive en la nube de Fish y ambas apps sintetizan contra
+  `api.fish.audio/v1/tts` con la misma cuenta. Fish caído = sin Roberto en
+  cualquiera de las dos apps. Ver `docs/INTEGRAR-VOZ-JG-VOICE.md`.
+
+### ElevenLabs: investigado y descartado (2026-09-17, precios oficiales)
+
+| Plan | Precio/mes | ≈ Audio incluido |
+|---|---|---|
+| Starter | $6 | ~30 min (se agota en un capítulo) |
+| Creator | $22 | ~2 h |
+| Pro | $99 | ~10 h |
+
+Un libro de 300 páginas ≈ 650k chars ≈ ~11 h: **ElevenLabs cuesta 5-12× más
+por hora que Fish pagado, y Fish pagado fue descartado por caro**. Once Labs
+solo volvería a considerarse como proveedor secundario para piezas cortas (el
+patrón `VoiceProvider` de JG Voice ya lo contempla, Fase 3 de su roadmap).
+
+### Síntesis local: descartada por hardware (medido)
+
+Re-clonar local (F5-TTS/XTTS/fish-speech abierto) requeriría GPU dedicada;
+el equipo del usuario tiene **Intel Iris Xe integrada + 16 GB RAM** (sin
+GPU): síntesis en CPU inviable para horas de audio. Además JG Turbo vive en
+Vercel y se usa en el teléfono: un servidor local exigiría túnel expuesto.
+
+### Cómo verificar la pila (comandos para agentes)
+
+```powershell
+# Estado de motores (booleanos, nunca claves)
+Invoke-RestMethod https://jg-turbo.vercel.app/api/health
+# → tts_fish: True, tts_azure: True
+
+# Camino Fish (Roberto): debe responder fish:Roberto con respaldo=0
+# Camino neural (sin Fish): debe responder azure-neural-* en ~1 s
+# (cuerpo de ejemplo en §v2.88.1; clave: prefer_fish true/false)
+```
+
+Si `tts_azure` aparece `false`: falta el env en Vercel o el despliegue aún no
+lo tomó. Si Fish responde `respaldo=1` constante: ver fusible, §v2.88.0.
+
+---
 
 ---
 

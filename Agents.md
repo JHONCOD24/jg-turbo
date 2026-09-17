@@ -440,9 +440,23 @@ reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias http
 
 ## TTS (lectura en voz alta)
 
+### ⚠️ Estrategia vigente (2026-09-17): 100 % GRATUITA — decisión del usuario
+
+El usuario **no paga** créditos de Fish ni suscripciones (ElevenLabs
+investigado y descartado: 5-12× más caro por hora). La meta es máxima
+estabilidad gratis. Cadena por bloque: **Fish gratuito** (Roberto y clones,
+con fusible: rachas de caída de minutos a ~1 h, vuelve solo) → **Azure F0
+oficial** (500k chars/mes gratis, ~1 s/bloque, no puede facturar) →
+**edge-tts** (gratis, no oficial) → navegador. Verificar con
+`/api/health` (`tts_fish`, `tts_azure`). Diagnóstico medido, costos,
+rotación de llave Azure y comandos: **`CAMBIOS_TTS.md` §Estrategia de voz
+vigente**. Síntesis local descartada por hardware (PC sin GPU dedicada).
+
 **Clones JG Voice → PDF:** receta para agentes en
 `docs/INTEGRAR-VOZ-JG-VOICE.md`. No armes un API entre las dos apps: el puente
 es el `reference_id` de Fish (misma cuenta). No reviertas el «PDF apaga Fish».
+Fish caído = sin clones en AMBAS apps (JG Voice sintetiza contra el mismo
+`api.fish.audio/v1/tts`).
 
 **v2.88.1 — Azure F0 oficial activado** (2026-09-17): respaldo de voz oficial
 gratuito (500k chars/mes) entre Fish y edge-tts. Recurso `jg-turbo-voz`
