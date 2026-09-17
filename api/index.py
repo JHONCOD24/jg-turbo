@@ -4228,6 +4228,19 @@ FISH_VOCES_RETIRADAS = {
 }
 _fish_nombres_cache: dict[str, str] | None = None
 FISH_TTS_TIMEOUT = 25.0
+# ── Presupuesto de tiempo de una petición de voz ──────────────────────────
+#
+# La función tiene 60 s en la plataforma (vercel.json). Fish, cuando se
+# atasca, podía consumirlos todos: 25 s por intento × 3 intentos × 2 modelos
+# = hasta 150 s. La función moría con 504 ANTES de probar Edge, que habría
+# contestado en dos segundos. Para quien escucha eso es la lectura que se
+# frena y hay que reiniciar.
+#
+# Con presupuesto, Fish dispone de un rato acotado; agotado, se pasa al
+# respaldo con tiempo de sobra para responder. Más vale un tramo con otra voz
+# que un bloque que no llega nunca.
+TTS_PRESUPUESTO_SEG = 45.0   # todo lo que puede durar la petición
+FISH_PRESUPUESTO_SEG = 22.0  # lo máximo que se le concede a Fish
 # Orígenes de la interfaz cuyo texto es del propio usuario. Se puede ampliar con
 # FISH_ALLOWED_SOURCES, pero el valor por defecto es el prudente.
 FISH_ORIGENES_PERMITIDOS = {
@@ -4468,7 +4481,8 @@ def _tts_fish_cuerpo(texto: str, reference_id: str, speed: float, tone: str) -> 
 
 
 async def _tts_fish_synthesize(
-    text: str, gender: str, speed: float, tone: str, fish_voice: str = ""
+    text: str, gender: str, speed: float, tone: str, fish_voice: str = "",
+    fin: float | None = None,
 ) -> tuple[bytes, str, str]:
     """Sintetiza con Fish Audio. Devuelve (audio, etiqueta, modelo_usado).
 
@@ -4478,6 +4492,7 @@ async def _tts_fish_synthesize(
     responde 402 (sin créditos), prueba el gratuito antes que Edge.
     """
     import asyncio
+    import time
 
     import httpx
 
@@ -4489,11 +4504,20 @@ async def _tts_fish_synthesize(
     if FISH_MODEL_GRATIS not in modelos:
         modelos.append(FISH_MODEL_GRATIS)
     ultimo_error: Exception | None = None
+    limite = (fin if fin is not None else time.monotonic() + FISH_PRESUPUESTO_SEG)
+
+    def queda() -> float:
+        return limite - time.monotonic()
+
     for modelo in modelos:
         cuerpo = _tts_fish_cuerpo(text, voz["reference_id"], speed, tone)
         for intento in range(FISH_REINTENTOS + 1):
+            # Sin tiempo para que la respuesta llegue entera, insistir solo
+            # gasta el presupuesto que necesita el respaldo para contestar.
+            if queda() < 4.0:
+                raise ultimo_error or TimeoutError("Fish agotó su tiempo.")
             try:
-                async with httpx.AsyncClient(timeout=FISH_TTS_TIMEOUT) as cliente:
+                async with httpx.AsyncClient(timeout=min(FISH_TTS_TIMEOUT, queda())) as cliente:
                     respuesta = await cliente.post(
                         "https://api.fish.audio/v1/tts",
                         json=cuerpo,
@@ -4515,7 +4539,7 @@ async def _tts_fish_synthesize(
                 estado = getattr(getattr(error, "response", None), "status_code", None)
                 if estado == 401:
                     raise  # clave mala: reintentar da lo mismo
-            if intento < FISH_REINTENTOS:
+            if intento < FISH_REINTENTOS and queda() > 6.0:
                 await asyncio.sleep(1.0 * (intento + 1))
     raise ultimo_error or RuntimeError("Fish no devolvió audio.")
 
@@ -4549,6 +4573,7 @@ async def _tts_synthesize(
     gender: str = "female",
     prefer_fish: bool = False,
     fish_voice: str = "",
+    fin: float | None = None,
 ) -> tuple[bytes, str, str, str]:
     """Sintetiza un fragmento. Devuelve (audio, motor usado, estilo, modelo).
 
@@ -4557,23 +4582,59 @@ async def _tts_synthesize(
     el navegador no oye un corte, pero un bloque aislado sí puede cambiar de
     timbre: el cliente lo detecta y lo reintenta (ver ttsDescargarBloque).
     """
+    import asyncio
+
+    def queda(reserva: float = 0.0) -> float:
+        """Segundos disponibles, dejando `reserva` para lo que venga después."""
+        if fin is None:
+            return TTS_PRESUPUESTO_SEG
+        return max(0.0, fin - time.monotonic() - reserva)
+
     if _tts_fish_activo(source, gender, prefer_fish, fish_voice):
-        try:
-            audio, etiqueta, modelo = await _tts_fish_synthesize(
-                text, gender, speed, tone, fish_voice
-            )
-            if audio:
-                return audio, "fish", etiqueta, modelo
-        except Exception:
-            pass
+        # A Fish se le concede su rato, pero nunca TODO el presupuesto: el
+        # respaldo tiene que llegar a contestar dentro del límite de la
+        # plataforma. Antes, un Fish atascado se comía los 60 s y la petición
+        # moría en 504 sin que Edge llegara a intentarlo siquiera.
+        #
+        # El corte se aplica AQUÍ, en quien llama, con `wait_for`: confiar en
+        # que el de dentro respete su plazo deja fuera justo el caso que
+        # importa, el del servicio que se queda colgado sin contestar.
+        margen = min(FISH_PRESUPUESTO_SEG, queda(reserva=8.0))
+        if margen > 2.0:
+            try:
+                audio, etiqueta, modelo = await asyncio.wait_for(
+                    _tts_fish_synthesize(
+                        text, gender, speed, tone, fish_voice,
+                        fin=time.monotonic() + margen,
+                    ),
+                    timeout=margen,
+                )
+                if audio:
+                    return audio, "fish", etiqueta, modelo
+            except Exception:
+                pass
     if _tts_azure_activo():
-        try:
-            audio, estilo = await _tts_azure_synthesize(text, voice_id, rate, pitch, tone)
-            if audio:
-                return audio, "azure", estilo, ""
-        except Exception:
-            pass
-    return await _tts_edge_synthesize(text, voice_id, rate, pitch, volume), "edge", "", ""
+        margen = min(AZURE_TTS_TIMEOUT, queda(reserva=6.0))
+        if margen > 2.0:
+            try:
+                audio, estilo = await asyncio.wait_for(
+                    _tts_azure_synthesize(text, voice_id, rate, pitch, tone),
+                    timeout=margen,
+                )
+                if audio:
+                    return audio, "azure", estilo, ""
+            except Exception:
+                pass
+    # edge-tts es el último recurso y no traía plazo ninguno: si se colgaba,
+    # se llevaba por delante lo que quedara de la petición.
+    margen = queda()
+    if margen <= 0.5:
+        raise TimeoutError("No quedó tiempo para sintetizar la voz.")
+    audio = await asyncio.wait_for(
+        _tts_edge_synthesize(text, voice_id, rate, pitch, volume),
+        timeout=margen,
+    )
+    return audio, "edge", "", ""
 
 
 async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
@@ -4613,13 +4674,23 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
         ]
     rate, pitch, volume, tone = _tts_prosody(req.rate, req.tone)
     last_error = None
-    for candidate in candidates:
+    # Reloj de toda la petición: pase lo que pase con los servicios de voz,
+    # esta función tiene que CONTESTAR antes del límite de la plataforma. Un
+    # 504 no es un error que el cliente pueda aprovechar: es la lectura que se
+    # para en seco y hay que reiniciar.
+    fin = time.monotonic() + TTS_PRESUPUESTO_SEG
+    for indice, candidate in enumerate(candidates):
+        # Probar otra voz cuesta otra ronda entera: con el tiempo justo, mejor
+        # devolver el error y que el cliente reintente ese bloque.
+        if indice and time.monotonic() > fin - 6.0:
+            break
         try:
             audio, motor, estilo, modelo = await _tts_synthesize(
                 text, candidate, rate, pitch, volume, tone,
                 source=req.source, speed=req.rate, gender=gender,
                 prefer_fish=bool(req.prefer_fish),
                 fish_voice=req.fish_voice or "",
+                fin=fin,
             )
             if not audio:
                 raise RuntimeError("El servicio no devolvió audio.")
@@ -4672,9 +4743,12 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
                     "X-TTS-Language": language,
                     "X-TTS-Locale": actual_locale,
                     "X-TTS-Engine": f"{motor}-neural-{modo}",
-                    # Modelo Fish que sonó (pagado o gratuito): la app lo usa
-                    # para avisar si un bloque cayó al respaldo con otro timbre.
-                    "X-TTS-Model": modelo or FISH_MODEL,
+                    # Modelo que sonó de verdad. Antes decía «s2.1-pro» aunque
+                    # el bloque lo hubiera hecho Edge: el cliente comparaba
+                    # modelos entre bloques y esa mentira le hacía ver cambios
+                    # de timbre donde no los había (y reintentar de más). Fuera
+                    # de Fish no hay modelo que anunciar.
+                    "X-TTS-Model": (modelo or FISH_MODEL) if motor == "fish" else "-",
                     # Estilo de interpretación aplicado (solo con motor Azure)
                     "X-TTS-Style": estilo or "none",
                     # «1» = este bloque NO sonó con la voz que se pidió. El

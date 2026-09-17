@@ -1,4 +1,4 @@
-<!-- v2.86.0 · PDF: una sola voz de principio a fin, números y rangos bien dichos, Contenido con más capítulos a la vista -->
+<!-- v2.87.0 · PDF: la lectura no se reinicia al volver al libro, un toque en el párrafo sigue desde ahí, flecha para bajar al final y vigilante que destraba la voz -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -5299,6 +5299,20 @@ body.jg-leyendo[data-lectura-tema="sepia"] #panelPdf>.card,body.jg-leyendo[data-
 .pdf-lectura[data-ancho="52"]{max-width:52ch}.pdf-lectura[data-ancho="76"]{max-width:76ch}
 .pdf-lectura[data-fuente="serif"]{font-family:Georgia,'Times New Roman',serif}
 .pdf-lectura[data-fuente="sans"]{font-family:'Figtree',system-ui,sans-serif}
+/* Mientras la voz suena, tocar un párrafo lleva la lectura ahí: el puntero y
+   un realce muy suave al pasar por encima lo cuentan sin escribir nada. Fuera
+   de la lectura en voz alta el texto se comporta como texto normal. */
+body.jg-voz-activa .pdf-lectura p,
+body.jg-voz-activa .pdf-lectura blockquote,
+body.jg-voz-activa .pdf-lectura li{cursor:pointer}
+@media (hover:hover){
+  body.jg-voz-activa .pdf-lectura p:hover,
+  body.jg-voz-activa .pdf-lectura blockquote:hover,
+  body.jg-voz-activa .pdf-lectura li:hover{
+    background:color-mix(in srgb, var(--lec-acento,var(--cyan)) 9%, transparent);
+    border-radius:6px;
+  }
+}
 .pdf-lectura h2,.pdf-lectura h3{line-height:1.3;margin:1.2em 0 .6em}
 .pdf-lectura p{margin:0 0 1em}.pdf-lectura blockquote{border-left:3px solid var(--lec-linea);margin:0 0 1em;padding:.2em 0 .2em 1em;color:var(--lec-suave)}
 .pdf-lectura ul,.pdf-lectura ol{margin:0 0 1em;padding-left:1.4em}.pdf-lectura table{border-collapse:collapse;width:100%;margin:0 0 1em;display:block;overflow-x:auto}
@@ -5694,6 +5708,30 @@ body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
   box-shadow:0 6px 20px -10px rgba(0,0,0,.45);cursor:pointer;z-index:3}
 .pdf-volver-lectura:hover{background:var(--lec-superficie-2)}
 .pdf-volver-lectura:focus-visible{outline:2px solid var(--lec-acento);outline-offset:2px}
+
+/* Bajar al final del capítulo. Flota sobre el texto, a la derecha y por
+   encima de la barra del teléfono, para no tapar el renglón que se lee ni
+   pelearse con «Volver a la lectura», que vive centrado. */
+.pdf-ir-abajo{
+  position:fixed;right:max(14px,env(safe-area-inset-right));
+  bottom:calc(var(--pdf-bm-alto,16px) + 16px + env(safe-area-inset-bottom));
+  width:48px;height:48px;border-radius:50%;z-index:6;cursor:pointer;
+  display:grid;place-items:center;
+  border:1px solid var(--lec-linea,var(--line));
+  background:var(--lec-superficie,var(--surface));
+  color:color-mix(in srgb, var(--lec-texto,var(--text)) 78%, transparent);
+  box-shadow:0 8px 24px -10px rgba(0,0,0,.5);
+  transition:background .15s, transform .15s;
+}
+.pdf-ir-abajo[hidden]{display:none}
+.pdf-ir-abajo svg{width:20px;height:20px}
+.pdf-ir-abajo:hover{background:var(--lec-superficie-2,var(--surface-2));transform:translateY(1px)}
+.pdf-ir-abajo:focus-visible{outline:2px solid var(--lec-acento,var(--cyan));outline-offset:2px}
+@media (prefers-reduced-motion: reduce){ .pdf-ir-abajo{transition:none} }
+/* En escritorio el dock no ocupa el borde inferior: se sube un poco menos. */
+@media (min-width:1024px){
+  .pdf-ir-abajo{bottom:24px;right:28px}
+}
 @media (max-width:767px){
   /* En el teléfono nunca por debajo de 17px: el tamaño elegido se respeta,
      pero la legibilidad mínima no se negocia. (El clamp anterior estaba
@@ -7360,6 +7398,17 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               </p>
               <button type="button" class="pdf-volver-lectura" id="pdfVolverLectura" hidden>
                 ↓ Volver a la lectura
+              </button>
+              <!-- Bajar de un salto al final del capítulo, donde viven la
+                   navegación y los ajustes. Solo en lectura con desplazamiento
+                   (pasando páginas no hay scroll que salvar) y solo mientras
+                   quede recorrido por delante: si ya estás abajo, estorba. -->
+              <button type="button" class="pdf-ir-abajo" id="pdfIrAbajo" hidden
+                      aria-label="Ir al final del capítulo, donde están los ajustes"
+                      title="Ir al final del capítulo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                  <line x1="12" y1="4" x2="12" y2="18"/><polyline points="6 13 12 19 18 13"/>
+                </svg>
               </button>
               <!-- Paso de páginas: como un libro, sin scroll. Se oculta entero
                    cuando se elige leer con desplazamiento. -->
@@ -15977,7 +16026,13 @@ function ttsDescargarBloque(indice, token){
         const esRespaldo = Boolean(res.respaldoHdr)
           || (queriaFish && !sonoFish)
           || (modeloRef && res.modelHdr && res.modelHdr !== modeloRef);
-        if(esRespaldo && intento < 2){
+        /* Reintentar cuesta tiempo (dos esperas y dos síntesis más). Si este
+         * es el bloque que la lectura está esperando AHORA, ese tiempo es
+         * silencio en los oídos de la persona: vale más un tramo con otro
+         * timbre que un hueco de medio minuto. Solo se insiste cuando el
+         * bloque va por delante y hay algo sonando mientras tanto. */
+        const urge = indice <= ttsState.idx;
+        if(esRespaldo && intento < 2 && !urge){
           await new Promise(r => setTimeout(r, 800 * (intento + 1)));
           if(token !== ttsState._speakToken) return null;
           continue;
@@ -16294,6 +16349,86 @@ function ttsBloqueFallo(el){
   const indice = parseInt(el.dataset.bloque || '-1', 10);
   if(indice !== ttsState.idx) return;
   ttsCaerANavegador(indice, ttsState._speakToken, new Error('Error de reproducción'));
+}
+
+/* ── Vigilante: que un atasco no obligue a reiniciar la lectura ───────────
+ *
+ * Un bloque se puede quedar clavado sin que nadie se entere: el sistema
+ * interrumpe el audio (una llamada, otra app), el navegador descarta el
+ * elemento al recuperar memoria, o el blob llega dañado y no dispara ni
+ * `ended` ni `error`. El estado sigue diciendo «sonando», no salta ningún
+ * aviso, y la única salida era volver a pulsar Escuchar — que es justo lo
+ * que se sentía como «se frena y hay que reiniciarla».
+ *
+ * Aquí se mira una cosa sola: si dice que suena, el reloj del audio TIENE
+ * que avanzar. Si no avanza, se insiste por pasos, del empujón más suave al
+ * más brusco, y solo se salta el bloque cuando lo demás ha fallado.
+ */
+const TTS_VIGILANTE_MS = 2000;
+const TTS_ATASCO_EMPUJAR_SEG = 8;   /* sin avanzar: se vuelve a dar al play */
+const TTS_ATASCO_REHACER_SEG = 18;  /* sigue quieto: se recarga el bloque */
+const TTS_ATASCO_SALTAR_SEG = 32;   /* nada funcionó: se pasa al siguiente */
+const ttsVigia = { idx: -1, tiempo: -1, desde: 0, paso: 0 };
+
+function ttsVigilarReproduccion(){
+  if(ttsState.status !== 'playing' || ttsState.engineUsed !== 'neural'){
+    ttsVigia.idx = -1; ttsVigia.paso = 0;
+    return;
+  }
+  /* Las pausas estructurales son silencio a propósito: ahí no hay atasco. */
+  if(ttsState.silencioTimer !== null) return;
+  const bloque = ttsState.queue[ttsState.idx];
+  /* Todavía generándose: esperar es lo correcto, no es un atasco. */
+  if(!bloque || bloque.silencio || bloque.estado !== 'listo') return;
+
+  const el = ttsElActivo();
+  if(!el || !el.src) return;
+  const ahora = Date.now();
+  const t = Number.isFinite(el.currentTime) ? el.currentTime : 0;
+
+  if(ttsState.idx !== ttsVigia.idx || Math.abs(t - ttsVigia.tiempo) > 0.15){
+    ttsVigia.idx = ttsState.idx;
+    ttsVigia.tiempo = t;
+    ttsVigia.desde = ahora;
+    ttsVigia.paso = 0;
+    return;
+  }
+
+  const quieto = (ahora - ttsVigia.desde) / 1000;
+  const token = ttsState._speakToken;
+
+  if(quieto >= TTS_ATASCO_SALTAR_SEG && ttsVigia.paso < 3){
+    ttsVigia.paso = 3;
+    console.warn('[jg-tts] bloque', ttsState.idx, 'atascado: se pasa al siguiente');
+    ttsVigia.desde = ahora;
+    ttsReproducirDesde(ttsState.idx + 1, 0, token);
+    return;
+  }
+  if(quieto >= TTS_ATASCO_REHACER_SEG && ttsVigia.paso < 2){
+    ttsVigia.paso = 2;
+    console.warn('[jg-tts] bloque', ttsState.idx, 'sigue quieto: se recarga');
+    /* Se recarga el MISMO bloque desde donde iba, no desde el principio: si
+     * se quedó a mitad, repetir la mitad ya oída se nota más que el corte. */
+    const desde = ttsVigia.tiempo > 0.5 ? ttsVigia.tiempo : 0;
+    try{ el.removeAttribute('src'); el.load(); }catch(_){}
+    delete el.dataset.bloque;
+    ttsReproducirDesde(ttsState.idx, desde, token);
+    return;
+  }
+  if(quieto >= TTS_ATASCO_EMPUJAR_SEG && ttsVigia.paso < 1){
+    ttsVigia.paso = 1;
+    console.warn('[jg-tts] bloque', ttsState.idx, 'no avanza: se reintenta el play');
+    try{
+      const pr = el.play();
+      if(pr && pr.catch) pr.catch(()=>{});
+    }catch(_){}
+  }
+}
+
+if(typeof window !== 'undefined'){
+  window.ttsVigilarReproduccion = ttsVigilarReproduccion;
+  window.ttsVigia = ttsVigia;
+  setInterval(ttsVigilarReproduccion, TTS_VIGILANTE_MS);
 }
 
 function ttsCaerANavegador(indice, token, error){
@@ -18238,7 +18373,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v142';
+const JG_JS_V = 'v143';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

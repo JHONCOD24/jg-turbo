@@ -194,7 +194,8 @@ export function inicializarLectorPdf(deps = {}) {
     compararPrev: $('btnPdfCompararPrev'), compararNext: $('btnPdfCompararNext'),
     compararVerificada: $('btnPdfPaginaVerificada'),
     btnCorregirLibro: $('btnPdfCorregirLibro'),
-    volverLectura: $('pdfVolverLectura'), btnPausar: $('btnPdfPausarCorreccion'),
+    volverLectura: $('pdfVolverLectura'), irAbajo: $('pdfIrAbajo'),
+    btnPausar: $('btnPdfPausarCorreccion'),
     orden: $('pdfOrden'), vistaPortadas: $('pdfVistaPortadas'), vistaCompacta: $('pdfVistaCompacta'),
     mostrarMas: $('pdfMostrarMas'),
     btnOrganizar: $('btnPdfOrganizar'), organizar: $('pdfOrganizar'),
@@ -2449,8 +2450,14 @@ export function inicializarLectorPdf(deps = {}) {
     prepararTraduccion();
     abrirLector();
     actualizarEstadoFidelidad();
+    /* `montando` distingue ABRIR el libro de NAVEGAR dentro de él. Sin esa
+     * distinción, volver al libro con la voz sonando la reiniciaba: el
+     * envoltorio de `mostrarParte` veía voz activa, daba por hecho que era un
+     * salto de capítulo y volvía a narrar desde el principio de lo visible
+     * (ver el envoltorio más abajo). */
     await mostrarParte(estado.progreso.parte || 0, {
       desplazamiento: estado.progreso.desplazamiento || 0,
+      montando: true,
     });
     /* Confirmar la posición recuperada sin tapar texto (PDF-04): la
      * confirmación vive en la zona de estado del lector, no en un flotante
@@ -7015,7 +7022,12 @@ export function inicializarLectorPdf(deps = {}) {
         const cfg2 = JSON.parse(localStorage.getItem('jg_pdf_lectura') || '{}');
         el.salida.hidden = cfg2.modo === 'lectura' && !!el.lectura;
       }
-      if (ttsSonandoAqui()) {
+      /* Si la voz está sonando y la persona SALTA a otro capítulo, la voz la
+       * sigue hasta allí. Pero abrir el libro no es saltar: al volver desde la
+       * biblioteca con la lectura en marcha, esto la reiniciaba desde el
+       * principio de lo visible y se perdía el sitio (token nuevo, bloque
+       * atrás). Montar el lector no toca la voz: sigue exactamente donde iba. */
+      if (ttsSonandoAqui() && !(opts && opts.montando)) {
         const punto = (opts && opts.seleccionar && opts.seleccionar.desde) != null
           ? opts.seleccionar.desde
           : (caracterVisible() || 0);

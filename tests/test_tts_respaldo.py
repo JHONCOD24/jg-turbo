@@ -29,7 +29,8 @@ def _render(caso, **campos):
     """Renderiza un fragmento fingiendo el desenlace `caso` de la síntesis."""
 
     async def falso(text, candidate, rate, pitch, volume, tone, source="",
-                    speed=1.0, gender="female", prefer_fish=False, fish_voice=""):
+                    speed=1.0, gender="female", prefer_fish=False, fish_voice="",
+                    fin=None):
         if prefer_fish and caso == "fish_ok":
             return b"\xff\xfbAUDIO", "fish", "", api.FISH_MODEL
         if prefer_fish and caso == "fish_gratis":
@@ -83,6 +84,15 @@ def test_el_respaldo_de_fish_habla_con_el_acento_pedido():
     """Y no con la multilingüe `en-US-*`, que sonaba a otra persona."""
     r = _render("fish_cae", **FISH)
     assert r.headers["x-tts-voice"].startswith("es-")
+
+
+def test_fuera_de_fish_no_se_anuncia_ningun_modelo():
+    """Decir «s2.1-pro» en un bloque hecho por Edge le hacía ver al cliente un
+    cambio de timbre donde no lo había, y reintentar de más."""
+    r = _render("fish_cae", **FISH)
+    assert r.headers["x-tts-model"] == "-"
+    r2 = _render("neural", unified=True, prefer_fish=False)
+    assert r2.headers["x-tts-model"] == "-"
 
 
 def test_misma_voz_sin_fish_conserva_la_multilingue():

@@ -158,6 +158,7 @@ export function initLibroVista({ el, estado, api }) {
       medirPaginas({ conservar: false });
       if (ancla) irACaracter(ancla);
       pintarPieLectura();
+      pintarIrAbajo();
       limpiarAlAbrir();
       /* Se intenta también al abrir el capítulo. `unirPalabras` vuelve a
        * pintar, así que hay que evitar el bucle: solo se dispara cuando el
@@ -175,6 +176,7 @@ export function initLibroVista({ el, estado, api }) {
           if (!el.lectura || el.lectura.hidden) return;
           medirPaginas({ conservar: true });
           pintarPieLectura();
+          pintarIrAbajo();
         });
       }
     });
@@ -253,7 +255,31 @@ export function initLibroVista({ el, estado, api }) {
    * a propósito también está el botón del reproductor (btnPdfDesdeAqui).
    * Se ignora si la persona estaba seleccionando texto, para no
    * secuestrar el copiar y pegar. */
+  /* Un toque simple en un párrafo MIENTRAS la voz suena la lleva ahí.
+   *
+   * Es lo que pide quien se pierde leyendo: en vez de arrastrar la línea de
+   * tiempo a ciegas, tocas el párrafo donde ibas y la voz continúa desde ahí.
+   * La condición de que YA haya voz es lo que lo hace seguro: un roce con el
+   * dedo no puede empezar a narrar solo (el dolor que cerró la v2.44), solo
+   * puede redirigir algo que la persona ya había puesto en marcha. Para
+   * empezar de cero siguen estando el doble toque y el botón del reproductor.
+   */
   if (el.lectura) {
+    el.lectura.addEventListener('click', (ev) => {
+      if (!document.body.classList.contains('jg-voz-activa')) return;
+      /* Este toque fue el que devolvió el cromo o el que pasó de página. */
+      if (consumirToqueDeCromo()) return;
+      /* Ni enlaces, ni figuras, ni nada que ya tenga su propio gesto. */
+      if (ev.target.closest('a, button, .lec-figura')) return;
+      const bloque = ev.target.closest('[data-ini]');
+      if (!bloque || !el.lectura.contains(bloque)) return;
+      const seleccion = document.getSelection();
+      if (seleccion && String(seleccion).trim().length > 1) return;
+      const ini = Number(bloque.dataset.ini);
+      if (!Number.isFinite(ini)) return;
+      if (api.leerDesdeCaracter) api.leerDesdeCaracter(ini);
+    });
+
     el.lectura.addEventListener('dblclick', (ev) => {
       /* Si este toque fue el que pasó de página con un deslizamiento, se
        * queda en eso: no se lee en voz alta desde un párrafo que la
@@ -356,6 +382,7 @@ export function initLibroVista({ el, estado, api }) {
     });
     pintarPaginacion();
     pintarPieLectura();
+    pintarIrAbajo();
     /* `caracterVisible()` se apoya en `pag.actual`, que aquí ya es la página
      * destino, y su cálculo no depende de dónde vaya la animación: por eso
      * puede anotarse el sitio sin esperar a que el desplazamiento termine. */
@@ -626,6 +653,54 @@ export function initLibroVista({ el, estado, api }) {
     const marca = el.lectura && el.lectura.querySelector('mark');
     if (marca) marca.scrollIntoView({ block: 'center' });
   });
+
+  /* ── Bajar de un salto al final del capítulo ─────────────────────────
+   *
+   * Leyendo con desplazamiento, un capítulo largo deja la navegación y los
+   * ajustes a cientos de píxeles: para llegar había que arrastrar hasta
+   * abajo. Esta flecha hace lo que el «volver arriba» de cualquier web, al
+   * revés: aquí lo lejano es el final. No sale pasando páginas (allí no hay
+   * scroll que salvar) ni cuando ya se ve el final.
+   */
+  function contenedorDesplazable() {
+    /* Quién se desplaza depende del modo y del ancho de la pantalla, así que
+     * se busca desde el texto hacia arriba en vez de darlo por sabido. */
+    let n = el.lectura;
+    while (n && n !== document.body) {
+      const cs = getComputedStyle(n);
+      if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 40) return n;
+      n = n.parentElement;
+    }
+    const doc = document.scrollingElement || document.documentElement;
+    return doc && doc.scrollHeight > doc.clientHeight + 40 ? doc : null;
+  }
+
+  function pintarIrAbajo() {
+    const btn = el.irAbajo;
+    if (!btn) return;
+    if (pag.activo || !el.lectura || el.lectura.hidden) { btn.hidden = true; return; }
+    const cont = contenedorDesplazable();
+    if (!cont) { btn.hidden = true; return; }
+    const queda = cont.scrollHeight - cont.scrollTop - cont.clientHeight;
+    btn.hidden = queda < 120;
+  }
+  api.pintarIrAbajo = pintarIrAbajo;
+
+  if (el.irAbajo) {
+    el.irAbajo.addEventListener('click', () => {
+      const cont = contenedorDesplazable();
+      if (!cont) return;
+      cont.scrollTo({
+        top: cont.scrollHeight,
+        behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth',
+      });
+      el.irAbajo.hidden = true;
+    });
+    /* En captura, porque el que se desplaza puede ser cualquiera de los
+     * contenedores del lector y `scroll` no burbujea. */
+    document.addEventListener('scroll', pintarIrAbajo, { passive: true, capture: true });
+    window.addEventListener('resize', pintarIrAbajo, { passive: true });
+  }
 
   /* Lleva la vista al carácter guardado: así un libro se reabre donde se dejó. */
   function irACaracter(caracter) {
