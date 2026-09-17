@@ -84,7 +84,17 @@ conexión», rearme 15 min, v144+juntas); `test_tts_voces_biblioteca.mjs`,
 desactualizado en v2.86.0 (esperaba 300 fijo; ahora acompaña al texto, ver
 TRAMPAS §6.15).
 
-**Deploy:** (anotar tras publicar).
+**Deploy:** `fxujtg8ls` · `READY` · alias `https://jg-turbo.vercel.app` (desde
+copia limpia en `%TEMP%\opencode\jg-deploy`, con `js/pdf/` repuesto: 34/34
+archivos, ver TRAMPAS §9.4). Verificado contra el dominio: marcador v2.88.0,
+`JG_JS_V=v144`, SW `jg-turbo-shell-v144`, HTML byte a byte igual al disco
+(923 814 B), toast nuevo servido y el viejo ausente. `POST /api/tts`
+(`source=pdf`, `fish_voice=roberto`) ×5 → `200` `fish:Roberto` `respaldo=0`
+(~8 s por bloque): al momento de verificar, el nivel gratuito de Fish había
+RECUPERADO (horas antes colgaba con timeouts de 45 s: verificado 3/3 caídas a
+Edge a ~23 s). La rama de fallo del fusible está cubierta por
+`backend/tests/test_tts_fish_estable.py` (no se puede provocar contra el
+dominio cuando el servicio contesta). Empujado a `origin/main` (`2ec1e88`).
 
 ---
 
