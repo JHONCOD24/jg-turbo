@@ -1995,6 +1995,11 @@ def health():
         "youtube_transcript_api": yt_transcript,
         # Booleano, nunca la clave: permite verificar el despliegue sin exponerla.
         "youtube_auto": supadata.configurado(),
+        # Motores de voz disponibles (booleanos, nunca las claves). Sirve para
+        # comprobar de un vistazo qué respaldo contestará si Fish se cae:
+        # Fish (clones) → Azure oficial (gratis 500k chars/mes) → edge-tts.
+        "tts_fish": bool(FISH_API_KEY),
+        "tts_azure": bool(AZURE_SPEECH_KEY and AZURE_SPEECH_REGION),
     }
 
 
