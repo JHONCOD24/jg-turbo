@@ -32,6 +32,34 @@
 
 ---
 
+## Nuevo en v2.88.1 · respaldo oficial Azure F0 activado (2026-09-17)
+
+**Pedido:** estrategia 100 % gratuita con máxima estabilidad (el usuario no
+pagará créditos de Fish ni ElevenLabs).
+
+**Qué se activó:** el motor Azure que ya estaba programado
+(`_tts_azure_synthesize`, estilos incluidos) con una cuenta **Free F0**:
+500 000 caracteres/mes gratis para siempre (≈ 8 h de audio/mes). Cuenta de
+usuario, recurso `jg-turbo-voz` en `eastus`. Claves en `.env` local y en
+Vercel (solo Production), nunca en código ni Git. Para rotar: Azure → Claves
+y punto de conexión → Regenerar.
+
+**Cadena de voz resultante:** Fish gratuito (Roberto y clones, con el fusible
+de v2.88.0) → **Azure oficial F0** (estable, ~1 s/bloque, medido 1,2 s) →
+edge-tts (no oficial, ilimitado) → voz del navegador. Con Fish caído, la
+lectura ya no depende de la vía no oficial de Microsoft.
+
+**Cambio de código:** `/api/health` reporta `tts_fish` y `tts_azure`
+(booleanos, nunca claves) para verificar el respaldo de un vistazo.
+
+**Verificado contra el dominio** (deploy `2cikfdg31`): `tts_fish=true`,
+`tts_azure=true`; bloque neural sin Fish → `azure-neural-unified` en 1,2 s;
+bloque `fish_voice=roberto` → `fish:Roberto` en 4,6 s `respaldo=0`. La llave
+se probó además directo contra `eastus.tts.speech.microsoft.com` (200, MP3
+`FF F3`) antes de subirla.
+
+---
+
 ## Nuevo en v2.88.0 · fusible de Fish: caída sostenida ≠ 22 s por bloque (2026-09-17)
 
 **Pedido:** leyendo *El placer eres tú* con la voz Roberto, a media página la

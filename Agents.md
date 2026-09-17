@@ -444,6 +444,12 @@ reestructuración del 2026-09-03. Tras el fix original: ~17 archivos, alias http
 `docs/INTEGRAR-VOZ-JG-VOICE.md`. No armes un API entre las dos apps: el puente
 es el `reference_id` de Fish (misma cuenta). No reviertas el «PDF apaga Fish».
 
+**v2.88.1 — Azure F0 oficial activado** (2026-09-17): respaldo de voz oficial
+gratuito (500k chars/mes) entre Fish y edge-tts. Recurso `jg-turbo-voz`
+(eastus, plan Free F0), claves solo en Vercel/`.env`. `/api/health` reporta
+`tts_fish`/`tts_azure`. Cadena: Fish → Azure → edge-tts → navegador. Detalle:
+`CAMBIOS_TTS.md` §v2.88.1.
+
 **v2.88.0 — fusible de Fish** (2026-09-17): con Fish caído (pagado 402 sin
 créditos + gratuito colgado), cada bloque quemaba 22 s antes de caer a Edge y
 el aviso «revisa tu conexión» sonaba cada 30 s. Ahora: 3 fallos seguidos dejan
