@@ -146,6 +146,15 @@ navegador. Rearme 15 min intacto.
 
 **Versión:** `JG_JS_V=v145`, SW `jg-turbo-shell-v145`, marcador HTML v2.88.2.
 
+**Deploy:** alias `https://jg-turbo.vercel.app` (Vercel prod desde `jg-turbo/`).
+Verificado contra el dominio: marcador v2.88.2 + `JG_JS_V=v145` + SW
+shell-v145 + `X-TTS-Engine` leído por el cliente; `/api/health`
+`tts_fish=true`, `tts_azure=true`; `POST /api/tts` neural →
+`azure-neural-regional` `es-CO-SalomeNeural` `respaldo=0`. Pruebas locales:
+`test_tts_voz_estable.mjs` en verde (15/15), `test_tts_voces_biblioteca`,
+`test_tts_narracion`, `test_pdf_voz` en verde; `py_compile` OK. Empujado a
+`origin/main`.
+
 ---
 
 ## Nuevo en v2.88.1 · respaldo oficial Azure F0 activado (2026-09-17)
