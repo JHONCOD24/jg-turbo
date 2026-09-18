@@ -1,4 +1,4 @@
-<!-- v2.88.0 · TTS: fusible de Fish (racha de fallos = respaldo rápido, sin 22 s por bloque) y aviso honesto sin spam -->
+<!-- v2.88.2 · TTS: el aviso de respaldo nombra el motor real (Azure/Edge) y el cliente lee X-TTS-Engine -->
 <!-- UX v3.8 · pegado compacto antes de aplicar Párrafos -->
 <!DOCTYPE html>
 <html lang="es">
@@ -15892,6 +15892,7 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintent
   return {
     blob,
     voiceHdr: resp.headers.get('X-TTS-Voice') || '',
+    engineHdr: resp.headers.get('X-TTS-Engine') || '',
     languageHdr: resp.headers.get('X-TTS-Language') || language,
     localeHdr: resp.headers.get('X-TTS-Locale') || locale,
     modelHdr: resp.headers.get('X-TTS-Model') || '',
@@ -16042,8 +16043,12 @@ function ttsDescargarBloque(indice, token){
           /* Antes decía «revisa tu conexión» y se repetía cada 30 s: mentía
            * (la conexión del usuario estaba bien) y era puro ruido cuando Fish
            * lleva una racha caída (sin créditos o servicio saturado). Ahora dice
-           * la verdad, suena UNA vez y solo se rearma a los 15 minutos. */
-          _mostrarToastMejora('La voz Fish no responde (sin créditos o saturada) · suena el respaldo de Edge', false);
+           * la verdad, suena UNA vez y solo se rearma a los 15 minutos.
+           * v2.88.2: el respaldo real es Azure oficial (no Edge). El motor viene
+           * en X-TTS-Engine: azure-neural-* o edge-neural-*. Se nombra el que
+           * de verdad sonó para no hacer creer que Azure no entra. */
+          const motorRespaldo = String(res.engineHdr || '').toLowerCase().includes('azure') ? 'Azure' : 'Edge';
+          _mostrarToastMejora('La voz Fish no responde (sin créditos o saturada) · suena el respaldo de ' + motorRespaldo, false);
           setTimeout(()=>{ ttsState._avisoRespaldo = false; }, 900000);
         }
         if(!esRespaldo && res.modelHdr && !ttsState._modeloVoz) ttsState._modeloVoz = res.modelHdr;
@@ -18377,7 +18382,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v144';
+const JG_JS_V = 'v145';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

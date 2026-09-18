@@ -33,6 +33,10 @@ comprobar(html.includes("resp.headers.get('X-TTS-Model')"),
  * 30 s con Fish caído era mentira + ruido; la conexión del usuario estaba bien). */
 comprobar(html.includes('La voz Fish no responde (sin créditos o saturada)'),
   'el aviso de respaldo dice la causa real (Fish caído, no la conexión)');
+comprobar(html.includes("suena el respaldo de ' + motorRespaldo") || html.includes('suena el respaldo de Azure') || html.includes('motorRespaldo'),
+  'el aviso nombra el motor real (Azure/Edge), no siempre Edge');
+comprobar(html.includes("resp.headers.get('X-TTS-Engine')"),
+  'el cliente lee X-TTS-Engine para nombrar el respaldo real');
 comprobar(!html.includes('voz de respaldo · revisa tu conexión'),
   'ya no se culpa de la conexión del usuario');
 comprobar(html.includes('}, 900000);'),
@@ -54,8 +58,8 @@ comprobar(!/sourceId === 'pdf'[\s\S]{0,180}preferFish:\s*false/.test(html),
 {
   const js = (html.match(/const JG_JS_V = '(v\d+)'/) || [])[1];
   const shell = (sw.match(/CACHE_SHELL = '(jg-turbo-shell-v\d+)'/) || [])[1];
-  comprobar(js === 'v144' && shell === 'jg-turbo-shell-v144',
-    'JG_JS_V y CACHE_SHELL suben juntas a v144');
+  comprobar(js === 'v145' && shell === 'jg-turbo-shell-v145',
+    'JG_JS_V y CACHE_SHELL suben juntas a v145');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

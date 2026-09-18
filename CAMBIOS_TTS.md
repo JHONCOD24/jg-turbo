@@ -4,7 +4,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Versión app** | **2.88.1** (respaldo oficial Azure F0 · 2026-09-17) · SW `jg-turbo-shell-v144` |
+| **Versión app** | **2.88.2** (aviso nombra Azure/Edge real · 2026-09-18) · SW `jg-turbo-shell-v145` |
 | **Motor principal** | Fish Audio gratuito (`s2.1-pro-free`, voces clonadas: Roberto, Amy…) |
 | **Respaldo 1** | **Azure Speech F0 oficial** (500k chars/mes gratis; ver §Estrategia) |
 | **Respaldo 2** | `edge-tts` (gratis, no oficial) → `speechSynthesis` del navegador |
@@ -117,6 +117,34 @@ Si `tts_azure` aparece `false`: falta el env en Vercel o el despliegue aún no
 lo tomó. Si Fish responde `respaldo=1` constante: ver fusible, §v2.88.0.
 
 ---
+
+---
+
+## Nuevo en v2.88.2 · el aviso nombra el respaldo real: Azure o Edge (2026-09-18)
+
+**Pedido:** el usuario veía Cost Manager en $0 y oía cambio de voz a media
+lectura. Dudaba si Azure estaba implementado. Medido 2026-09-18 contra
+producción: Azure SÍ está activo (`/api/health` → `tts_fish=true`,
+`tts_azure=true`; `POST /api/tts` neural → `azure-neural-regional`
+`es-CO-SalomeNeural`; `POST` Fish Roberto → `fish:Roberto`
+`s2.1-pro-free`). El $0 en Cost Manager es lo esperado: plan Free F0 =
+500k chars/mes gratis para siempre, muestra $0.00 siempre (datos con 24-48 h
+de retraso) y no toca el crédito. El cambio de timbre también es por diseño:
+Azure no tiene el clon Roberto, suena Gonzalo/Salomé para que la lectura no
+se frene.
+
+**Bug encontrado:** el toast de v2.88.0 decía fijo «suena el respaldo de
+Edge» aunque el bloque hubiera sonado por Azure. Hacía creer que Azure no
+entraba.
+
+**Cambios (`index.html`):** `ttsFetchNeuralChunk` devuelve también
+`engineHdr` (`X-TTS-Engine`). `ttsDescargarBloque` nombra el respaldo según
+ese motor: contiene `azure` → «Azure», si no → «Edge». Mensaje resultante:
+«La voz Fish no responde (sin créditos o saturada) · suena el respaldo de
+Azure/Edge». Sin cambios al motor ni a la cadena Fish → Azure → Edge →
+navegador. Rearme 15 min intacto.
+
+**Versión:** `JG_JS_V=v145`, SW `jg-turbo-shell-v145`, marcador HTML v2.88.2.
 
 ---
 
