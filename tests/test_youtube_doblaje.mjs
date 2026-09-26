@@ -221,6 +221,22 @@ const { MotorPreparacion } = await modulo('motorPreparacion.js');
   comprobar(nuevos.length > 0 && segmentos[nuevos[0]].startTime >= 1200 - 10, 'tras un salto, lo primero que se traduce es lo de la nueva posición');
 }
 
+// ── T1.6: regla de idioma ───────────────────────────────────────────────
+const io = await modulo('idiomaOrigen.js');
+{
+  const d = io.decidirDoblaje;
+  comprobar(d({ idioma: 'en', confianza: 0.8, fuente: 'titulo' }).accion === 'doblar', 'inglés con buena señal: se dobla sin preguntar');
+  comprobar(d({ idioma: 'pt', confianza: 0.3, fuente: 'usuario' }).accion === 'doblar', 'lo que eligió la persona no se vuelve a preguntar');
+  comprobar(d({ idioma: 'en', confianza: 0.97, fuente: 'youtube' }).accion === 'doblar', 'lo que declara YouTube basta');
+  comprobar(d({ idioma: 'en', confianza: 0.55, fuente: 'disponibles' }).accion === 'preguntar', 'con poca certeza se pregunta (nunca un rechazo a ciegas)');
+  comprobar(d({ idioma: 'en', confianza: 0.9, fuente: 'titulo', conflicto: true }).accion === 'preguntar', 'si las señales se contradicen, se pregunta');
+  comprobar(d({ idioma: 'es', confianza: 1, fuente: 'usuario' }).accion === 'sin_doblaje', 'un video en español no se dobla');
+  comprobar(d({ idioma: 'es', confianza: 0.45, fuente: 'titulo' }).accion === 'preguntar', 'un título en español con duda no basta para decir «ya está en español»');
+  comprobar(d({ idioma: 'ar', confianza: 0.95, fuente: 'proveedor' }).accion === 'no_soportado', 'un idioma aún no soportado lo dice claro');
+  comprobar(d({}).accion === 'preguntar', 'sin datos se pregunta');
+  comprobar(io.nombreIdioma('en-US') === 'inglés' && io.codigoCorto('pt_BR') === 'pt', 'nombres y códigos cortos');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

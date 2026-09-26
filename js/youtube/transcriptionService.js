@@ -1,3 +1,5 @@
+import { codigoCorto } from './idiomaOrigen.js';
+
 /**
  * @typedef {Object} SegmentoTranscripcion
  * @property {number} startTime
@@ -122,150 +124,38 @@ export function extraerVideoId(urlCruda) {
   }
 }
 
-/** Umbrales de respaldo si el servidor es de una versión anterior. */
-export const UMBRALES_IDIOMA = { aceptar: 0.85, preguntar: 0.6 };
-
-const NOMBRES_IDIOMA = {
-  en: 'inglés', es: 'español', pt: 'portugués', fr: 'francés', de: 'alemán',
-  it: 'italiano', ja: 'japonés', ko: 'coreano', zh: 'chino', ru: 'ruso',
-  ar: 'árabe', hi: 'hindi', nl: 'neerlandés', tr: 'turco', pl: 'polaco',
-};
-
-/** Nombres en inglés que devuelve Whisper cuando detecta el idioma él solo. */
-const CODIGO_POR_NOMBRE = {
-  english: 'en', spanish: 'es', castilian: 'es', french: 'fr', portuguese: 'pt',
-  german: 'de', italian: 'it', dutch: 'nl', russian: 'ru', japanese: 'ja',
-  korean: 'ko', chinese: 'zh', mandarin: 'zh', arabic: 'ar', hindi: 'hi',
-  turkish: 'tr', polish: 'pl', catalan: 'ca', romanian: 'ro', swedish: 'sv',
-  norwegian: 'no', danish: 'da', finnish: 'fi', greek: 'el', hebrew: 'he',
-  indonesian: 'id', ukrainian: 'uk', czech: 'cs', vietnamese: 'vi', thai: 'th',
-};
-
-/**
- * Código ISO del idioma, venga como código ('en-US') o como nombre ('English').
- *
- * Por qué hace falta: cuando se pide «detectar idioma», Whisper no devuelve el
- * código sino el nombre en inglés. Tratarlo como código forma pares imposibles
- * ('english' → 'es'), la traducción se rechaza entera y el doblaje termina
- * leyendo el texto original en el idioma de partida.
- */
-export function codigoIdioma(valor) {
-  const crudo = String(valor || '').trim().toLowerCase().replace(/_/g, '-');
-  if (!crudo) return '';
-  const corto = crudo.split('-')[0];
-  if (corto.length === 2) return corto;
-  return CODIGO_POR_NOMBRE[corto] || corto;
+export class ErrorYoutube extends Error {
+  constructor(mensaje, codigo, datos = {}) {
+    super(mensaje);
+    this.name = 'ErrorYoutube';
+    this.codigo = codigo;   // enlace | sin_subtitulos | cuenta | servidor | sin_segmentos
+    this.datos = datos;
+  }
 }
 
-export function nombreIdioma(codigo) {
-  const corto = codigoIdioma(codigo);
-  return NOMBRES_IDIOMA[corto] || corto || 'desconocido';
-}
-
-/**
- * Peso de cada señal: cuánto demuestra sobre el idioma del AUDIO.
- * Debe coincidir con `PESOS_FUENTE` de `api/deteccion_idioma.py`.
- */
-export const PESOS_SENAL = {
-  audio_declarado: 0.97,
-  pista_automatica: 0.92,
-  lexico_asr: 0.9,
-  lexico: 0.72,
-  proveedor: 0.62,
-  pista_manual: 0.55,
-};
-
-/**
- * Funde señales en un veredicto, igual que hace el servidor: gana la más fuerte,
- * las que coinciden recortan parte de la duda y las contrarias la aumentan.
- */
-export function combinarEvidencia(senales) {
-  const validas = (senales || []).filter((s) => s && s.idioma);
-  if (!validas.length) return { idioma: '', confianza: 0, conflicto: false };
-
-  const mejor = validas.reduce((a, b) => (b.confianza > a.confianza ? b : a));
-  const idioma = mejor.idioma;
-  const aFavor = validas
-    .filter((s) => s.idioma === idioma)
-    .map((s) => s.confianza)
-    .sort((a, b) => b - a)
-    .slice(1);
-  const enContra = validas.filter((s) => s.idioma !== idioma).map((s) => s.confianza);
-
-  let confianza = mejor.confianza;
-  for (const extra of aFavor) confianza += (1 - confianza) * extra * 0.45;
-  if (enContra.length) confianza -= Math.max(...enContra) * 0.6;
-
+/** Idioma tal como lo decidió el servidor: una sola fuente de verdad. */
+function leerIdioma(datos) {
+  const idioma = codigoCorto(datos?.language);
+  const solicitado = codigoCorto(datos?.requested_lang);
+  const audio = codigoCorto(datos?.audio_language);
+  const resolucion = datos?.language_resolution_confidence;
   return {
     idioma,
-    confianza: Math.max(0, Math.min(0.99, Math.round(confianza * 1000) / 1000)),
-    conflicto: enContra.length > 0,
+    solicitado,
+    confianza: Number(resolucion ?? datos?.audio_language_confidence) || 0,
+    fuente: String(datos?.language_source || 'proveedor'),
+    conflicto: Boolean(datos?.audio_language_conflict)
+      || Boolean(audio && idioma && audio !== idioma)
+      || Boolean(solicitado && idioma && solicitado !== idioma),
+    disponibles: Array.isArray(datos?.available_langs) ? datos.available_langs : [],
   };
 }
 
-/**
- * Traduce el veredicto del servidor a una decisión de negocio.
- * `aceptar` = doblar · `preguntar` = pedir confirmación · `rechazar` = no doblar.
- *
- * `pistaNavegador` es la señal que solo el navegador puede conseguir: el idioma
- * de la pista automática de YouTube. Sin ella, un video servido por un proveedor
- * externo se queda como mucho en 0,80 de confianza —medido en producción— y
- * siempre acabaría preguntando, aunque el audio esté clarísimamente en inglés.
- */
-export function evaluarIdiomaAudio(datos, idiomaEsperado = 'en', pistaNavegador = null) {
-  const umbrales = { ...UMBRALES_IDIOMA, ...(datos?.audio_language_thresholds || {}) };
-  let idioma = String(datos?.audio_language || '').toLowerCase().split(/[-_]/)[0];
-  const confianza = Number(datos?.audio_language_confidence);
-  let seguro = Number.isFinite(confianza) ? confianza : 0;
-
-  if (pistaNavegador?.idioma) {
-    const fuente = pistaNavegador.automatica ? 'pista_automatica' : 'pista_manual';
-    const combinado = combinarEvidencia([
-      ...(datos?.audio_language_evidence || []),
-      { fuente, idioma: pistaNavegador.idioma, confianza: PESOS_SENAL[fuente] },
-    ]);
-    idioma = combinado.idioma;
-    seguro = combinado.confianza;
-  }
-  const coincide = idioma === idiomaEsperado;
-  const porcentaje = Math.round(seguro * 100);
-
-  if (coincide && seguro >= umbrales.aceptar) {
-    return { decision: 'aceptar', idioma, confianza: seguro, porcentaje, mensaje: '' };
-  }
-  if (seguro < umbrales.preguntar) {
-    return {
-      decision: 'preguntar',
-      idioma,
-      confianza: seguro,
-      porcentaje,
-      // Sin certeza no se afirma nada: se le da la decisión al usuario en vez
-      // de doblar a ciegas o rechazar un video que quizá sí estaba en inglés.
-      mensaje: idioma
-        ? `No pudimos confirmar el idioma del audio (parece ${nombreIdioma(idioma)}, con solo ${porcentaje} % de certeza).`
-        : 'No pudimos determinar el idioma del audio de este video.',
-    };
-  }
-  if (!coincide) {
-    return {
-      decision: 'rechazar',
-      idioma,
-      confianza: seguro,
-      porcentaje,
-      mensaje: `El audio de este video está en ${nombreIdioma(idioma)} (${porcentaje} % de certeza), no en inglés. El doblaje solo está preparado para videos hablados en inglés.`,
-    };
-  }
-  return {
-    decision: 'preguntar',
-    idioma,
-    confianza: seguro,
-    porcentaje,
-    mensaje: `El audio parece estar en inglés, pero con ${porcentaje} % de certeza. Puede que la transcripción sea una traducción y no el audio real.`,
-  };
-}
+/** Hasta 85 s: Supadata tardó 26,7 s con un video de 88 min (auditoría H14). */
+const ESPERA_PETICION_MS = 85000;
 
 export class TranscriptionService {
-  constructor({ fetchApi, pollIntervalMs = 3000, maxWaitMs = 240000 }) {
+  constructor({ fetchApi, pollIntervalMs = 3000, maxWaitMs = 20 * 60 * 1000 }) {
     if (typeof fetchApi !== 'function') throw new Error('Falta el cliente de la API.');
     this.fetchApi = fetchApi;
     this.pollIntervalMs = pollIntervalMs;
@@ -273,105 +163,76 @@ export class TranscriptionService {
   }
 
   /**
-   * Trae la transcripción del audio original con marcas de tiempo y verifica
-   * que ese audio esté en inglés.
-   *
-   * Antes se pedía `language: 'en'`, y eso era el error de raíz: obligaba al
-   * servidor a traer la pista inglesa aunque el video estuviera hablado en otro
-   * idioma. Ahora se pide «auto» y el servidor informa qué idioma detectó en el
-   * audio y con cuánta confianza.
-   *
-   * `confirmar` recibe el motivo de la duda y devuelve true/false. Si no se
-   * pasa, la duda equivale a un no.
+   * Texto con marcas de tiempo en el idioma original del video. No decide si se
+   * dobla: eso es `decidirDoblaje` (idiomaOrigen.js), con lo que aquí se devuelve.
    */
   async obtenerParaDoblaje(url, {
-    onProgress = () => {},
-    apiKey = '',
-    context = '',
-    confirmar = null,
-    pistaNavegador = null,
+    idiomaOrigen = 'auto', tituloVideo = '', duracionS = 0, permitirIA = false,
+    apiKey = '', context = '', signal = null, onProgress = () => {},
   } = {}) {
-    if (!extraerVideoId(url)) throw new Error('El enlace de YouTube no es válido.');
-    onProgress('Analizando el audio del video…');
+    if (!extraerVideoId(url)) throw new ErrorYoutube('El enlace de YouTube no es válido.', 'enlace');
+    onProgress('Leyendo el video…');
     const respuesta = await this.fetchApi('/youtube', {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url,
-        language: 'auto',
+        language: idiomaOrigen || 'auto',
         prefer_subtitles: true,
         fast_mode: false,
         include_timestamps: true,
+        title_hint: String(tituloVideo || '').slice(0, 300),
+        duration_hint_s: Number(duracionS) || 0,
+        allow_ai_generation: Boolean(permitirIA),
         api_key: String(apiKey || ''),
         context: String(context || '').slice(0, 4000),
       }),
-    }, 55000);
+    }, ESPERA_PETICION_MS);
     let datos = await respuesta.json().catch(() => ({}));
+    if (respuesta.status === 409 && datos?.code === 'sin_subtitulos') {
+      throw new ErrorYoutube(detalleError(datos, 'Este video no tiene subtítulos.'), 'sin_subtitulos', datos);
+    }
+    if (respuesta.status === 402) {
+      throw new ErrorYoutube(detalleError(datos, 'Hay un problema con la cuenta de Supadata.'), 'cuenta', datos);
+    }
     if (!respuesta.ok && respuesta.status !== 202) {
-      throw new Error(detalleError(datos, 'No se pudo transcribir el video.'));
+      throw new ErrorYoutube(detalleError(datos, 'No se pudo leer el video.'), 'servidor', datos);
     }
     if (datos.pending && datos.job_id) {
-      datos = await this.#esperarTrabajo(datos.job_id, onProgress);
+      // El 202 trae qué se pidió y por qué; el trabajo trae el texto.
+      datos = { ...datos, ...(await this.#esperarTrabajo(datos.job_id, { signal, onProgress })) };
     }
     const segmentos = normalizarSegmentos(datos.segments);
     if (!segmentos.length) {
-      throw new Error('El servicio devolvió texto, pero no marcas de tiempo utilizables.');
+      throw new ErrorYoutube('El video no trae frases con tiempos que se puedan doblar.', 'sin_segmentos', datos);
     }
-
-    // La señal del navegador se pide aquí, con la transcripción ya en mano: es
-    // el único momento en que sabemos que el video existe y merece la espera.
-    let pista = null;
-    if (typeof pistaNavegador === 'function') {
-      try {
-        pista = await pistaNavegador();
-      } catch (_) {
-        pista = null; // Nunca bloquea: es una señal opcional.
-      }
-    }
-    const veredicto = evaluarIdiomaAudio(datos, 'en', pista);
-    if (veredicto.decision === 'rechazar') {
-      const error = new Error(veredicto.mensaje);
-      error.idiomaDetectado = veredicto.idioma;
-      throw error;
-    }
-    if (veredicto.decision === 'preguntar') {
-      const aprobado = typeof confirmar === 'function'
-        ? await confirmar(veredicto)
-        : false;
-      if (!aprobado) {
-        const error = new Error(`${veredicto.mensaje} El doblaje se detuvo sin gastar procesamiento.`);
-        error.idiomaDetectado = veredicto.idioma;
-        error.cancelado = true;
-        throw error;
-      }
-    }
-
     return {
-      ...datos,
-      language: String(datos.language || 'en').toLowerCase(),
-      segments: segmentos,
-      veredictoIdioma: veredicto,
+      segmentos,
+      ...leerIdioma(datos),
+      titulo: tituloVideo || datos.title || '',
+      duracionS: Number(datos.duration_s) || Number(duracionS) || 0,
     };
   }
 
-  async #esperarTrabajo(jobId, onProgress) {
-    const limite = Date.now() + this.maxWaitMs;
+  async #esperarTrabajo(jobId, { signal, onProgress }) {
+    const inicio = Date.now();
+    const limite = inicio + this.maxWaitMs;
     while (Date.now() < limite) {
       await new Promise((resolver) => setTimeout(resolver, this.pollIntervalMs));
-      const segundos = Math.max(0, Math.round((limite - Date.now()) / 1000));
-      onProgress(`El video sigue procesándose. Tiempo máximo restante: ${segundos} s.`);
+      if (signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
+      const segundos = Math.round((Date.now() - inicio) / 1000);
+      onProgress(`Transcribiendo el video: ${segundos} s (los videos largos pueden tardar varios minutos)…`);
       const respuesta = await this.fetchApi(
         `/youtube-job?id=${encodeURIComponent(jobId)}&include_timestamps=true`,
-        {},
+        { signal },
         30000,
       );
       if (respuesta.status === 202) continue;
       const datos = await respuesta.json().catch(() => ({}));
-      if (!respuesta.ok) {
-        throw new Error(detalleError(datos, 'Falló el procesamiento del video largo.'));
-      }
+      if (!respuesta.ok) throw new ErrorYoutube(detalleError(datos, 'Falló la transcripción del video largo.'), 'servidor', datos);
       return datos;
     }
-    throw new Error('El video sigue procesándose. Intenta de nuevo en un minuto.');
+    throw new ErrorYoutube('El video sigue procesándose. Intenta de nuevo en unos minutos.', 'servidor');
   }
 }

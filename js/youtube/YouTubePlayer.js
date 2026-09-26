@@ -82,6 +82,14 @@ export class YouTubePlayer {
     return Number(this.player?.getCurrentTime?.() || 0);
   }
 
+  getDuration() {
+    return Number(this.player?.getDuration?.() || 0);
+  }
+
+  getVideoData() {
+    try { return this.player?.getVideoData?.() || {}; } catch (_) { return {}; }
+  }
+
   getPlaybackRate() {
     return Number(this.player?.getPlaybackRate?.() || 1);
   }
@@ -103,25 +111,24 @@ export class YouTubePlayer {
     this.player?.pauseVideo?.();
   }
 
-  /**
-seekTo(segundos) {
-  this.player?.seekTo?.(Math.max(0, Number(segundos) || 0), true);
-}
-
-getPlayerState() {
-  return this.player?.getPlayerState?.();
-}
-
-/**
- * Quita los subtítulos propios de YouTube (salieron en alemán encima de la voz
- * en español, auditoría H12). `unloadModule` no está en la documentación
- * oficial: si no existe, no pasa nada. [POR CONFIRMAR en navegador real, T4.3]
- */
-ocultarSubtitulosDeYouTube() {
-  for (const modulo of ['captions', 'cc']) {
-    try { this.player?.unloadModule?.(modulo); } catch (_) { /* opcional */ }
+  seekTo(segundos) {
+    this.player?.seekTo?.(Math.max(0, Number(segundos) || 0), true);
   }
-}
+
+  getPlayerState() {
+    return this.player?.getPlayerState?.();
+  }
+
+  /**
+   * Quita los subtítulos propios de YouTube (salieron en alemán encima de la voz
+   * en español, auditoría H12). `unloadModule` no está en la documentación
+   * oficial: si no existe, no pasa nada. [POR CONFIRMAR en navegador real, T4.3]
+   */
+  ocultarSubtitulosDeYouTube() {
+    for (const modulo of ['captions', 'cc']) {
+      try { this.player?.unloadModule?.(modulo); } catch (_) { /* opcional */ }
+    }
+  }
 
   /** Volumen del video, 0 a 100. Permite bajar el original sin silenciarlo. */
   getVolume() {

@@ -251,6 +251,139 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── T1.5: un solo clic cuenta; cerrar detiene todo ──────────────');
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, {
+      demoraTraduccionMs: 600,
+      youtube: () => respuestaYoutube({ segmentos: segmentosRepetidos(6), confianza: 0.9, fuente: 'usuario' }),
+    });
+    await pegarEnlace(pagina);
+    await pagina.click('#ytSyncBtn');
+    await pagina.evaluate(() => {
+      window.dispatchEvent(new CustomEvent('jg:server-status'));
+      document.getElementById('ytUrl').dispatchEvent(new Event('input'));
+    });
+    comprobar('mientras trabaja, el botón sigue bloqueado aunque el servidor avise', await pagina.isDisabled('#ytSyncBtn'));
+    await pagina.evaluate(() => document.getElementById('ytSyncBtn').click());
+    await esperar(1500);
+    comprobar('un doble clic no lanza una segunda petición', reg.youtube.length === 1, `${reg.youtube.length}`);
+    const t0 = Date.now();
+    while (!reg.translate.length && Date.now() - t0 < 15000) await esperar(100);
+    await pagina.click('#btnYtSyncClose');
+    const traduccionesAlCerrar = reg.translate.length;
+    const vozAlCerrar = reg.tts.length;
+    await esperar(3000);
+    // +1: una petición que ya estaba saliendo justo al pulsar puede registrarse después.
+    comprobar('después de cerrar no sale ni una traducción más', reg.translate.length <= traduccionesAlCerrar + 1, `${traduccionesAlCerrar} → ${reg.translate.length}`);
+    comprobar('ni una síntesis de voz más', reg.tts.length === vozAlCerrar, `${vozAlCerrar} → ${reg.tts.length}`);
+    comprobar('«Cerrar» devuelve el formulario con el enlace a la vista', await pagina.isVisible('#ytUrl'));
+    comprobar('y no deja una transcripción vacía en pantalla', !(await pagina.isVisible('#ytResultArea')));
+    await contexto.close();
+  }
+
+  console.log('\n── T1.6: idioma decidido sin rechazos ciegos ───────────────────');
+  {
+    const a = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'titulo', confianza: 0.8 }) });
+    await pegarEnlace(a.pagina); await a.pagina.click('#ytSyncBtn'); await esperarListo(a.pagina);
+    comprobar('con el idioma claro no se pregunta nada', !(await a.pagina.isVisible('#ytLangConfirm')));
+    comprobar('y el doblaje queda listo', await listo(a.pagina));
+    await a.contexto.close();
+
+    const b = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'disponibles', confianza: 0.55, disponibles: ['ar', 'en', 'de-DE'] }) });
+    await pegarEnlace(b.pagina); await b.pagina.click('#ytSyncBtn');
+    await b.pagina.waitForSelector('#ytLangConfirm:not([hidden])', { timeout: 15000 }).catch(() => {});
+    comprobar('con duda aparece el selector de idioma', await b.pagina.isVisible('#ytLangConfirm'));
+    comprobar('con inglés preseleccionado', (await b.pagina.inputValue('#ytIdiomaElegido')) === 'en');
+    await b.pagina.click('#ytLangConfirmYes'); await esperarListo(b.pagina);
+    comprobar('confirmar el mismo idioma no vuelve a pedir el texto', b.reg.youtube.length === 1, `${b.reg.youtube.length}`);
+    await b.contexto.close();
+
+    const c = await abrir(navegador, { youtube: (cuerpo) => (cuerpo.language === 'pt'
+      ? respuestaYoutube({ idioma: 'pt', fuente: 'usuario', confianza: 1 })
+      : respuestaYoutube({ fuente: 'disponibles', confianza: 0.55 })) });
+    await pegarEnlace(c.pagina); await c.pagina.click('#ytSyncBtn');
+    await c.pagina.waitForSelector('#ytLangConfirm:not([hidden])', { timeout: 15000 }).catch(() => {});
+    await c.pagina.selectOption('#ytIdiomaElegido', 'pt'); await c.pagina.click('#ytLangConfirmYes'); await esperarListo(c.pagina);
+    comprobar('elegir portugués pide el texto en portugués', c.reg.youtube[1]?.cuerpo?.language === 'pt');
+    comprobar('y traduce desde portugués', c.reg.translate.some((t) => t.cuerpo.direction === 'pt-es'));
+    await c.contexto.close();
+
+    const d = await abrir(navegador, { youtube: () => respuestaYoutube({ idioma: 'es', fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(d.pagina); await d.pagina.click('#ytSyncBtn'); await esperar(4000);
+    comprobar('un video en español avisa que no necesita doblaje', /ya está en español/i.test(await d.pagina.textContent('#ytSyncArea')));
+    comprobar('y no gasta traducciones', d.reg.translate.length === 0);
+    await d.contexto.close();
+
+    const e = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await e.pagina.selectOption('#ytLang', 'en'); await pegarEnlace(e.pagina); await e.pagina.click('#ytSyncBtn'); await esperar(2500);
+    comprobar('el idioma elegido en el formulario viaja en la petición', e.reg.youtube[0]?.cuerpo?.language === 'en');
+    await e.contexto.close();
+  }
+
+  console.log('\n── T1.7: el progreso se ve desde el primer instante ────────────');
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, { demoraYoutubeMs: 4000, youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina);
+    await pagina.click('#ytSyncBtn');
+    await esperar(300);
+    const caja = await pagina.locator('#ytDubProgreso').boundingBox();
+    const alto = pagina.viewportSize()?.height || 800;
+    comprobar('a los 300 ms ya se ve el progreso', await pagina.isVisible('#ytDubProgreso'));
+    comprobar('y cae dentro de la pantalla del teléfono', Boolean(caja) && caja.y >= 0 && caja.y + 40 <= alto, JSON.stringify(caja));
+    comprobar('el paso «Leer el video» está activo', (await pagina.getAttribute('#ytDubPasos [data-paso="leer"]', 'data-estado')) === 'activo');
+    const t1 = await pagina.textContent('#ytDubTiempo');
+    await esperar(2200);
+    const t2 = await pagina.textContent('#ytDubTiempo');
+    comprobar('el contador de tiempo avanza (se nota vivo)', t1 !== t2, `${t1} → ${t2}`);
+    comprobar('el reproductor ya está creado mientras se lee el video', (await pagina.locator('#ytPlayer[data-yt-falso="1"]').count()) === 1);
+    await esperarListo(pagina);
+    comprobar('la petición lleva el título que dio el reproductor', /Marketing GENIUS/.test(reg.youtube[0]?.cuerpo?.title_hint || ''));
+    comprobar('y la duración', reg.youtube[0]?.cuerpo?.duration_hint_s === 5314);
+    comprobar('el panel muestra el título real, no el id', /Marketing GENIUS/.test(await pagina.textContent('#ytSyncTitle')));
+    comprobar('al terminar, el progreso se retira', !(await pagina.isVisible('#ytDubProgreso')));
+    await contexto.close();
+  }
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, { demoraYoutubeMs: 5000 });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperar(800);
+    await pagina.click('#ytDubCancelar');
+    await esperar(5500);
+    comprobar('«Cancelar» vuelve al formulario', await pagina.isVisible('#ytUrl'));
+    comprobar('y no sigue con traducción ni voz', reg.translate.length === 0 && reg.tts.length === 0, `${reg.translate.length}/${reg.tts.length}`);
+    await contexto.close();
+  }
+
+  console.log('\n── T2.5: video largo — suena sin traducirlo entero ─────────────');
+  {
+    const largo = segmentosRepetidos(30);   // ≈45 min, 1320 segmentos
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ segmentos: largo, fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina);
+    const inicio = Date.now();
+    await pagina.click('#ytSyncBtn');
+    await esperarListo(pagina);
+    const segundos = (Date.now() - inicio) / 1000;
+    comprobar('listo para escuchar en menos de 10 s (API simulada)', segundos < 10, `${segundos.toFixed(1)} s`);
+    comprobar('para arrancar bastan unas pocas traducciones, no el video entero', reg.translate.length <= 10, `${reg.translate.length} (el video entero serían ~190 lotes)`);
+    comprobar('al arrancar no se precarga la voz de todo el video', reg.tts.length <= 18, `${reg.tts.length}`);
+    await esperar(8000);   // en pausa: la preparación se detiene en el horizonte
+    const maximo = Math.max(...reg.translate.flatMap((t) => t.indices));
+    comprobar('en pausa, la traducción se detiene en el horizonte de 3 minutos', largo[maximo].startTime <= 230, `${largo[maximo].startTime.toFixed(0)} s`);
+    comprobar('y la voz también (≤ 18 síntesis)', reg.tts.length <= 18, `${reg.tts.length}`);
+    const playsAntes = await pagina.evaluate(() => window.__plays);
+    const lotesAntes = reg.translate.length;
+    await pagina.evaluate(() => { window.__yt.seekTo(1800); window.__yt.playVideo(); });
+    const t0 = Date.now();
+    while (reg.translate.length === lotesAntes && Date.now() - t0 < 6000) await esperar(100);
+    const primero = reg.translate[lotesAntes]?.indices?.[0];
+    comprobar('tras saltar al minuto 30, lo primero que se traduce es ese tramo', primero !== undefined && largo[primero].startTime >= 1790,
+      primero === undefined ? 'sin petición' : `${largo[primero].startTime.toFixed(0)} s`);
+    await esperar(5000);
+    comprobar('y la voz en español vuelve a sonar allí', (await pagina.evaluate(() => window.__plays)) > playsAntes);
+    comprobar('no aparece una transcripción vacía bajo el video', !(await pagina.isVisible('#ytResultArea')));
+    comprobar('sin errores de JavaScript', reg.errores.length === 0, reg.errores.join(' | '));
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();

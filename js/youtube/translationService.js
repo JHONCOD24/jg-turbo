@@ -162,20 +162,22 @@ export class TranslationService {
   }
 
   /** Traduce sin modificar startTime/endTime; un fallo queda aislado al segmento. */
-  async traducirSegmentos(segmentos, { onProgress = () => {} } = {}) {
+  async traducirSegmentos(segmentos, { origen = 'en', signal = null, onProgress = () => {} } = {}) {
     const lotes = crearLotes(segmentos);
     const resultados = new Array(segmentos.length);
     let terminados = 0;
     onProgress(0, segmentos.length);
 
     await mapaConLimite(lotes, CONCURRENCIA, async (lote) => {
+      if (signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
       let traducciones = null;
       // Dos intentos: la IA acorta el lote de forma intermitente, así que
       // reintentar arregla la mayoría de los casos sin bajar a traducir suelto.
       for (let intento = 0; intento < 2 && !traducciones; intento += 1) {
         try {
-          traducciones = await this.pedirLote(lote);
-        } catch {
+          traducciones = await this.pedirLote(lote, { origen, signal });
+        } catch (error) {
+          if (signal?.aborted) throw error;
           traducciones = null;
         }
       }
@@ -185,10 +187,11 @@ export class TranslationService {
         let translationError = '';
         if (!text) {
           try {
-            const respuesta = await this.traducirTexto(segmento.text);
+            const respuesta = await this.traducirTexto(segmento.text, { origen, signal });
             text = String(respuesta?.text ?? respuesta ?? '').trim();
             if (!text) throw new Error('Traducción vacía.');
           } catch (error) {
+            if (signal?.aborted) throw error;
             text = segmento.text;
             translationError = error?.message || 'No se pudo traducir este segmento.';
           }

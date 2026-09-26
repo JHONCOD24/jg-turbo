@@ -1,346 +1,420 @@
-import { TranscriptionService, extraerVideoId, nombreIdioma } from './transcriptionService.js';
+/**
+ * Doblaje de YouTube al español: orquesta reproductor, texto, traducción y voz.
+ *
+ * Flujo (auditoría 2026-09-25): el reproductor primero (se ve el video y da título y
+ * duración gratis) → texto en el idioma original → regla de idioma → preparación por
+ * ventanas alrededor de lo que se ve → voz encendida por defecto. Una sola sesión viva;
+ * «Cancelar» y «Cerrar» la detienen entera.
+ */
+import { TranscriptionService, extraerVideoId } from './transcriptionService.js';
 import { TranslationService } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
 import { SyncEngine } from './syncEngine.js';
 import { TranscriptionDisplay } from './TranscriptionDisplay.js';
-import { DubbingService } from './dubbingService.js';
+import { DubbingService, agruparPorTiempo } from './dubbingService.js';
 import { DubbingEngine } from './dubbingEngine.js';
-
-// Segundos de video con voz ya generada antes de dejar pulsar «Reproducir».
-// Arrancar con poco y seguir llenando por detrás es mejor que hacer esperar:
-// el generador de voz tarda entre 1 y 41 s por fragmento, así que esperar el
-// video entero podría ser minutos.
-const COLCHON_ARRANQUE_S = 25;
-const COLCHON_OBJETIVO_S = 120;
+import { MotorPreparacion } from './motorPreparacion.js';
+import { crearLimitador } from './limitador.js';
+import { VOZ_INICIAL_S } from './planificador.js';
+import { decidirDoblaje, nombreIdioma, IDIOMAS_DOBLABLES } from './idiomaOrigen.js';
 
 const CLAVE_VOL_VOZ = 'jg_yt_vol_voz';
 const CLAVE_VOL_ORIGINAL = 'jg_yt_vol_original';
+const ESPERA_REPRODUCTOR_MS = 8000;
+// 0,01 s de silencio: «desbloquea» el audio en Safari/iOS dentro del primer toque.
+const SILENCIO_WAV = 'data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
 
-function leerNumero(clave, porDefecto) {
-  // Ojo: `Number(null)` es 0, así que sin comprobar la ausencia primero, la
-  // primera visita arrancaba con el volumen en cero y no se oía nada.
-  const crudo = localStorage.getItem(clave);
-  if (crudo === null || crudo === '') return porDefecto;
-  const guardado = Number(crudo);
-  return Number.isFinite(guardado) && guardado >= 0 ? guardado : porDefecto;
+function leer(clave) {
+  try { return localStorage.getItem(clave); } catch (_) { return null; }
 }
+function guardar(clave, valor) {
+  try { localStorage.setItem(clave, valor); } catch (_) { /* modo privado: no se recuerda */ }
+}
+function leerNumero(clave, porDefecto) {
+  // `Number(null)` es 0: sin comprobar la ausencia, la primera visita arrancaba en silencio.
+  const crudo = leer(clave);
+  if (crudo === null || crudo === '') return porDefecto;
+  const numero = Number(crudo);
+  return Number.isFinite(numero) && numero >= 0 ? numero : porDefecto;
+}
+const formatoTiempo = (s) => (s < 60 ? `${Math.floor(s)} s` : `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, '0')} s`);
+const cancelado = () => new DOMException('Cancelado', 'AbortError');
 
-export function inicializarYoutubeSincronizado({
-  fetchApi,
-  traducirTexto,
-  generarAudioEspanol,
-  estaServidorOnline,
-}) {
-  const boton = document.getElementById('ytSyncBtn');
-  const urlInput = document.getElementById('ytUrl');
-  const area = document.getElementById('ytSyncArea');
-  const estado = document.getElementById('ytSyncStatus');
-  const cerrar = document.getElementById('btnYtSyncClose');
-  const selectorVelocidad = document.getElementById('ytSyncRate');
-  const botonVoz = document.getElementById('ytDubbingBtn');
-  const etiquetaVoz = document.getElementById('ytDubbingLabel');
-  const insigniaIdioma = document.getElementById('ytLangBadge');
-  const caption = document.getElementById('ytCaption');
-  const toggleCaption = document.getElementById('ytToggleCaption');
-  const confirmacion = document.getElementById('ytLangConfirm');
-  const confirmacionTexto = document.getElementById('ytLangConfirmText');
-  const confirmacionSi = document.getElementById('ytLangConfirmYes');
-  const confirmacionNo = document.getElementById('ytLangConfirmNo');
-  const volVoz = document.getElementById('ytVolVoz');
-  const volVozVal = document.getElementById('ytVolVozVal');
-  const volOriginal = document.getElementById('ytVolOriginal');
-  const volOriginalVal = document.getElementById('ytVolOriginalVal');
-  const metricas = document.getElementById('ytSyncMetrics');
-  const panelTranscripcion = document.getElementById('ytTranscriptPanel');
-  const display = new TranscriptionDisplay(document.getElementById('ytSyncDisplay'), caption);
-  const transcriptionService = new TranscriptionService({ fetchApi });
-  const translationService = new TranslationService({ traducirTexto });
-  let player = null;
-  let motor = null;
-  let servicioVoz = null;
-  let motorVoz = null;
+export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, generarAudioEspanol, estaServidorOnline }) {
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    boton: $('ytSyncBtn'), url: $('ytUrl'), idioma: $('ytLang'), area: $('ytSyncArea'), titulo: $('ytSyncTitle'),
+    estado: $('ytSyncStatus'), cerrar: $('btnYtSyncClose'), velocidad: $('ytSyncRate'),
+    botonVoz: $('ytDubbingBtn'), etiquetaVoz: $('ytDubbingLabel'), insignia: $('ytLangBadge'),
+    caption: $('ytCaption'), toggleCaption: $('ytToggleCaption'),
+    elegir: $('ytLangConfirm'), elegirTexto: $('ytLangConfirmText'), elegirSelect: $('ytIdiomaElegido'),
+    elegirSi: $('ytLangConfirmYes'), elegirNo: $('ytLangConfirmNo'),
+    volVoz: $('ytVolVoz'), volVozVal: $('ytVolVozVal'), volOriginal: $('ytVolOriginal'), volOriginalVal: $('ytVolOriginalVal'),
+    metricas: $('ytSyncMetrics'), reproducir: $('ytDubReproducir'), buffer: $('ytBuffer'),
+    tarjeta: $('ytDubProgreso'), barra: $('ytDubBarra'), mensaje: $('ytDubMensaje'), tiempo: $('ytDubTiempo'),
+    ayuda: $('ytDubAyuda'), cancelar: $('ytDubCancelar'),
+  };
+  const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
+  const transcripciones = new TranscriptionService({ fetchApi });
+  const traductor = new TranslationService({ traducirTexto });
+  const audioDoblaje = new Audio();   // uno solo, desbloqueado en el primer toque
+  let sesion = null;
 
-  volVoz.value = String(leerNumero(CLAVE_VOL_VOZ, 100));
-  volOriginal.value = String(leerNumero(CLAVE_VOL_ORIGINAL, 12));
-
+  // ── Volúmenes y subtítulo (se recuerdan) ────────────────────────────────
+  ui.volVoz.value = String(leerNumero(CLAVE_VOL_VOZ, 100));
+  ui.volOriginal.value = String(leerNumero(CLAVE_VOL_ORIGINAL, 12));
   const pintarVolumenes = () => {
-    volVozVal.textContent = `${volVoz.value} %`;
-    volOriginalVal.textContent = `${volOriginal.value} %`;
+    ui.volVozVal.textContent = `${ui.volVoz.value} %`;
+    ui.volOriginalVal.textContent = `${ui.volOriginal.value} %`;
   };
   pintarVolumenes();
-
-  volVoz.addEventListener('input', () => {
+  ui.volVoz.addEventListener('input', () => {
     pintarVolumenes();
-    localStorage.setItem(CLAVE_VOL_VOZ, volVoz.value);
-    motorVoz?.definirVolumenVoz(Number(volVoz.value) / 100);
+    guardar(CLAVE_VOL_VOZ, ui.volVoz.value);
+    sesion?.motorVoz?.definirVolumenVoz(Number(ui.volVoz.value) / 100);
   });
-  volOriginal.addEventListener('input', () => {
+  ui.volOriginal.addEventListener('input', () => {
     pintarVolumenes();
-    localStorage.setItem(CLAVE_VOL_ORIGINAL, volOriginal.value);
-    motorVoz?.definirVolumenFondo(Number(volOriginal.value));
+    guardar(CLAVE_VOL_ORIGINAL, ui.volOriginal.value);
+    sesion?.motorVoz?.definirVolumenFondo(Number(ui.volOriginal.value));
   });
+  ui.toggleCaption.addEventListener('change', () => { ui.caption.hidden = !ui.toggleCaption.checked; });
 
-  toggleCaption.addEventListener('change', () => {
-    caption.hidden = !toggleCaption.checked;
-  });
-
-  const mostrarIdioma = (texto, tipo) => {
-    insigniaIdioma.textContent = texto;
-    insigniaIdioma.dataset.estado = tipo;
+  // ── Progreso visible (TRAMPAS §8.1) ─────────────────────────────────────
+  const progreso = {
+    cronometro: null,
+    iniciar() {
+      const inicio = Date.now();
+      delete ui.tarjeta.dataset.estado;
+      ui.tarjeta.hidden = false;
+      ui.cancelar.textContent = 'Cancelar';
+      ui.tiempo.textContent = '0 s';
+      ui.ayuda.textContent = 'Mientras tanto puedes darle play: el video suena en su idioma y la voz en español entra sola cuando esté lista.';
+      clearInterval(this.cronometro);
+      this.cronometro = setInterval(() => { ui.tiempo.textContent = formatoTiempo((Date.now() - inicio) / 1000); }, 1000);
+      this.paso('leer', 'Leyendo el video…');
+      this.barra(null);
+    },
+    paso(nombre, mensaje) {
+      let despues = false;
+      for (const li of ui.tarjeta.querySelectorAll('[data-paso]')) {
+        if (li.dataset.paso === nombre) { li.dataset.estado = 'activo'; despues = true; }
+        else li.dataset.estado = despues ? 'espera' : 'hecho';
+      }
+      if (mensaje) ui.mensaje.textContent = mensaje;
+    },
+    barra(fraccion) {
+      ui.barra.classList.toggle('es-indeterminada', fraccion === null);
+      ui.barra.style.width = fraccion === null ? '' : `${Math.round(Math.max(0, Math.min(1, fraccion)) * 100)}%`;
+    },
+    mensaje(texto) { ui.mensaje.textContent = texto; },
+    ayuda(texto) { ui.ayuda.textContent = texto; },
+    terminar() { clearInterval(this.cronometro); this.cronometro = null; ui.tarjeta.hidden = true; },
+    error(texto) {
+      clearInterval(this.cronometro);
+      this.cronometro = null;
+      ui.tarjeta.hidden = false;
+      ui.tarjeta.dataset.estado = 'error';
+      this.barra(0);
+      ui.mensaje.textContent = texto;
+      ui.cancelar.textContent = 'Volver';
+    },
   };
 
-  /** Panel de confirmación cuando el idioma no es seguro. Devuelve true/false. */
-  const pedirConfirmacion = (veredicto) => new Promise((resolver) => {
-    confirmacionTexto.textContent =
-      `${veredicto.mensaje} Puedes doblarlo igual, pero la traducción podría no tener sentido.`;
-    confirmacion.hidden = false;
-    confirmacionSi.focus();
-    const responder = (respuesta) => {
-      confirmacion.hidden = true;
-      confirmacionSi.removeEventListener('click', aceptar);
-      confirmacionNo.removeEventListener('click', rechazar);
-      resolver(respuesta);
-    };
-    const aceptar = () => responder(true);
-    const rechazar = () => responder(false);
-    confirmacionSi.addEventListener('click', aceptar);
-    confirmacionNo.addEventListener('click', rechazar);
-  });
+  // ── Botón principal: ocupado mientras trabaja (auditoría H7) ────────────
+  const estaOcupado = () => ui.boton.dataset.ocupado === '1';
+  function actualizarBoton() {
+    ui.boton.disabled = estaOcupado() || !extraerVideoId(ui.url.value) || !estaServidorOnline();
+  }
+  function marcarOcupado(activo) {
+    if (activo) ui.boton.dataset.ocupado = '1';
+    else delete ui.boton.dataset.ocupado;
+    ui.boton.setAttribute('aria-busy', activo ? 'true' : 'false');
+    actualizarBoton();
+  }
+  ui.url.addEventListener('input', actualizarBoton);
+  window.addEventListener('jg:server-status', actualizarBoton);
+  actualizarBoton();
 
-  /** Crea el reproductor una sola vez por video. */
-  const asegurarPlayer = async (videoId) => {
-    if (!player) player = await new YouTubePlayer('ytPlayer', videoId).inicializar();
-    return player;
-  };
-
-  /**
-   * Espera a que el módulo de subtítulos del reproductor publique sus pistas.
-   * Tarda un poco en cargar y a veces no aparece nunca: si no llega en ~2,4 s
-   * se sigue sin ella, porque es una mejora de la detección, no un requisito.
-   */
-  const leerPistasConEspera = async (intentos = 8, esperaMs = 300) => {
-    for (let i = 0; i < intentos; i += 1) {
-      const pista = player?.idiomaSegunPistas?.();
-      if (pista?.idioma) return pista;
-      await new Promise((resolver) => setTimeout(resolver, esperaMs));
-    }
-    return null;
-  };
-
-  const recrearDestino = () => {
-    const contenedor = area.querySelector('.yt-player-shell');
-    // Solo se reemplaza el iframe: el subtítulo sobre el video vive aquí y debe
-    // sobrevivir a cada reinicio del reproductor.
+  // ── Vista ───────────────────────────────────────────────────────────────
+  const mostrarIdioma = (texto, tipo) => { ui.insignia.textContent = texto; ui.insignia.dataset.estado = tipo; };
+  function ponerEstadoBotonVoz(activo) {
+    ui.botonVoz.setAttribute('aria-pressed', activo ? 'true' : 'false');
+    ui.etiquetaVoz.textContent = activo ? 'Volver al audio original' : 'Escuchar en español';
+  }
+  function recrearDestino() {
+    const contenedor = ui.area.querySelector('.yt-player-shell');
     contenedor.querySelector('#ytPlayer')?.remove();
     const destino = document.createElement('div');
     destino.id = 'ytPlayer';
     contenedor.prepend(destino);
-  };
-
-  const ponerEstadoBotonVoz = (activo) => {
-    botonVoz.setAttribute('aria-pressed', activo ? 'true' : 'false');
-    etiquetaVoz.textContent = activo ? 'Volver al audio original' : 'Escuchar en español';
-  };
-
-  const limpiarReproductor = () => {
-    motorVoz?.destruir();
-    servicioVoz?.liberar();
-    motor?.destruir();
-    player?.destruir();
-    motorVoz = null;
-    servicioVoz = null;
-    motor = null;
-    player = null;
-    botonVoz.disabled = true;
-    botonVoz.setAttribute('aria-pressed', 'false');
-    etiquetaVoz.textContent = 'Preparando voz en español…';
-    confirmacion.hidden = true;
-    metricas.hidden = true;
-    caption.textContent = '';
-    mostrarIdioma('Analizando el idioma del audio…', 'analizando');
+  }
+  function reiniciarVista() {
+    ui.botonVoz.disabled = true;
+    ponerEstadoBotonVoz(false);
+    ui.etiquetaVoz.textContent = 'Voz en español';
+    ui.elegir.hidden = true;
+    ui.metricas.hidden = true;
+    ui.reproducir.hidden = true;
+    ui.buffer.textContent = '';
+    ui.estado.textContent = '';
+    ui.caption.textContent = '';
+    ui.titulo.textContent = 'Video doblado al español';
+    ui.velocidad.disabled = true;
+    mostrarIdioma('Idioma del video: por confirmar', 'analizando');
+    display.definirSegmentos([], () => null);
     display.mostrarVoz('cargando');
-    recrearDestino();
-  };
+    progreso.terminar();
+  }
 
-  const actualizarBoton = () => {
-    boton.disabled = !extraerVideoId(urlInput.value) || !estaServidorOnline();
-  };
-  urlInput.addEventListener('input', actualizarBoton);
-  window.addEventListener('jg:server-status', actualizarBoton);
-  actualizarBoton();
+  /** Detiene TODO lo de la sesión (H7) y, si se pide, devuelve el formulario (H8). */
+  function terminarSesion({ restaurarFormulario = true } = {}) {
+    const actual = sesion;
+    sesion = null;
+    if (actual) {
+      actual.controlador.abort();
+      actual.motor?.detener();
+      actual.motorVoz?.destruir();
+      actual.servicioVoz?.liberar();
+      actual.sync?.destruir();
+      actual.player?.destruir();
+    }
+    marcarOcupado(false);
+    reiniciarVista();
+    if (restaurarFormulario) {
+      ui.area.hidden = true;
+      document.querySelector('.yt-area')?.classList.remove('has-results', 'modo-doblaje', 'con-texto');
+      ui.url.focus({ preventScroll: true });
+    }
+  }
+  ui.cerrar.addEventListener('click', () => terminarSesion());
+  ui.cancelar.addEventListener('click', () => terminarSesion());
 
-  cerrar.addEventListener('click', () => {
-    limpiarReproductor();
-    area.hidden = true;
-  });
-
-  botonVoz.addEventListener('click', () => {
-    if (!motorVoz || botonVoz.disabled) return;
+  ui.botonVoz.addEventListener('click', () => {
+    const motorVoz = sesion?.motorVoz;
+    if (!motorVoz || ui.botonVoz.disabled) return;
     if (motorVoz.activo) {
       motorVoz.desactivar();
       ponerEstadoBotonVoz(false);
       display.mostrarVoz('inactivo');
       return;
     }
-    motorVoz.definirVolumenVoz(Number(volVoz.value) / 100);
-    motorVoz.definirVolumenFondo(Number(volOriginal.value));
-    motorVoz.activarYReproducir();
+    motorVoz.activar();
     ponerEstadoBotonVoz(true);
     display.mostrarVoz('activo');
   });
-
-  boton.addEventListener('click', async () => {
-    const url = urlInput.value.trim();
-    if (!extraerVideoId(url) || !estaServidorOnline()) return;
-    limpiarReproductor();
-    area.hidden = false;
-    document.querySelector('.yt-area')?.classList.add('has-results');
-    boton.disabled = true;
-    boton.setAttribute('aria-busy', 'true');
-    const textoOriginalBoton = boton.textContent;
-    boton.textContent = 'Preparando el doblaje…';
-    selectorVelocidad.disabled = true;
-    botonVoz.disabled = true;
-    estado.textContent = 'Analizando el audio del video…';
-    display.definirSegmentos([]);
-
-    try {
-      const videoId = extraerVideoId(url);
-      const transcripcion = await transcriptionService.obtenerParaDoblaje(url, {
-        onProgress: (mensaje) => { estado.textContent = mensaje; },
-        apiKey: localStorage.getItem('jg_groq_api_key') || '',
-        context: localStorage.getItem('jg_glossary') || '',
-        confirmar: pedirConfirmacion,
-        // El reproductor se crea antes de decidir: sus pistas dicen el idioma
-        // del audio, y el servidor no puede conseguir ese dato desde Vercel.
-        pistaNavegador: async () => {
-          estado.textContent = 'Comprobando el idioma del audio en el reproductor…';
-          await asegurarPlayer(videoId);
-          return leerPistasConEspera();
-        },
-      });
-      const veredicto = transcripcion.veredictoIdioma;
-      mostrarIdioma(
-        veredicto.decision === 'aceptar'
-          ? `Audio en inglés confirmado (${veredicto.porcentaje} % de certeza)`
-          : `Idioma sin confirmar (${nombreIdioma(veredicto.idioma)}, ${veredicto.porcentaje} %) — doblaje forzado por ti`,
-        veredicto.decision === 'aceptar' ? 'ok' : 'duda',
-      );
-
-      estado.textContent = 'Traduciendo al español…';
-      const segmentos = await translationService.traducirSegmentos(transcripcion.segments, {
-        onProgress: (hechos, total) => {
-          estado.textContent = total
-            ? `Traduciendo al español: ${hechos} de ${total} frases.`
-            : 'Preparando la traducción…';
-        },
-      });
-      display.definirSegmentos(segmentos);
-
-      const textoCompleto = segmentos.map((segmento) => segmento.text).join(' ').trim();
-      const salida = document.getElementById('ytOutput');
-      salida.value = textoCompleto;
-      salida.dispatchEvent(new Event('input'));
-      document.getElementById('ytResultArea').style.display = 'block';
-      document.getElementById('ytCount').textContent =
-        `${textoCompleto.split(/\s+/).filter(Boolean).length} palabras · traducción fiel sincronizada`;
-
-      await asegurarPlayer(videoId);
-      const tasas = player.getAvailablePlaybackRates();
-      selectorVelocidad.replaceChildren(...tasas.map((tasa) => {
-        const opcion = document.createElement('option');
-        opcion.value = String(tasa);
-        opcion.textContent = `${tasa}x`;
-        return opcion;
-      }));
-      selectorVelocidad.value = String(player.getPlaybackRate());
-      selectorVelocidad.disabled = false;
-      selectorVelocidad.onchange = () => player?.setPlaybackRate(selectorVelocidad.value);
-
-      motor = new SyncEngine({
-        player,
-        segmentos,
-        onSegmentChange: (indice) => display.mostrar(indice),
-        onPlaybackRateChange: (velocidad) => {
-          display.mostrarVelocidad(velocidad);
-          selectorVelocidad.value = String(velocidad);
-        },
-      });
-      motor.iniciar();
-
-      const fallidos = segmentos.filter((segmento) => segmento.translationError).length;
-      servicioVoz = new DubbingService({
-        generarAudio: generarAudioEspanol,
-        onProgress: (hechos, total) => {
-          if (!motorVoz?.activo) {
-            estado.textContent = `Generando la voz en español: ${hechos} de ${total} frases.`;
-          }
-        },
-      });
-      const unidades = servicioVoz.definirSegmentos(segmentos);
-      if (!unidades.length) throw new Error('No hay frases válidas para generar la voz.');
-
-      estado.textContent = 'Generando los primeros segundos de voz…';
-      await servicioVoz.asegurarColchon(0, COLCHON_ARRANQUE_S, 3);
-      const servicioActual = servicioVoz;
-      motorVoz = new DubbingEngine({
-        player,
-        servicio: servicioVoz,
-        colchonSegundos: COLCHON_OBJETIVO_S,
-        onStatus: (mensaje, tipo) => {
-          estado.textContent = mensaje;
-          display.mostrarVoz(tipo);
-        },
-        onMetricas: (datos) => {
-          metricas.hidden = false;
-          metricas.textContent =
-            `Sincronía medida: desfase típico ${datos.promedioMs} ms · p95 ${datos.p95Ms} ms · `
-            + `${Math.round(datos.dentroObjetivo * 100)} % dentro del objetivo de 150 ms.`;
-        },
-      });
-      motorVoz.definirVolumenVoz(Number(volVoz.value) / 100);
-      motorVoz.definirVolumenFondo(Number(volOriginal.value));
-
-      botonVoz.disabled = false;
-      ponerEstadoBotonVoz(false);
-      display.mostrarVoz('lista');
-      const listos = Math.round(servicioActual.segundosListosDesde(0));
-      estado.textContent = fallidos
-        ? `Listo para escuchar. ${fallidos} frases conservaron el inglés por un fallo de traducción.`
-        : `Listo para escuchar: ${listos} s de voz preparados; el resto se genera mientras ves el video.`;
-
-      // El colchón sigue creciendo por detrás; si la reproducción lo alcanza, el
-      // motor deja sonar el audio original en vez de congelar el video.
-      servicioActual.asegurarColchon(0, COLCHON_OBJETIVO_S, 3)
-        .then(() => servicioActual.precargarResto(0, 2))
-        .then(() => {
-          if (!motorVoz?.activo && servicioVoz === servicioActual && !servicioActual.destruido) {
-            const fallosVoz = servicioActual.unidades.filter((u) => u.estado === 'error').length;
-            estado.textContent = fallosVoz
-              ? `Voz preparada parcialmente: ${fallosVoz} frases no pudieron generarse.`
-              : 'Toda la voz en español está preparada.';
-            display.mostrarVoz(fallosVoz ? 'error' : 'lista');
-          }
-        })
-        .catch(() => {});
-    } catch (error) {
-      const mensaje = String(error?.message || error);
-      limpiarReproductor();
-      if (error?.idiomaDetectado || error?.cancelado) {
-        mostrarIdioma(
-          error.idiomaDetectado
-            ? `Audio en ${nombreIdioma(error.idiomaDetectado)}: sin doblaje`
-            : 'Idioma del audio sin confirmar',
-          'no',
-        );
-      }
-      estado.textContent = mensaje;
-    } finally {
-      boton.removeAttribute('aria-busy');
-      boton.textContent = textoOriginalBoton;
-      actualizarBoton();
-    }
+  ui.reproducir.addEventListener('click', () => {
+    const motorVoz = sesion?.motorVoz;
+    if (!motorVoz) return;
+    motorVoz.activarYReproducir();
+    ponerEstadoBotonVoz(true);
+    display.mostrarVoz('activo');
+    ui.reproducir.hidden = true;
   });
 
-  return { destruir: limpiarReproductor, actualizarBoton, panelTranscripcion };
+  /** Ante la duda se ofrece elegir el idioma; nunca un rechazo a ciegas (H2, H6). */
+  function elegirIdioma(decision, signal) {
+    return new Promise((resolver) => {
+      ui.elegirTexto.textContent = decision.mensaje || '¿En qué idioma habla el video?';
+      ui.elegirSelect.value = IDIOMAS_DOBLABLES.includes(decision.idioma) ? decision.idioma : 'en';
+      ui.elegir.hidden = false;
+      ui.elegirSi.focus();
+      const terminar = (valor) => {
+        ui.elegir.hidden = true;
+        ui.elegirSi.removeEventListener('click', aceptar);
+        ui.elegirNo.removeEventListener('click', rechazar);
+        signal.removeEventListener('abort', rechazar);
+        resolver(valor);
+      };
+      const aceptar = () => terminar(ui.elegirSelect.value);
+      const rechazar = () => terminar(null);
+      ui.elegirSi.addEventListener('click', aceptar);
+      ui.elegirNo.addEventListener('click', rechazar);
+      signal.addEventListener('abort', rechazar, { once: true });
+    });
+  }
+
+  function desbloquearAudio() {
+    try {
+      audioDoblaje.src = SILENCIO_WAV;
+      const intento = audioDoblaje.play();
+      if (intento?.then) intento.then(() => { if (audioDoblaje.src === SILENCIO_WAV) audioDoblaje.pause(); }).catch(() => {});
+    } catch (_) { /* si no se pudo, «Ver con voz en español» lo hace con su propio toque */ }
+  }
+
+  async function crearReproductor(videoId, signal) {
+    recrearDestino();
+    const player = new YouTubePlayer('ytPlayer', videoId);
+    const listo = player.inicializar().then(() => true).catch(() => false);
+    const tardo = new Promise((resolver) => setTimeout(() => resolver(false), ESPERA_REPRODUCTOR_MS));
+    await Promise.race([listo, tardo]);
+    if (signal.aborted) { player.destruir(); throw cancelado(); }
+    return player;   // si tardó, se sigue: puede terminar de cargar después
+  }
+
+  function configurarVelocidades(player) {
+    const tasas = player.getAvailablePlaybackRates();
+    ui.velocidad.replaceChildren(...tasas.map((tasa) => {
+      const opcion = document.createElement('option');
+      opcion.value = String(tasa);
+      opcion.textContent = `${tasa}x`;
+      return opcion;
+    }));
+    ui.velocidad.value = String(player.getPlaybackRate());
+    ui.velocidad.disabled = false;
+    ui.velocidad.onchange = () => player.setPlaybackRate(ui.velocidad.value);
+  }
+
+  function textoDeError(error) {
+    if (!error?.codigo && /abort|timeout|tiempo l[ií]mite/i.test(String(error?.message))) {
+      return 'El servidor tardó demasiado. Intenta de nuevo en un momento.';
+    }
+    return String(error?.message || error || 'No se pudo preparar el doblaje.');
+  }
+
+  async function pedirTexto(url, { idiomaOrigen, tituloVideo, duracionS, signal, permitirIA = false }) {
+    progreso.paso('leer', 'Leyendo el video…');
+    progreso.barra(null);
+    return transcripciones.obtenerParaDoblaje(url, {
+      idiomaOrigen, tituloVideo, duracionS, permitirIA, signal,
+      apiKey: leer('jg_groq_api_key') || '',
+      context: leer('jg_glossary') || '',
+      onProgress: (mensaje) => progreso.mensaje(mensaje),
+    });
+  }
+
+  function pintarBuffer(actual) {
+    if (sesion !== actual || !actual.motor) return;
+    const { vozHastaS, errores } = actual.motor.resumen();
+    const voz = Number.isFinite(vozHastaS) ? `Voz lista para los próximos ${formatoTiempo(vozHastaS)}` : 'Voz lista hasta el final';
+    const fallidos = errores.traduccion + errores.voz;
+    ui.buffer.textContent = fallidos ? `${voz} · ${fallidos} tramos sonarán en su idioma original` : voz;
+  }
+
+  /** Preparación por ventanas (H3): lo de ahora primero; el resto, mientras se ve. */
+  async function prepararDoblaje(actual, { datos, origen, tituloVideo, signal }) {
+    const { player } = actual;
+    const limitador = crearLimitador();
+    const servicioVoz = new DubbingService({ generarAudio: (texto) => generarAudioEspanol(texto, { signal }), limitador });
+    servicioVoz.definirUnidades(agruparPorTiempo(datos.segmentos));
+    actual.servicioVoz = servicioVoz;
+    const motor = new MotorPreparacion({
+      segmentos: datos.segmentos, servicioVoz, traductor,
+      posicion: () => player.getCurrentTime(),
+      origen, tituloVideo, limitadorVoz: limitador, signal,
+      onCambio: (evento) => {
+        if (evento?.tipo === 'pausa') ui.estado.textContent = evento.mensaje;
+        pintarBuffer(actual);
+      },
+      onTraduccion: () => display.refrescar(),
+    });
+    actual.motor = motor;
+    display.definirSegmentos(datos.segmentos, (i) => {
+      if (!motor.traducciones.has(i)) return null;
+      return motor.traducciones.get(i) ?? datos.segmentos[i].text;   // sin traducción: se lee el original
+    });
+    motor.iniciar();
+    progreso.paso('traducir', 'Traduciendo el comienzo al español…');
+    progreso.barra(0);
+    await motor.esperarArranque({
+      vozInicialS: VOZ_INICIAL_S,
+      onProgreso: (resumen) => {
+        const traducido = Math.min(1, resumen.traducidoHastaS / VOZ_INICIAL_S);
+        if (traducido < 1) {
+          progreso.paso('traducir');
+          progreso.barra(traducido);
+        } else {
+          progreso.paso('voz', 'Preparando la voz en español…');
+          progreso.barra(Math.min(1, resumen.vozHastaS / VOZ_INICIAL_S));
+        }
+      },
+    });
+    if (signal.aborted) throw cancelado();
+
+    actual.motorVoz = new DubbingEngine({
+      player, servicio: servicioVoz, crearAudio: () => audioDoblaje,
+      onStatus: (mensaje, tipo) => { ui.estado.textContent = mensaje; display.mostrarVoz(tipo); },
+      onMetricas: (metricas) => { actual.metricas = metricas; },   // solo diagnóstico (H28)
+      onFin: () => { ui.estado.textContent = 'El video terminó.'; display.mostrarVoz('fin'); },
+    });
+    actual.motorVoz.definirVolumenVoz(Number(ui.volVoz.value) / 100);
+    actual.motorVoz.definirVolumenFondo(Number(ui.volOriginal.value));
+    actual.sync = new SyncEngine({
+      player, segmentos: datos.segmentos,
+      onSegmentChange: (indice) => display.mostrar(indice),
+      onPlaybackRateChange: (velocidad) => { display.mostrarVelocidad(velocidad); ui.velocidad.value = String(velocidad); },
+    });
+    actual.sync.iniciar();
+    configurarVelocidades(player);
+
+    progreso.terminar();
+    ui.botonVoz.disabled = false;
+    // La voz queda encendida por defecto: si la persona ya le dio play, entra sola.
+    actual.motorVoz.activar();
+    ponerEstadoBotonVoz(true);
+    display.mostrarVoz('activo');
+    ui.reproducir.hidden = player.getPlayerState() === 1;
+    if (!ui.reproducir.hidden) ui.reproducir.focus({ preventScroll: true });
+    ui.estado.textContent = 'Listo. El resto del doblaje se prepara mientras ves el video.';
+    pintarBuffer(actual);
+  }
+
+  async function iniciarSesion() {
+    const url = ui.url.value.trim();
+    const videoId = extraerVideoId(url);
+    if (!videoId || !estaServidorOnline()) return;
+    terminarSesion({ restaurarFormulario: false });
+    const controlador = new AbortController();
+    const { signal } = controlador;
+    const actual = { controlador, videoId };
+    sesion = actual;
+    marcarOcupado(true);
+    ui.area.hidden = false;
+    document.querySelector('.yt-area')?.classList.add('has-results', 'modo-doblaje');
+    progreso.iniciar();
+    ui.area.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    desbloquearAudio();
+    try {
+      actual.player = await crearReproductor(videoId, signal);
+      const tituloVideo = actual.player.getVideoData()?.title || '';
+      const duracionS = actual.player.getDuration() || 0;
+      if (tituloVideo) ui.titulo.textContent = tituloVideo;
+      if (duracionS > 1800) progreso.ayuda('Video largo: la primera vez puede tardar unos 30 s en leerse. Puedes darle play mientras tanto.');
+
+      let datos = await pedirTexto(url, { idiomaOrigen: ui.idioma?.value || 'auto', tituloVideo, duracionS, signal });
+      let decision = decidirDoblaje(datos);
+      if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
+        progreso.mensaje('Confirma el idioma del video para seguir.');
+        const elegido = await elegirIdioma(decision, signal);
+        if (!elegido) { terminarSesion(); return; }
+        if (elegido !== datos.idioma) {
+          datos = await pedirTexto(url, { idiomaOrigen: elegido, tituloVideo, duracionS, signal });
+        }
+        decision = { accion: 'doblar', idioma: elegido, mensaje: '' };
+      }
+      if (decision.accion === 'sin_doblaje') {
+        mostrarIdioma('El video ya está en español', 'ok');
+        progreso.error(decision.mensaje);
+        return;
+      }
+      mostrarIdioma(`Idioma del video: ${nombreIdioma(decision.idioma)}`, 'ok');
+      await prepararDoblaje(actual, { datos, origen: decision.idioma, tituloVideo, signal });
+    } catch (error) {
+      if (signal.aborted || error?.name === 'AbortError') return;
+      mostrarIdioma('No se pudo preparar el doblaje', 'no');
+      progreso.error(textoDeError(error));
+    } finally {
+      if (sesion === actual) marcarOcupado(false);
+    }
+  }
+
+  ui.boton.addEventListener('click', () => {
+    if (estaOcupado()) return;
+    iniciarSesion().catch((error) => {
+      console.error('[jg-youtube]', error);
+      progreso.error('Algo falló al preparar el doblaje. Vuelve a intentarlo.');   // nunca en silencio
+    });
+  });
+
+  return { destruir: () => terminarSesion(), actualizarBoton };
 }

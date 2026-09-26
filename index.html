@@ -3869,6 +3869,28 @@
   .yt-confirm[hidden]{display:none}
   .yt-confirm p{font-size:var(--fs-sm);line-height:1.5;color:var(--text);margin-bottom:10px}
   .yt-confirm-acciones{display:flex;gap:8px;flex-wrap:wrap}
+  .yt-confirm-acciones select{min-height:44px}
+  .yt-confirm .mini-btn{min-height:44px}
+
+/* Progreso del doblaje: pasos, barra y tiempo. Tiene que verse vivo (TRAMPAS §8.1). */
+.yt-progreso{margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(11,13,18,.55);display:grid;gap:8px}
+.yt-progreso[hidden]{display:none}
+.yt-progreso[data-estado="error"]{border-color:rgba(255,105,105,.45)}
+.yt-pasos{display:flex;gap:6px 14px;flex-wrap:wrap;list-style:none;margin:0;padding:0;font-size:var(--fs-sm);color:var(--muted)}
+.yt-pasos li{display:inline-flex;align-items:center;gap:6px}
+.yt-paso-punto{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
+.yt-pasos li[data-estado="activo"]{color:var(--text);font-weight:600}
+.yt-pasos li[data-estado="activo"] .yt-paso-punto{background:var(--cyan);box-shadow:0 0 0 4px rgba(39,225,193,.18)}
+.yt-pasos li[data-estado="hecho"] .yt-paso-punto{background:var(--cyan)}
+.yt-progreso .prog-bar{margin:0}
+.yt-progreso .prog-fill.es-indeterminada{width:35%;animation:ytBarraViva 1.4s ease-in-out infinite}
+@keyframes ytBarraViva{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
+@media (prefers-reduced-motion:reduce){.yt-progreso .prog-fill.es-indeterminada{animation:none;width:100%;opacity:.45}}
+.yt-progreso-texto{display:flex;justify-content:space-between;gap:10px;margin:0;font-size:var(--fs-sm);color:var(--text)}
+.yt-progreso-tiempo{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.yt-progreso-ayuda{margin:0;font-size:var(--fs-xs);color:var(--muted)}
+.yt-sync-area .yt-progreso .mini-btn{justify-self:start;min-height:44px}
+
   .yt-mixer{display:grid;gap:6px;flex:1;min-width:230px;max-width:380px}
   .yt-mixer-fila{
     display:grid;grid-template-columns:minmax(96px,auto) 1fr auto;align-items:center;gap:10px;
@@ -3884,6 +3906,10 @@
      que redefine min-height y ganaría por orden a un `.btn-doblar` suelto. */
   .yt-sync-controls .btn-doblar{min-height:48px;height:auto;font-size:var(--fs-md);padding-inline:18px}
   .yt-sync-controls .btn-doblar svg{width:17px;height:17px;flex:none}
+  .yt-sync-controls .yt-buffer{margin:0;font-size:var(--fs-xs);color:var(--muted);flex-basis:100%}
+  /* Durante el doblaje la transcripción completa solo aparece si se pide (T3.6). */
+  .yt-area.has-results.modo-doblaje #ytResultArea{display:none !important}
+  .yt-area.has-results.modo-doblaje.con-texto #ytResultArea{display:flex !important}
   .yt-transcript-panel{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:rgba(11,13,18,.5)}
   .yt-transcript-panel > summary{
     padding:12px 14px;min-height:44px;display:flex;align-items:center;cursor:pointer;
@@ -6458,7 +6484,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
 
         <div class="yt-opts" aria-label="Opciones de la transcripción">
           <label class="task-field" for="ytLang">
-            <span class="task-field-label">Idioma del audio</span>
+            <span class="task-field-label">Idioma del video</span>
             <select id="ytLang" title="Detecta inglés, español u otros idiomas">
               <option value="auto">Detectar idioma</option>
               <option value="es">Español</option>
@@ -6466,6 +6492,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <option value="fr">Francés</option>
               <option value="de">Alemán</option>
               <option value="pt">Portugués</option>
+              <option value="it">Italiano</option>
             </select>
           </label>
           <label class="task-field" for="ytOutputLang">
@@ -6570,20 +6597,47 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             <button class="mini-btn" id="btnYtSyncClose" type="button" aria-label="Cerrar reproductor sincronizado">Cerrar</button>
           </div>
 
+          <div class="yt-progreso" id="ytDubProgreso" role="status" aria-live="polite" hidden>
+            <ol class="yt-pasos" id="ytDubPasos">
+              <li data-paso="leer" data-estado="espera"><span class="yt-paso-punto" aria-hidden="true"></span>Leer el video</li>
+              <li data-paso="traducir" data-estado="espera"><span class="yt-paso-punto" aria-hidden="true"></span>Traducir</li>
+              <li data-paso="voz" data-estado="espera"><span class="yt-paso-punto" aria-hidden="true"></span>Preparar la voz</li>
+            </ol>
+            <div class="prog-bar" aria-hidden="true"><div class="prog-fill" id="ytDubBarra"></div></div>
+            <p class="yt-progreso-texto"><span id="ytDubMensaje">Leyendo el video…</span><span class="yt-progreso-tiempo" id="ytDubTiempo">0 s</span></p>
+            <p class="yt-progreso-ayuda" id="ytDubAyuda">Mientras tanto puedes darle play: el video suena en su idioma y la voz en español entra sola cuando esté lista.</p>
+            <button class="mini-btn" id="ytDubCancelar" type="button">Cancelar</button>
+          </div>
+
           <div class="yt-player-shell">
             <div id="ytPlayer"></div>
             <p class="yt-caption" id="ytCaption" data-sync-caption aria-hidden="true" hidden></p>
           </div>
 
-          <div class="yt-confirm" id="ytLangConfirm" role="alertdialog" aria-labelledby="ytLangConfirmText" hidden>
-            <p id="ytLangConfirmText">¿Doblar este video de todos modos?</p>
+          <div class="yt-confirm" id="ytLangConfirm" role="group" aria-labelledby="ytLangConfirmText" hidden>
+            <p id="ytLangConfirmText">¿En qué idioma habla el video?</p>
             <div class="yt-confirm-acciones">
-              <button class="btn primary" id="ytLangConfirmYes" type="button">Doblar de todos modos</button>
+              <label class="yt-opcion" for="ytIdiomaElegido">Idioma del video
+                <select id="ytIdiomaElegido">
+                  <option value="en">Inglés</option>
+                  <option value="pt">Portugués</option>
+                  <option value="fr">Francés</option>
+                  <option value="de">Alemán</option>
+                  <option value="it">Italiano</option>
+                </select>
+              </label>
+              <button class="btn primary" id="ytLangConfirmYes" type="button">Doblar</button>
               <button class="mini-btn" id="ytLangConfirmNo" type="button">Cancelar</button>
             </div>
           </div>
 
           <div class="yt-sync-controls">
+            <button class="btn primary btn-doblar" id="ytDubReproducir" type="button" hidden>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"/></svg>
+              Ver con voz en español
+            </button>
+            <p class="yt-buffer" id="ytBuffer"></p>
+
             <button class="btn primary btn-doblar" id="ytDubbingBtn" type="button" aria-pressed="false" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
               <span id="ytDubbingLabel">Preparando voz en español…</span>
@@ -8809,8 +8863,18 @@ let limitesServidor = { maxAudioMb:50, maxAudioMinutes:30, maxYoutubeMinutes:90 
 async function fetchTimeout(url, opts={}, ms=3000){
   const ctrl = new AbortController();
   const t = setTimeout(()=>ctrl.abort(), ms);
+  // Una señal externa («Cancelar» del doblaje) también corta la petición.
+  const externa = opts.signal;
+  const alAbortar = () => ctrl.abort();
+  if(externa){
+    if(externa.aborted) ctrl.abort();
+    else externa.addEventListener('abort', alAbortar, { once: true });
+  }
   try{ return await fetch(url, {...opts, signal:ctrl.signal}); }
-  finally{ clearTimeout(t); }
+  finally{
+    clearTimeout(t);
+    if(externa) externa.removeEventListener('abort', alAbortar);
+  }
 }
 
 function buildAuthHeaders(extra = {}){
@@ -9001,9 +9065,12 @@ function actualizarBotonesServidor(){
   document.getElementById('btnFileTranscribe').disabled = !micOn || !document.getElementById('fileInput').files[0];
   const ytUrlActual = document.getElementById('ytUrl')?.value || '';
   const ytUrlValida = jgEsUrlYouTubeValida(ytUrlActual);
-  document.getElementById('ytBtn').disabled = !serverInfo.online || !ytUrlValida;
+  const ytBtnEl = document.getElementById('ytBtn');
+  // Mientras un proceso trabaja, el chequeo del servidor no puede re-habilitar su
+  // botón: un segundo clic lanzaría otra petición y gastaría otro crédito (auditoría H7).
+  ytBtnEl.disabled = ytBtnEl.dataset.ocupado === '1' || !serverInfo.online || !ytUrlValida;
   const ytSyncBtn = document.getElementById('ytSyncBtn');
-  if(ytSyncBtn) ytSyncBtn.disabled = !serverInfo.online || !ytUrlValida;
+  if(ytSyncBtn) ytSyncBtn.disabled = ytSyncBtn.dataset.ocupado === '1' || !serverInfo.online || !ytUrlValida;
   const ytHint = document.getElementById('ytActionHint');
   if(ytHint){
     ytHint.textContent = ytUrlValida
@@ -10239,15 +10306,17 @@ function jgPeorValidacion(a, b){
 }
 
 /** Una petición de traducción, con un reintento ante fallo pasajero. */
-async function jgPedirTraduccion(cuerpo, timeoutMs){
+async function jgPedirTraduccion(cuerpo, timeoutMs, signal = null){
   let ultimoError = null;
   for(let intento = 0; intento < 2; intento++){
+    if(signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
     if(intento) await new Promise((r) => setTimeout(r, 1200));
     try{
       const resp = await fetchApi('/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cuerpo),
+        signal,
       }, timeoutMs);
       if(resp.ok) return await resp.json();
       if(resp.status === 504 || resp.status === 502){
@@ -10258,6 +10327,7 @@ async function jgPedirTraduccion(cuerpo, timeoutMs){
       throw new Error(extraerDetalleError(err, 'No se pudo traducir el texto'));
     }catch(e){
       ultimoError = e;
+      if(signal?.aborted) throw e;
       // Un aborto por tiempo o un corte de red merecen el segundo intento.
       if(!/abort|timeout|tiempo|network|failed to fetch|tardó/i.test(e.message || '')) throw e;
     }
@@ -10304,7 +10374,7 @@ async function traducirTranscripcionDetallada(texto, origen, destino, opts = {})
   const timeoutMs = 90000;
 
   if(trozos.length === 1){
-    const data = await jgPedirTraduccion({ ...cuerpoBase, text: trozos[0] }, timeoutMs);
+    const data = await jgPedirTraduccion({ ...cuerpoBase, text: trozos[0] }, timeoutMs, opts.signal);
     const out = (data.text || '').trim();
     if(!out) throw new Error('El servicio devolvió una traducción vacía. Intenta de nuevo.');
     return { ...data, text: out, cleaned_source: textoLimpio };
@@ -10317,7 +10387,7 @@ async function traducirTranscripcionDetallada(texto, origen, destino, opts = {})
   };
   avisar();
   const partes = await jgMapaConLimite(trozos, TRAD_PETICIONES_EN_PARALELO, async (trozo) => {
-    const data = await jgPedirTraduccion({ ...cuerpoBase, text: trozo }, timeoutMs);
+    const data = await jgPedirTraduccion({ ...cuerpoBase, text: trozo }, timeoutMs, opts.signal);
     hechos += 1;
     avisar();
     return data;
@@ -13295,6 +13365,7 @@ document.getElementById('ytBtn').addEventListener('click', async ()=>{
   if(!serverInfo.online){ alert('Conecta primero el servidor backend.'); return; }
   const btn = document.getElementById('ytBtn');
   btn.disabled = true;
+  btn.dataset.ocupado = '1';
   btn.innerHTML = '<span class="spin"></span> Analizando…';
   const usaSubs = document.getElementById('ytSubPref').value === 'true';
   mostrarProgreso(
@@ -13457,6 +13528,7 @@ document.getElementById('ytBtn').addEventListener('click', async ()=>{
       btn.disabled = false;
       btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Transcribir video';
     }
+    delete btn.dataset.ocupado;
     actualizarBotonesServidor();
   }
 });
@@ -15844,7 +15916,7 @@ function ttsForzarIdiomaSiInglesPuro(text, language){
   return language;
 }
 
-async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintento = 0){
+async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintento = 0, signal = null){
   let text = ttsQueueText(item);
   let language = ttsQueueLang(item, ttsState.langHint || 'es');
   const locale = ttsResolveNeuralLocale(prefs, language === 'multi' ? null : language);
@@ -15882,7 +15954,7 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintent
     prefer_fish: !!prefs.preferFish,
     fish_voice: prefs.preferFish ? (prefs.fishId || '') : '',
   };
-  const resp = await ttsPedirAudio(cuerpo, reintento);
+  const resp = await ttsPedirAudio(cuerpo, reintento, signal);
   if(!resp.ok){
     let detail = resp.statusText || 'Error TTS';
     try{
@@ -15913,7 +15985,7 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintent
  * y el CDN lo guardan y la segunda vez suena al instante) y por POST cuando es
  * largo. Si el GET falla por lo que sea, reintenta por POST.
  */
-async function ttsPedirAudio(cuerpo, reintento = 0){
+async function ttsPedirAudio(cuerpo, reintento = 0, signal = null){
   const params = new URLSearchParams({
     text: cuerpo.text,
     voice: cuerpo.voice,
@@ -15932,15 +16004,16 @@ async function ttsPedirAudio(cuerpo, reintento = 0){
    * sin caché, para que la petición llegue de verdad al servicio. */
   if(reintento === 0 && params.length <= 1600){
     try{
-      const resp = await fetchApi('/tts?' + params, { method: 'GET' }, 90000);
+      const resp = await fetchApi('/tts?' + params, { method: 'GET', signal }, 90000);
       if(resp.ok) return resp;
-    }catch(_){ /* red o URL rechazada: seguimos por POST */ }
+    }catch(e){ if(signal?.aborted) throw e; /* red o URL rechazada: seguimos por POST */ }
   }
   return fetchApi('/tts', {
     method: 'POST',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cuerpo),
+    signal,
   }, 90000);
 }
 
@@ -18402,9 +18475,9 @@ function asegurarYoutubeSincronizado(){
         contexto: opciones.contexto || null,
         signal: opciones.signal,
       }),
-      generarAudioEspanol: (texto) => {
+      generarAudioEspanol: (texto, opciones = {}) => {
         const prefs = ttsPrefs();
-        return ttsFetchNeuralChunk({ text: texto, lang: 'es' }, prefs, 1, 'yt');
+        return ttsFetchNeuralChunk({ text: texto, lang: 'es' }, prefs, 1, 'yt', 0, opciones.signal);
       },
     });
   }).catch((error) => {

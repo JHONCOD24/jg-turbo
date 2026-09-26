@@ -71,6 +71,7 @@ export class DubbingEngine {
     servicio,
     onStatus = () => {},
     onMetricas = () => {},
+    onFin = () => {},
     crearAudio = () => new Audio(),
     reloj = null,
     colchonSegundos = 90,
@@ -79,6 +80,7 @@ export class DubbingEngine {
     this.servicio = servicio;
     this.onStatus = onStatus;
     this.onMetricas = onMetricas;
+    this.onFin = onFin;
     this.colchonSegundos = colchonSegundos;
     this.audio = crearAudio();
     this.audio.preload = 'auto';
@@ -106,18 +108,22 @@ export class DubbingEngine {
     });
   }
 
-  activarYReproducir() {
+/** Enciende la voz sin tocar el reproductor: si el video ya corre, entra en el siguiente tic. */
+  activar() {
     if (this.activo) return;
     this.activo = true;
     this.volumenOriginalPrevio = this.player.getVolume?.() ?? 100;
     if (this.player.isMuted?.()) this.player.unMute?.();
-    this.player.setVolume?.(this.volumenFondo);
     this.audio.volume = this.volumenVoz;
-    this.reproduciendo = true;
+    this.esperandoVoz = true;   // el original suena normal hasta que haya voz encima
     this.#actualizar(true);
+    if (this.reproduciendo) this.reloj.iniciar();
+  }
+
+  activarYReproducir() {
+    this.activar();
+    this.reproduciendo = true;
     this.reloj.iniciar();
-    // Se intenta iniciar el elemento de audio dentro del clic del usuario. Esto
-    // respeta el bloqueo de reproducción automática de los navegadores móviles.
     if (this.audio.src) this.audio.play().catch(() => {});
     this.player.playVideo();
     this.onStatus('Voz en español activa.', 'activo');
@@ -163,6 +169,7 @@ export class DubbingEngine {
   }
 
   #cambiarEstado(estado) {
+    if (estado === 'ended') this.onFin();
     this.reproduciendo = estado === 'playing';
     if (!this.activo) return;
     if (this.reproduciendo) {
@@ -273,25 +280,33 @@ export class DubbingEngine {
   }
 
   #resolverBloqueFaltante(indice) {
-    // Ya no se pausa el video: se deja sonar el audio original mientras llega la
-    // voz. Congelar la imagen era peor que un tramo en inglés, y el servicio de
-    // voz puede tardar hasta 41 s en un fragmento.
+    // Nunca se pausa el video: mientras falte la voz de este tramo suena el original.
     this.#audioOriginalEnPrimerPlano(false);
     this.audio.pause();
-    if (this.cargaPendiente === indice) return;
-    if (this.servicio.unidades[indice]?.estado === 'error') {
-      this.onStatus('Este tramo se quedó sin voz: sigue en su idioma original.', 'error');
+    const unidad = this.servicio.unidades[indice];
+    if (unidad.estado === 'sin_voz' || unidad.estado === 'error') {
+      if (this.avisoSinVoz !== indice) {
+        this.avisoSinVoz = indice;
+        this.onStatus('Este tramo suena en su idioma original.', 'error');
+      }
       return;
     }
+    if (unidad.estado === 'sin_traducir') {
+      if (this.avisoPreparando !== indice) {
+        this.avisoPreparando = indice;
+        this.onStatus('Preparando el doblaje de este tramo…', 'cargando');
+      }
+      return;   // el motor de preparación ya va por él: prioriza la posición actual
+    }
+    if (this.cargaPendiente === indice) return;
     this.cargaPendiente = indice;
-    this.onStatus('Alcanzamos la voz generada: suena el audio original un momento…', 'cargando');
+    this.onStatus('Preparando la voz de este tramo…', 'cargando');
     this.servicio.asegurar(indice).then(() => {
       this.cargaPendiente = null;
       this.#actualizar(true);
       if (this.activo) this.onStatus('Voz en español activa.', 'activo');
-    }).catch((error) => {
-      this.cargaPendiente = null;
-      this.onStatus(`No se pudo generar este tramo: ${error?.message || error}`, 'error');
+    }).catch(() => {
+      this.cargaPendiente = null;   // quedó en «error»: el siguiente tic lo anuncia
     });
   }
 
