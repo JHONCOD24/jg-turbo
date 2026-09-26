@@ -12,6 +12,42 @@ function detalleError(datos, respaldo) {
   return respaldo;
 }
 
+/* Lo que no es habla no se traduce ni se dice en voz alta (auditoría H10):
+ * etiquetas de sonido de YouTube («[music]», «[clears throat]»), efectos
+ * escritos entre paréntesis («(baaaaaaaaaaahhh!!)», «(APPLAUSE)»), lo cantado
+ * entre notas «♪…♪» y el «>>» con que los subtítulos automáticos marcan un
+ * cambio de hablante. Un paréntesis con habla normal se conserva. */
+const RE_CORCHETES = /\[[^\]]{0,60}\]/gu;
+const RE_PARENTESIS = /\(([^)]{0,40})\)/gu;
+const RE_CANTADO = /[♪♫♬][^♪♫♬]*[♪♫♬]/gu;
+const RE_NOTAS = /[♪♫♬]+/gu;
+const RE_CAMBIO_HABLANTE = /(^|\s)(?:>>|&gt;&gt;)+\s*/gu;
+const SONIDOS = /^(?:music|m[uú]sica|applause|aplausos?|laughter|laughs?|risas?|cheering|cheers|silence|silencio|inaudible|snorts?|sighs?|coughs?|clears throat|noise|ruido|sound|sonido|gasps?|groans?|screams?|suspira|tose)\b/iu;
+
+function esSonidoEntreParentesis(contenido) {
+  const texto = contenido.trim();
+  if (!texto) return true;
+  if (SONIDOS.test(texto)) return true;
+  if (/(\p{L})\1{3,}/u.test(texto)) return true;                      // «baaaaah», «ohhhh»
+  return /\p{L}/u.test(texto) && texto === texto.toUpperCase();        // «(MUSIC)», «(APLAUSOS)»
+}
+
+export function limpiarNoHabla(texto) {
+  return String(texto || '')
+    .replace(RE_CORCHETES, ' ')
+    .replace(RE_PARENTESIS, (entero, contenido) => (esSonidoEntreParentesis(contenido) ? ' ' : entero))
+    .replace(RE_CANTADO, ' ')
+    .replace(RE_NOTAS, ' ')
+    .replace(RE_CAMBIO_HABLANTE, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** true si, quitando los sonidos, no queda ni una letra ni una cifra. */
+export function esSoloSonido(texto) {
+  return !/[\p{L}\p{N}]/u.test(limpiarNoHabla(texto));
+}
+
 /** Duración mínima que se le deja a un segmento tras recortar su solape. */
 const DURACION_MINIMA_SEGMENTO = 0.25;
 
@@ -51,8 +87,8 @@ export function normalizarSegmentos(segmentos) {
       const endTime = Number.isFinite(endRecibido)
         ? endRecibido
         : startTime + (Number.isFinite(durationRecibida) ? durationRecibida : 0);
-      const text = String(segmento.text || '').replace(/\s+/g, ' ').trim();
-      if (!text || !Number.isFinite(startTime) || !Number.isFinite(endTime)) return null;
+      const text = limpiarNoHabla(String(segmento.text || '').replace(/\s+/g, ' '));
+      if (!text || esSoloSonido(text) || !Number.isFinite(startTime) || !Number.isFinite(endTime)) return null;
       const inicio = Math.max(0, startTime);
       const fin = Math.max(inicio + 0.01, endTime);
       return {

@@ -45,6 +45,20 @@ const de = await modulo('dubbingEngine.js');
   comprobar(de.percentil([1, 2, 3, 4, 100], 0.95) === 100, 'percentil: p95');
 }
 
+// ── T1.3: lo que no es habla no se traduce ni se lee ───────────────────
+{
+  comprobar(ts.limpiarNoHabla('with your production processes, [music]') === 'with your production processes,', 'quita [music] del final de una frase');
+  comprobar(ts.esSoloSonido('(baaaaaaaaaaahhh!!)'), '«(baaaah!!)» es un sonido, no diálogo');
+  comprobar(ts.esSoloSonido('[clears throat]'), '[clears throat] es un sonido');
+  comprobar(ts.esSoloSonido('♪ never gonna give you up ♪'), 'lo cantado entre ♪ no se dobla');
+  comprobar(ts.limpiarNoHabla('>> At this point, you are') === 'At this point, you are', 'el >> de cambio de hablante no se lee');
+  comprobar(ts.limpiarNoHabla('It was (and I mean it) great') === 'It was (and I mean it) great', 'un paréntesis con habla se conserva');
+  comprobar(ts.limpiarNoHabla('(APPLAUSE) Thank you') === 'Thank you', 'un (APLAUSO) en mayúsculas se quita');
+  const segs = ts.normalizarSegmentos([{ startTime: 0, endTime: 2, text: '[music]' }, { startTime: 2, endTime: 4, text: 'Hello there' }]);
+  comprobar(segs.length === 1 && segs[0].text === 'Hello there', 'un segmento que solo era sonido desaparece');
+  comprobar(ts.normalizarSegmentos(fixture.segments).length === 44, 'el fixture real conserva sus 44 segmentos (el [music] era parte de una frase)');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);
