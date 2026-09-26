@@ -1,5 +1,37 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Mejora 2026-09-26 · Velocidad del video a gusto de la persona
+
+### Pedido
+
+La velocidad solo ofrecía los pasos de YouTube (0.25/0.5/0.75/1/…/2): no se
+podía dejar en 0.97×, 0.85× u 0.80×. En videos muy rápidos, el español no cabe
+y la voz se acelera hasta sonar mal; al frenar el video, cada frase tiene más
+tiempo y el doblaje va más a tono. Los subtítulos no se tocaron.
+
+### Solución
+
+- Selector con presets finos (0.50–2: 0.80, 0.85, 0.90, 0.95, **0.97**, 1.05…)
+  más lo que ofrezca YouTube, y opción **«Otra…»** con campo libre (0.25–2,
+  acepta coma decimal; vacío = sin cambio).
+- Se recuerda entre videos (`jg_yt_rate`) y también lo que se cambie en los
+  controles del propio YouTube.
+- Si YouTube redondea un valor libre, se lee la tasa REAL y se muestra esa
+  (nunca miente). La voz en español la sigue sola: el motor ya multiplica por
+  la velocidad del video, sin cambios.
+- Lógica pura y probada en `js/youtube/syncEngine.js` (`tasasParaSelector`,
+  `normalizarTasa`, `presetDeTasa`).
+
+### Pruebas
+
+`test_youtube_doblaje.mjs` **111 OK** · `verificar_youtube_doblaje.mjs`
+**94 OK** (0.85 frena el video, 0.97 libre se aplica, tasa recordada) ·
+referencia 1.192 OK sin retroceder.
+
+### Despliegue
+
+`v148` / `jg-turbo-shell-v148` · `dpl_…` [PENDIENTE: anotar tras desplegar].
+
 ## Entrega 2026-09-26 · Doblaje v3.1: voz automática, 2 voces y sin frenos
 
 ### Pedido

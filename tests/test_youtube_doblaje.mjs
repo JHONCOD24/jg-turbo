@@ -326,6 +326,22 @@ const vd = await modulo('vocesDoblaje.js');
   comprobar(vd.vozParaUnidad({ hablante: 1 }, { vozPrincipal: 'A', vozSecundaria: 'B' }) === 'B', 'hablante 1 usa la secundaria');
 }
 
+// ── Velocidad a gusto de la persona (2026-09-26) ─────────────────────────
+const se = await modulo('syncEngine.js');
+{
+  const tasas = se.tasasParaSelector([0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
+  comprobar(tasas.includes(0.8) && tasas.includes(0.85) && tasas.includes(0.97), 'el selector trae presets finos (0.80, 0.85, 0.97)');
+  comprobar(tasas.includes(0.25) && tasas.includes(2), 'y conserva lo que ofrece YouTube');
+  comprobar(JSON.stringify(tasas) === JSON.stringify([...tasas].sort((a, b) => a - b)), 'ordenadas y sin repetidos');
+  comprobar(new Set(tasas).size === tasas.length, 'sin duplicados al unir con YouTube');
+  comprobar(se.normalizarTasa('0,97') === 0.97, 'acepta coma decimal (0,97)');
+  comprobar(se.normalizarTasa('0.85') === 0.85, 'acepta 0.85 tal cual');
+  comprobar(se.normalizarTasa('5') === 2 && se.normalizarTasa('0.1') === 0.25, 'recorta a 0.25–2');
+  comprobar(se.normalizarTasa('hola') === 1 && se.normalizarTasa('') === 1, 'sin número vuelve a 1x');
+  comprobar(se.presetDeTasa(tasas, 0.97) === 0.97, '0.97 cae en su preset');
+  comprobar(se.presetDeTasa(tasas, 0.93) === null, '0.93 va por valor libre');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

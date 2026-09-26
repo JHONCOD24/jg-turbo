@@ -578,6 +578,24 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── Velocidad a gusto de la persona (2026-09-26) ────────────────');
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    const presets = await pagina.locator('#ytSyncRate option').count();
+    comprobar('el selector trae presets finos además de los de YouTube', presets >= 12, `${presets}`);
+    await pagina.selectOption('#ytSyncRate', '0.85');
+    comprobar('elegir 0.85 frena el video a 0.85x', (await pagina.evaluate(() => window.__yt.tasa)) === 0.85);
+    comprobar('y se recuerda entre videos', (await pagina.evaluate(() => localStorage.getItem('jg_yt_rate'))) === '0.85');
+    await pagina.selectOption('#ytSyncRate', 'libre');
+    comprobar('«Otra…» muestra el campo libre', await pagina.isVisible('#ytRateCustomWrap'));
+    await pagina.fill('#ytRateCustom', '0.97');
+    await pagina.dispatchEvent('#ytRateCustom', 'change');
+    comprobar('0.97 libre se aplica al video', (await pagina.evaluate(() => window.__yt.tasa)) === 0.97);
+    comprobar('sin errores de JavaScript', reg.errores.length === 0, reg.errores.join(' | '));
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();

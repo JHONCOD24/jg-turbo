@@ -10,6 +10,9 @@ import { TranscriptionService, extraerVideoId } from './transcriptionService.js'
 import { TranslationService } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
 import { SyncEngine } from './syncEngine.js';
+import {
+  tasasParaSelector, normalizarTasa, presetDeTasa, VALOR_TASA_LIBRE,
+} from './syncEngine.js';
 import { TranscriptionDisplay } from './TranscriptionDisplay.js';
 import { DubbingService, agruparPorTiempo } from './dubbingService.js';
 import { DubbingEngine } from './dubbingEngine.js';
@@ -24,6 +27,7 @@ import {
 
 const CLAVE_VOL_VOZ = 'jg_yt_vol_voz';
 const CLAVE_VOL_ORIGINAL = 'jg_yt_vol_original';
+const CLAVE_TASA = 'jg_yt_rate';
 const ESPERA_REPRODUCTOR_MS = 8000;
 // 0,01 s de silencio: «desbloquea» el audio en Safari/iOS dentro del primer toque.
 const SILENCIO_WAV = 'data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
@@ -57,6 +61,7 @@ export function inicializarYoutubeSincronizado({
   const ui = {
     boton: $('ytSyncBtn'), url: $('ytUrl'), idioma: $('ytLang'), area: $('ytSyncArea'), titulo: $('ytSyncTitle'),
     estado: $('ytSyncStatus'), cerrar: $('btnYtSyncClose'), velocidad: $('ytSyncRate'),
+    tasaLibre: $('ytRateCustom'), tasaLibreWrap: $('ytRateCustomWrap'),
     botonVoz: $('ytDubbingBtn'), etiquetaVoz: $('ytDubbingLabel'), insignia: $('ytLangBadge'),
     caption: $('ytCaption'), toggleCaption: $('ytToggleCaption'),
     elegir: $('ytLangConfirm'), elegirTexto: $('ytLangConfirmText'), elegirSelect: $('ytIdiomaElegido'),
@@ -304,6 +309,7 @@ export function inicializarYoutubeSincronizado({
   function reiniciarVista() {
     ui.botonVoz.disabled = true;
     if (ui.voz2Wrap) ui.voz2Wrap.hidden = true;
+    if (ui.tasaLibreWrap) ui.tasaLibreWrap.hidden = true;
     $('ytDesdeInicio').hidden = true;
     ponerEstadoBotonVoz(false);
     ui.etiquetaVoz.textContent = 'Voz en español';
@@ -466,16 +472,61 @@ export function inicializarYoutubeSincronizado({
   }
 
   function configurarVelocidades(player) {
-    const tasas = player.getAvailablePlaybackRates();
-    ui.velocidad.replaceChildren(...tasas.map((tasa) => {
+    // Presets finos (0.80, 0.85, 0.97…) + lo que ofrezca YouTube + valor libre.
+    const tasas = tasasParaSelector(player.getAvailablePlaybackRates());
+    const opciones = tasas.map((tasa) => {
       const opcion = document.createElement('option');
       opcion.value = String(tasa);
       opcion.textContent = `${tasa}x`;
       return opcion;
-    }));
-    ui.velocidad.value = String(player.getPlaybackRate());
+    });
+    const libre = document.createElement('option');
+    libre.value = VALOR_TASA_LIBRE;
+    libre.textContent = 'Otra…';
+    opciones.push(libre);
+    ui.velocidad.replaceChildren(...opciones);
     ui.velocidad.disabled = false;
-    ui.velocidad.onchange = () => player.setPlaybackRate(ui.velocidad.value);
+    // Se recuerda entre videos: si la persona frenó un video rápido a 0.85,
+    // el siguiente arranca igual.
+    const guardada = normalizarTasa(leer(CLAVE_TASA));
+    aplicarTasa(player, guardada === 1 ? player.getPlaybackRate() : guardada);
+    ui.velocidad.onchange = () => {
+      if (ui.velocidad.value === VALOR_TASA_LIBRE) {
+        ui.tasaLibreWrap.hidden = false;
+        ui.tasaLibre.focus({ preventScroll: true });
+        return;
+      }
+      ui.tasaLibreWrap.hidden = true;
+      aplicarTasa(player, ui.velocidad.value);
+    };
+    ui.tasaLibre.onchange = () => aplicarTasa(player, ui.tasaLibre.value);
+  }
+
+  /** Fija la velocidad del video y deja el selector mostrando la tasa REAL. */
+  function aplicarTasa(player, valor) {
+    const tasa = normalizarTasa(valor);
+    player.setPlaybackRate(tasa);
+    guardar(CLAVE_TASA, String(tasa));
+    // YouTube puede redondear un valor libre: se muestra lo que quedó de verdad.
+    const real = Number(player.getPlaybackRate?.()) || tasa;
+    fijarTasaEnSelector(real);
+  }
+
+  /** El selector refleja la tasa real (de la persona o del propio YouTube). */
+  function fijarTasaEnSelector(velocidad) {
+    const tasas = [...ui.velocidad.options]
+      .map((o) => o.value)
+      .filter((v) => v !== VALOR_TASA_LIBRE);
+    const preset = presetDeTasa(tasas, velocidad);
+    if (preset === null) {
+      ui.velocidad.value = VALOR_TASA_LIBRE;
+      ui.tasaLibreWrap.hidden = false;
+      ui.tasaLibre.value = String(velocidad);
+    } else {
+      ui.velocidad.value = String(preset);
+      ui.tasaLibreWrap.hidden = true;
+    }
+    display.mostrarVelocidad(velocidad);
   }
 
   function textoDeError(error) {
@@ -596,7 +647,12 @@ export function inicializarYoutubeSincronizado({
     actual.sync = new SyncEngine({
       player, segmentos: datos.segmentos,
       onSegmentChange: (indice) => display.mostrar(indice),
-      onPlaybackRateChange: (velocidad) => { display.mostrarVelocidad(velocidad); ui.velocidad.value = String(velocidad); },
+      onPlaybackRateChange: (velocidad) => {
+        // Si la tasa cambió en los controles del propio YouTube, se recuerda
+        // igual: la próxima vez el video arranca a ese ritmo.
+        guardar(CLAVE_TASA, String(normalizarTasa(velocidad)));
+        fijarTasaEnSelector(velocidad);
+      },
     });
     actual.sync.iniciar();
     configurarVelocidades(player);
