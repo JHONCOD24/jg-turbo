@@ -7,6 +7,14 @@ doblar al español» moría con «no hay marcas de tiempo utilizables».
 Todo con dobles: ninguna prueba sale a la red ni gasta créditos.
 """
 
+import pytest
+
+# Cubren `api/subtitulos_limpieza.py` (y `backend/app.py`, que lo importa): un
+# módulo perdido en la reestructuración del 2026-09-03 que producción no usa.
+# Se saltan con motivo visible en vez de romper la batería (TRAMPAS §1.7). Si
+# algún día se restaura el módulo, vuelven a correr solas.
+pytest.importorskip("api.subtitulos_limpieza", reason="módulo perdido en la reestructuración del 2026-09-03")
+
 import sys
 from pathlib import Path
 

@@ -252,7 +252,7 @@ def test_la_via_gratuita_va_primero_y_no_gasta_creditos(monkeypatch):
     """Si YouTube responde, no se llama a Supadata (el plan gratis es de 100/mes)."""
     monkeypatch.setattr(
         api_module, "_subtitulos_via_transcript_api",
-        lambda video_id, idioma: ("Subtítulos gratis.", "es", []),
+        lambda video_id, idioma: ("Subtítulos gratis.", "es"),
     )
     monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
 
@@ -369,7 +369,7 @@ def test_sin_supadata_la_cadena_antigua_sigue_intacta(monkeypatch):
             }
 
     monkeypatch.setattr(
-        api_module, "_obtener_subtitulos", lambda info, idioma: ("Texto por yt-dlp.", "es", [])
+        api_module, "_obtener_subtitulos", lambda info, idioma: ("Texto por yt-dlp.", "es")
     )
     monkeypatch.setitem(sys.modules, "yt_dlp", types.SimpleNamespace(YoutubeDL=YdlConSubtitulos))
 
