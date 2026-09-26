@@ -41,7 +41,14 @@ function leerNumero(clave, porDefecto) {
 const formatoTiempo = (s) => (s < 60 ? `${Math.floor(s)} s` : `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, '0')} s`);
 const cancelado = () => new DOMException('Cancelado', 'AbortError');
 
-export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, generarAudioEspanol, estaServidorOnline }) {
+export function inicializarYoutubeSincronizado({
+  fetchApi,
+  traducirTexto,
+  generarAudioEspanol,
+  estaServidorOnline,
+  listarVoces = () => [],
+  vozPorDefecto = () => 'neural:auto:female',
+}) {
   const $ = (id) => document.getElementById(id);
   const ui = {
     boton: $('ytSyncBtn'), url: $('ytUrl'), idioma: $('ytLang'), area: $('ytSyncArea'), titulo: $('ytSyncTitle'),
@@ -51,7 +58,8 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
     elegir: $('ytLangConfirm'), elegirTexto: $('ytLangConfirmText'), elegirSelect: $('ytIdiomaElegido'),
     elegirSi: $('ytLangConfirmYes'), elegirNo: $('ytLangConfirmNo'),
     volVoz: $('ytVolVoz'), volVozVal: $('ytVolVozVal'), volOriginal: $('ytVolOriginal'), volOriginalVal: $('ytVolOriginalVal'),
-    metricas: $('ytSyncMetrics'), reproducir: $('ytDubReproducir'), buffer: $('ytBuffer'),
+      metricas: $('ytSyncMetrics'), reproducir: $('ytDubReproducir'), buffer: $('ytBuffer'),
+      voz: $('ytVozSelect'),
     tarjeta: $('ytDubProgreso'), barra: $('ytDubBarra'), mensaje: $('ytDubMensaje'), tiempo: $('ytDubTiempo'),
     ayuda: $('ytDubAyuda'), cancelar: $('ytDubCancelar'),
   };
@@ -79,7 +87,31 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
     guardar(CLAVE_VOL_ORIGINAL, ui.volOriginal.value);
     sesion?.motorVoz?.definirVolumenFondo(Number(ui.volOriginal.value));
   });
-  ui.toggleCaption.addEventListener('change', () => { ui.caption.hidden = !ui.toggleCaption.checked; });
+    ui.toggleCaption.addEventListener('change', () => { ui.caption.hidden = !ui.toggleCaption.checked; });
+
+    // ── Voz del doblaje (propia; la voz global no se toca) ─────────────────
+    if (ui.voz) {
+      const grupos = new Map();
+      for (const item of listarVoces()) {
+        const etiqueta = String(item.value || '').startsWith('fish:') ? `${item.label} (más lenta)` : item.label;
+        if (!grupos.has(item.group)) grupos.set(item.group, document.createElement('optgroup'));
+        grupos.get(item.group).label = item.group;
+        const opcion = document.createElement('option');
+        opcion.value = item.value;
+        opcion.textContent = etiqueta;
+        grupos.get(item.group).appendChild(opcion);
+      }
+      ui.voz.replaceChildren(...grupos.values());
+      const recordada = leer('jg_yt_voz');
+      const hayRecordada = [...ui.voz.options].some((o) => o.value === recordada);
+      ui.voz.value = hayRecordada ? recordada : vozPorDefecto();
+      ui.voz.addEventListener('change', () => {
+        guardar('jg_yt_voz', ui.voz.value);
+        if (sesion) sesion.voz = ui.voz.value;
+        // La voz nueva entra desde la próxima frase, sin cortar la actual.
+        if (sesion?.servicioVoz) sesion.servicioVoz.invalidarDesde((sesion.player?.getCurrentTime?.() || 0) + 1);
+      });
+    }
 
   // ── Progreso visible (TRAMPAS §8.1) ─────────────────────────────────────
   const progreso = {
@@ -311,14 +343,33 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
     const { vozHastaS, errores } = actual.motor.resumen();
     const voz = Number.isFinite(vozHastaS) ? `Voz lista para los próximos ${formatoTiempo(vozHastaS)}` : 'Voz lista hasta el final';
     const fallidos = errores.traduccion + errores.voz;
-    ui.buffer.textContent = fallidos ? `${voz} · ${fallidos} tramos sonarán en su idioma original` : voz;
+    /* El relevo de voz es un aviso permanente: la línea de estado se sobrescribe
+     * con cada cambio («Listo…», «Voz en español activa…») y la persona que
+     * vuelve al panel tiene que poder seguir viendo la causa real. */
+    const relevo = actual.avisoRespaldo ? ' · La voz Fish no responde (sin créditos o saturada): el doblaje sigue con la voz neural para no cambiar de timbre a media escena.' : '';
+    ui.buffer.textContent = fallidos ? `${voz} · ${fallidos} tramos sonarán en su idioma original${relevo}` : `${voz}${relevo}`;
+  }
+
+  /** Fish cayó a mitad de sesión: todo el resto con UNA voz neural, sin mezclar timbres (TRAMPAS §6.14). */
+  function pasarANeural(actual) {
+    if (!actual.voz?.startsWith('fish:') || actual.avisoRespaldo) return;
+    const genero = /male$/.test(actual.voz) || /valentino|narrador(?!a)/i.test(actual.voz) ? 'male' : 'female';
+    actual.voz = `neural:auto:${genero}`;
+    actual.avisoRespaldo = true;
+    actual.servicioVoz.invalidarDesde(actual.player.getCurrentTime() + 1);
+    ui.estado.textContent = 'La voz Fish no responde (sin créditos o saturada): el doblaje sigue con la voz neural para no cambiar de timbre a media escena.';
   }
 
   /** Preparación por ventanas (H3): lo de ahora primero; el resto, mientras se ve. */
   async function prepararDoblaje(actual, { datos, origen, tituloVideo, signal, traduccionesGuardadas = [] }) {
     const { player } = actual;
+    actual.voz = ui.voz.value;
     const limitador = crearLimitador();
-    const servicioVoz = new DubbingService({ generarAudio: (texto) => generarAudioEspanol(texto, { signal }), limitador });
+    const servicioVoz = new DubbingService({
+      generarAudio: (texto) => generarAudioEspanol(texto, { voz: actual.voz, signal }),
+      limitador,
+      onRespaldo: () => pasarANeural(actual),
+    });
     servicioVoz.definirUnidades(agruparPorTiempo(datos.segmentos));
     actual.servicioVoz = servicioVoz;
     const motor = new MotorPreparacion({

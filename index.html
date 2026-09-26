@@ -6656,6 +6656,9 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             </div>
             <div class="yt-sync-extras">
               <button class="mini-btn" id="ytDesdeInicio" type="button" hidden>Empezar desde el inicio</button>
+              <label class="yt-opcion" for="ytVozSelect">Voz
+                <select id="ytVozSelect" class="tts-voice-select" aria-label="Voz del doblaje"></select>
+              </label>
               <label class="yt-opcion" for="ytSyncRate">Velocidad
                 <select id="ytSyncRate" disabled><option value="1">1x</option></select>
               </label>
@@ -14808,6 +14811,29 @@ function ttsCatalogoVoces(){
   return lista;
 }
 
+/* Voces que ofrece el doblaje de YouTube: la biblioteca de la app más las voces
+ * neurales que el motor sigue usando. La biblioteca retiró los acentos de TODOS
+ * sus listados el 2026-09-03 («vienen reemplazos»), pero `neural:*` sigue sonando
+ * —es el valor por defecto del doblaje— y un selector vacío no deja elegir nada.
+ * Al llegar los reemplazos, `ttsCatalogoVoces()` los ofrecerá y aquí se
+ * descartan los duplicados. */
+function ttsVocesParaDoblaje(){
+  const vistas = new Set();
+  const salida = [];
+  const empujar = (item) => {
+    if(!item || vistas.has(item.value)) return;
+    vistas.add(item.value);
+    salida.push(item);
+  };
+  ttsCatalogoVoces().forEach(empujar);
+  Object.entries(TTS_NOMBRES_NEURAL).forEach(([acento, nombres]) => {
+    const pais = TTS_ACCENT_LABELS[acento] || acento;
+    empujar({ value: 'neural:' + acento + ':female', group: 'Neural', label: pais + ' · ' + nombres.female, corto: nombres.female + ' · ' + pais });
+    empujar({ value: 'neural:' + acento + ':male', group: 'Neural', label: pais + ' · ' + nombres.male, corto: nombres.male + ' · ' + pais });
+  });
+  return salida;
+}
+
 function ttsAplicarCatalogoFish(data){
   const fish = data && data.engines && data.engines.fish;
   if(!fish){
@@ -14891,6 +14917,22 @@ function ttsNormalizarVelocidad(rate){
   let r = parseFloat(rate);
   if(!Number.isFinite(r)) r = 1;
   return Math.round(Math.min(2, Math.max(0.75, r)) * 100) / 100;
+}
+
+/** Preferencias para una voz concreta: el doblaje de YouTube tiene la suya y no toca la global. */
+function ttsPrefsParaVoz(clave){
+  const base = ttsPrefs();
+  const voz = ttsParseVoz(clave);
+  if(!voz) return base;
+  const esFish = voz.provider === 'fish' && ttsFishInfo.active !== false;
+  return {
+    ...base,
+    gender: voz.gender,
+    locale: voz.locale || 'auto',
+    preferFish: esFish,
+    fishId: esFish ? voz.fishId : '',
+    voiceKey: ttsClaveVoz(voz),
+  };
 }
 
 function ttsSincronizarVelocidadUI(rate){
@@ -18476,9 +18518,18 @@ function asegurarYoutubeSincronizado(){
         contexto: opciones.contexto || null,
         signal: opciones.signal,
       }),
-      generarAudioEspanol: (texto, opciones = {}) => {
-        const prefs = ttsPrefs();
-        return ttsFetchNeuralChunk({ text: texto, lang: 'es' }, prefs, 1, 'yt', 0, opciones.signal);
+      generarAudioEspanol: (texto, opciones = {}) => ttsFetchNeuralChunk(
+        { text: texto, lang: 'es' },
+        opciones.voz ? ttsPrefsParaVoz(opciones.voz) : ttsPrefs(),
+        1, 'yt', 0, opciones.signal,
+      ),
+      listarVoces: () => ttsVocesParaDoblaje(),
+      vozPorDefecto: () => {
+        // Neural del mismo género que la voz global: rápida (0,4–1,1 s por frase) y estable.
+        const global = ttsVozActual();
+        return global.provider === 'neural'
+          ? ttsClaveVoz(global)
+          : ttsClaveVoz({ provider: 'neural', locale: 'auto', gender: global.gender });
       },
     });
   }).catch((error) => {

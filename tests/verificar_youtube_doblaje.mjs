@@ -406,6 +406,42 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── T3.2: la voz del doblaje se elige en el panel ────────────────');
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    const opciones = await pagina.locator('#ytVozSelect option').count();
+    comprobar('el panel ofrece las voces predefinidas de la app', opciones >= 4, `${opciones}`);
+    const masculina = await pagina.evaluate(() => [...document.querySelectorAll('#ytVozSelect option')].find((o) => /:male$/.test(o.value))?.value || '');
+    const antes = reg.tts.length;
+    await pagina.selectOption('#ytVozSelect', masculina);
+    await reproducirConVoz(pagina); await esperar(3000);
+    const nuevas = reg.tts.slice(antes);
+    comprobar('desde el cambio, las frases salen con la voz nueva', nuevas.length > 0 && nuevas.every((t) => t.voz === 'male'), nuevas.map((t) => t.voz).join(','));
+    comprobar('la voz del doblaje se recuerda aparte de la global', (await pagina.evaluate(() => localStorage.getItem('jg_yt_voz'))) === masculina);
+    await contexto.close();
+  }
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, { vozRespaldo: true, youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    // La página simulada no anuncia Fish (/tts-voices → {}): se activa a mano y se elige
+    // una voz Fish en el selector del doblaje, como haría la persona.
+    await pagina.waitForFunction(() => document.querySelectorAll('#ytVozSelect option').length > 0, null, { timeout: 10000 });
+    await pagina.evaluate(() => {
+      ttsFishInfo.active = true;   // `let` global de index.html: accesible por nombre
+      const selector = document.getElementById('ytVozSelect');
+      if (![...selector.options].some((o) => o.value === 'fish:jg-narradora')) selector.add(new Option('JG Narradora (más lenta)', 'fish:jg-narradora'));
+      selector.value = 'fish:jg-narradora';
+      selector.dispatchEvent(new Event('change'));
+    });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await reproducirConVoz(pagina); await esperar(3000);
+    const conFish = reg.tts.filter((t) => t.fish).length;
+    const ultimas = reg.tts.slice(-3);
+    comprobar('si Fish cae, el doblaje sigue entero con una sola voz neural (sin mezclar timbres)', conFish >= 1 && ultimas.every((t) => !t.fish), `${conFish} con Fish; últimas: ${ultimas.map((t) => t.fish).join(',')}`);
+    comprobar('y lo dice una vez, con la causa real', /Fish no responde/i.test(await pagina.textContent('#ytSyncArea')));
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();
