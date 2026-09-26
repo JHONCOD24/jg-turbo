@@ -152,6 +152,8 @@ node tests/test_pdf_traduccion.mjs       node tests/test_pdf_auditoria_p0.mjs
 node tests/test_pdf_voz.mjs              node tests/test_tts_narracion.mjs
 node tests/test_pdf_mejora_apartado.mjs  node tests/test_pdf_cola_correccion.mjs
 node tests/test_pdf_continuidad.mjs      node tests/test_pdf_caratula.mjs
+node tests/test_tts_voz_estable.mjs      node tests/test_tts_voces_biblioteca.mjs
+node tests/test_tts_pausas.mjs           node tests/test_youtube_doblaje.mjs
 ```
 
 Referencia al 2026-09-05 (v2.41.0): **1.120 comprobaciones OK, 0 fallos** (24 archivos).
@@ -172,6 +174,7 @@ se cortó.
 | `node tests/verificar_pdf_unir_palabras.mjs` | «Unir palabras» sobre una palabra partida de verdad, con su Deshacer | 18 |
 | `node tests/verificar_arranque_ligero.mjs` | **Obligatoria al tocar lo que se carga al arrancar**: que el lector de PDF no viaje con quien solo abre la app | 7 |
 | `node tests/verificar_movil_pantalla.mjs` | **Obligatoria al tocar alturas, scroll o zona segura**: quién desplaza, que se llegue al final del contenido y que no sobre hueco, en 5 pestañas × 4 teléfonos | 62 |
+| `node tests/verificar_youtube_doblaje.mjs` | **Obligatoria al tocar el doblaje de YouTube**: idioma antes del texto, ventana de preparación (voz sin traducirlo todo), cancelar que corta verdad, caché por video, voz/subtítulos/pantalla completa, permiso de IA y texto completo bajo demanda — todo con API y reproductor simulados | 81 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -196,6 +199,17 @@ obliga a repartir las páginas otra vez y deshace el salto de página. Ver `TRAM
 - Backend local: `backend/app.py` (faster-whisper)
 
 ## YouTube (leer antes de "arreglar" la extracción)
+
+**Doblaje v3 (2026-09-26):** el idioma se decide ANTES de pedir el texto
+(persona → YouTube Data API `defaultAudioLanguage` si hay `YOUTUBE_DATA_API_KEY` →
+título del video → pistas) y se le pide a Supadata explícito: con doblaje automático
+de YouTube «la primera pista» puede ser árabe en un video en inglés. La traducción y la
+voz se preparan por ventanas alrededor de la posición (`js/youtube/motorPreparacion.js`:
+traducción 180 s, voz 90 s, ≤ 18 síntesis/min por la cuota de Azure F0). Nunca volver a
+traducir el video entero antes de reproducir, ni a mover el reloj a `requestAnimationFrame`.
+Sin subtítulos: `409 sin_subtitulos` y permiso con créditos estimados. Pruebas:
+`tests/test_youtube_doblaje.mjs`, `tests/verificar_youtube_doblaje.mjs`,
+`backend/tests/test_youtube_idioma_origen.py`. Detalle: `CAMBIOS_YOUTUBE.md`.
 
 **Estado desde 2026-08-01: la extracción es automática otra vez.** Documento
 maestro: **`CAMBIOS_YOUTUBE.md`** (diagnóstico medido, alternativas con fuente,
