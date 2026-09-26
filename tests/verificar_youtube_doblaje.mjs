@@ -466,6 +466,30 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── T3.4: panel claro en teléfono, tableta y escritorio ─────────');
+  for (const vista of [{ width: 360, height: 740 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1366, height: 768 }]) {
+    const { contexto, pagina } = await abrir(navegador, { viewport: vista });
+    await pegarEnlace(pagina);
+    const desborde = await pagina.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    comprobar(`${vista.width} px: sin desborde horizontal`, desborde <= 1, `${desborde} px`);
+    comprobar(`${vista.width} px: «Doblar al español» es la acción principal`, /\bprimary\b/.test(await pagina.getAttribute('#ytSyncBtn', 'class')));
+    if (vista.width < 1024) {
+      const pequenos = await pagina.evaluate(() => [...document.querySelectorAll('#panelYt button, #panelYt select, #panelYt input, #panelYt summary')]
+        .filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44)
+        .map((e) => e.id || e.className || e.tagName));
+      comprobar(`${vista.width} px: todo lo tocable mide ≥ 44 px`, pequenos.length === 0, pequenos.join(', '));
+    }
+    await contexto.close();
+  }
+  {
+    const { contexto, pagina, reg } = await abrir(navegador);
+    await pegarEnlace(pagina);
+    await pagina.click('.yt-opciones-texto > summary');
+    await pagina.click('#ytBtn'); await esperar(2500);
+    comprobar('«Solo el texto» sigue funcionando (flujo clásico)', reg.youtube.some((p) => p.cuerpo.fast_mode === true));
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();

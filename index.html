@@ -1417,6 +1417,8 @@
 
   .yt-sync-action{margin-top:8px}
   .yt-sync-action .btn{width:100%;justify-content:center}
+  .yt-area.has-results .yt-opciones-texto{display:none !important}
+  .yt-opciones-texto > summary{min-height:44px;display:flex;align-items:center}
   .yt-sync-area{
     margin-bottom:16px;padding:14px;border:1px solid rgba(39,225,193,.26);
     border-radius:16px;background:linear-gradient(145deg,rgba(39,225,193,.07),rgba(22,27,38,.96));
@@ -6476,8 +6478,8 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     <div class="card">
       <div class="yt-area">
         <div class="panel-lead">
-          <h2>Texto de un video de YouTube</h2>
-          <p>Pega el enlace e intenta transcribir. Si YouTube bloquea el servidor, usa <b>Pegar transcripción</b> (copia el texto en YouTube y pégalo aquí; luego puedes traducirlo).</p>
+          <h2>Mira videos de YouTube en español</h2>
+          <p>Pega el enlace y pulsa <b>Doblar al español</b>: la voz empieza en segundos y el resto se prepara mientras ves. Funciona con videos en inglés, portugués, francés, alemán o italiano.</p>
         </div>
 
         <div id="ytServerWarn" class="notice warn" style="margin:0 0 12px">
@@ -6492,7 +6494,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           </label>
         </div>
 
-        <div class="yt-opts" aria-label="Opciones de la transcripción">
+        <div class="yt-opts" aria-label="Idioma del video">
           <label class="task-field" for="ytLang">
             <span class="task-field-label">Idioma del video</span>
             <select id="ytLang" title="Detecta inglés, español u otros idiomas">
@@ -6505,40 +6507,46 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <option value="it">Italiano</option>
             </select>
           </label>
-          <label class="task-field" for="ytOutputLang">
-            <span class="task-field-label">Idioma del texto final</span>
-            <select id="ytOutputLang" title="Idioma del texto resultante">
-              <option value="same">Mismo idioma del audio</option>
-              <option value="es">Español</option>
-              <option value="en">Inglés</option>
-              <option value="fr">Francés</option>
-              <option value="pt">Portugués</option>
-              <option value="de">Alemán</option>
-            </select>
-          </label>
-          <label class="task-field" for="ytSubPref">
-            <span class="task-field-label">Cómo obtener el texto</span>
-            <select id="ytSubPref">
-              <option value="true">Rápido: subtítulos si hay (recomendado)</option>
-              <option value="false">Whisper turbo (sin subtítulos / más lento)</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="task-action">
-          <button class="btn primary" id="ytBtn" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Transcribir video
-          </button>
-          <span class="task-action-hint" id="ytActionHint">Primero pega un enlace de YouTube válido.</span>
         </div>
 
         <div class="task-action yt-sync-action">
-          <button class="btn" id="ytSyncBtn" type="button" disabled>
-            Traducir y doblar al español
+          <button class="btn primary" id="ytSyncBtn" type="button" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+            Doblar al español
           </button>
-          <span class="task-action-hint">Traduce fielmente el inglés y genera una voz española natural, sin reescribir el contenido.</span>
+          <span class="task-action-hint">Traducción fiel y voz natural, con las voces de la app. Tú decides si ver subtítulos.</span>
         </div>
+
+        <details class="yt-opciones-texto">
+          <summary>Solo el texto (sin doblaje)</summary>
+          <div class="yt-opts">
+            <label class="task-field" for="ytOutputLang">
+              <span class="task-field-label">Idioma del texto final</span>
+              <select id="ytOutputLang" title="Idioma del texto resultante">
+                <option value="same">Mismo idioma del audio</option>
+                <option value="es">Español</option>
+                <option value="en">Inglés</option>
+                <option value="fr">Francés</option>
+                <option value="pt">Portugués</option>
+                <option value="de">Alemán</option>
+              </select>
+            </label>
+            <label class="task-field" for="ytSubPref">
+              <span class="task-field-label">Cómo obtener el texto</span>
+              <select id="ytSubPref">
+                <option value="true">Rápido: subtítulos si hay (recomendado)</option>
+                <option value="false">Whisper turbo (sin subtítulos / más lento)</option>
+              </select>
+            </label>
+          </div>
+          <div class="task-action">
+            <button class="btn primary" id="ytBtn" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Transcribir video
+            </button>
+            <span class="task-action-hint" id="ytActionHint">Primero pega un enlace de YouTube válido.</span>
+          </div>
+        </details>
 
         <!-- Red de seguridad: el servidor ya trae el texto solo. Esto queda
              plegado y cerrado para los casos raros (video privado, sin audio
@@ -9091,7 +9099,7 @@ function actualizarBotonesServidor(){
   const ytHint = document.getElementById('ytActionHint');
   if(ytHint){
     ytHint.textContent = ytUrlValida
-      ? (serverInfo.online ? 'Enlace listo. Revisa las opciones y transcribe el video.' : 'El enlace es válido; falta conectar el servidor.')
+      ? (serverInfo.online ? 'Enlace listo. Pulsa «Doblar al español» o saca solo el texto.' : 'El enlace es válido; falta conectar el servidor.')
       : 'Primero pega un enlace de YouTube válido.';
   }
   document.getElementById('pbTranscribe').disabled = !micOn || !ultimaGrabacionBlob;
