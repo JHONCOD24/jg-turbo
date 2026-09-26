@@ -247,6 +247,21 @@ const io = await modulo('idiomaOrigen.js');
   comprobar(unidades.some((u) => u.duration > u.finHabla - u.startTime), 'las frases usan el silencio prestado como tiempo extra');
 }
 
+// ── T3.6: traducir todo reaprovechando lo ya traducido ────────────────────
+{
+  const segmentos = ts.normalizarSegmentos(fixture.segments);
+  const pedidos = [];
+  const servicio = new tr.TranslationService({ traducirTexto: async (texto) => {
+    const piezas = [...texto.matchAll(/\[\[JG_SEG_(\d{6})\]\]\n([^\[]*)/g)];
+    pedidos.push(piezas.map((m) => Number(m[1])));
+    return { text: piezas.map((m) => `[[JG_SEG_${m[1]}]]\nES ${m[2].trim()}`).join('\n\n') };
+  } });
+  const ya = new Map(segmentos.slice(0, 10).map((s, i) => [i, `YA ${i}`]));
+  const todo = await servicio.traducirTodo(segmentos, { ya });
+  comprobar(todo.size === segmentos.length && todo.get(3) === 'YA 3', 'traducirTodo completa el texto y conserva lo ya traducido');
+  comprobar(pedidos.flat().every((i) => i >= 10), 'no vuelve a pagar lo que el doblaje ya tradujo');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

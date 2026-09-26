@@ -161,51 +161,21 @@ export class TranslationService {
     return new Map(indices.map((indice) => [indice, null]));
   }
 
-  /** Traduce sin modificar startTime/endTime; un fallo queda aislado al segmento. */
-  async traducirSegmentos(segmentos, { origen = 'en', signal = null, onProgress = () => {} } = {}) {
-    const lotes = crearLotes(segmentos);
-    const resultados = new Array(segmentos.length);
-    let terminados = 0;
-    onProgress(0, segmentos.length);
-
-    await mapaConLimite(lotes, CONCURRENCIA, async (lote) => {
-      if (signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
-      let traducciones = null;
-      // Dos intentos: la IA acorta el lote de forma intermitente, así que
-      // reintentar arregla la mayoría de los casos sin bajar a traducir suelto.
-      for (let intento = 0; intento < 2 && !traducciones; intento += 1) {
-        try {
-          traducciones = await this.pedirLote(lote, { origen, signal });
-        } catch (error) {
-          if (signal?.aborted) throw error;
-          traducciones = null;
-        }
-      }
-
-      for (const { indice, segmento } of lote) {
-        let text = traducciones?.get(indice) || '';
-        let translationError = '';
-        if (!text) {
-          try {
-            const respuesta = await this.traducirTexto(segmento.text, { origen, signal });
-            text = String(respuesta?.text ?? respuesta ?? '').trim();
-            if (!text) throw new Error('Traducción vacía.');
-          } catch (error) {
-            if (signal?.aborted) throw error;
-            text = segmento.text;
-            translationError = error?.message || 'No se pudo traducir este segmento.';
-          }
-        }
-        resultados[indice] = {
-          ...segmento,
-          text,
-          originalText: segmento.text,
-          ...(translationError ? { translationError } : {}),
-        };
-        terminados += 1;
-        onProgress(terminados, segmentos.length);
-      }
-    });
-    return resultados;
+  /** Todo el video, lote a lote, reaprovechando lo ya traducido (`ya`). */
+  async traducirTodo(segmentos, { origen = 'en', tituloVideo = '', signal = null, ya = new Map(), onProgress = () => {} } = {}) {
+    const resultado = new Map(ya);
+    const lotes = crearLotes(segmentos)
+      .map((lote) => lote.map(({ indice }) => indice).filter((indice) => !resultado.has(indice)))
+      .filter((indices) => indices.length);
+    let hechos = 0;
+    onProgress(hechos, lotes.length);
+    for (const indices of lotes) {
+      const mapa = await this.traducirLote(indices, segmentos, { origen, tituloVideo, signal });
+      for (const [indice, texto] of mapa) resultado.set(indice, texto);
+      hechos += 1;
+      onProgress(hechos, lotes.length);
+    }
+    return resultado;
   }
+
 }

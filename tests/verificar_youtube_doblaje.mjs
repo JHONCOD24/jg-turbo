@@ -526,6 +526,20 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── T3.6: el texto traducido completo, solo si se pide ──────────');
+  {
+    const { contexto, pagina } = await abrir(navegador, { youtube: () => respuestaYoutube({ segmentos: segmentosRepetidos(3), fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    comprobar('mientras no se pide, no aparece una transcripción vacía', !(await pagina.isVisible('#ytResultArea')));
+    await pagina.click('#ytTranscriptPanel > summary');
+    await pagina.click('#ytTextoCompleto');
+    await pagina.waitForFunction(() => (document.getElementById('ytOutput').value.match(/ES /g) || []).length >= 130, null, { timeout: 30000 }).catch(() => {});
+    const cuenta = await pagina.evaluate(() => (document.getElementById('ytOutput').value.match(/ES /g) || []).length);
+    comprobar('el texto completo queda traducido en el cuadro de resultado', cuenta >= 130, `${cuenta}`);
+    comprobar('y se muestra, listo para copiar, descargar o escuchar', await pagina.isVisible('#ytResultArea'));
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();

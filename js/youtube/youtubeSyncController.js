@@ -144,6 +144,36 @@ export function inicializarYoutubeSincronizado({
     $('ytNotaIOS').hidden = false;
   }
 
+  $('ytTextoCompleto').addEventListener('click', async () => {
+    const actual = sesion;
+    if (!actual?.motor || actual.textoEnCurso) return;
+    actual.textoEnCurso = true;
+    const boton = $('ytTextoCompleto');
+    const aviso = $('ytTextoProgreso');
+    boton.disabled = true;
+    try {
+      const mapa = await traductor.traducirTodo(actual.segmentos, {
+        origen: actual.origen, tituloVideo: actual.tituloVideo, signal: actual.controlador.signal,
+        ya: actual.motor.traducciones,
+        onProgress: (hechos, total) => { aviso.textContent = total ? `Traduciendo el texto completo: ${hechos} de ${total} partes…` : ''; },
+      });
+      for (const [indice, texto] of mapa) actual.motor.traducciones.set(indice, texto);
+      const texto = actual.segmentos.map((s, i) => mapa.get(i) ?? s.text).join(' ').replace(/\s+/g, ' ').trim();
+      const salida = $('ytOutput');
+      salida.value = texto;
+      salida.dispatchEvent(new Event('input'));
+      $('ytCount').textContent = `${texto.split(/\s+/).filter(Boolean).length} palabras · traducción fiel`;
+      document.querySelector('.yt-area')?.classList.add('con-texto');
+      aviso.textContent = 'Listo: el texto completo está abajo.';
+      $('ytResultArea').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } catch (error) {
+      if (!actual.controlador.signal.aborted) aviso.textContent = `No se pudo terminar el texto: ${error?.message || error}`;
+    } finally {
+      actual.textoEnCurso = false;
+      boton.disabled = false;
+    }
+  });
+
   // ── Progreso visible (TRAMPAS §8.1) ─────────────────────────────────────
   const progreso = {
     cronometro: null,
@@ -250,6 +280,7 @@ export function inicializarYoutubeSincronizado({
       const shell = ui.area.querySelector('.yt-player-shell');
       shell?.classList.remove('yt-pantalla-completa');
       $('ytPantallaCompleta')?.setAttribute('aria-pressed', 'false');
+      $('ytTextoProgreso').textContent = '';
       clearTimeout(actual.temporizadorCache);
       clearInterval(actual.relojCache);
       guardarSesion(actual);
@@ -424,6 +455,9 @@ export function inicializarYoutubeSincronizado({
   /** Preparación por ventanas (H3): lo de ahora primero; el resto, mientras se ve. */
   async function prepararDoblaje(actual, { datos, origen, tituloVideo, signal, traduccionesGuardadas = [] }) {
     const { player } = actual;
+    actual.segmentos = datos.segmentos;
+    actual.origen = origen;
+    actual.tituloVideo = tituloVideo;
     actual.voz = ui.voz.value;
     const limitador = crearLimitador();
     const servicioVoz = new DubbingService({
