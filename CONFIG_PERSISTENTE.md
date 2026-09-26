@@ -65,6 +65,14 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
   extraer un PDF; se borra al terminar o al avisar.
 - `jg_config_bundle` (snapshot JSON versionado)
 - `jg_glossary_seeded` (flag: ya se sembró glosario por defecto)
+- `jg_yt_vol_voz` (0–100): volumen de la voz en español del doblaje de YouTube
+  (existía sin documentar; H30).
+- `jg_yt_vol_original` (0–60): volumen del audio original bajo la voz doblada
+  (existía sin documentar; H30).
+- `jg_yt_voz` (`neural:auto:female`, `neural:es-CO:male`, `fish:jg-narradora`…):
+  voz propia del doblaje de YouTube. No toca la voz global (`jg_tts_voice`).
+- `jg_yt_subtitulos` (`1` / `0`): si se ven los subtítulos del doblaje sobre el
+  video.
 
 ## Reglas obligatorias para agentes / futuros LLM
 
@@ -109,6 +117,16 @@ Los libros viven en `jg-turbo-pdf` (versión de base **5**, sin subirla en v2.37
 
 No se renombran almacenes ni índices. Un deploy no borra la biblioteca. Un libro v5 con PDF se
 reextrae al abrirlo; uno sin PDF ni manifiesto se marca `needsSource` y no se finge corregido.
+
+## Caché del doblaje de YouTube (IndexedDB `jg_youtube`)
+
+Doblaje v3 (2026-09-26): base **`jg_youtube`**, versión **1**, almacén
+**`doblajes`** (ver `js/youtube/cacheDoblaje.js`). Por video se guardan los
+segmentos, las traducciones y la posición de reproducción — **nunca audios**
+(las voces son `blob:` y se regeneran). Máximo **20 videos**; al pasar de ahí se
+descartan los más antiguos. Reabrir un video ya doblado no gasta créditos de
+Supadata ni traducciones y retoma donde ibas. Un deploy no la borra; si se
+limpian los datos del sitio, la siguiente vez se vuelve a preparar sin más.
 
 ## Qué NO es persistente (normal)
 

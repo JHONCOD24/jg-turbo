@@ -571,6 +571,12 @@ este repo ni en el respaldo**. Es anterior a septiembre de 2026 (comprobado con 
 **Regla:** una prueba que no compila es ruido que enseña a ignorar los fallos. Arréglala o
 retírala, pero no la dejes ahí.
 
+**Actualización (2026-09-26, doblaje de YouTube):** `test_marcas_de_tiempo.py` y
+`test_ai_youtube.py` quedaron con `pytest.importorskip("api.subtitulos_limpieza", reason=…)`
+al principio, antes de cualquier import del proyecto: se saltan **con motivo visible** en
+lugar de romper la recolección, y si algún día se restaura el módulo perdido vuelven a
+correr solas.
+
 ---
 
 ## 2. Cuando una prueba antigua falla, empieza por suponer que tiene razón
@@ -1349,3 +1355,39 @@ reparación de capítulos solo actúa dentro de la misma versión
 (`remoto.actualizado === local.actualizado`) y `importarPartes` descarta lo
 más viejo que lo local; cada sync unifica duplicados y purga lápidas de
 +30 días (`eliminarDuplicadosLocales`, `purgarLapidasAntiguas`).
+
+
+---
+
+## Trampas medidas en el doblaje de YouTube (2026-09-26)
+
+## Con doblaje automático, «la primera pista automática» ya no es el idioma del audio
+
+**Síntoma (2026-09-25):** un video en inglés de 88 min se rechazó con «El audio de este
+video está en árabe (62 %)». **Causa:** YouTube dobla videos solo y cada idioma doblado
+trae su propia pista `asr` (7 en `dNWkwrqAkcM`, la primera árabe); Supadata sin `lang`
+entrega «la primera disponible». **Regla:** el idioma se decide antes de pedir el texto
+(persona → YouTube Data API → título → pistas) y se pide explícito; con varias pistas
+automáticas no se deduce nada de ellas. Pruebas: `backend/tests/test_youtube_idioma_origen.py`.
+
+## `requestAnimationFrame` se congela: un motor de audio no puede depender de él
+
+**Síntoma (2026-09-25):** con la ventana tapada, el doblaje no llamó a `play()` ni una
+vez en 29 s. **Causa:** rAF no dispara si la página no se pinta (medido: 0 disparos en
+1,5 s frente a 16 de un `setInterval` de 100 ms). **Regla:** relojes de audio con
+`setInterval` (`js/youtube/reloj.js`); rAF solo para adornos visuales. Y al probar en
+un navegador oculto, mide rAF antes de concluir que «no suena».
+
+## Azure F0 admite 20 síntesis por minuto: precargar un video entero es chocar con el techo
+
+**Síntoma:** el doblaje precargaba la voz de todo el video con 2 hilos (más de 100
+síntesis por minuto). **Causa:** límite no ajustable del plan gratuito de Azure Speech.
+**Regla:** la voz se genera por ventana (90 s por delante) y con limitador de 18 por
+minuto (`js/youtube/limitador.js`); lo ya escuchado se libera.
+
+## Traducir el video entero antes de dejar escuchar no escala
+
+**Síntoma:** un video de 88 min exigía 351 lotes y 702 llamadas a la IA antes del primer
+sonido (17–47 min). **Regla:** se traduce alrededor de la posición (180 s por delante),
+sin segunda pasada de revisión en el doblaje y partiendo un lote fallido en mitades
+(nunca frase por frase sin contexto: «trunks» → «troncos»).

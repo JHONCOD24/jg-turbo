@@ -1,5 +1,121 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Entrega 2026-09-26 · Doblaje v3: fiable, progresivo y multilingüe
+
+### Pedido
+
+Implementar el plan `PLAN_YOUTUBE_DOBLAJE_IMPLEMENTACION_LLM.md` (auditoría
+`AUDITORIA_YOUTUBE_2026-09-25.md`) tal cual: el doblaje de YouTube tenía que
+funcionar en videos reales, con el idioma correcto, sonando en segundos y sin
+gastar créditos ni cuota de más.
+
+### Causas verificadas (con sus cifras)
+
+- **H1 · el idioma se decidía mal.** Un video en inglés de 88 min se rechazó con
+  «El audio de este video está en árabe (62 %)»: YouTube dobla videos solo y cada
+  idioma doblado trae su pista automática (`asr`) — medido **7 pistas en
+  `dNWkwrqAkcM`, la primera árabe** — y a Supadata se le pedía el texto **sin
+  `lang`**, así que devolvía «la primera disponible».
+- **H3 · se traducía el video entero antes del primer sonido.** Un video de
+  88 min exigía **351 lotes y 702 llamadas a la IA** (17–47 min esperando) y otra
+  pasada de revisión duplicaba el tiempo de cada lote (2,5–2,8 s → 1,4 s medidos
+  sin ella).
+- **H4 · no había progreso real.** Un texto fijo «Procesando…» durante 27 s, sin
+  barra, pasos ni tiempo; el mensaje final quedaba fuera de pantalla y el botón
+  de voz decía «Preparando…» incluso tras un rechazo.
+- **H5 · el motor se congelaba con la pestaña tapada.** Con la ventana oculta,
+  `requestAnimationFrame` no disparó **ni una vez en 29 s** (0 disparos en 1,5 s
+  frente a 16 de un `setInterval` de 100 ms), así que la voz no llamaba a
+  `play()`.
+
+### Solución por fase
+
+- **Fase 0 · cimientos.** Pruebas del backend al contrato vigente de 2 valores
+  (las 4 antiguas esperaban un contrato perdido en la reestructuración del
+  2026-09-03) y pruebas huérfanas saltadas con motivo visible. Arnés propio del
+  doblaje con fixture real (`youtube_dNWkwrqAkcM_90s.json`, 44 segmentos) y API
+  + reproductor simulados: **sin red y sin créditos**.
+- **Fase 1 · fiabilidad.** El idioma se decide ANTES de pedir el texto (persona →
+  YouTube Data API `defaultAudioLanguage` → título → pistas; alfabeto como señal
+  en `deteccion_idioma.py`) y se pide explícito. Sin subtítulos: `409` con
+  créditos estimados, nunca IA sin permiso. Los sonidos (`[music]`, `(baaaah!!)`,
+  `>>`) no se traducen ni se leen. Reloj con `setInterval`
+  (`js/youtube/reloj.js`) y texto sin parpadeo. Sesión cancelable con `AbortSignal`
+  de verdad (botones ocupados: un clic = una petición). Progreso visible y vivo
+  (pasos, barra, tiempo). El reproductor nace sin subtítulos de YouTube encima.
+- **Fase 2 · progresivo.** Las frases de voz se definen por el tiempo del
+  original (con silencio prestado); traducción por lotes con el contexto vecino y
+  modo literal que no borra horas del diálogo («a las 10:30»); limitador, planificador
+  y motor por ventanas (`motorPreparacion.js`: traducción 180 s, voz 90 s,
+  ≤ 18 síntesis/min por la cuota de Azure F0); controlador nuevo: la voz suena sin
+  traducir el video entero; velocidad estable 0,9×–1,25×.
+- **Fase 3 · la experiencia.** Caché por video en IndexedDB (`jg_youtube`):
+  reabrir no gasta créditos y retoma donde ibas. Voz propia del doblaje en el
+  panel (clave `jg_yt_voz`; si Fish cae, relevo a neural con aviso honesto y sin
+  mezclar timbres). Subtítulos a elección recordados, pantalla completa con
+  subtítulos propios y modo iPhone (el original se silencia mientras suena la
+  voz). El panel pone el doblaje primero y deja el texto como opción. Permiso con
+  el costo estimado a la vista antes de transcribir con IA. El texto traducido
+  completo se pide con un botón y reaprovecha lo que el doblaje ya tradujo.
+
+### Contrato de API (todo aditivo)
+
+- `POST /api/youtube` acepta además `title_hint`, `duration_hint_s` y
+  `allow_ai_generation` (`false` = solo subtítulos existentes; nunca gasta IA sin
+  permiso). Devuelve además `requested_lang`, `language_source`
+  (`usuario|youtube|titulo|proveedor|audio`), `language_resolution_confidence`,
+  `available_langs`, `duration_s` y `audio_language*`.
+- **`409 {code: "sin_subtitulos", duration_s, estimated_credits}`** cuando no hay
+  subtítulos y no se autorizó IA (2 créditos/min).
+- `POST /api/translate` acepta además `contexto_previo`/`contexto_siguiente`
+  (solo desambiguan; nunca se traducen) y `literal: true` ya no borra horas del
+  diálogo.
+- `GET /api/health` informa además `youtube_data_api` (si hay
+  `YOUTUBE_DATA_API_KEY`).
+
+### Pruebas y sus cuentas
+
+| Batería | Resultado |
+|---|---|
+| `node tests/test_youtube_doblaje.mjs` | **78 OK · 0 fallos** |
+| `node tests/verificar_youtube_doblaje.mjs` | **81 OK · 0 fallos** |
+| `pytest backend/tests/test_youtube_idioma_origen.py` | **30 passed** |
+| `pytest` de YouTube (T0.1) | en verde; **2 skipped** (huérfanas, con motivo) |
+| `pytest backend/tests/test_traducir_largo.py` | 6 passed; los 2 fallos `prefer_fast` son preexistentes y ajenos |
+| Unitarias de referencia (19 archivos) | **1.192 OK · 0 fallos** (sin retroceder) |
+| `verificar_arranque_ligero.mjs` | 9 OK + 1 fallo preexistente (1038 KB, ajeno) |
+| `verificar_movil_pantalla.mjs` | 60 comprobaciones, como antes |
+
+### Despliegue y verificación contra el dominio
+
+- `dpl_…`: **[pendiente de T4.3]**
+- Resultados A1–A10 con videos reales: **[pendientes de T4.3]**
+
+### [POR CONFIRMAR] abiertos
+
+- **iPhone real (H21):** que Safari silencie el original mientras suena la voz
+  (prueba A10).
+- **Supadata `mode=native`:** código exacto que devuelve cuando no hay subtítulos
+  (prueba A9).
+- **`unloadModule` de la IFrame API** para quitar los subtítulos de YouTube: no
+  está en la documentación oficial; si no existe, se ignora sin romper (A1/A2).
+- **Sustitutos de las voces regionales retiradas** (2026-09-03): el selector del
+  doblaje ofrece hoy las voces neurales que el motor sigue usando además de la
+  biblioteca; cuando lleguen los reemplazos, `ttsCatalogoVoces()` los ofrecerá y
+  los duplicados se descartan solos.
+
+### Correcciones al plan (medidas durante la implementación)
+
+- La comprobación de «sin segunda pasada» del plan miraba el código con un
+  `slice` invertido (inalcanzable); se corrigió el límite sin cambiar su
+  intención.
+- La prueba de objetivos táctiles comparaba `< 44` exacto y el render devuelve
+  `43,999999999999996` con coordenadas fraccionarias: se redondea al píxel CSS.
+- El aviso de «Fish no responde» se pisaba con la línea de estado («Listo…»,
+  «Voz en español activa…»): ahora persiste en la línea de voz del panel.
+- La Fase 3 del plan no se había ejecutado en su validación original; sus
+  comprobaciones se corrigieron contra el comportamiento real medido.
+
 ## Corrección 2026-08-16 (2) · ventanas de tiempo infladas y techo de confianza
 
 Diagnóstico hecho sobre un video real de 52 min (`AQ_Iqo3UYMk`, 1331 segmentos)

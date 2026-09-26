@@ -217,29 +217,77 @@ En la web verás el botón **«Instalar app»** (arriba a la derecha). Guía com
 
 ### ▶️ Panel de YouTube
 
-**Pega el enlace y pulsa «Transcribir video». Eso es todo.** No tienes que abrir YouTube ni copiar nada. Detalle técnico e historial: [CAMBIOS_YOUTUBE.md](CAMBIOS_YOUTUBE.md).
+**Pega el enlace y pulsa «Doblar al español». La voz empieza en segundos** y el
+resto del video se prepara mientras lo ves. Detalle técnico e historial:
+[CAMBIOS_YOUTUBE.md](CAMBIOS_YOUTUBE.md).
+
+#### Doblaje (lo principal)
 
 1. Pega el enlace del video (ej. `https://www.youtube.com/watch?v=...`).
-2. Elige el idioma del texto final si quieres traducirlo (opcional).
-3. Pulsa **«Transcribir video»**.
-4. El texto aparece listo para **Copiar, Corregir, Traducir, Escuchar y descargar .txt**.
+2. Si el video no está en inglés, elige su idioma en **«Idioma del video»**
+   (español, inglés, francés, alemán, portugués o italiano). En «Detectar
+   idioma» la app lo averigua sola: no vuelve a preguntar si ya lo sabe.
+3. Pulsa **«Doblar al español»**. En unos segundos suena la voz en español;
+   el resto del doblaje se prepara mientras ves el video.
+4. Mientras se prepara verás los pasos (Leer el video · Traducir · Voz en
+   español), una barra y el tiempo que lleva. Puedes darle play desde el
+   principio: el video suena en su idioma y la voz va entrando sola.
+
+#### Controles del doblaje
+
+- **Voz:** elige la voz del doblaje (no cambia la voz del resto de la app). Las
+  voces marcadas «(más lenta)» suenan más naturales pero tardan más en generarse.
+- **Voz en español / Audio original:** dos deslizadores para mezclar. En iPhone
+  el original se silencia mientras suena la voz (Safari no deja bajar el volumen
+  desde la página) y se avisa con una nota.
+- **Subtítulo sobre el video:** el interruptor recuerda tu elección. Puedes leer
+  o no; la voz siempre suena.
+- **Pantalla completa:** agranda el video conservando los subtítulos propios.
+- **Cancelar / Cerrar:** «Cancelar» detiene TODO (traducción, voz y peticiones);
+  «Cerrar» vuelve al formulario sin gastar nada más.
+- Si vuelves a abrir un video ya doblado, **no se vuelve a pagar**: la app lo
+  recuerda (sin guardar los audios) y retoma donde ibas.
+
+#### Solo el texto (sin doblaje)
+
+Dentro de **«Solo el texto (sin doblaje)»** está el flujo clásico:
+**«Transcribir video»** (rápido con subtítulos, o Whisper si el video no los
+tiene) y el idioma del texto final. El texto aparece listo para **Copiar,
+Corregir, Traducir, Escuchar y descargar .txt**. Con el doblaje activo, el
+**texto traducido completo** se pide con el botón «Obtener el texto traducido
+completo» (aprovecha lo ya traducido; lleva su propio aviso de progreso).
+
+#### Videos sin subtítulos (permiso antes de gastar)
+
+Si el video no tiene subtítulos, hacerlo solo se puede transcribiendo con IA
+(**2 créditos de Supadata por minuto**). La app **pregunta antes** y muestra el
+costo estimado: «Transcribir con IA» o «No, gracias» (con rechazar no se gasta
+nada). El plan gratuito de Supadata trae 100 créditos al mes.
 
 **Qué pasa por dentro** (no necesitas saberlo, pero por si falla algo):
 
 | Orden | Vía | Cuándo actúa | Costo |
 |---|---|---|---|
 | 1 | `youtube-transcript-api` | Si YouTube deja pasar la consulta (videos muy populares) | Gratis |
-| 2 | **Supadata** | Caso normal: trae los subtítulos o los genera con IA | 1 crédito (2 por minuto si usa IA) |
+| 2 | **Supadata** | Caso normal: trae los subtítulos o, solo con permiso, los genera con IA | 1 crédito (2 por minuto si usa IA) |
 | 3 | yt-dlp + Whisper de Groq | Respaldo si Supadata no está disponible | Gratis |
 | 4 | Pegado manual | Red de seguridad, solo si todo lo anterior falla | Gratis |
 
-**Videos largos (+20 min):** si el proveedor tarda, se procesan en segundo plano. Verás «Video largo: transcribiendo…» y el texto llega solo; no cierres la pestaña.
+**Videos largos (+20 min):** si el proveedor tarda, se procesan en segundo plano.
+Verás el progreso con tiempo real y el texto llega solo; no cierres la pestaña.
 
 **Sobre el selector «Idioma del video»:**
 
-- Si eliges un idioma concreto (Español, Inglés…), **se respeta**: el texto llega en ese idioma si el video lo tiene.
-- Si dejas **«Auto»**, la app prefiere **español**, luego **inglés**, y si no hay ninguno de los dos usa el que haya. Es a propósito: sin esa regla, un video hablado en inglés podía llegar en alemán, porque el proveedor entrega «la primera pista disponible» y esa puede ser cualquier traducción.
-- Consecuencia práctica: con «Auto», un video en inglés que tenga subtítulos en español llegará **en español**. Si quieres el original, elige el idioma en el selector.
+- Si eliges un idioma concreto (Español, Inglés…), **se respeta**: se le pide el
+  texto en ese idioma y no se vuelve a preguntar.
+- Si dejas **«Detectar idioma»**, la app decide así: lo que digas tú → el idioma
+  que declare YouTube para el audio (si está conectada la YouTube Data API) → el
+  idioma del título → las pistas del video. Antes se tomaba «la primera pista
+  automática» como el idioma del audio y un video en inglés podía rechazarse
+  como árabe: con los doblajes automáticos de YouTube esa primera pista suele
+  ser de otro idioma.
+- Consecuencia práctica: con «Auto», un video en inglés se dobla desde el inglés
+  sin preguntarte.
 
 **Si un video concreto falla** (privado, restringido o con audio muy sucio) la app abre sola el bloque **«¿Este video no funcionó? Pega el texto tú mismo»**. Es una red de seguridad, no el camino normal.
 
