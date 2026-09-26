@@ -30,7 +30,7 @@ referencia 1.192 OK sin retroceder.
 
 ### Despliegue
 
-`v148` / `jg-turbo-shell-v148` · `dpl_…` [PENDIENTE: anotar tras desplegar].
+`v148` / `jg-turbo-shell-v148` · `dpl_EjXEsMCGuKtQNpS15yMBuKy6ZTy3` (2026-09-26, READY, alias verificado: `JG_JS_V='v148'`, campo libre en el HTML).
 
 ## Entrega 2026-09-26 · Doblaje v3.1: voz automática, 2 voces y sin frenos
 
