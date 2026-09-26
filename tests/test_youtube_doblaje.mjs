@@ -237,6 +237,16 @@ const io = await modulo('idiomaOrigen.js');
   comprobar(io.nombreIdioma('en-US') === 'inglés' && io.codigoCorto('pt_BR') === 'pt', 'nombres y códigos cortos');
 }
 
+// ── T2.6: velocidad estable ─────────────────────────────────────────────
+{
+  comprobar(de.VELOCIDAD_MINIMA === 0.9 && de.VELOCIDAD_MAXIMA === 1.25, 'la voz se mueve entre 0,9× y 1,25×');
+  comprobar(cerca(de.calcularVelocidadAudio(10, 5, 1), 1.25), 'si no cabe, acelera hasta 1,25× y no más');
+  comprobar(cerca(de.calcularVelocidadAudio(3, 6, 1), 0.9), 'si sobra tiempo, frena hasta 0,9× y no más');
+  comprobar(cerca(de.calcularVelocidadAudio(5.5, 5, 1.5), 1.1 * 1.5), 'la velocidad elegida para el video se respeta encima');
+  const unidades = ds.agruparPorTiempo(ts.normalizarSegmentos(fixture.segments));
+  comprobar(unidades.some((u) => u.duration > u.finHabla - u.startTime), 'las frases usan el silencio prestado como tiempo extra');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

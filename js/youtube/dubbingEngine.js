@@ -9,8 +9,9 @@ export const DESFASE_SALTO_S = 0.4;
 // Rango de velocidad en el que una voz sigue sonando natural. El límite viejo
 // era 4x, que es ininteligible: el español ocupa más tiempo que el inglés y casi
 // siempre pedía acelerar, así que la voz se volvía un chillido.
-export const VELOCIDAD_MINIMA = 0.85;
-export const VELOCIDAD_MAXIMA = 1.35;
+// Medido 2026-09-25: con 0,85–1,35 la voz saltaba de «cámara lenta» a «ardilla» entre frases. Con el silencio prestado (T2.1) casi siempre cabe sin pasar de 1,25.
+export const VELOCIDAD_MINIMA = 0.9;
+export const VELOCIDAD_MAXIMA = 1.25;
 // Corrección fina: empujar o frenar un 6 % es imperceptible y evita saltos.
 const AJUSTE_FINO_MAXIMO = 0.06;
 // Margen que se le concede a una frase para terminar su última sílaba.
