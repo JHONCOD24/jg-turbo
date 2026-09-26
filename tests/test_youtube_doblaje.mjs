@@ -154,6 +154,73 @@ const tr = await modulo('translationService.js');
   comprobar(/revisar:\s*false/.test(puente), 'el doblaje ya no hace la segunda pasada de revisión (2× llamadas)');
 }
 
+// ── T2.4: limitador ─────────────────────────────────────────────────────
+const lim = await modulo('limitador.js');
+{
+  let ahora = 0;
+  const l = lim.crearLimitador({ maximo: 3, ventanaMs: 1000, ahora: () => ahora });
+  l.registrar(); l.registrar(); l.registrar();
+  comprobar(!l.disponible() && l.esperaMs() === 1000, 'limitador: con el cupo lleno hay que esperar');
+  ahora = 999;
+  comprobar(!l.disponible() && l.esperaMs() === 1, 'limitador: la espera baja con el tiempo');
+  ahora = 1000;
+  comprobar(l.disponible() && l.usados === 0, 'limitador: pasada la ventana, el cupo vuelve');
+  comprobar(lim.MAXIMO_VOZ_POR_MINUTO === 18, 'el doblaje deja margen bajo las 20 síntesis/minuto de Azure F0');
+}
+// ── T2.4: planificador ──────────────────────────────────────────────────
+const pl = await modulo('planificador.js');
+{
+  const segmentos = ts.normalizarSegmentos(repetir(fixture.segments, 10));
+  const hechos = new Set();
+  const estado = { traducido: (i) => hechos.has(i), enCurso: () => false };
+  const primero = pl.siguienteLoteTraduccion(segmentos, estado, 0);
+  comprobar(Array.isArray(primero) && primero[0] === 0 && primero.length <= 8, 'el primer lote empieza en el primer segmento y no pasa de 8');
+  primero.forEach((i) => hechos.add(i));
+  const segundo = pl.siguienteLoteTraduccion(segmentos, estado, 0);
+  comprobar(segundo[0] === primero[primero.length - 1] + 1, 'el siguiente lote sigue donde terminó el anterior');
+  const lejos = pl.siguienteLoteTraduccion(segmentos, { traducido: () => false, enCurso: () => false }, 400);
+  comprobar(segmentos[lejos[0]].endTime > 398, 'desde otra posición, el lote empieza ahí (con 2 s de margen)');
+  comprobar(pl.siguienteLoteTraduccion(segmentos, { traducido: () => true, enCurso: () => false }, 0) === null, 'si todo está traducido no hay lote');
+  const fuera = pl.siguienteLoteTraduccion(segmentos, { traducido: (i) => segmentos[i].startTime < 200, enCurso: () => false }, 0, { horizonteS: 180 });
+  comprobar(fuera === null, 'no se traduce más allá del horizonte');
+  const unidades = [
+    { startTime: 0, endTime: 5, estado: 'listo' }, { startTime: 5, endTime: 11, estado: 'pendiente' },
+    { startTime: 11, endTime: 15, estado: 'sin_traducir' }, { startTime: 200, endTime: 205, estado: 'pendiente' },
+  ];
+  comprobar(JSON.stringify(pl.unidadesAGenerar(unidades, 0, { limite: 3 })) === '[1]', 'solo se sintetizan frases con texto y dentro del horizonte de voz');
+  comprobar(pl.segundosCubiertos(unidades, 0) === 5, 'la voz cubre hasta la primera frase sin voz');
+  comprobar(pl.segundosCubiertos([{ startTime: 30, endTime: 35, estado: 'pendiente' }], 0) === 30, 'un silencio inicial cuenta como cubierto');
+  comprobar(pl.segundosCubiertos([{ startTime: 0, endTime: 5, estado: 'listo' }], 0) === Infinity, 'todo listo = cubierto hasta el final');
+}
+// ── T2.4: motor de preparación (con dobles, sin red) ────────────────────
+const { MotorPreparacion } = await modulo('motorPreparacion.js');
+{
+  const segmentos = ts.normalizarSegmentos(repetir(fixture.segments, 20));   // ≈30 min
+  const unidades = ds.agruparPorTiempo(segmentos);
+  const ahora = 0;
+  const limitador = lim.crearLimitador({ ahora: () => ahora });
+  const pedidosVoz = [];
+  const servicioVoz = new ds.DubbingService({ generarAudio: async (texto) => { pedidosVoz.push(texto); return { blob: new Blob(['x']) }; }, limitador });
+  servicioVoz.definirUnidades(unidades);
+  const lotes = [];
+  const traductor = { traducirLote: async (indices) => { lotes.push(indices); return new Map(indices.map((i) => [i, `ES ${segmentos[i].text}`])); } };
+  let posicion = 0;
+  const reloj = { iniciar() {}, detener() {}, activo: false };   // los pasos se dan a mano
+  const motor = new MotorPreparacion({ segmentos, servicioVoz, traductor, posicion: () => posicion, limitadorVoz: limitador, reloj, ahora: () => ahora });
+  const pasos = async (n) => { for (let i = 0; i < n; i += 1) { motor.paso(); await new Promise((r) => setTimeout(r, 0)); } };
+  await pasos(60);
+  const maximo = Math.max(...lotes.flat());
+  comprobar(segmentos[maximo].startTime <= 180 + 35, 'en pausa, la traducción se detiene en el horizonte de 3 min');
+  comprobar(pedidosVoz.length <= 18, `no más de 18 síntesis en el primer minuto (${pedidosVoz.length})`);
+  comprobar(motor.resumen().vozHastaS >= 20, 'hay al menos 20 s de voz para arrancar');
+  posicion = 1200;
+  const antes = lotes.length;
+  await pasos(10);
+  const nuevos = lotes.slice(antes).flat();
+  // −10 s: el primer segmento que sigue sonando en 1198 s puede haber empezado unos segundos antes.
+  comprobar(nuevos.length > 0 && segmentos[nuevos[0]].startTime >= 1200 - 10, 'tras un salto, lo primero que se traduce es lo de la nueva posición');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);
