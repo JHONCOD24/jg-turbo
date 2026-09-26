@@ -10267,10 +10267,13 @@ async function jgPedirTraduccion(cuerpo, timeoutMs){
 
 async function traducirTranscripcionDetallada(texto, origen, destino, opts = {}){
   if(!texto || !texto.trim()) return { text: texto, validation: null };
-  // Transcripción pegada de YouTube: quitar 0:00 / 0:01… antes de mandar a traducir
-  const textoLimpio = (typeof jgPrepararTextoParaTraducir === 'function')
-    ? jgPrepararTextoParaTraducir(texto)
-    : String(texto).trim();
+  // El doblaje manda texto ya limpio y segmentado: limpiar «marcas de hora» aquí
+  // borraba horas reales del diálogo («a las 10:30», auditoría H19).
+  const textoLimpio = opts.literal
+    ? String(texto).trim()
+    : ((typeof jgPrepararTextoParaTraducir === 'function')
+      ? jgPrepararTextoParaTraducir(texto)
+      : String(texto).trim());
   if(!textoLimpio) return { text: texto, validation: null };
   const src = normalizarLangApi(origen);
   const dst = normalizarLangApi(destino);
@@ -10294,6 +10297,8 @@ async function traducirTranscripcionDetallada(texto, origen, destino, opts = {})
     literal: !!opts.literal,
     revisar: !!opts.revisar,
     titulo_video: String(opts.tituloVideo || '').slice(0, 300),
+    contexto_previo: String(opts.contexto?.anterior || '').slice(-600),
+    contexto_siguiente: String(opts.contexto?.siguiente || '').slice(0, 300),
   };
   // Cada bloque va muy por debajo del límite de la función; el margen es amplio.
   const timeoutMs = 90000;
@@ -18390,9 +18395,12 @@ function asegurarYoutubeSincronizado(){
     inicializarYoutubeSincronizado({
       fetchApi,
       estaServidorOnline: () => Boolean(serverInfo.online),
-      traducirTexto: (texto) => traducirTranscripcionDetallada(texto, 'en', 'es', {
+      traducirTexto: (texto, opciones = {}) => traducirTranscripcionDetallada(texto, opciones.origen || 'en', 'es', {
         literal: true,
-        revisar: true,
+        revisar: false,   // medido: la segunda pasada duplicaba el tiempo por lote (2,5–2,8 s → 1,4 s)
+        tituloVideo: opciones.tituloVideo || '',
+        contexto: opciones.contexto || null,
+        signal: opciones.signal,
       }),
       generarAudioEspanol: (texto) => {
         const prefs = ttsPrefs();

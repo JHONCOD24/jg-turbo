@@ -113,6 +113,47 @@ const ds = await modulo('dubbingService.js');
   comprobar(servicio.unidades[0].estado === 'pendiente' && !servicio.unidades[0].url, 'liberarAntesDe suelta la memoria de lo ya escuchado (y se puede regenerar)');
 }
 
+// ── T2.2: traducir un lote con contexto; si falla, partirlo en mitades ─────
+const tr = await modulo('translationService.js');
+{
+  const segmentos = ts.normalizarSegmentos(fixture.segments);
+  const responder = (texto, quitarUltimo = false) => {
+    const piezas = [...texto.matchAll(/\[\[JG_SEG_(\d{6})\]\]\n([^\[]*)/g)];
+    const salida = quitarUltimo && piezas.length > 2 ? piezas.slice(0, -1) : piezas;
+    return { text: salida.map((m) => `[[JG_SEG_${m[1]}]]\nES ${m[2].trim()}`).join('\n\n') };
+  };
+  const llamadas = [];
+  const sano = new tr.TranslationService({ traducirTexto: async (texto, opciones) => { llamadas.push({ texto, opciones }); return responder(texto); } });
+  const mapa = await sano.traducirLote([5, 6, 7], segmentos, { origen: 'en', tituloVideo: 'T' });
+  comprobar(llamadas.length === 1, 'un lote sano es una sola llamada');
+  comprobar(mapa.get(6)?.startsWith('ES '), 'cada índice recibe su traducción');
+  comprobar(llamadas[0].opciones.origen === 'en' && llamadas[0].opciones.tituloVideo === 'T', 'el idioma de origen y el título viajan en la petición');
+  comprobar(llamadas[0].opciones.contexto.anterior.includes(segmentos[4].text), 'el lote lleva como contexto lo dicho justo antes');
+  comprobar(llamadas[0].opciones.contexto.siguiente === segmentos[8].text, 'y lo que viene justo después');
+
+  let n = 0;
+  const pierde = new tr.TranslationService({ traducirTexto: async (texto) => { n += 1; return responder(texto, true); } });
+  const partido = await pierde.traducirLote([0, 1, 2, 3, 4, 5, 6, 7], segmentos, {});
+  comprobar([...partido.values()].every((t) => t && t.startsWith('ES ')), 'tras partir el lote en mitades, todo queda traducido');
+  comprobar(n <= 7, `partir en mitades gasta pocas llamadas (${n})`);
+
+  const vacio = new tr.TranslationService({ traducirTexto: async () => ({ text: '' }) });
+  const nada = await vacio.traducirLote([0, 1], segmentos, {});
+  comprobar(nada.get(0) === null && nada.get(1) === null, 'si no hay forma de traducir, el tramo queda marcado (null), sin inventar');
+  const limite = new tr.TranslationService({ traducirTexto: async () => { throw new Error('mistral: límite de uso alcanzado (429)'); } });
+  let lanzo = false;
+  try { await limite.traducirLote([0], segmentos, {}); } catch { lanzo = true; }
+  comprobar(lanzo, 'un 429 sube al motor para que haga una pausa (no se marca como texto fallido)');
+  comprobar(tr.crearLotes(segmentos).every((lote) => lote.length <= tr.MAX_SEGMENTOS_POR_LOTE), 'crearLotes respeta el máximo de 8 segmentos');
+}
+{
+  const html = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
+  // `window.jgAsegurarYoutube` se cita antes (carga perezosa de la pestaña), así
+  // que hay que recortar hasta la ÚLTIMA mención: la asignación bajo la función.
+  const puente = html.slice(html.indexOf('function asegurarYoutubeSincronizado'), html.lastIndexOf('window.jgAsegurarYoutube'));
+  comprobar(/revisar:\s*false/.test(puente), 'el doblaje ya no hace la segunda pasada de revisión (2× llamadas)');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

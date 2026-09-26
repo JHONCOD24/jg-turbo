@@ -1,5 +1,5 @@
-const MAX_SEGMENTOS_POR_LOTE = 8;
-const MAX_CHARS_POR_LOTE = 2800;
+export const MAX_SEGMENTOS_POR_LOTE = 8;
+export const MAX_CHARS_POR_LOTE = 2800;
 const CONCURRENCIA = 2;
 
 /* Cortar el lote en cada pausa suena bien, pero hay videos con un silencio
@@ -7,8 +7,8 @@ const CONCURRENCIA = 2;
    traducía media frase suelta —justo lo que queríamos evitar— y salían tantas
    llamadas como segmentos. Medido: 150 segmentos → 150 lotes. Por eso una pausa
    solo cierra el lote cuando ya hay material suficiente dentro. */
-const MIN_SEGMENTOS_PARA_CERRAR = 3;
-const MIN_CHARS_PARA_CERRAR = 350;
+export const MIN_SEGMENTOS_PARA_CERRAR = 3;
+export const MIN_CHARS_PARA_CERRAR = 350;
 
 /* Si la traducción de un lote sale mucho más corta que el original, la IA se
    comió segmentos: pasa cuando reparte el texto entre los marcadores y se queda
@@ -24,7 +24,16 @@ function marcador(indice) {
   return `[[JG_SEG_${String(indice).padStart(6, '0')}]]`;
 }
 
-function crearLotes(segmentos) {
+export function piezaDeLote(indice, texto) {
+  return `${marcador(indice)}\n${texto}`;
+}
+
+/** Un 429 o «límite de uso»: el motor hace una pausa y reintenta; no es culpa del texto. */
+export function esLimiteDeUso(error) {
+  return /\b429\b|l[ií]mite de uso|rate.?limit|too many requests/i.test(String(error?.message || error || ''));
+}
+
+export function crearLotes(segmentos) {
   const lotes = [];
   let actual = [];
   let caracteres = 0;
@@ -35,7 +44,7 @@ function crearLotes(segmentos) {
     caracteres = 0;
   };
   segmentos.forEach((segmento, indice) => {
-    const pieza = `${marcador(indice)}\n${segmento.text}`;
+    const pieza = piezaDeLote(indice, segmento.text);
     if (
       actual.length &&
       (actual.length >= MAX_SEGMENTOS_POR_LOTE || caracteres + pieza.length > MAX_CHARS_POR_LOTE)
@@ -103,11 +112,53 @@ export class TranslationService {
   }
 
   /** Pide un lote y lo rechaza si volvió incompleto. Devuelve el mapa o null. */
-  async pedirLote(lote) {
-    const respuesta = await this.traducirTexto(lote.map(({ pieza }) => pieza).join('\n\n'));
+  async pedirLote(lote, opciones) {
+    const respuesta = await this.traducirTexto(lote.map(({ pieza }) => pieza).join('\n\n'), opciones);
     const traducciones = extraerTraducciones(respuesta?.text ?? respuesta, lote);
     if (!traducciones) return null;
     return conservaElContenido(lote, traducciones) ? traducciones : null;
+  }
+
+  /**
+   * Traduce índices consecutivos. Nunca lanza por un fallo del texto: devuelve
+   * índice → traducción, o `null` si ese segmento no se pudo traducir. Si el lote
+   * vuelve roto se parte en dos mitades, cada una con su contexto; frase por frase
+   * y sin contexto se perdía el sentido («trunks» → «troncos», auditoría H11).
+   */
+  async traducirLote(indices, segmentos, { origen = 'en', tituloVideo = '', signal = null, profundidad = 0 } = {}) {
+    if (signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
+    const primero = indices[0];
+    const ultimo = indices[indices.length - 1];
+    const contexto = {
+      anterior: segmentos.slice(Math.max(0, primero - 2), primero).map((s) => s.text).join(' '),
+      siguiente: segmentos.slice(ultimo + 1, ultimo + 2).map((s) => s.text).join(' '),
+    };
+    const lote = indices.map((indice) => ({ indice, segmento: segmentos[indice], pieza: piezaDeLote(indice, segmentos[indice].text) }));
+    const opciones = { origen, tituloVideo, contexto, signal };
+    let mapa = null;
+    try {
+      mapa = await this.pedirLote(lote, opciones);
+    } catch (error) {
+      if (signal?.aborted || error?.name === 'AbortError' || esLimiteDeUso(error)) throw error;
+    }
+    if (mapa) return mapa;
+    if (indices.length > 1 && profundidad < 3) {
+      const mitad = Math.ceil(indices.length / 2);
+      const izquierda = await this.traducirLote(indices.slice(0, mitad), segmentos, { origen, tituloVideo, signal, profundidad: profundidad + 1 });
+      const derecha = await this.traducirLote(indices.slice(mitad), segmentos, { origen, tituloVideo, signal, profundidad: profundidad + 1 });
+      return new Map([...izquierda, ...derecha]);
+    }
+    if (indices.length === 1) {
+      // Último intento, sin marcadores: a veces el modelo los pierde en una sola frase.
+      try {
+        const respuesta = await this.traducirTexto(segmentos[primero].text, opciones);
+        const texto = String(respuesta?.text ?? respuesta ?? '').trim();
+        if (texto) return new Map([[primero, texto]]);
+      } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError' || esLimiteDeUso(error)) throw error;
+      }
+    }
+    return new Map(indices.map((indice) => [indice, null]));
   }
 
   /** Traduce sin modificar startTime/endTime; un fallo queda aislado al segmento. */
