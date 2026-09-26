@@ -88,8 +88,23 @@ gastar créditos ni cuota de más.
 
 ### Despliegue y verificación contra el dominio
 
-- `dpl_…`: **[pendiente de T4.3]**
-- Resultados A1–A10 con videos reales: **[pendientes de T4.3]**
+- `dpl_AU8hXERG7PE9j7rDrUtfZ1MjkXBB` (2026-09-26) · producción `v146` /
+  `jg-turbo-shell-v146` confirmados con `?nocache=` en `https://jg-turbo.vercel.app`.
+- Módulos de `js/youtube/` con `Content-Length` idéntico al local (11/11).
+- `/api/health`: `youtube_auto: true`, `youtube_data_api: false` (D1 sin clave:
+  el idioma se resuelve por título, como manda el por defecto del plan).
+- `verificar_arranque_ligero.mjs` contra producción: **9 OK · 1 fallo preexistente**
+  (1053 KB; el mismo de local, ajeno a YouTube).
+
+| # | Video | Resultado |
+|---|---|---|
+| A1 | `dNWkwrqAkcM` (inglés, 88 min, doblajes automáticos) | ✅ `language=en`, `language_source=titulo`, `confidence=0.8`, texto en inglés. **El fallo original («árabe») está corregido.** Sin `YOUTUBE_DATA_API_KEY` la fuente es el título; con la clave sería `youtube`. |
+| A2 | `jNQXAC9IVRw` (inglés, 19 s) | ✅ Con `title_hint` del reproductor: `language=en`, `source=titulo`. Con `language: "en"` explícito: `source=usuario`. Nota: sin título ni idioma pedido, el proveedor puede entregar otra pista (`de` medido) — por eso la app siempre manda el título del reproductor (T1.7). |
+| A3 | Video en portugués/francés | **[POR CONFIRMAR]** (hace falta un video real de esos idiomas + créditos). |
+| A4 | Video en español | **[POR CONFIRMAR]** (los IDs de prueba disponibles no se pudieron procesar; la lógica cliente de «ya está en español» está cubierta por las pruebas de navegador T1.6). |
+| A5–A8 | Pestaña 2.º plano, salto, cancelar, caché | **[POR CONFIRMAR en navegador visible]** — cubiertos por `verificar_youtube_doblaje.mjs` (81 OK) con API simulada. |
+| A9 | Video sin subtítulos + permiso | **[POR CONFIRMAR]** (código exacto de Supadata `mode=native`). Cubierto por T3.5 en navegador simulado. |
+| A10 | iPhone real (H21) | **[POR CONFIRMAR]** — la nota de Safari y el silenciado del original están implementados y probados en emulador (T3.3). |
 
 ### [POR CONFIRMAR] abiertos
 
@@ -99,6 +114,10 @@ gastar créditos ni cuota de más.
   (prueba A9).
 - **`unloadModule` de la IFrame API** para quitar los subtítulos de YouTube: no
   está en la documentación oficial; si no existe, se ignora sin romper (A1/A2).
+- **`YOUTUBE_DATA_API_KEY` (D1):** no está en Vercel. Sin ella el idioma se
+  resuelve por título (funciona); con ella gana precisión (`defaultAudioLanguage`).
+  Para activarla: crear la clave en Google Cloud, ponerla como variable de
+  entorno de Producción en Vercel y volver a desplegar.
 - **Sustitutos de las voces regionales retiradas** (2026-09-03): el selector del
   doblaje ofrece hoy las voces neurales que el motor sigue usando además de la
   biblioteca; cuando lleguen los reemplazos, `ttsCatalogoVoces()` los ofrecerá y
