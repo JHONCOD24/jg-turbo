@@ -3910,6 +3910,16 @@
   /* Durante el doblaje la transcripción completa solo aparece si se pide (T3.6). */
   .yt-area.has-results.modo-doblaje #ytResultArea{display:none !important}
   .yt-area.has-results.modo-doblaje.con-texto #ytResultArea{display:flex !important}
+
+.yt-player-shell:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0;background:#000}
+.yt-player-shell.yt-pantalla-completa{position:fixed;inset:0;z-index:1000;width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0;background:#000}
+.yt-player-shell:fullscreen .yt-caption,.yt-player-shell.yt-pantalla-completa .yt-caption{font-size:clamp(18px,3vw,30px);bottom:12%}
+.yt-player-shell .yt-salir-pantalla{display:none}
+.yt-player-shell.yt-pantalla-completa .yt-salir-pantalla{display:inline-flex;position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;z-index:2;min-height:44px}
+.yt-mixer-fila[hidden]{display:none !important}   /* el selector de clase le ganaba a [hidden] (TRAMPAS «Un selector con identificador le gana a hidden») */
+.yt-nota{margin:0;font-size:var(--fs-xs);color:var(--muted)}
+.yt-nota[hidden]{display:none}
+
   .yt-transcript-panel{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:rgba(11,13,18,.5)}
   .yt-transcript-panel > summary{
     padding:12px 14px;min-height:44px;display:flex;align-items:center;cursor:pointer;
@@ -6612,6 +6622,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           <div class="yt-player-shell">
             <div id="ytPlayer"></div>
             <p class="yt-caption" id="ytCaption" data-sync-caption aria-hidden="true" hidden></p>
+            <button class="mini-btn yt-salir-pantalla" id="ytSalirPantalla" type="button">Salir de pantalla completa</button>
           </div>
 
           <div class="yt-confirm" id="ytLangConfirm" role="group" aria-labelledby="ytLangConfirmText" hidden>
@@ -6654,8 +6665,10 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                 <output id="ytVolOriginalVal" for="ytVolOriginal">12&nbsp;%</output>
               </label>
             </div>
+            <p class="yt-nota" id="ytNotaIOS" hidden>En iPhone el volumen se controla con los botones del teléfono: mientras suena la voz en español, el audio original se silencia.</p>
             <div class="yt-sync-extras">
               <button class="mini-btn" id="ytDesdeInicio" type="button" hidden>Empezar desde el inicio</button>
+              <button class="mini-btn" id="ytPantallaCompleta" type="button" aria-pressed="false">Pantalla completa</button>
               <label class="yt-opcion" for="ytVozSelect">Voz
                 <select id="ytVozSelect" class="tts-voice-select" aria-label="Voz del doblaje"></select>
               </label>
@@ -18531,6 +18544,7 @@ function asegurarYoutubeSincronizado(){
           ? ttsClaveVoz(global)
           : ttsClaveVoz({ provider: 'neural', locale: 'auto', gender: global.gender });
       },
+      esIOS: /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
     });
   }).catch((error) => {
     jgCargaYoutube = null;

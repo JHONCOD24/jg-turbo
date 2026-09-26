@@ -442,6 +442,30 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── T3.3: subtítulos a elección, pantalla completa e iPhone ──────');
+  {
+    const { contexto, pagina } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await pagina.check('#ytToggleCaption');
+    await pagina.reload(); await pagina.waitForSelector('#ytUrl', { state: 'attached' });
+    comprobar('el interruptor de subtítulos se recuerda', await pagina.isChecked('#ytToggleCaption'));
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await pagina.click('#ytPantallaCompleta'); await esperar(500);
+    const agrandado = await pagina.evaluate(() => Boolean(document.fullscreenElement?.classList.contains('yt-player-shell'))
+      || document.querySelector('.yt-player-shell').classList.contains('yt-pantalla-completa'));
+    comprobar('pantalla completa agranda el contenedor (así se ve el subtítulo propio)', agrandado);
+    await contexto.close();
+  }
+  {
+    const { contexto, pagina } = await abrir(navegador, { dispositivo: 'iPhone 13', youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    comprobar('en iPhone se explica que el original se silencia', await pagina.isVisible('#ytNotaIOS'));
+    comprobar('y no se ofrece un volumen que Safari ignora', !(await pagina.isVisible('#ytVolOriginal')));
+    await reproducirConVoz(pagina); await esperar(2500);
+    comprobar('mientras suena la voz, el original queda en silencio', await pagina.evaluate(() => window.__yt.mudo === true));
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();

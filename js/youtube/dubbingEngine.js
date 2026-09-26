@@ -76,6 +76,7 @@ export class DubbingEngine {
     crearAudio = () => new Audio(),
     reloj = null,
     colchonSegundos = 90,
+    modoSilenciarOriginal = false,
   }) {
     this.player = player;
     this.servicio = servicio;
@@ -83,6 +84,7 @@ export class DubbingEngine {
     this.onMetricas = onMetricas;
     this.onFin = onFin;
     this.colchonSegundos = colchonSegundos;
+    this.modoSilenciarOriginal = modoSilenciarOriginal;
     this.audio = crearAudio();
     this.audio.preload = 'auto';
     this.audio.preservesPitch = true;
@@ -139,6 +141,7 @@ export class DubbingEngine {
     this.indice = -1;
     this.esperandoVoz = false;
     this.reloj.detener();
+    if (this.modoSilenciarOriginal) this.player.unMute?.();
     this.player.setVolume?.(this.volumenOriginalPrevio);
     this.onStatus('Audio original activo.', 'inactivo');
   }
@@ -146,6 +149,7 @@ export class DubbingEngine {
   /** Volumen del audio original bajo la voz doblada (0 a 100). */
   definirVolumenFondo(valor) {
     this.volumenFondo = Math.max(0, Math.min(100, Number(valor) || 0));
+    if (this.modoSilenciarOriginal) return;
     if (this.activo && !this.esperandoVoz) this.player.setVolume?.(this.volumenFondo);
   }
 
@@ -257,6 +261,11 @@ export class DubbingEngine {
     const esperando = !hayVoz;
     if (esperando === this.esperandoVoz) return;
     this.esperandoVoz = esperando;
+    if (this.modoSilenciarOriginal) {
+      // iPhone: Safari no deja bajar el volumen desde código; se silencia mientras hay voz.
+      if (hayVoz) this.player.mute?.(); else this.player.unMute?.();
+      return;
+    }
     this.player.setVolume?.(esperando ? this.volumenOriginalPrevio : this.volumenFondo);
   }
 

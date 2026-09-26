@@ -48,6 +48,7 @@ export function inicializarYoutubeSincronizado({
   estaServidorOnline,
   listarVoces = () => [],
   vozPorDefecto = () => 'neural:auto:female',
+  esIOS = false,
 }) {
   const $ = (id) => document.getElementById(id);
   const ui = {
@@ -87,7 +88,12 @@ export function inicializarYoutubeSincronizado({
     guardar(CLAVE_VOL_ORIGINAL, ui.volOriginal.value);
     sesion?.motorVoz?.definirVolumenFondo(Number(ui.volOriginal.value));
   });
-    ui.toggleCaption.addEventListener('change', () => { ui.caption.hidden = !ui.toggleCaption.checked; });
+    ui.toggleCaption.checked = leer('jg_yt_subtitulos') === '1';
+    ui.caption.hidden = !ui.toggleCaption.checked;
+    ui.toggleCaption.addEventListener('change', () => {
+      ui.caption.hidden = !ui.toggleCaption.checked;
+      guardar('jg_yt_subtitulos', ui.toggleCaption.checked ? '1' : '0');
+    });
 
     // ── Voz del doblaje (propia; la voz global no se toca) ─────────────────
     if (ui.voz) {
@@ -112,6 +118,31 @@ export function inicializarYoutubeSincronizado({
         if (sesion?.servicioVoz) sesion.servicioVoz.invalidarDesde((sesion.player?.getCurrentTime?.() || 0) + 1);
       });
     }
+
+  async function alternarPantallaCompleta() {
+    const shell = ui.area.querySelector('.yt-player-shell');
+    const boton = $('ytPantallaCompleta');
+    if (document.fullscreenElement) { await document.exitFullscreen().catch(() => {}); return; }
+    if (shell.classList.contains('yt-pantalla-completa')) {
+      shell.classList.remove('yt-pantalla-completa');
+      boton.setAttribute('aria-pressed', 'false');
+      return;
+    }
+    if (shell.requestFullscreen) {
+      try { await shell.requestFullscreen({ navigationUI: 'hide' }); return; } catch (_) { /* iPhone: sin pantalla completa de elementos */ }
+    }
+    shell.classList.add('yt-pantalla-completa');   // respaldo: ocupa toda la ventana
+    boton.setAttribute('aria-pressed', 'true');
+  }
+  $('ytPantallaCompleta').addEventListener('click', alternarPantallaCompleta);
+  $('ytSalirPantalla').addEventListener('click', alternarPantallaCompleta);
+  document.addEventListener('fullscreenchange', () => $('ytPantallaCompleta').setAttribute('aria-pressed', document.fullscreenElement ? 'true' : 'false'));
+  if (esIOS) {
+    // Safari no deja fijar el volumen desde código: el original se silencia y se explica.
+    ui.volVoz.closest('.yt-mixer-fila').hidden = true;
+    ui.volOriginal.closest('.yt-mixer-fila').hidden = true;
+    $('ytNotaIOS').hidden = false;
+  }
 
   // ── Progreso visible (TRAMPAS §8.1) ─────────────────────────────────────
   const progreso = {
@@ -215,6 +246,10 @@ export function inicializarYoutubeSincronizado({
     const actual = sesion;
     sesion = null;
     if (actual) {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      const shell = ui.area.querySelector('.yt-player-shell');
+      shell?.classList.remove('yt-pantalla-completa');
+      $('ytPantallaCompleta')?.setAttribute('aria-pressed', 'false');
       clearTimeout(actual.temporizadorCache);
       clearInterval(actual.relojCache);
       guardarSesion(actual);
@@ -299,7 +334,7 @@ export function inicializarYoutubeSincronizado({
 
   async function crearReproductor(videoId, signal) {
     recrearDestino();
-    const player = new YouTubePlayer('ytPlayer', videoId);
+    const player = new YouTubePlayer('ytPlayer', videoId, { pantallaCompletaPropia: true });
     const listo = player.inicializar().then(() => true).catch(() => false);
     const tardo = new Promise((resolver) => setTimeout(() => resolver(false), ESPERA_REPRODUCTOR_MS));
     await Promise.race([listo, tardo]);
@@ -411,7 +446,7 @@ export function inicializarYoutubeSincronizado({
     if (signal.aborted) throw cancelado();
 
     actual.motorVoz = new DubbingEngine({
-      player, servicio: servicioVoz, crearAudio: () => audioDoblaje,
+      player, servicio: servicioVoz, crearAudio: () => audioDoblaje, modoSilenciarOriginal: esIOS,
       onStatus: (mensaje, tipo) => { ui.estado.textContent = mensaje; display.mostrarVoz(tipo); },
       onMetricas: (metricas) => { actual.metricas = metricas; },   // solo diagnóstico (H28)
       onFin: () => { ui.estado.textContent = 'El video terminó.'; display.mostrarVoz('fin'); },
