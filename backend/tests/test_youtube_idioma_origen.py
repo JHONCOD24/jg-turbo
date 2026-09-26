@@ -233,3 +233,37 @@ def test_el_flujo_clasico_sin_campos_nuevos_no_cambia(monkeypatch):
 def test_health_dice_si_hay_data_api(monkeypatch):
     monkeypatch.setattr(yd, "API_KEY", "")
     assert TestClient(api_module.app).get("/api/health").json()["youtube_data_api"] is False
+
+
+def test_el_prompt_lleva_lo_dicho_antes_y_despues():
+    prompt = api_module._prompt_traducir_bloque(
+        "en", "es", "[[JG_SEG_000001]]\nthey have really long trunks", True, "es", "", "", None,
+        contexto_previo="here we are in front of the elephants", contexto_siguiente="and that's cool",
+    )
+    assert "justo antes" in prompt and "elephants" in prompt
+    assert "justo después" in prompt and "that's cool" in prompt
+
+
+def _ia_que_anota(monkeypatch, vistos, salida):
+    def ia(client_key, provider, prompt, openrouter_model=None, max_tokens=None):
+        vistos.append(prompt)
+        return salida, "mistral"
+    monkeypatch.setattr(api_module, "_llamar_ia_con_respaldo", ia)
+    monkeypatch.setattr(api_module, "_resolver_ia", lambda client_key="", provider="": ("clave", "mistral"))
+
+
+def test_el_modo_literal_no_borra_horas_del_dialogo(monkeypatch):
+    vistos = []
+    _ia_que_anota(monkeypatch, vistos, "[[JG_SEG_000000]]\nNos vemos a las 10:30, 11:45 y 12:15.")
+    resp = TestClient(api_module.app).post("/api/translate", json={
+        "text": "[[JG_SEG_000000]]\nSee you at 10:30, 11:45 and 12:15.", "direction": "en-es", "literal": True,
+    })
+    assert resp.status_code == 200
+    assert "10:30" in vistos[0] and "12:15" in vistos[0]
+
+
+def test_fuera_del_doblaje_se_sigue_limpiando_lo_pegado(monkeypatch):
+    vistos = []
+    _ia_que_anota(monkeypatch, vistos, "Hola mundo otra vez")
+    TestClient(api_module.app).post("/api/translate", json={"text": "0:01\nhello\n0:02\nworld\n0:03\nagain", "direction": "en-es"})
+    assert "0:01" not in vistos[0]

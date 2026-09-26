@@ -302,6 +302,9 @@ class TranslateRequest(BaseModel):
     # Segunda pasada de corrección; si falla, se conserva la traducción inicial.
     revisar: bool = False
     titulo_video: str = Field(default="", max_length=300)
+    # Doblaje: lo dicho justo antes y justo después, en el idioma original. Solo da contexto para desambiguar; nunca se traduce ni se devuelve.
+    contexto_previo: str = Field(default="", max_length=600)
+    contexto_siguiente: str = Field(default="", max_length=300)
 
 
 _LANG_NAMES = {
@@ -2908,6 +2911,8 @@ def _prompt_traducir_bloque(
     titulo: str = "",
     continuidad: str = "",
     terminos: Optional[list] = None,
+    contexto_previo: str = "",
+    contexto_siguiente: str = "",
 ) -> str:
     """Prompt de traducción por sentido, no palabra por palabra.
 
@@ -2923,7 +2928,7 @@ def _prompt_traducir_bloque(
     trg_es = _LANG_NAMES_ES.get((trg_lang or "").lower(), trg_lang)
 
     contexto = ""
-    if titulo or continuidad or terminos:
+    if titulo or continuidad or terminos or contexto_previo or contexto_siguiente:
         contexto = "CONTEXTO (solo para entenderlo; NO lo traduzcas ni lo repitas):\n"
         if titulo:
             contexto += f"- Título del video: {titulo.strip()[:200]}\n"
@@ -2935,6 +2940,10 @@ def _prompt_traducir_bloque(
             )
         if terminos:
             contexto += "- Terminología ya consolidada: " + ", ".join(terminos[:15]) + "\n"
+        if contexto_previo:
+            contexto += f"- Lo que se dijo justo antes (original, NO lo traduzcas): «…{contexto_previo.strip()[-600:]}»\n"
+        if contexto_siguiente:
+            contexto += f"- Lo que se dice justo después (original, NO lo traduzcas): «{contexto_siguiente.strip()[:300]}…»\n"
         contexto += "\n"
 
     if literal:
@@ -3054,9 +3063,10 @@ async def translate(req: TranslateRequest):
     if not txt:
         raise HTTPException(status_code=400, detail="Texto vacío.")
 
-    # Si el usuario pega la transcripción cruda de YouTube (con 0:00, 0:01…),
-    # quitar marcas de tiempo antes de traducir para no ensuciar la salida.
-    txt = _limpiar_transcripcion_youtube_cruda(txt)
+    # El doblaje manda texto ya limpio y segmentado: limpiar «marcas de hora» aquí
+    # borraba horas reales del diálogo («a las 10:30», auditoría H19).
+    if not req.literal:
+        txt = _limpiar_transcripcion_youtube_cruda(txt)
 
     src_code, trg_code, src_lang, trg_lang = _parse_translate_direction(req.direction)
 
@@ -3100,6 +3110,8 @@ async def translate(req: TranslateRequest):
                 req.titulo_video,
                 anterior,
                 terminos,
+                contexto_previo=req.contexto_previo,
+                contexto_siguiente=req.contexto_siguiente,
             )
 
         def ejecutar(prompt: str, max_tokens: int):
