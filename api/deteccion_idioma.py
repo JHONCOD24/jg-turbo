@@ -50,6 +50,34 @@ _RE_SOLO_ES = re.compile(r"[ñ¿¡]|(?<=[a-z])[áéíóú]", re.IGNORECASE)
 _RE_SOLO_EN = re.compile(r"\b\w+'(?:s|t|re|ve|ll|d|m)\b", re.IGNORECASE)
 _RE_PALABRA = re.compile(r"[a-záéíóúüñ]+", re.IGNORECASE)
 
+# Alfabetos que delatan el idioma sin léxico. El léxico de arriba solo separa
+# inglés de español: un texto en árabe quedaba «sin idioma» y la única señal era
+# la del proveedor (0,62), medido el 2026-09-25 (auditoría H1).
+_ESCRITURAS = (
+    ("ar", re.compile(r"[؀-ۿ]")),
+    ("ru", re.compile(r"[Ѐ-ӿ]")),
+    ("hi", re.compile(r"[ऀ-ॿ]")),
+    ("ko", re.compile(r"[가-힯ᄀ-ᇿ]")),
+    ("ja", re.compile(r"[぀-ヿ]")),   # kana: va antes que el chino
+    ("zh", re.compile(r"[一-鿿]")),
+    ("he", re.compile(r"[֐-׿]")),
+    ("el", re.compile(r"[Ͱ-Ͽ]")),
+    ("th", re.compile(r"[฀-๿]")),
+)
+
+
+def idioma_por_escritura(texto: str, minimo: float = 0.3) -> tuple[str, float]:
+    """Idioma evidente por el alfabeto. ``("", 0.0)`` si es latino o no hay letras."""
+    letras = "".join(c for c in str(texto or "")[:4000] if c.isalpha())
+    if not letras:
+        return "", 0.0
+    for codigo, patron in _ESCRITURAS:
+        proporcion = len(patron.findall(letras)) / len(letras)
+        if proporcion >= minimo:
+            return codigo, round(min(0.95, 0.6 + proporcion * 0.35), 3)
+    return "", 0.0
+
+
 # Cuánto demuestra cada señal sobre el idioma del AUDIO (no del texto).
 PESOS_FUENTE = {
     # YouTube declara el idioma del audio del video: es la señal más directa.
@@ -65,6 +93,8 @@ PESOS_FUENTE = {
     "pista_manual": 0.55,
     # Un proveedor externo nos dice el idioma del texto que entregó.
     "proveedor": 0.62,
+    # El alfabeto no miente sobre el TEXTO.
+    "escritura": 0.95,
 }
 
 NOMBRES_IDIOMA = {
@@ -72,6 +102,7 @@ NOMBRES_IDIOMA = {
     "de": "alemán", "it": "italiano", "ja": "japonés", "ko": "coreano",
     "zh": "chino", "ru": "ruso", "ar": "árabe", "hi": "hindi", "nl": "neerlandés",
     "tr": "turco", "pl": "polaco", "id": "indonesio", "vi": "vietnamita",
+    "he": "hebreo", "el": "griego", "th": "tailandés",
 }
 
 
@@ -236,6 +267,10 @@ def detectar(
             lexico["confianza"],
             detalle=f"{lexico['palabras']} palabras analizadas",
         ))
+
+    escritura, confianza_escritura = idioma_por_escritura(texto)
+    if escritura:
+        senales.append(senal("escritura", escritura, confianza_escritura, detalle="alfabeto del texto"))
 
     veredicto = combinar(senales)
     veredicto["lexico"] = lexico
