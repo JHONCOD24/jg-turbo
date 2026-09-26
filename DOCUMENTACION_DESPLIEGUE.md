@@ -510,9 +510,10 @@ Variables admitidas en Vercel:
 | `GROQ_API_KEY` | Clave de transcripción compartida (**obligatoria** para mic/archivo en todos los dispositivos) | Sin valor |
 | `GROQ_ASR_MODEL` | Modelo de transcripción | `whisper-large-v3` |
 | `GROQ_TIMEOUT_S` | Tiempo máximo de Groq | Definido en la API |
-| `GEMINI_API_KEY` | Traducción o mejora manual | Sin valor |
+| `GEMINI_API_KEY` | Traducción/mejora con Gemini. Si falla (API bloqueada o clave inválida), el servidor **cae solo** a los demás proveedores configurados (Mistral, etc.) | Configurada en Production (2026-09-26); la API de Gemini aún está desactivada en Google Cloud |
+| `YOUTUBE_DATA_API_KEY` | **Idioma real del audio** (`defaultAudioLanguage`) antes de pedir el texto. Sin ella se usa el título del video | Configurada en Production (2026-09-26) |
 | `OPENROUTER_API_KEY` | Proveedor alternativo | Sin valor |
-| `MISTRAL_API_KEY` | IA de pulido en servidor (configurada en prod) | Con valor en Production |
+| `MISTRAL_API_KEY` | IA de pulido/traducción en servidor (configurada en prod) | Con valor en Production |
 | `XAI_API_KEY` / `GROK_API_KEY` | Grok xAI para pulir texto (no es transcripción) | Sin valor |
 
 ## Sincronizar la copia de despliegue

@@ -86,15 +86,22 @@ gastar créditos ni cuota de más.
 | `verificar_arranque_ligero.mjs` | 9 OK + 1 fallo preexistente (1038 KB, ajeno) |
 | `verificar_movil_pantalla.mjs` | 60 comprobaciones, como antes |
 
-### Despliegue y verificación contra el dominio
+### Despliegues de esta entrega (2026-09-26)
 
-- `dpl_AU8hXERG7PE9j7rDrUtfZ1MjkXBB` (2026-09-26) · producción `v146` /
-  `jg-turbo-shell-v146` confirmados con `?nocache=` en `https://jg-turbo.vercel.app`.
-- Módulos de `js/youtube/` con `Content-Length` idéntico al local (11/11).
-- `/api/health`: `youtube_auto: true`, `youtube_data_api: false` (D1 sin clave:
-  el idioma se resuelve por título, como manda el por defecto del plan).
+| `dpl_…` | Qué entró |
+|---|---|
+| `dpl_AU8hXERG7PE9j7rDrUtfZ1MjkXBB` | Doblaje v3 completo (`v146` / `jg-turbo-shell-v146`) |
+| `dpl_3ZbyrBtErWh3CrKh2j32jiMqGsN1` | `YOUTUBE_DATA_API_KEY` en producción |
+| `dpl_62dWUkZRnFUzrL6bkbLWxhqmHhNx` | `GEMINI_API_KEY` + respaldo automático a Mistral + `tests/verificar_youtube_produccion.mjs` |
+
+Producción: https://jg-turbo.vercel.app · GitHub: `JHONCOD24/jg-turbo`, `main` al día.
+
+### Verificación contra el dominio real
+
+- `JG_JS_V = 'v146'` y `CACHE_SHELL = 'jg-turbo-shell-v146'` confirmados con `?nocache=`.
+- Módulos de `js/youtube/` con `Content-Length` idéntico al local (**11/11**).
 - `verificar_arranque_ligero.mjs` contra producción: **9 OK · 1 fallo preexistente**
-  (1053 KB; el mismo de local, ajeno a YouTube).
+  (~1053 KB; el mismo de local, ajeno a YouTube).
 
 | # | Video | Resultado |
 |---|---|---|
@@ -106,29 +113,55 @@ gastar créditos ni cuota de más.
 | A9 | Video sin subtítulos + permiso | **[POR CONFIRMAR]** (código exacto de Supadata `mode=native`). Cubierto por T3.5 en navegador simulado. |
 | A10 | iPhone real (H21) | **[POR CONFIRMAR]** — implementado y probado en emulador (T3.3). |
 
+### Claves y proveedor de IA (2026-09-26)
+
+| Variable | Dónde | Estado medido |
+|---|---|---|
+| `YOUTUBE_DATA_API_KEY` | Vercel Production + `.env` (ignorado por Git) | ✅ Activa. `/api/health` → `youtube_data_api: true`. El idioma sale de `snippet.defaultAudioLanguage` (fuente `youtube`, confianza 0.97). |
+| `GEMINI_API_KEY` | Vercel Production + `.env` | ⚠️ Configurada, pero la API `generativelanguage.googleapis.com` está **bloqueada** en el proyecto de Google Cloud de esa clave (`API_KEY_SERVICE_BLOCKED`). |
+
+**Nunca** pegar estas claves en código, pruebas, logs ni commits.
+
+#### Respaldo automático si Gemini falla (cambio en `api/index.py`)
+
+Antes, si el proveedor preferido daba 401/403 (clave inválida o API bloqueada),
+la traducción se caía. Ahora `_llamar_ia_con_respaldo` prueba el resto de
+proveedores configurados (`GEMINI_API_KEY` → `OPENROUTER_API_KEY` →
+`MISTRAL_API_KEY` → `XAI_API_KEY`) tanto en errores de **auth** como de **rate
+limit**. Así añadir `GEMINI_API_KEY` no tumba la traducción.
+
+Medido en producción tras el cambio:
+
+```json
+{"text":"¡Hola, mundo! Esto es una prueba del sistema de traducción alternativo.",
+ "provider":"mistral","model":"mistral-small-latest",
+ "validation":{"status":"ok","integrity_score":100}}
+```
+
+Es decir: Gemini rechazó, **Mistral cogió el relevo** y la persona no notó nada.
+
+**Para que Gemini mande de verdad** (un paso del dueño): habilitar
+«Generative Language API» en Google Cloud Console del proyecto de esa clave, o
+crear una clave en [Google AI Studio](https://aistudio.google.com/apikey) y
+cambiar `GEMINI_API_KEY` en Vercel. No hace falta otro deploy si solo se habilita
+la API.
+
+#### Prueba nueva · `tests/verificar_youtube_produccion.mjs`
+
+Corre contra `https://jg-turbo.vercel.app` con un video **real** (gasta ~1 crédito
+de Supadata). Cubre A5–A8: progreso visible, sin «árabe», Cerrar que corta
+traducción y voz, formulario de vuelta, caché al reabrir y cero errores de
+JavaScript. Uso: `node tests/verificar_youtube_produccion.mjs` (o `--headed`).
+
 ### [POR CONFIRMAR] abiertos
 
-- **iPhone real (H21):** que Safari silencie el original mientras suena la voz
-  (prueba A10).
-- **Supadata `mode=native`:** código exacto que devuelve cuando no hay subtítulos
-  (prueba A9).
+- **A3 ·** video real en portugués o francés (doblaje desde otro idioma).
+- **A4 ·** video real en español (mensaje «ya está en español»).
+- **A9 ·** código exacto de Supadata `mode=native` en un video sin subtítulos.
+- **A10 · iPhone real (H21):** que Safari silencie el original mientras suena la voz.
 - **`unloadModule` de la IFrame API** para quitar los subtítulos de YouTube: no
-  está en la documentación oficial; si no existe, se ignora sin romper (A1/A2).
-- **Gemini como traductor primario:** `GEMINI_API_KEY` está configurada, pero la
-  API `generativelanguage.googleapis.com` está **bloqueada** en el proyecto de
-  Google Cloud de esa clave (`API_KEY_SERVICE_BLOCKED`). Mientras tanto el
-  respaldo automático la sustituye por **Mistral** (medido: `provider: mistral`,
-  `integrity_score: 100`). Para que Gemini mande: habilitar «Generative Language
-  API» en Google Cloud Console del proyecto de la clave, o usar una clave de
-  [Google AI Studio](https://aistudio.google.com/apikey).
-
-### Claves (2026-09-26)
-
-- `YOUTUBE_DATA_API_KEY` en Vercel Production: activa (`youtube_data_api: true`).
-  El idioma se resuelve con `defaultAudioLanguage` (fuente `youtube`, confianza 0.97).
-- `GEMINI_API_KEY` en Vercel Production: configurada; la API está desactivada en
-  Google Cloud y el servidor cae a Mistral sin que la persona note nada.
-- Ambas solo en Vercel y `.env` (ignorado por Git). Nunca en código ni commits.
+  está en la documentación oficial; si no existe, se ignora sin romper.
+- **Gemini primario:** pendiente de habilitar la API en Google Cloud (ver arriba).
 - **Sustitutos de las voces regionales retiradas** (2026-09-03): el selector del
   doblaje ofrece hoy las voces neurales que el motor sigue usando además de la
   biblioteca; cuando lleguen los reemplazos, `ttsCatalogoVoces()` los ofrecerá y
