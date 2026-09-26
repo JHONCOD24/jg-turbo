@@ -1,3 +1,4 @@
+import { crearReloj } from './reloj.js';
 import { buscarIndiceSegmento } from './syncEngine.js';
 
 // Objetivo de sincronía: el arranque de cada frase no debe separarse más de
@@ -71,6 +72,7 @@ export class DubbingEngine {
     onStatus = () => {},
     onMetricas = () => {},
     crearAudio = () => new Audio(),
+    reloj = null,
     colchonSegundos = 90,
   }) {
     this.player = player;
@@ -83,9 +85,9 @@ export class DubbingEngine {
     this.audio.preservesPitch = true;
     this.audio.crossOrigin = 'anonymous';
     this.activo = false;
-    this.reproduciendo = false;
+    this.reproduciendo = player.getPlayerState?.() === 1;
     this.indice = -1;
-    this.frame = 0;
+    this.reloj = reloj || crearReloj(() => this.#actualizar(), { intervaloMs: 100 });
     this.cargaPendiente = null;
     this.colchonPedido = false;
     this.esperandoVoz = false;
@@ -113,6 +115,7 @@ export class DubbingEngine {
     this.audio.volume = this.volumenVoz;
     this.reproduciendo = true;
     this.#actualizar(true);
+    this.reloj.iniciar();
     // Se intenta iniciar el elemento de audio dentro del clic del usuario. Esto
     // respeta el bloqueo de reproducción automática de los navegadores móviles.
     if (this.audio.src) this.audio.play().catch(() => {});
@@ -128,8 +131,7 @@ export class DubbingEngine {
     this.audio.load();
     this.indice = -1;
     this.esperandoVoz = false;
-    cancelAnimationFrame(this.frame);
-    this.frame = 0;
+    this.reloj.detener();
     this.player.setVolume?.(this.volumenOriginalPrevio);
     this.onStatus('Audio original activo.', 'inactivo');
   }
@@ -165,23 +167,12 @@ export class DubbingEngine {
     if (!this.activo) return;
     if (this.reproduciendo) {
       this.#actualizar(true);
-      this.#programar();
+      this.reloj.iniciar();
     } else {
       this.audio.pause();
-      cancelAnimationFrame(this.frame);
-      this.frame = 0;
+      this.reloj.detener();
       this.#actualizar(true);
     }
-  }
-
-  #programar() {
-    if (this.frame || !this.activo || !this.reproduciendo) return;
-    const tick = () => {
-      this.frame = 0;
-      this.#actualizar();
-      this.#programar();
-    };
-    this.frame = requestAnimationFrame(tick);
   }
 
   #actualizar(forzar = false) {

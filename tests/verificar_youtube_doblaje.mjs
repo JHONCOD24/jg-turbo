@@ -223,6 +223,22 @@ try {
 
   // ── Escenarios de las tareas ────────────────────────────────────────────
 
+  console.log('\n── T1.4: la voz suena aunque la página no se pinte (sin rAF) ─');
+  {
+    const { contexto, pagina } = await abrir(navegador, { sinRaf: true, youtube: () => respuestaYoutube({ confianza: 0.9, fuente: 'usuario' }) });
+    await pegarEnlace(pagina);
+    await pagina.click('#ytSyncBtn');
+    await esperarListo(pagina);
+    const antes = await pagina.evaluate(() => window.__plays);
+    await reproducirConVoz(pagina);
+    await esperar(3500);
+    const despues = await pagina.evaluate(() => window.__plays);
+    comprobar('sin requestAnimationFrame, la voz en español arranca igual', despues > antes, `play() ${antes} → ${despues}`);
+    const t = await pagina.evaluate(() => window.__yt.getCurrentTime());
+    comprobar('y el video avanza mientras suena', t > 2, `${t.toFixed(1)} s`);
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();

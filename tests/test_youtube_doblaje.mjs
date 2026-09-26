@@ -59,6 +59,30 @@ const de = await modulo('dubbingEngine.js');
   comprobar(ts.normalizarSegmentos(fixture.segments).length === 44, 'el fixture real conserva sus 44 segmentos (el [music] era parte de una frase)');
 }
 
+// ── T1.4: reloj con temporizador ────────────────────────────────────────
+const { crearReloj } = await modulo('reloj.js');
+{
+  let llamadas = 0;
+  let programado = null;
+  let cancelado = null;
+  const reloj = crearReloj(() => { llamadas += 1; }, {
+    intervaloMs: 100,
+    programar: (fn, ms) => { programado = { fn, ms }; return 7; },
+    cancelar: (id) => { cancelado = id; },
+  });
+  reloj.iniciar();
+  reloj.iniciar();
+  comprobar(programado?.ms === 100 && reloj.activo, 'reloj: programa un intervalo de 100 ms una sola vez');
+  programado.fn();
+  programado.fn();
+  comprobar(llamadas === 2, 'reloj: cada tic llama a la función');
+  reloj.detener();
+  comprobar(cancelado === 7 && !reloj.activo, 'reloj: detener cancela el intervalo');
+  let sobrevivio = true;
+  try { crearReloj(() => { throw new Error('x'); }, { programar: (fn) => { fn(); return 1; }, cancelar: () => {} }).iniciar(); } catch { sobrevivio = false; }
+  comprobar(sobrevivio, 'reloj: un error en un tic no tumba el reloj');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

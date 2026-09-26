@@ -1,3 +1,5 @@
+import { crearReloj } from './reloj.js';
+
 export function buscarIndiceSegmento(segmentos, tiempo) {
   let izquierda = 0;
   let derecha = segmentos.length - 1;
@@ -16,12 +18,12 @@ export function buscarIndiceSegmento(segmentos, tiempo) {
 }
 
 export class SyncEngine {
-  constructor({ player, segmentos, onSegmentChange, onPlaybackRateChange = () => {} }) {
+  constructor({ player, segmentos, onSegmentChange, onPlaybackRateChange = () => {}, reloj = null }) {
     this.player = player;
     this.segmentos = segmentos;
     this.onSegmentChange = onSegmentChange;
     this.onPlaybackRateChange = onPlaybackRateChange;
-    this.frame = 0;
+    this.reloj = reloj || crearReloj(() => this.#actualizar(), { intervaloMs: 150 });
     this.indiceActivo = -2;
     this.reproduciendo = false;
     this.desuscribirEstado = player.suscribirEstado((estado) => this.#cambiarEstado(estado));
@@ -36,26 +38,16 @@ export class SyncEngine {
   iniciar() {
     this.#actualizar();
     this.onPlaybackRateChange(this.player.getPlaybackRate());
+    if (this.player.getPlayerState?.() === 1) { this.reproduciendo = true; this.reloj.iniciar(); }
   }
 
   #cambiarEstado(estado) {
     this.reproduciendo = estado === 'playing';
-    if (this.reproduciendo) this.#programar();
+    if (this.reproduciendo) this.reloj.iniciar();
     else {
-      cancelAnimationFrame(this.frame);
-      this.frame = 0;
+      this.reloj.detener();
       this.#actualizar();
     }
-  }
-
-  #programar() {
-    if (this.frame || !this.reproduciendo) return;
-    const tick = () => {
-      this.frame = 0;
-      this.#actualizar();
-      if (this.reproduciendo) this.#programar();
-    };
-    this.frame = requestAnimationFrame(tick);
   }
 
   #actualizar() {
@@ -67,7 +59,7 @@ export class SyncEngine {
 
   destruir() {
     this.reproduciendo = false;
-    cancelAnimationFrame(this.frame);
+    this.reloj.detener();
     this.desuscribirEstado?.();
     this.desuscribirVelocidad?.();
   }
