@@ -60,7 +60,7 @@ freno en `#precargarSiguiente` si vinieran duplicados. Detalle en `TRAMPAS.md`.
 
 ### Despliegue de esta entrega (2026-09-26)
 
-`v147` / `jg-turbo-shell-v147` · `dpl_…` [PENDIENTE: anotar tras desplegar].
+`v147` / `jg-turbo-shell-v147` · `dpl_Bar7QpgwVTnvtj4u7Cm3g3XUCQRY` (2026-09-26, READY, alias https://jg-turbo.vercel.app verificado: `JG_JS_V='v147'`, selector auto + 2.ª voz en el HTML, 5/5 módulos `js/youtube/` HTTP 200, `/api/health` ok con `youtube_auto: true`; arranque contra prod 9 OK + 1 fallo preexistente).
 
 Producción: https://jg-turbo.vercel.app · GitHub: `JHONCOD24/jg-turbo`, `main` al día.
 
