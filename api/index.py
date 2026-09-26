@@ -621,6 +621,19 @@ def _llamar_ia_con_respaldo(
             or server_prov == "none"
             or (server_key == api_key and server_prov == provider_ef)
         ):
+            # Misma clave/que falló: probar el resto del servidor antes de rendirse
+            for alt_env, alt_prov in [
+                ("GEMINI_API_KEY", "gemini"),
+                ("OPENROUTER_API_KEY", "openrouter"),
+                ("MISTRAL_API_KEY", "mistral"),
+                ("XAI_API_KEY", "xai"),
+            ]:
+                alt_key = os.environ.get(alt_env)
+                if alt_key and alt_prov != provider_ef:
+                    try:
+                        return _llamar_ia(alt_prov, alt_key.strip(), prompt, openrouter_model, max_tokens)
+                    except Exception:
+                        continue
             if es_auth:
                 raise Exception(
                     f"{provider_ef}: clave no autorizada (401). "
@@ -637,8 +650,15 @@ def _llamar_ia_con_respaldo(
         try:
             return _llamar_ia(server_prov, server_key, prompt, openrouter_model, max_tokens)
         except Exception as e2:
-            # Si el servidor también está rate-limited, probar otro proveedor del servidor distinto
-            if _es_error_rate_limit_ia(e2) or _es_error_rate_limit_ia(e):
+            # Si el servidor también falla (429 o clave/API bloqueada), probar el resto
+            # de proveedores configurados. Así añadir GEMINI_API_KEY no tumba la
+            # traducción si esa API está desactivada en el proyecto de Google.
+            if (
+                _es_error_rate_limit_ia(e2)
+                or _es_error_rate_limit_ia(e)
+                or _es_error_auth_ia(e2)
+                or _es_error_auth_ia(e)
+            ):
                 for alt_env, alt_prov in [
                     ("GEMINI_API_KEY", "gemini"),
                     ("OPENROUTER_API_KEY", "openrouter"),

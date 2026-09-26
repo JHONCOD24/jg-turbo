@@ -98,13 +98,13 @@ gastar créditos ni cuota de más.
 
 | # | Video | Resultado |
 |---|---|---|
-| A1 | `dNWkwrqAkcM` (inglés, 88 min, doblajes automáticos) | ✅ `language=en`, `language_source=titulo`, `confidence=0.8`, texto en inglés. **El fallo original («árabe») está corregido.** Sin `YOUTUBE_DATA_API_KEY` la fuente es el título; con la clave sería `youtube`. |
-| A2 | `jNQXAC9IVRw` (inglés, 19 s) | ✅ Con `title_hint` del reproductor: `language=en`, `source=titulo`. Con `language: "en"` explícito: `source=usuario`. Nota: sin título ni idioma pedido, el proveedor puede entregar otra pista (`de` medido) — por eso la app siempre manda el título del reproductor (T1.7). |
+| A1 | `dNWkwrqAkcM` (inglés, 88 min, doblajes automáticos) | ✅ **Con Data API:** `language=en`, `language_source=youtube`, confianza **0.97**, `duration_s=5314`. El fallo original («árabe») está corregido. |
+| A2 | `jNQXAC9IVRw` (inglés, 19 s) | ✅ Con `title_hint` del reproductor: `language=en`, `source=titulo`. Con `language: "en"` explícito: `source=usuario`. |
 | A3 | Video en portugués/francés | **[POR CONFIRMAR]** (hace falta un video real de esos idiomas + créditos). |
-| A4 | Video en español | **[POR CONFIRMAR]** (los IDs de prueba disponibles no se pudieron procesar; la lógica cliente de «ya está en español» está cubierta por las pruebas de navegador T1.6). |
-| A5–A8 | Pestaña 2.º plano, salto, cancelar, caché | **[POR CONFIRMAR en navegador visible]** — cubiertos por `verificar_youtube_doblaje.mjs` (81 OK) con API simulada. |
+| A4 | Video en español | **[POR CONFIRMAR]** (los IDs de prueba disponibles no se pudieron procesar; la lógica cliente de «ya está en español» está cubierta por T1.6). |
+| A5–A8 | Progreso, Cerrar, caché, sin errores | ✅ `tests/verificar_youtube_produccion.mjs` contra el dominio real: **9 OK · 0 fallos** (progreso visible, sin «árabe», Cerrar no deja trabajo colgado, reabrir no repite `/youtube`). |
 | A9 | Video sin subtítulos + permiso | **[POR CONFIRMAR]** (código exacto de Supadata `mode=native`). Cubierto por T3.5 en navegador simulado. |
-| A10 | iPhone real (H21) | **[POR CONFIRMAR]** — la nota de Safari y el silenciado del original están implementados y probados en emulador (T3.3). |
+| A10 | iPhone real (H21) | **[POR CONFIRMAR]** — implementado y probado en emulador (T3.3). |
 
 ### [POR CONFIRMAR] abiertos
 
@@ -114,10 +114,21 @@ gastar créditos ni cuota de más.
   (prueba A9).
 - **`unloadModule` de la IFrame API** para quitar los subtítulos de YouTube: no
   está en la documentación oficial; si no existe, se ignora sin romper (A1/A2).
-- **`YOUTUBE_DATA_API_KEY` (D1):** no está en Vercel. Sin ella el idioma se
-  resuelve por título (funciona); con ella gana precisión (`defaultAudioLanguage`).
-  Para activarla: crear la clave en Google Cloud, ponerla como variable de
-  entorno de Producción en Vercel y volver a desplegar.
+- **Gemini como traductor primario:** `GEMINI_API_KEY` está configurada, pero la
+  API `generativelanguage.googleapis.com` está **bloqueada** en el proyecto de
+  Google Cloud de esa clave (`API_KEY_SERVICE_BLOCKED`). Mientras tanto el
+  respaldo automático la sustituye por **Mistral** (medido: `provider: mistral`,
+  `integrity_score: 100`). Para que Gemini mande: habilitar «Generative Language
+  API» en Google Cloud Console del proyecto de la clave, o usar una clave de
+  [Google AI Studio](https://aistudio.google.com/apikey).
+
+### Claves (2026-09-26)
+
+- `YOUTUBE_DATA_API_KEY` en Vercel Production: activa (`youtube_data_api: true`).
+  El idioma se resuelve con `defaultAudioLanguage` (fuente `youtube`, confianza 0.97).
+- `GEMINI_API_KEY` en Vercel Production: configurada; la API está desactivada en
+  Google Cloud y el servidor cae a Mistral sin que la persona note nada.
+- Ambas solo en Vercel y `.env` (ignorado por Git). Nunca en código ni commits.
 - **Sustitutos de las voces regionales retiradas** (2026-09-03): el selector del
   doblaje ofrece hoy las voces neurales que el motor sigue usando además de la
   biblioteca; cuando lleguen los reemplazos, `ttsCatalogoVoces()` los ofrecerá y
