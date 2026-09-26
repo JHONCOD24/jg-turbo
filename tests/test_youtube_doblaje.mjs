@@ -238,10 +238,12 @@ const io = await modulo('idiomaOrigen.js');
 }
 
 // ── T2.6: velocidad estable ─────────────────────────────────────────────
+// Ajuste 2026-09-26: 0,95–1,20. El 0,90 se oía frenado («frenos en la voz») y
+// con 2 s de silencio prestado casi nunca hace falta bajar tanto ni pasar de 1,20.
 {
-  comprobar(de.VELOCIDAD_MINIMA === 0.9 && de.VELOCIDAD_MAXIMA === 1.25, 'la voz se mueve entre 0,9× y 1,25×');
-  comprobar(cerca(de.calcularVelocidadAudio(10, 5, 1), 1.25), 'si no cabe, acelera hasta 1,25× y no más');
-  comprobar(cerca(de.calcularVelocidadAudio(3, 6, 1), 0.9), 'si sobra tiempo, frena hasta 0,9× y no más');
+  comprobar(de.VELOCIDAD_MINIMA === 0.95 && de.VELOCIDAD_MAXIMA === 1.2, 'la voz se mueve entre 0,95× y 1,20×');
+  comprobar(cerca(de.calcularVelocidadAudio(10, 5, 1), 1.2), 'si no cabe, acelera hasta 1,20× y no más');
+  comprobar(cerca(de.calcularVelocidadAudio(3, 6, 1), 0.95), 'si sobra tiempo, frena hasta 0,95× y no más');
   comprobar(cerca(de.calcularVelocidadAudio(5.5, 5, 1.5), 1.1 * 1.5), 'la velocidad elegida para el video se respeta encima');
   const unidades = ds.agruparPorTiempo(ts.normalizarSegmentos(fixture.segments));
   comprobar(unidades.some((u) => u.duration > u.finHabla - u.startTime), 'las frases usan el silencio prestado como tiempo extra');
@@ -260,6 +262,68 @@ const io = await modulo('idiomaOrigen.js');
   const todo = await servicio.traducirTodo(segmentos, { ya });
   comprobar(todo.size === segmentos.length && todo.get(3) === 'YA 3', 'traducirTodo completa el texto y conserva lo ya traducido');
   comprobar(pedidos.flat().every((i) => i >= 10), 'no vuelve a pagar lo que el doblaje ya tradujo');
+}
+
+// ── Voces del doblaje: automática y 2 hablantes (2026-09-26) ─────────────
+const vd = await modulo('vocesDoblaje.js');
+{
+  // Detección de diálogo sobre el texto CRUDO (la limpieza borra el >>).
+  comprobar(vd.esCambioHablante('>> At this point'), 'el >> marca cambio de hablante');
+  comprobar(vd.esCambioHablante('— Hola, ¿cómo estás?'), 'el guion de diálogo marca cambio');
+  comprobar(!vd.esCambioHablante('Hello world, this is English'), 'una frase normal no marca cambio');
+  // normalizarSegmentos preserva la marca aunque limpie el texto.
+  const conMarca = ts.normalizarSegmentos([
+    { startTime: 0, endTime: 2, text: 'Hello there' },
+    { startTime: 2, endTime: 4, text: '>> General Kenobi, you are a bold one' },
+    { startTime: 4, endTime: 6, text: '>> Hello there again' },
+  ]);
+  comprobar(conMarca.length === 3 && !conMarca[0].cambioHablante, 'sin marca no hay campo cambioHablante');
+  comprobar(conMarca[1].cambioHablante === true && conMarca[2].cambioHablante === true, 'la marca sobrevive a la limpieza');
+  comprobar(!/>>/.test(conMarca[1].text), 'el >> no se lee en voz alta');
+  comprobar(vd.hayDialogo(conMarca), 'dos cambios = hay diálogo');
+  comprobar(!vd.hayDialogo(ts.normalizarSegmentos(fixture.segments.slice(0, 3))), 'un monólogo no es diálogo');
+  // Las unidades alternan de hablante y cortan en el cambio (sin mezclar voces).
+  const unidades = ds.agruparPorTiempo(conMarca);
+  comprobar(unidades.length >= 2, 'el cambio de hablante corta la frase');
+  comprobar(unidades[0].hablante === 0, 'el primer hablante es el 0');
+  comprobar(unidades.some((u) => u.hablante === 1), 'hay al menos una frase del hablante 1');
+  const mono = ds.agruparPorTiempo(ts.normalizarSegmentos([
+    { startTime: 0, endTime: 2, text: 'Hello there' },
+    { startTime: 2.5, endTime: 4, text: 'How are you today' },
+  ]));
+  comprobar(mono.every((u) => u.hablante === 0), 'el monólogo queda todo en el hablante 0');
+  // Un >> suelto es un artefacto: ni corta ni voltea la voz.
+  const suelto = ts.normalizarSegmentos([
+    { startTime: 0, endTime: 2, text: 'Hello there' },
+    { startTime: 2.5, endTime: 4.5, text: '>> How are you today' },
+    { startTime: 5, endTime: 7, text: 'Nice to see you again' },
+  ]);
+  const uSuelto = ds.agruparPorTiempo(suelto);
+  const uLimpio = ds.agruparPorTiempo(ts.normalizarSegmentos([
+    { startTime: 0, endTime: 2, text: 'Hello there' },
+    { startTime: 2.5, endTime: 4.5, text: 'How are you today' },
+    { startTime: 5, endTime: 7, text: 'Nice to see you again' },
+  ]));
+  comprobar(uSuelto.every((u) => u.hablante === 0), 'un >> suelto no voltea la voz a mitad');
+  comprobar(uSuelto.length === uLimpio.length, 'un >> suelto no parte frases de más');
+  // Género: exige ventaja clara, si no, no afirma nada.
+  comprobar(vd.inferirGenero('She told her sister that her mother would come with her') === 'female', 'pronombres femeninos claros');
+  comprobar(vd.inferirGenero('He told his brother that his father would come with him') === 'male', 'pronombres masculinos claros');
+  comprobar(vd.inferirGenero('Hello world, this is a test of the system') === '', 'sin pistas no se afirma género');
+  comprobar(vd.inferirGenero('He said hello and she said hi to him and her') === '', 'sin ventaja clara no se afirma género');
+  // Automática: siempre neural rápida, nunca Fish.
+  const catalogo = [
+    { value: 'neural:auto:female', group: 'Neural', label: 'Salomé' },
+    { value: 'neural:auto:male', group: 'Neural', label: 'Gonzalo' },
+    { value: 'fish:roberto', group: 'Fish', label: 'Roberto' },
+  ];
+  const autoF = vd.elegirVocesAutomaticas({ textosOriginales: ['She told her sister'], vozGlobal: 'neural:auto:male', catalogo });
+  comprobar(autoF.principal === 'neural:auto:female' && vd.esNeuralRapida(autoF.principal), 'detectada mujer: principal neural femenina');
+  comprobar(autoF.secundaria === 'neural:auto:male', 'la secundaria es del otro género');
+  const autoSinPistas = vd.elegirVocesAutomaticas({ textosOriginales: ['Hello world test'], vozGlobal: 'neural:auto:male', catalogo });
+  comprobar(autoSinPistas.principal === 'neural:auto:male', 'sin pistas manda la voz global');
+  comprobar(vd.vozParaUnidad({ hablante: 0 }, { vozPrincipal: 'A', vozSecundaria: 'B' }) === 'A', 'hablante 0 usa la principal');
+  comprobar(vd.vozParaUnidad({ hablante: 1 }, { vozPrincipal: 'A', vozSecundaria: 'B' }) === 'B', 'hablante 1 usa la secundaria');
 }
 
 // ── Resumen ─────────────────────────────────────────────────────────────

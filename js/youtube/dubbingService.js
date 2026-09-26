@@ -17,7 +17,7 @@ const PAUSA_MEDIA = /[,;:—-]["'»)\]]?$/;
 
 
 /** Silencio posterior que una frase puede tomar prestado para no acelerar la voz. */
-export const SILENCIO_PRESTADO_MAX_S = 1.5;
+export const SILENCIO_PRESTADO_MAX_S = 2;
 
 /**
  * Frases de voz definidas por el TIEMPO del original, no por la traducción.
@@ -25,18 +25,32 @@ export const SILENCIO_PRESTADO_MAX_S = 1.5;
  * traducir) y la traducción solo rellena su texto. Mismas reglas de corte que
  * `agruparSegmentosParaVoz`, aplicadas al texto original. Recibe segmentos ya
  * normalizados (`normalizarSegmentos`).
+ *
+ * Cada unidad lleva `hablante` (0 o 1): cada marca `>>` alterna de hablante
+ * para que el diálogo suene con 2 voces distintas. Un monólogo queda todo en 0.
  */
 export function agruparPorTiempo(segmentos) {
   const grupos = [];
   let actual = null;
+  let hablante = 0;
+  // Un >> suelto es un artefacto, no un diálogo: solo con 2 cambios
+  // confirmados se alternan voces (y se corta en el cambio). Sin diálogo, las
+  // unidades quedan idénticas a las de antes: un monólogo = 1 voz.
+  const lista = Array.isArray(segmentos) ? segmentos : [];
+  const dialogo = lista.filter((s) => s?.cambioHablante).length >= 2;
   const abrir = (segmento, indice) => ({
     startTime: segmento.startTime, finHabla: segmento.endTime, desde: indice, hasta: indice, textoOriginal: segmento.text,
+    hablante,
   });
   (segmentos || []).forEach((segmento, indice) => {
     const texto = String(segmento?.text || '').trim();
     const inicio = Number(segmento?.startTime);
     const fin = Number(segmento?.endTime);
     if (!texto || !Number.isFinite(inicio) || !Number.isFinite(fin) || fin <= inicio) return;
+    const cambio = dialogo && segmento?.cambioHablante;
+    // La primera marca (>>) abre la conversación, no alterna: el primer
+    // hablante siempre es el 0. Las siguientes sí alternan 0 ↔ 1.
+    if (cambio && (actual || grupos.length)) hablante = hablante === 0 ? 1 : 0;
     if (!actual) { actual = abrir(segmento, indice); return; }
     const haySilencio = inicio - actual.finHabla > MAXIMO_SALTO;
     const nuevoTexto = `${actual.textoOriginal} ${texto}`;
@@ -44,6 +58,7 @@ export function agruparPorTiempo(segmentos) {
     const puntoNatural = TERMINA_IDEA.test(actual.textoOriginal)
       || (PAUSA_MEDIA.test(actual.textoOriginal) && duracionActual >= DURACION_OBJETIVO);
     const debeCortar = haySilencio
+      || Boolean(cambio)
       || fin - actual.startTime > DURACION_MAXIMA
       || nuevoTexto.length > MAXIMO_CARACTERES
       || (puntoNatural && duracionActual >= DURACION_MINIMA);
@@ -162,7 +177,10 @@ export class DubbingService {
     unidad.promesa = (async () => {
       try {
         await this.#cupo();
-        const resultado = await this.generarAudio(unidad.text);
+        // Se pasa la unidad completa: el controlador elige la voz según el
+        // hablante (diálogos con 2 voces). Las funciones viejas que solo
+        // reciben el texto siguen funcionando: el 2.º argumento se ignora.
+        const resultado = await this.generarAudio(unidad.text, unidad);
         const blob = resultado instanceof Blob ? resultado : resultado?.blob;
         if (!blob?.size) throw new Error('El servicio no devolvió audio.');
         if (this.destruido) throw new Error('La preparación de voz fue cancelada.');

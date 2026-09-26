@@ -7,11 +7,13 @@ export const DESFASE_OBJETIVO_S = 0.15;
 // Por encima de esto ya no se disimula con velocidad: se salta al punto exacto.
 export const DESFASE_SALTO_S = 0.4;
 // Rango de velocidad en el que una voz sigue sonando natural. El límite viejo
-// era 4x, que es ininteligible: el español ocupa más tiempo que el inglés y casi
+// era 4x, que es ininteligible: el español ocupa más que el inglés y casi
 // siempre pedía acelerar, así que la voz se volvía un chillido.
 // Medido 2026-09-25: con 0,85–1,35 la voz saltaba de «cámara lenta» a «ardilla» entre frases. Con el silencio prestado (T2.1) casi siempre cabe sin pasar de 1,25.
-export const VELOCIDAD_MINIMA = 0.9;
-export const VELOCIDAD_MAXIMA = 1.25;
+// Ajuste 2026-09-26: 0,95–1,20. El 0,90 se oía frenado («frenos en la voz») y
+// con 2 s de silencio prestado casi nunca hace falta bajar tanto ni subir de 1,20.
+export const VELOCIDAD_MINIMA = 0.95;
+export const VELOCIDAD_MAXIMA = 1.2;
 // Corrección fina: empujar o frenar un 6 % es imperceptible y evita saltos.
 const AJUSTE_FINO_MAXIMO = 0.06;
 // Margen que se le concede a una frase para terminar su última sílaba.
@@ -85,10 +87,18 @@ export class DubbingEngine {
     this.onFin = onFin;
     this.colchonSegundos = colchonSegundos;
     this.modoSilenciarOriginal = modoSilenciarOriginal;
-    this.audio = crearAudio();
-    this.audio.preload = 'auto';
-    this.audio.preservesPitch = true;
-    this.audio.crossOrigin = 'anonymous';
+    // Doble audio alternado (igual que el lector PDF desde v2.8.0): mientras
+    // suena una frase, la otra ya tiene la siguiente cargada. Con un solo
+    // elemento, cada cambio de frase era pausa + src + load + play: de ahí los
+    // micro-cortes («frenos») entre frases seguidas.
+    this.elementos = [crearAudio(), crearAudio()];
+    for (const el of this.elementos) {
+      el.preload = 'auto';
+      el.preservesPitch = true;
+      el.crossOrigin = 'anonymous';
+    }
+    this.cual = 0;
+    this.audio = this.elementos[0];
     this.activo = false;
     this.reproduciendo = player.getPlayerState?.() === 1;
     this.indice = -1;
@@ -105,19 +115,21 @@ export class DubbingEngine {
     this.ultimaMuestra = 0;
     this.desuscribirEstado = player.suscribirEstado((estado) => this.#cambiarEstado(estado));
     this.desuscribirVelocidad = player.suscribirVelocidad(() => this.#actualizar(true));
-    this.audio.addEventListener('loadedmetadata', () => this.#actualizar(true));
-    this.audio.addEventListener('error', () => {
-      if (this.activo) this.onStatus('No se pudo reproducir un bloque de voz.', 'error');
-    });
+    for (const el of this.elementos) {
+      el.addEventListener('loadedmetadata', () => this.#actualizar(true));
+      el.addEventListener('error', () => {
+        if (this.activo) this.onStatus('No se pudo reproducir un bloque de voz.', 'error');
+      });
+    }
   }
 
-/** Enciende la voz sin tocar el reproductor: si el video ya corre, entra en el siguiente tic. */
+  /** Enciende la voz sin tocar el reproductor: si el video ya corre, entra en el siguiente tic. */
   activar() {
     if (this.activo) return;
     this.activo = true;
     this.volumenOriginalPrevio = this.player.getVolume?.() ?? 100;
     if (this.player.isMuted?.()) this.player.unMute?.();
-    this.audio.volume = this.volumenVoz;
+    for (const el of this.elementos) el.volume = this.volumenVoz;
     this.esperandoVoz = true;   // el original suena normal hasta que haya voz encima
     this.#actualizar(true);
     if (this.reproduciendo) this.reloj.iniciar();
@@ -135,9 +147,13 @@ export class DubbingEngine {
   desactivar() {
     if (!this.activo) return;
     this.activo = false;
-    this.audio.pause();
-    this.audio.removeAttribute('src');
-    this.audio.load();
+    for (const el of this.elementos) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+    this.cual = 0;
+    this.audio = this.elementos[0];
     this.indice = -1;
     this.esperandoVoz = false;
     this.reloj.detener();
@@ -156,7 +172,7 @@ export class DubbingEngine {
   /** Volumen de la voz en español (0 a 1). */
   definirVolumenVoz(valor) {
     this.volumenVoz = Math.max(0, Math.min(1, Number(valor)));
-    this.audio.volume = this.volumenVoz;
+    for (const el of this.elementos) el.volume = this.volumenVoz;
   }
 
   /** Desfase medido: promedio y p95 en milisegundos. */
@@ -216,10 +232,10 @@ export class DubbingEngine {
     }
 
     if (indice !== this.indice || this.audio.src !== unidad.url) {
-      this.indice = indice;
-      this.audio.src = unidad.url;
-      this.audio.load();
+      this.#cambiarA(indice, unidad);
       forzar = true;
+    } else {
+      this.#precargarSiguiente(indice);
     }
 
     const duracionAudio = Number(this.audio.duration);
@@ -254,6 +270,38 @@ export class DubbingEngine {
         this.onStatus('Pulsa otra vez “Reproducir con voz” para habilitar el audio.', 'error');
       });
     }
+  }
+
+  /** Cambia a la frase sin cortar la anterior a la fuerza: el elemento libre
+   * ya suele traerla precargada, así que suena al instante (sin frenos). */
+  #cambiarA(indice, unidad) {
+    const anterior = this.audio;
+    const siguiente = this.elementos[1 - this.cual];
+    try { anterior.pause(); } catch (_) {}
+    this.cual = 1 - this.cual;
+    this.audio = siguiente;
+    this.indice = indice;
+    siguiente.volume = this.volumenVoz;
+    if (siguiente.src !== unidad.url) {
+      siguiente.src = unidad.url;
+      siguiente.load();
+    }
+  }
+
+  /** Deja la frase inmediata cargada en el elemento libre (sin sonarla). */
+  #precargarSiguiente(indice) {
+    const libre = this.elementos[1 - this.cual];
+    // Si la fábrica devolvió el mismo elemento dos veces no hay libre: sin
+    // este freno, la precarga pisaría la frase que está sonando.
+    if (libre === this.audio) return;
+    const siguiente = this.servicio.unidades[indice + 1];
+    if (!siguiente || siguiente.estado !== 'listo' || !siguiente.url) return;
+    if (libre.src === siguiente.url) return;
+    try {
+      libre.src = siguiente.url;
+      libre.load();
+      libre.volume = this.volumenVoz;
+    } catch (_) {}
   }
 
   /** Sube el original mientras no hay voz que poner encima. */

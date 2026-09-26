@@ -415,6 +415,10 @@ try {
     const masculina = await pagina.evaluate(() => [...document.querySelectorAll('#ytVozSelect option')].find((o) => /:male$/.test(o.value))?.value || '');
     const antes = reg.tts.length;
     await pagina.selectOption('#ytVozSelect', masculina);
+    // El video de prueba trae diálogo (3 marcas >>): se fija la 2.ª voz en la
+    // misma masculina para comprobar que el cambio de voz entra sin cortar.
+    comprobar('con diálogo se ofrece la segunda voz', await pagina.isVisible('#ytVoz2Wrap'));
+    await pagina.selectOption('#ytVoz2Select', masculina);
     await reproducirConVoz(pagina); await esperar(3000);
     const nuevas = reg.tts.slice(antes);
     comprobar('desde el cambio, las frases salen con la voz nueva', nuevas.length > 0 && nuevas.every((t) => t.voz === 'male'), nuevas.map((t) => t.voz).join(','));
@@ -537,6 +541,40 @@ try {
     const cuenta = await pagina.evaluate(() => (document.getElementById('ytOutput').value.match(/ES /g) || []).length);
     comprobar('el texto completo queda traducido en el cuadro de resultado', cuenta >= 130, `${cuenta}`);
     comprobar('y se muestra, listo para copiar, descargar o escuchar', await pagina.isVisible('#ytResultArea'));
+    await contexto.close();
+  }
+
+  console.log('\n── Voz automática + diálogo con 2 voces (2026-09-26) ────────');
+  {
+    const dialogo = [
+      { startTime: 0, endTime: 3, duration: 3, text: 'Hello, welcome to the show' },
+      { startTime: 3, endTime: 6, duration: 3, text: '>> Thanks, happy to be here today' },
+      { startTime: 6, endTime: 9, duration: 3, text: '>> Tell us about your new book' },
+      { startTime: 9, endTime: 12, duration: 3, text: '>> It is about marketing in the age of AI' },
+    ];
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ segmentos: dialogo, fuente: 'usuario', confianza: 1 }) });
+    await pagina.waitForFunction(() => document.querySelectorAll('#ytVozSelect option').length > 1, null, { timeout: 10000 }).catch(() => {});
+    comprobar('la voz inicial es Automática (según el video)', (await pagina.inputValue('#ytVozSelect')) === 'auto');
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    comprobar('con diálogo aparece la segunda voz', await pagina.isVisible('#ytVoz2Wrap'));
+    const voces = [...new Set(reg.tts.map((t) => t.voz))].sort().join(',');
+    comprobar('el diálogo alterna voz femenina y masculina', voces === 'female,male', voces || 'sin voz aún');
+    comprobar('sin errores de JavaScript', reg.errores.length === 0, reg.errores.join(' | '));
+    await contexto.close();
+  }
+  {
+    // Monólogo real (sin >>): una sola voz y sin segunda voz a la vista.
+    const monologo = [
+      { startTime: 0, endTime: 3, duration: 3, text: 'Hello, welcome to this tutorial' },
+      { startTime: 3, endTime: 6, duration: 3, text: 'Today we talk about marketing basics' },
+      { startTime: 6, endTime: 9, duration: 3, text: 'First, know your audience very well' },
+      { startTime: 9, endTime: 12, duration: 3, text: 'Second, tell a story they remember' },
+    ];
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ segmentos: monologo, fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    comprobar('un monólogo no ofrece segunda voz', !(await pagina.isVisible('#ytVoz2Wrap')));
+    const voces = [...new Set(reg.tts.map((t) => t.voz))];
+    comprobar('y todo suena con una sola voz', voces.length === 1, voces.join(','));
     await contexto.close();
   }
 

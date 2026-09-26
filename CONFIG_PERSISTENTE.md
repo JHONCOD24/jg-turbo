@@ -69,8 +69,10 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
   (existía sin documentar; H30).
 - `jg_yt_vol_original` (0–60): volumen del audio original bajo la voz doblada
   (existía sin documentar; H30).
-- `jg_yt_voz` (`neural:auto:female`, `neural:es-CO:male`, `fish:jg-narradora`…):
+- `jg_yt_voz` (`auto`, `neural:auto:female`, `neural:es-CO:male`, `fish:jg-narradora`…):
   voz propia del doblaje de YouTube. No toca la voz global (`jg_tts_voice`).
+  `auto` (valor inicial desde v147) = neural rápida según el video.
+- `jg_yt_voz2` (v147): segunda voz del doblaje, solo para videos con diálogo.
 - `jg_yt_subtitulos` (`1` / `0`): si se ven los subtítulos del doblaje sobre el
   video.
 

@@ -6688,6 +6688,9 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <label class="yt-opcion" for="ytVozSelect">Voz
                 <select id="ytVozSelect" class="tts-voice-select" aria-label="Voz del doblaje"></select>
               </label>
+              <label class="yt-opcion" for="ytVoz2Select" id="ytVoz2Wrap" hidden>Segunda voz (diálogos)
+                <select id="ytVoz2Select" class="tts-voice-select" aria-label="Segunda voz del doblaje para diálogos"></select>
+              </label>
               <label class="yt-opcion" for="ytSyncRate">Velocidad
                 <select id="ytSyncRate" disabled><option value="1">1x</option></select>
               </label>
@@ -18534,7 +18537,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v146';
+const JG_JS_V = 'v147';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

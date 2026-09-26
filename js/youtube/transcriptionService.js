@@ -1,4 +1,5 @@
 import { codigoCorto } from './idiomaOrigen.js';
+import { esCambioHablante } from './vocesDoblaje.js';
 
 /**
  * @typedef {Object} SegmentoTranscripcion
@@ -89,7 +90,11 @@ export function normalizarSegmentos(segmentos) {
       const endTime = Number.isFinite(endRecibido)
         ? endRecibido
         : startTime + (Number.isFinite(durationRecibida) ? durationRecibida : 0);
-      const text = limpiarNoHabla(String(segmento.text || '').replace(/\s+/g, ' '));
+      const crudo = String(segmento.text || '').replace(/\s+/g, ' ');
+      // La marca de cambio de hablante (>>) se detecta ANTES de limpiar: la
+      // limpieza la borra y el doblaje la necesita para alternar 2 voces.
+      const cambioHablante = esCambioHablante(crudo);
+      const text = limpiarNoHabla(crudo);
       if (!text || esSoloSonido(text) || !Number.isFinite(startTime) || !Number.isFinite(endTime)) return null;
       const inicio = Math.max(0, startTime);
       const fin = Math.max(inicio + 0.01, endTime);
@@ -98,6 +103,7 @@ export function normalizarSegmentos(segmentos) {
         endTime: Math.round(fin * 1000) / 1000,
         duration: Math.round((fin - inicio) * 1000) / 1000,
         text,
+        ...(cambioHablante ? { cambioHablante: true } : {}),
       };
     })
     .filter(Boolean)

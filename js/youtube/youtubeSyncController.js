@@ -18,6 +18,9 @@ import { crearLimitador } from './limitador.js';
 import { VOZ_INICIAL_S } from './planificador.js';
 import { decidirDoblaje, nombreIdioma, IDIOMAS_DOBLABLES } from './idiomaOrigen.js';
 import { leerDoblaje, guardarDoblaje } from './cacheDoblaje.js';
+import {
+  hayDialogo, elegirVocesAutomaticas, vozParaUnidad, generoDeVoz,
+} from './vocesDoblaje.js';
 
 const CLAVE_VOL_VOZ = 'jg_yt_vol_voz';
 const CLAVE_VOL_ORIGINAL = 'jg_yt_vol_original';
@@ -60,14 +63,18 @@ export function inicializarYoutubeSincronizado({
     elegirSi: $('ytLangConfirmYes'), elegirNo: $('ytLangConfirmNo'),
     volVoz: $('ytVolVoz'), volVozVal: $('ytVolVozVal'), volOriginal: $('ytVolOriginal'), volOriginalVal: $('ytVolOriginalVal'),
       metricas: $('ytSyncMetrics'), reproducir: $('ytDubReproducir'), buffer: $('ytBuffer'),
-      voz: $('ytVozSelect'),
+      voz: $('ytVozSelect'), voz2: $('ytVoz2Select'), voz2Wrap: $('ytVoz2Wrap'),
     tarjeta: $('ytDubProgreso'), barra: $('ytDubBarra'), mensaje: $('ytDubMensaje'), tiempo: $('ytDubTiempo'),
     ayuda: $('ytDubAyuda'), cancelar: $('ytDubCancelar'),
   };
   const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
   const transcripciones = new TranscriptionService({ fetchApi });
   const traductor = new TranslationService({ traducirTexto });
-  const audioDoblaje = new Audio();   // uno solo, desbloqueado en el primer toque
+  // Doble audio alternado (sin micro-cortes entre frases): los dos se crean y
+  // desbloquean dentro del primer toque (iOS solo deja desbloquear en gesto).
+  const audioDoblaje = new Audio();
+  const audioDoblaje2 = new Audio();
+  let audiosEntregados = 0;
   let sesion = null;
 
   // ── Volúmenes y subtítulo (se recuerdan) ────────────────────────────────
@@ -96,7 +103,13 @@ export function inicializarYoutubeSincronizado({
     });
 
     // ── Voz del doblaje (propia; la voz global no se toca) ─────────────────
-    if (ui.voz) {
+    // «Automática (según el video)» = neural rápida del género detectado (o del
+    // global si no hay pistas). Si el video trae diálogo (>>), aparece la 2.ª
+    // voz para el otro hablante. Fish sigue a mano, marcada «más lenta».
+    const CLAVE_VOZ = 'jg_yt_voz';
+    const CLAVE_VOZ2 = 'jg_yt_voz2';
+    const VALOR_AUTO = 'auto';
+    function llenarSelectorVoz(select, conAuto) {
       const grupos = new Map();
       for (const item of listarVoces()) {
         const etiqueta = String(item.value || '').startsWith('fish:') ? `${item.label} (más lenta)` : item.label;
@@ -107,16 +120,61 @@ export function inicializarYoutubeSincronizado({
         opcion.textContent = etiqueta;
         grupos.get(item.group).appendChild(opcion);
       }
-      ui.voz.replaceChildren(...grupos.values());
-      const recordada = leer('jg_yt_voz');
-      const hayRecordada = [...ui.voz.options].some((o) => o.value === recordada);
-      ui.voz.value = hayRecordada ? recordada : vozPorDefecto();
-      ui.voz.addEventListener('change', () => {
-        guardar('jg_yt_voz', ui.voz.value);
-        if (sesion) sesion.voz = ui.voz.value;
-        // La voz nueva entra desde la próxima frase, sin cortar la actual.
-        if (sesion?.servicioVoz) sesion.servicioVoz.invalidarDesde((sesion.player?.getCurrentTime?.() || 0) + 1);
-      });
+      select.replaceChildren(...grupos.values());
+      if (conAuto) {
+        const auto = document.createElement('option');
+        auto.value = VALOR_AUTO;
+        auto.textContent = 'Automática (según el video)';
+        select.prepend(auto);
+      }
+    }
+    function vozValida(select, valor) {
+      return [...select.options].some((o) => o.value === valor);
+    }
+    /** Voces efectivas de la sesión (resuelve «auto» una vez por video). */
+    function resolverVocesSesion(actual) {
+      const catalogo = listarVoces();
+      const elegida = ui.voz?.value || VALOR_AUTO;
+      if (elegida === VALOR_AUTO) {
+        const auto = elegirVocesAutomaticas({
+          textosOriginales: (actual.segmentos || []).map((s) => s.text),
+          vozGlobal: vozPorDefecto(),
+          catalogo,
+        });
+        actual.voz = auto.principal;
+        actual.vozSecundaria = auto.secundaria;
+      } else {
+        actual.voz = elegida;
+        const genero = generoDeVoz(elegida);
+        const contraria = catalogo.find((v) => String(v.value).startsWith('neural:') && generoDeVoz(v.value) !== genero);
+        const segunda = ui.voz2?.value;
+        actual.vozSecundaria = (segunda && vozValida(ui.voz2, segunda))
+          ? segunda
+          : (contraria ? contraria.value : `neural:auto:${genero === 'male' ? 'female' : 'male'}`);
+      }
+      // La 2.ª voz solo se ofrece cuando el video trae diálogo.
+      const dialogo = hayDialogo(actual.segmentos || []);
+      if (ui.voz2Wrap) ui.voz2Wrap.hidden = !dialogo;
+      return dialogo;
+    }
+    function vozNuevaDesde(select, clave) {
+      guardar(clave, select.value);
+      if (!sesion) return;
+      resolverVocesSesion(sesion);
+      // La voz nueva entra desde la próxima frase, sin cortar la actual.
+      if (sesion?.servicioVoz) sesion.servicioVoz.invalidarDesde((sesion.player?.getCurrentTime?.() || 0) + 1);
+    }
+    if (ui.voz) {
+      llenarSelectorVoz(ui.voz, true);
+      const recordada = leer(CLAVE_VOZ);
+      ui.voz.value = (recordada && vozValida(ui.voz, recordada)) ? recordada : VALOR_AUTO;
+      ui.voz.addEventListener('change', () => vozNuevaDesde(ui.voz, CLAVE_VOZ));
+    }
+    if (ui.voz2) {
+      llenarSelectorVoz(ui.voz2, false);
+      const recordada2 = leer(CLAVE_VOZ2);
+      ui.voz2.value = (recordada2 && vozValida(ui.voz2, recordada2)) ? recordada2 : vozPorDefecto();
+      ui.voz2.addEventListener('change', () => vozNuevaDesde(ui.voz2, CLAVE_VOZ2));
     }
 
   async function alternarPantallaCompleta() {
@@ -245,6 +303,7 @@ export function inicializarYoutubeSincronizado({
   }
   function reiniciarVista() {
     ui.botonVoz.disabled = true;
+    if (ui.voz2Wrap) ui.voz2Wrap.hidden = true;
     $('ytDesdeInicio').hidden = true;
     ponerEstadoBotonVoz(false);
     ui.etiquetaVoz.textContent = 'Voz en español';
@@ -381,12 +440,19 @@ export function inicializarYoutubeSincronizado({
     });
   }
 
-  function desbloquearAudio() {
+  function desbloquearElemento(elemento) {
     try {
-      audioDoblaje.src = SILENCIO_WAV;
-      const intento = audioDoblaje.play();
-      if (intento?.then) intento.then(() => { if (audioDoblaje.src === SILENCIO_WAV) audioDoblaje.pause(); }).catch(() => {});
+      elemento.src = SILENCIO_WAV;
+      const intento = elemento.play();
+      if (intento?.then) intento.then(() => { if (elemento.src === SILENCIO_WAV) elemento.pause(); }).catch(() => {});
     } catch (_) { /* si no se pudo, «Ver con voz en español» lo hace con su propio toque */ }
+  }
+
+  function desbloquearAudio() {
+    // Los dos elementos se desbloquean en el gesto: en iPhone un elemento que
+    // nunca sonó dentro de un toque no puede arrancar solo a mitad del video.
+    desbloquearElemento(audioDoblaje);
+    desbloquearElemento(audioDoblaje2);
   }
 
   async function crearReproductor(videoId, signal) {
@@ -442,11 +508,12 @@ export function inicializarYoutubeSincronizado({
     ui.buffer.textContent = fallidos ? `${voz} · ${fallidos} tramos sonarán en su idioma original${relevo}` : `${voz}${relevo}`;
   }
 
-  /** Fish cayó a mitad de sesión: todo el resto con UNA voz neural, sin mezclar timbres (TRAMPAS §6.14). */
+  /** Fish cayó a mitad de sesión: todo el resto con voces neurales, sin mezclar timbres (TRAMPAS §6.14). */
   function pasarANeural(actual) {
-    if (!actual.voz?.startsWith('fish:') || actual.avisoRespaldo) return;
-    const genero = /male$/.test(actual.voz) || /valentino|narrador(?!a)/i.test(actual.voz) ? 'male' : 'female';
-    actual.voz = `neural:auto:${genero}`;
+    const esFish = (v) => String(v || '').startsWith('fish:');
+    if ((!esFish(actual.voz) && !esFish(actual.vozSecundaria)) || actual.avisoRespaldo) return;
+    if (esFish(actual.voz)) actual.voz = `neural:auto:${generoDeVoz(actual.voz)}`;
+    if (esFish(actual.vozSecundaria)) actual.vozSecundaria = `neural:auto:${generoDeVoz(actual.vozSecundaria)}`;
     actual.avisoRespaldo = true;
     actual.servicioVoz.invalidarDesde(actual.player.getCurrentTime() + 1);
     ui.estado.textContent = 'La voz Fish no responde (sin créditos o saturada): el doblaje sigue con la voz neural para no cambiar de timbre a media escena.';
@@ -458,10 +525,14 @@ export function inicializarYoutubeSincronizado({
     actual.segmentos = datos.segmentos;
     actual.origen = origen;
     actual.tituloVideo = tituloVideo;
-    actual.voz = ui.voz.value;
+    resolverVocesSesion(actual);
     const limitador = crearLimitador();
     const servicioVoz = new DubbingService({
-      generarAudio: (texto) => generarAudioEspanol(texto, { voz: actual.voz, signal }),
+      // Cada frase suena con su hablante: monólogo = 1 voz, diálogo = 2.
+      generarAudio: (texto, unidad) => generarAudioEspanol(texto, {
+        voz: vozParaUnidad(unidad, { vozPrincipal: actual.voz, vozSecundaria: actual.vozSecundaria }),
+        signal,
+      }),
       limitador,
       onRespaldo: () => pasarANeural(actual),
     });
@@ -506,7 +577,16 @@ export function inicializarYoutubeSincronizado({
     if (signal.aborted) throw cancelado();
 
     actual.motorVoz = new DubbingEngine({
-      player, servicio: servicioVoz, crearAudio: () => audioDoblaje, modoSilenciarOriginal: esIOS,
+      player, servicio: servicioVoz,
+      // Dos elementos distintos (doble búfer): si la fábrica devolviera el
+      // mismo dos veces, la precarga pisaría la frase actual y no sonaría.
+      crearAudio: () => {
+        audiosEntregados += 1;
+        if (audiosEntregados === 1) return audioDoblaje;
+        if (audiosEntregados === 2) return audioDoblaje2;
+        return new Audio();
+      },
+      modoSilenciarOriginal: esIOS,
       onStatus: (mensaje, tipo) => { ui.estado.textContent = mensaje; display.mostrarVoz(tipo); },
       onMetricas: (metricas) => { actual.metricas = metricas; },   // solo diagnóstico (H28)
       onFin: () => { ui.estado.textContent = 'El video terminó.'; display.mostrarVoz('fin'); },
@@ -548,6 +628,7 @@ export function inicializarYoutubeSincronizado({
     document.querySelector('.yt-area')?.classList.add('has-results', 'modo-doblaje');
     progreso.iniciar();
     ui.area.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    audiosEntregados = 0;
     desbloquearAudio();
     try {
       actual.player = await crearReproductor(videoId, signal);

@@ -1,5 +1,69 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Entrega 2026-09-26 · Doblaje v3.1: voz automática, 2 voces y sin frenos
+
+### Pedido
+
+El doblaje en español no iba a la par (frenos entre frases), las voces no
+siempre eran las propicias y se pidió: mismas voces en PDF y YouTube, mejor
+sincronía, más voces de referencia y voz automática según el video (hombre /
+mujer, 2 voces si hay 2 interlocutores). Los subtítulos NO se tocaron: su
+diseño quedó establecido tal cual.
+
+### Causas verificadas
+
+- **Frenos entre frases:** el motor usaba UN solo `<audio>`: cada frase era
+  pausa + `src` + `load` + `play` (micro-corte). El lector PDF no tiene ese
+  problema desde v2.8.0 porque alterna DOS audios.
+- **Voz frenada:** el rango 0,90×–1,25× bajaba a «cámara lenta» audible (0,90×)
+  y saltaba a «ardilla» (1,25×) entre frases.
+- **Voces:** PDF y YouTube ya comparten la misma biblioteca
+  (`ttsVocesParaDoblaje` = `ttsCatalogoVoces` + neurales), pero el doblaje
+  arrancaba con la voz que hubiera, incluida Fish (2,6–4,8 s por frase): con
+  Fish elegida, la preparación se arrastra y se oye el original a tramos.
+- **Sin auto ni 2 voces:** la limpieza borraba el `>>` (marca de cambio de
+  hablante) antes de que el doblaje pudiera usarlo: una entrevista sonaba a
+  monólogo con una sola voz.
+
+### Solución
+
+- **Doble audio alternado** (`dubbingEngine.js`, igual que el lector PDF):
+  mientras suena una frase, la siguiente ya está cargada en el otro elemento.
+  Los dos se crean y desbloquean dentro del primer toque (iOS lo exige).
+- **Velocidad 0,95×–1,20×** y silencio prestado de 1,5 → 2 s: casi siempre
+  cabe sin frenar ni acelerar de más.
+- **Voz inicial «Automática (según el video)»** (nuevo `js/youtube/vocesDoblaje.js`,
+  puro y probado): neural rápida del género detectado en el texto original
+  (pronombres, exige 3 de cada 4) o del género global si no hay pistas. Nunca
+  Fish en auto (lenta). Fish sigue elegible a mano, marcada «más lenta».
+- **Segunda voz en diálogos:** `normalizarSegmentos` guarda `cambioHablante`
+  ANTES de limpiar; con 2+ cambios, las frases alternan hablante 0/1 y cada
+  una suena con su voz; el panel muestra «Segunda voz (diálogos)». Un `>>`
+  suelto es artefacto: ni corta ni voltea la voz (probado).
+- Claves: `jg_yt_voz` ahora admite `auto` (valor inicial); nueva `jg_yt_voz2`.
+
+### Pruebas y sus cuentas
+
+| Batería | Resultado |
+|---|---|
+| `node tests/test_youtube_doblaje.mjs` | **101 OK · 0 fallos** (78 + 23 nuevas: auto, diálogo, >> suelto, rango 0,95–1,20) |
+| `node tests/verificar_youtube_doblaje.mjs` | **88 OK · 0 fallos** (81 + 7: auto inicial, diálogo alterna 2 voces, monólogo 1 voz) |
+| Unitarias de referencia (19 archivos) | **1.192 OK · 0 fallos** (sin retroceder) |
+| `verificar_arranque_ligero.mjs` | 9 OK + 1 fallo preexistente (1031 KB, ajeno) |
+| `verificar_movil_pantalla.mjs` | 60 comprobaciones, como antes |
+| `pytest` YouTube (`test_youtube_idioma_origen`, `test_supadata_youtube`, `test_youtube_subs_parse`, `test_api_youtube_bloqueo`) | **68 passed** |
+
+Regresión cazada por T2.5 durante el trabajo: la fábrica de audio devolvía la
+MISMA instancia dos veces y la precarga pisaba la frase actual (el video no
+volvía a sonar tras saltar). Se entrega fábrica con 2 elementos distintos +
+freno en `#precargarSiguiente` si vinieran duplicados. Detalle en `TRAMPAS.md`.
+
+### Despliegue de esta entrega (2026-09-26)
+
+`v147` / `jg-turbo-shell-v147` · `dpl_…` [PENDIENTE: anotar tras desplegar].
+
+Producción: https://jg-turbo.vercel.app · GitHub: `JHONCOD24/jg-turbo`, `main` al día.
+
 ## Entrega 2026-09-26 · Doblaje v3: fiable, progresivo y multilingüe
 
 ### Pedido

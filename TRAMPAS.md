@@ -1391,3 +1391,12 @@ minuto (`js/youtube/limitador.js`); lo ya escuchado se libera.
 sonido (17–47 min). **Regla:** se traduce alrededor de la posición (180 s por delante),
 sin segunda pasada de revisión en el doblaje y partiendo un lote fallido en mitades
 (nunca frase por frase sin contexto: «trunks» → «troncos»).
+
+## El doble búfer con un solo elemento se pisa a sí mismo
+
+**Síntoma (doblaje v3.1):** con dos `<audio>` alternados, el video no volvía a sonar
+tras saltar a otro minuto (T2.5 lo cazó). **Causa:** la fábrica `crearAudio` devolvía
+LA MISMA instancia dos veces (`() => audioDoblaje`); la precarga del siguiente tramo
+le pisaba el `src` al que estaba sonando. **Regla:** la fábrica del motor de voz
+devuelve elementos DISTINTOS (los dos desbloqueados en el gesto, por iOS), y
+`#precargarSiguiente` no toca nada si el libre es el activo.
