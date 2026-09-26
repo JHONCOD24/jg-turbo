@@ -474,9 +474,12 @@ try {
     comprobar(`${vista.width} px: sin desborde horizontal`, desborde <= 1, `${desborde} px`);
     comprobar(`${vista.width} px: «Doblar al español» es la acción principal`, /\bprimary\b/.test(await pagina.getAttribute('#ytSyncBtn', 'class')));
     if (vista.width < 1024) {
+      // Redondeo a píxel CSS: con coordenadas fraccionarias el alto llega como
+      // 43,999999999999996 y una comparación exacta marcaría objetivos de 44 px.
       const pequenos = await pagina.evaluate(() => [...document.querySelectorAll('#panelYt button, #panelYt select, #panelYt input, #panelYt summary')]
-        .filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44)
-        .map((e) => e.id || e.className || e.tagName));
+        .map((e) => ({ e, alto: e.getBoundingClientRect().height }))
+        .filter(({ e, alto }) => e.offsetParent && Math.round(alto) < 44)
+        .map(({ e, alto }) => `${e.id || e.className || e.tagName}@${e.parentElement?.id || e.parentElement?.className}:${alto.toFixed(4)}`));
       comprobar(`${vista.width} px: todo lo tocable mide ≥ 44 px`, pequenos.length === 0, pequenos.join(', '));
     }
     await contexto.close();
@@ -487,6 +490,39 @@ try {
     await pagina.click('.yt-opciones-texto > summary');
     await pagina.click('#ytBtn'); await esperar(2500);
     comprobar('«Solo el texto» sigue funcionando (flujo clásico)', reg.youtube.some((p) => p.cuerpo.fast_mode === true));
+    await contexto.close();
+  }
+
+  console.log('\n── T3.5: sin subtítulos se pide permiso antes de gastar ─────────');
+  {
+    const respuesta = (cuerpo) => (cuerpo.allow_ai_generation
+      ? { status: 202, json: { pending: true, job_id: 'job-ia', title: 'x', requested_lang: 'en', language_source: 'titulo', language_resolution_confidence: 0.8 } }
+      : { status: 409, json: { detail: 'Este video no tiene subtítulos.', code: 'sin_subtitulos', duration_s: 600, estimated_credits: 20 } });
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: respuesta });
+    let consultas = 0;
+    await pagina.route(/\/youtube-job(\?|$)/, async (r) => {
+      consultas += 1;
+      const datos = consultas < 2 ? { status: 202, json: { pending: true, job_id: 'job-ia' } } : respuestaYoutube({ fuente: 'titulo', confianza: 0.8 });
+      await r.fulfill(datos).catch(() => {});
+    });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn');
+    await pagina.waitForSelector('#ytIaConsentimiento:not([hidden])', { timeout: 15000 }).catch(() => {});
+    comprobar('sin subtítulos aparece el permiso', await pagina.isVisible('#ytIaConsentimiento'));
+    comprobar('con el costo estimado a la vista', /20 créditos/.test(await pagina.textContent('#ytIaConsentimiento')));
+    comprobar('la primera petición no autoriza gastar IA', reg.youtube[0]?.cuerpo?.allow_ai_generation === false);
+    await pagina.click('#ytIaSi');
+    await esperarListo(pagina, 40000);
+    comprobar('al aceptar, se pide con permiso', reg.youtube[1]?.cuerpo?.allow_ai_generation === true);
+    comprobar('y el trabajo largo termina en doblaje listo', await listo(pagina));
+    await contexto.close();
+  }
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => ({ status: 409, json: { detail: 'Sin subtítulos', code: 'sin_subtitulos', duration_s: 600, estimated_credits: 20 } }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn');
+    await pagina.waitForSelector('#ytIaConsentimiento:not([hidden])', { timeout: 15000 }).catch(() => {});
+    await pagina.click('#ytIaNo'); await esperar(1500);
+    comprobar('al rechazar no se pide nada más', reg.youtube.length === 1);
+    comprobar('y se dice claro que no se gastó ningún crédito', /ningún crédito/i.test(await pagina.textContent('#ytSyncArea')));
     await contexto.close();
   }
 

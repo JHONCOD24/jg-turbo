@@ -303,6 +303,32 @@ export function inicializarYoutubeSincronizado({
   });
 
   /** Ante la duda se ofrece elegir el idioma; nunca un rechazo a ciegas (H2, H6). */
+  function pedirPermisoIA(datos, signal) {
+    const creditos = Number(datos?.estimated_credits) || 0;
+    const minutos = Math.ceil((Number(datos?.duration_s) || 0) / 60);
+    const texto = creditos
+      ? `Este video no tiene subtítulos. Para doblarlo hay que transcribirlo con IA: gasta unos ${creditos} créditos de Supadata (${minutos} min × 2). El plan gratuito trae 100 al mes.`
+      : 'Este video no tiene subtítulos. Para doblarlo hay que transcribirlo con IA: gasta 2 créditos de Supadata por minuto de video.';
+    return new Promise((resolver) => {
+      $('ytIaTexto').textContent = texto;
+      const caja = $('ytIaConsentimiento');
+      caja.hidden = false;
+      $('ytIaSi').focus();
+      const terminar = (valor) => {
+        caja.hidden = true;
+        $('ytIaSi').removeEventListener('click', si);
+        $('ytIaNo').removeEventListener('click', no);
+        signal.removeEventListener('abort', no);
+        resolver(valor);
+      };
+      const si = () => terminar(true);
+      const no = () => terminar(false);
+      $('ytIaSi').addEventListener('click', si);
+      $('ytIaNo').addEventListener('click', no);
+      signal.addEventListener('abort', no, { once: true });
+    });
+  }
+
   function elegirIdioma(decision, signal) {
     return new Promise((resolver) => {
       ui.elegirTexto.textContent = decision.mensaje || '¿En qué idioma habla el video?';
@@ -506,7 +532,22 @@ export function inicializarYoutubeSincronizado({
         datos = { segmentos: guardado.segmentos, idioma: guardado.idiomaOrigen, confianza: 1, fuente: 'usuario', conflicto: false };
         decision = { accion: 'doblar', idioma: guardado.idiomaOrigen, mensaje: '' };
       } else {
-        datos = await pedirTexto(url, { idiomaOrigen: elegidoEnFormulario, tituloVideo, duracionS, signal });
+        try {
+          datos = await pedirTexto(url, { idiomaOrigen: elegidoEnFormulario, tituloVideo, duracionS, signal });
+        } catch (error) {
+          if (error?.codigo !== 'sin_subtitulos') throw error;
+          // Sin subtítulos hay que transcribir con IA: se pide permiso ANTES de gastar (H24).
+          progreso.mensaje('Este video no tiene subtítulos.');
+          const permitir = await pedirPermisoIA(error.datos, signal);
+          if (!permitir) {
+            mostrarIdioma('Sin doblaje', 'no');
+            progreso.error('Sin subtítulos no se puede doblar sin transcribir con IA. No se gastó ningún crédito.');
+            return;
+          }
+          progreso.paso('leer', 'Transcribiendo con IA…');
+          progreso.ayuda('Los videos largos pueden tardar varios minutos. Puedes cancelar cuando quieras.');
+          datos = await pedirTexto(url, { idiomaOrigen: elegidoEnFormulario, tituloVideo, duracionS, signal, permitirIA: true });
+        }
         decision = decidirDoblaje(datos);
         if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
           progreso.mensaje('Confirma el idioma del video para seguir.');

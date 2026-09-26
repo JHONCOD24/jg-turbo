@@ -6615,7 +6615,15 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             <button class="mini-btn" id="btnYtSyncClose" type="button" aria-label="Cerrar reproductor sincronizado">Cerrar</button>
           </div>
 
-          <div class="yt-progreso" id="ytDubProgreso" role="status" aria-live="polite" hidden>
+            <div class="yt-confirm" id="ytIaConsentimiento" role="group" aria-labelledby="ytIaTexto" hidden>
+              <p id="ytIaTexto"></p>
+              <div class="yt-confirm-acciones">
+                <button class="btn primary" id="ytIaSi" type="button">Transcribir con IA</button>
+                <button class="mini-btn" id="ytIaNo" type="button">No, gracias</button>
+              </div>
+            </div>
+
+            <div class="yt-progreso" id="ytDubProgreso" role="status" aria-live="polite" hidden>
             <ol class="yt-pasos" id="ytDubPasos">
               <li data-paso="leer" data-estado="espera"><span class="yt-paso-punto" aria-hidden="true"></span>Leer el video</li>
               <li data-paso="traducir" data-estado="espera"><span class="yt-paso-punto" aria-hidden="true"></span>Traducir</li>
