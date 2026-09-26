@@ -83,6 +83,36 @@ const { crearReloj } = await modulo('reloj.js');
   comprobar(sobrevivio, 'reloj: un error en un tic no tumba el reloj');
 }
 
+// ── T2.1: frases de voz por el tiempo del original ─────────────────────
+const ds = await modulo('dubbingService.js');
+{
+  const segmentos = ts.normalizarSegmentos(fixture.segments);
+  const unidades = ds.agruparPorTiempo(segmentos);
+  comprobar(unidades.length >= 8 && unidades.length <= 20, `el minuto y medio real queda en ${unidades.length} frases de voz`);
+  const cubiertos = unidades.flatMap((u) => Array.from({ length: u.hasta - u.desde + 1 }, (_, k) => u.desde + k));
+  comprobar(cubiertos.length === segmentos.length && cubiertos.every((v, i) => v === i), 'cada segmento pertenece a exactamente una frase, en orden');
+  comprobar(unidades.every((u, i) => i === unidades.length - 1 || u.endTime <= unidades[i + 1].startTime + 1e-9), 'una frase nunca pisa a la siguiente');
+  comprobar(unidades.every((u) => u.endTime - u.finHabla <= ds.SILENCIO_PRESTADO_MAX_S + 1e-9 && u.endTime >= u.finHabla), 'el silencio prestado va de 0 a 1,5 s');
+  comprobar(unidades.every((u) => u.estado === 'sin_traducir' && u.text === ''), 'las frases nacen sin texto: la traducción las rellena');
+  const traducciones = new Map();
+  const u0 = unidades[0];
+  comprobar(ds.textoDeUnidad(u0, traducciones) === null, 'sin traducción, la frase aún no tiene texto');
+  for (let i = u0.desde; i <= u0.hasta; i += 1) traducciones.set(i, `ES ${i}`);
+  const esperado = Array.from({ length: u0.hasta - u0.desde + 1 }, (_, k) => `ES ${u0.desde + k}`).join(' ');
+  comprobar(ds.textoDeUnidad(u0, traducciones) === esperado, 'con todo traducido, la frase une sus segmentos');
+  traducciones.set(u0.desde, null);
+  comprobar(ds.textoDeUnidad(u0, traducciones) === '', 'un segmento sin traducción deja la frase sin voz (suena el original)');
+  const servicio = new ds.DubbingService({ generarAudio: async () => ({ blob: new Blob(['x']) }) });
+  servicio.definirUnidades(ds.agruparPorTiempo(segmentos));
+  servicio.fijarTexto(0, 'Hola');
+  servicio.fijarTexto(1, '');
+  comprobar(servicio.unidades[0].estado === 'pendiente' && servicio.unidades[1].estado === 'sin_voz', 'fijarTexto: con texto queda pendiente; vacío, sin voz');
+  await servicio.asegurar(0);
+  comprobar(servicio.unidades[0].estado === 'listo' && servicio.unidades[0].url.startsWith('blob:'), 'asegurar genera la voz de una frase pendiente');
+  servicio.liberarAntesDe(servicio.unidades[0].endTime + 1);
+  comprobar(servicio.unidades[0].estado === 'pendiente' && !servicio.unidades[0].url, 'liberarAntesDe suelta la memoria de lo ya escuchado (y se puede regenerar)');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);
