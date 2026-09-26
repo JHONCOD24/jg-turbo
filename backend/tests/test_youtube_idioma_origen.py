@@ -116,3 +116,120 @@ def test_consultar_nunca_lanza(monkeypatch):
 
     monkeypatch.setattr(yd.requests, "get", sin_red)
     assert yd.consultar("dNWkwrqAkcM") == {}
+
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from api import index as api_module  # noqa: E402
+from api import supadata as sd  # noqa: E402
+from api.supadata import SupadataError  # noqa: E402
+
+URL_VIDEO = "https://www.youtube.com/watch?v=dNWkwrqAkcM"
+SEGMENTO_EN = {"startTime": 0.08, "endTime": 3.4, "duration": 3.32, "text": "There's all these things we can build"}
+SEGMENTO_AR = {"startTime": 0.08, "endTime": 3.4, "duration": 3.32, "text": "هناك الكثير من الأشياء التي يمكننا بناؤها"}
+
+
+def _youtube_bloqueado(monkeypatch):
+    def bloqueado(video_id, idioma):
+        raise api_module.YouTubeBloqueoIP("RequestBlocked")
+    monkeypatch.setattr(api_module, "_subtitulos_cronometrados_via_transcript_api", bloqueado)
+    monkeypatch.setattr(api_module, "_subtitulos_via_transcript_api", bloqueado)
+    monkeypatch.setattr(yd, "API_KEY", "")
+
+
+def _supadata_con_doblaje_automatico(monkeypatch, pedidos, siempre_arabe=False):
+    """Como Supadata con dNWkwrqAkcM: sin `lang` entrega la pista árabe."""
+    monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
+
+    def transcribir(url, idioma=None, con_tiempos=False, modo="auto"):
+        pedidos.append({"idioma": idioma, "modo": modo})
+        if siempre_arabe or idioma in (None, "", "ar"):
+            return {"texto": SEGMENTO_AR["text"], "lang": "ar", "disponibles": ["ar"], "segmentos": [SEGMENTO_AR]}
+        return {"texto": SEGMENTO_EN["text"], "lang": idioma, "disponibles": ["ar", "en"], "segmentos": [SEGMENTO_EN]}
+
+    monkeypatch.setattr(sd, "transcribir", transcribir)
+
+
+def _pedir(**campos):
+    cuerpo = {"url": URL_VIDEO, "language": "auto", "include_timestamps": True, "fast_mode": False, **campos}
+    return TestClient(api_module.app).post("/api/youtube", json=cuerpo)
+
+
+def test_el_titulo_en_ingles_evita_la_pista_arabe(monkeypatch):
+    pedidos = []
+    _youtube_bloqueado(monkeypatch)
+    _supadata_con_doblaje_automatico(monkeypatch, pedidos)
+    resp = _pedir(title_hint=TITULO)
+    assert resp.status_code == 200
+    datos = resp.json()
+    assert pedidos[0]["idioma"] == "en"        # se pidió explícito, ANTES de descargar
+    assert datos["language"] == "en" and datos["requested_lang"] == "en"
+    assert datos["language_source"] == "titulo"
+    assert datos["title"] == TITULO             # ya no se muestra el id del video
+
+
+def test_el_idioma_que_elige_la_persona_manda(monkeypatch):
+    pedidos = []
+    _youtube_bloqueado(monkeypatch)
+    _supadata_con_doblaje_automatico(monkeypatch, pedidos)
+    datos = _pedir(language="pt", title_hint=TITULO).json()
+    assert pedidos[0]["idioma"] == "pt"
+    assert datos["language_source"] == "usuario" and datos["language_resolution_confidence"] == 1.0
+
+
+def test_youtube_data_api_manda_sobre_el_titulo(monkeypatch):
+    pedidos = []
+    _youtube_bloqueado(monkeypatch)
+    _supadata_con_doblaje_automatico(monkeypatch, pedidos)
+    monkeypatch.setattr(yd, "API_KEY", "clave-falsa")
+    monkeypatch.setattr(yd, "consultar", lambda video_id, timeout=5.0: {"audio": "en-US", "idioma_metadatos": "en", "titulo": TITULO, "duracion_s": 5314, "subtitulos": True})
+    datos = _pedir(title_hint="Cómo construir una marca que vende").json()
+    assert pedidos[0]["idioma"] == "en"
+    assert datos["language_source"] == "youtube" and datos["duration_s"] == 5314
+
+
+def test_si_llega_otro_idioma_no_se_finge(monkeypatch):
+    pedidos = []
+    _youtube_bloqueado(monkeypatch)
+    _supadata_con_doblaje_automatico(monkeypatch, pedidos, siempre_arabe=True)
+    datos = _pedir(language="en").json()
+    assert datos["language"] == "ar" and datos["requested_lang"] == "en"
+    assert datos["language_source"] == "proveedor" and datos["audio_language_conflict"] is True
+    assert datos["audio_language"] == "ar"      # el alfabeto lo delata
+
+
+def test_sin_subtitulos_y_sin_permiso_responde_409_con_creditos(monkeypatch):
+    _youtube_bloqueado(monkeypatch)
+    monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
+
+    def transcribir(url, idioma=None, con_tiempos=False, modo="auto"):
+        assert modo == "native"
+        raise SupadataError("Supadata no encontró texto en este video.", "transcript-unavailable", 404)
+
+    monkeypatch.setattr(sd, "transcribir", transcribir)
+    resp = _pedir(language="en", allow_ai_generation=False, duration_hint_s=600)
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "sin_subtitulos" and resp.json()["estimated_credits"] == 20
+
+
+def test_con_permiso_se_pide_mode_auto(monkeypatch):
+    pedidos = []
+    _youtube_bloqueado(monkeypatch)
+    _supadata_con_doblaje_automatico(monkeypatch, pedidos)
+    _pedir(language="en", allow_ai_generation=True)
+    assert pedidos[0]["modo"] == "auto"
+
+
+def test_el_flujo_clasico_sin_campos_nuevos_no_cambia(monkeypatch):
+    """«Transcribir video» no manda los campos nuevos: sigue con mode=auto y la firma vieja."""
+    pedidos = []
+    _youtube_bloqueado(monkeypatch)
+    monkeypatch.setattr(sd, "API_KEY", "clave-de-prueba")
+    monkeypatch.setattr(sd, "transcribir", lambda url, idioma, con_tiempos=False: (pedidos.append(idioma), {"texto": "Texto.", "lang": "es"})[1])
+    resp = TestClient(api_module.app).post("/api/youtube", json={"url": URL_VIDEO, "language": "es", "prefer_subtitles": True})
+    assert resp.status_code == 200 and pedidos == ["es"]
+
+
+def test_health_dice_si_hay_data_api(monkeypatch):
+    monkeypatch.setattr(yd, "API_KEY", "")
+    assert TestClient(api_module.app).get("/api/health").json()["youtube_data_api"] is False

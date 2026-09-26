@@ -40,7 +40,9 @@ from api.calidad_linguistica import (
 )
 from api.youtube_subs import segmentos_desde_fetched, texto_desde_fetched
 from api import deteccion_idioma
+from api import idioma_video
 from api import supadata
+from api import youtube_datos
 from api.supadata import SupadataError
 
 app = FastAPI(title="JG Turbo Vercel API", version="3.0")
@@ -255,6 +257,12 @@ class YouTubeRequest(BaseModel):
     context: str = ""  # glosario / términos preferidos para Whisper
     # Campo aditivo: el flujo histórico sigue recibiendo texto plano por defecto.
     include_timestamps: bool = False
+    # Doblaje (aditivos): el navegador ya conoce título y duración por el reproductor.
+    title_hint: str = Field(default="", max_length=300)
+    duration_hint_s: float = 0
+    # None = histórico (mode=auto). False = solo subtítulos existentes (no gasta
+    # créditos de IA sin permiso). True = la persona aceptó transcribir con IA.
+    allow_ai_generation: Optional[bool] = None
 
 
 class ImproveRequest(BaseModel):
@@ -1179,8 +1187,13 @@ def _elegir_pista_cronometrada(listado, idioma_corto: Optional[str]):
 
     generadas = [p for p in pistas if getattr(p, "is_generated", False)]
     manuales = [p for p in pistas if not getattr(p, "is_generated", False)]
+    # Doblaje automático de YouTube: cada idioma doblado trae su propia pista
+    # automática (medido: 7 en dNWkwrqAkcM, la primera árabe). Con más de una,
+    # «la primera automática» ya no dice el idioma del audio (auditoría H1).
+    idiomas_generados = {deteccion_idioma.codigo_corto(getattr(p, "language_code", "")) for p in generadas}
+    varias_automaticas = len(idiomas_generados) > 1
     idioma_audio = ""
-    if generadas:
+    if generadas and not varias_automaticas:
         idioma_audio = str(getattr(generadas[0], "language_code", "") or "")
 
     def buscar(candidatas, codigo: str):
@@ -1191,6 +1204,13 @@ def _elegir_pista_cronometrada(listado, idioma_corto: Optional[str]):
             if deteccion_idioma.codigo_corto(getattr(pista, "language_code", "")) == corto:
                 return pista
         return None
+
+    # 0) Lo que pidió quien llama manda: ya decidió con mejores señales.
+    if idioma_corto:
+        elegida = buscar(manuales, idioma_corto) or buscar(generadas, idioma_corto)
+        if elegida is not None:
+            automatica = None if varias_automaticas else bool(getattr(elegida, "is_generated", False))
+            return elegida, idioma_audio, automatica
 
     # 1) Si sabemos el idioma del audio, la mejor pista es la que está en ese
     #    idioma: manual primero (mejor puntuación y sin errores de ASR).
@@ -1995,6 +2015,7 @@ def health():
         "youtube_transcript_api": yt_transcript,
         # Booleano, nunca la clave: permite verificar el despliegue sin exponerla.
         "youtube_auto": supadata.configurado(),
+        "youtube_data_api": youtube_datos.configurado(),
         # Motores de voz disponibles (booleanos, nunca las claves). Sirve para
         # comprobar de un vistazo qué respaldo contestará si Fish se cae:
         # Fish (clones) → Azure oficial (gratis 500k chars/mes) → edge-tts.
@@ -2141,11 +2162,12 @@ def _respuesta_subtitulos(
     fuente: str,
     segmentos: Optional[list[dict]] = None,
     deteccion: Optional[dict] = None,
+    extra: Optional[dict] = None,
 ) -> JSONResponse:
     """Forma única de la respuesta de texto ya listo (sin pasar por Whisper)."""
     limpio = _postprocess_texto(texto)
     veredicto = deteccion or deteccion_idioma.detectar(limpio, idioma_pista=lang)
-    return JSONResponse({
+    cuerpo = {
         "text": limpio,
         "language": lang or "es",
         "title": titulo,
@@ -2155,7 +2177,36 @@ def _respuesta_subtitulos(
         "removed_hallucinations": 0,
         "needs_review": False,
         **deteccion_idioma.resumen_para_respuesta(veredicto),
-    })
+    }
+    if extra:
+        cuerpo.update(extra)
+    return JSONResponse(cuerpo)
+
+
+def _campos_idioma(resolucion: dict, idioma_entregado, disponibles, duracion_s: float) -> dict:
+    """Qué se pidió, qué llegó y por qué: el navegador decide con esto, sin adivinar."""
+    pedido = resolucion.get("idioma") or ""
+    entregado = deteccion_idioma.codigo_corto(idioma_entregado)
+    campos = {
+        "requested_lang": pedido,
+        "available_langs": list(disponibles or []),
+        "duration_s": duracion_s or 0,
+    }
+    if not pedido:
+        campos.update({"language_source": "proveedor", "language_resolution_confidence": None})
+    elif entregado == pedido:
+        campos.update({"language_source": resolucion.get("fuente", "desconocido"), "language_resolution_confidence": resolucion.get("confianza", 0.0)})
+    else:
+        # Se pidió un idioma y llegó otro: no se finge (auditoría H1).
+        campos.update({"language_source": "proveedor", "language_resolution_confidence": 0.0, "audio_language_conflict": True})
+    return campos
+
+
+def _supadata_transcribir(url: str, idioma, con_tiempos: bool, modo: str) -> dict:
+    """Los dobles de prueba y backend/app.py usan la firma de 3 argumentos."""
+    if modo == "auto":
+        return supadata.transcribir(url, idioma, con_tiempos)
+    return supadata.transcribir(url, idioma, con_tiempos, modo=modo)
 
 
 @app.get("/api/youtube-job")
@@ -2194,16 +2245,23 @@ async def transcribe_youtube(req: YouTubeRequest):
         raise HTTPException(status_code=400, detail="URL de YouTube no válida.")
 
     inicio = time.monotonic()
-    idioma = req.language if req.language and req.language != "auto" else None
-    idioma_corto = idioma.split("-")[0].lower() if idioma else None
     video_id = _extraer_video_id(req.url)
-    titulo = ""
+    # El idioma se decide ANTES de pedir el texto (auditoría 2026-09-25, H1).
+    datos_yt = youtube_datos.consultar(video_id or "") if youtube_datos.configurado() else {}
+    resolucion = idioma_video.resolver_idioma_origen(
+        pedido=req.language or "",
+        audio_declarado=datos_yt.get("audio", ""),
+        idioma_metadatos=datos_yt.get("idioma_metadatos", ""),
+        titulo=req.title_hint or datos_yt.get("titulo", ""),
+    )
+    idioma_corto = resolucion["idioma"] if resolucion["confianza"] >= 0.5 else None
+    titulo = datos_yt.get("titulo") or req.title_hint or ""
+    duracion_s = float(datos_yt.get("duracion_s") or req.duration_hint_s or 0)
     bloqueo_subtitulos = None
     _log_youtube(
-        "inicio",
-        video_id or "",
-        prefer_subtitles=bool(req.prefer_subtitles),
-        fast_mode=bool(req.fast_mode),
+        "inicio", video_id or "",
+        prefer_subtitles=bool(req.prefer_subtitles), fast_mode=bool(req.fast_mode),
+        idioma_origen=resolucion["idioma"], fuente_idioma=resolucion["fuente"], confianza_idioma=resolucion["confianza"],
     )
 
     # 1) Subtítulos vía youtube-transcript-api (rápido y suele funcionar en Vercel)
@@ -2246,104 +2304,70 @@ async def transcribe_youtube(req: YouTubeRequest):
                     lang_subs or idioma_corto,
                     pistas_subs,
                     video_id,
-                    permitir_consulta_extra=bool(req.include_timestamps),
+                    permitir_consulta_extra=False,
                 ),
+                extra=_campos_idioma(resolucion, lang_subs or idioma_corto, [], duracion_s),
             )
 
-    # 2) Supadata: vía principal. Sale por su propia infraestructura (YouTube no
-    #    la bloquea) y con mode=auto transcribe con IA los videos sin subtítulos.
+    # 2) Supadata: vía principal (sale por su propia red). `allow_ai_generation`:
+    #    None = histórico (mode=auto); False = solo subtítulos existentes; True =
+    #    la persona aceptó transcribir con IA (auditoría H24).
     if supadata.configurado():
+        modo = "native" if req.allow_ai_generation is False else "auto"
         try:
-            resultado_sd = (
-                supadata.transcribir(req.url, idioma_corto, True)
-                if req.include_timestamps
-                else supadata.transcribir(req.url, idioma_corto)
-            )
+            resultado_sd = _supadata_transcribir(req.url, idioma_corto, bool(req.include_timestamps), modo)
             if resultado_sd.get("job_id"):
-                # Videos de más de 20 min llegan como trabajo en segundo plano.
                 job_id = resultado_sd["job_id"]
                 _log_youtube("supadata_job", video_id or "", job_id=job_id)
                 restante = SUPADATA_ESPERA_SERVIDOR_S - (time.monotonic() - inicio)
                 listo = supadata.esperar(job_id, restante)
                 if listo:
-                    _log_youtube(
-                        "supadata_job_listo", video_id or "",
-                        intentos=listo.get("intentos", 0),
-                    )
+                    _log_youtube("supadata_job_listo", video_id or "", intentos=listo.get("intentos", 0))
                     return _respuesta_subtitulos(
-                        listo["texto"], listo.get("lang") or idioma_corto,
-                        titulo or video_id, "subtitles", listo.get("segmentos"),
-                        _detectar_idioma_audio(
-                            listo["texto"], listo.get("lang") or idioma_corto,
-                            None, video_id,
-                            permitir_consulta_extra=bool(req.include_timestamps),
-                        ),
+                        listo["texto"], listo.get("lang") or idioma_corto, titulo or video_id, "subtitles",
+                        listo.get("segmentos"),
+                        _detectar_idioma_audio(listo["texto"], listo.get("lang") or idioma_corto, None, video_id),
+                        extra=_campos_idioma(resolucion, listo.get("lang"), [], duracion_s),
                     )
-                # Sigue en curso: el navegador continúa la espera sin bloquear.
-                return JSONResponse(
-                    {
-                        "pending": True,
-                        "job_id": job_id,
-                        "title": titulo or video_id,
-                        "message": "Video largo: se está transcribiendo…",
-                    },
-                    status_code=202,
-                )
-            # Con «auto» la API entrega «la primera pista disponible», que puede
-            # ser una traducción cualquiera: un video en inglés llegaba en
-            # alemán. Si hay una pista en un idioma que la app entiende, la
-            # pedimos explícitamente.
+                return JSONResponse({
+                    "pending": True, "job_id": job_id, "title": titulo or video_id,
+                    "message": "Video largo: se está transcribiendo…",
+                    **_campos_idioma(resolucion, idioma_corto or "", [], duracion_s),
+                }, status_code=202)
             if not idioma_corto:
-                mejor = supadata.elegir_idioma(
-                    resultado_sd.get("lang", ""), resultado_sd.get("disponibles")
-                )
-                if mejor:
-                    _log_youtube(
-                        "supadata_reintento_idioma",
-                        video_id or "",
-                        recibido=resultado_sd.get("lang"),
-                        pedido=mejor,
-                    )
+                # Sin señal previa: se decide con lo que Supadata dice que tiene.
+                recibido = deteccion_idioma.codigo_corto(resultado_sd.get("lang"))
+                ofrecidos = {deteccion_idioma.codigo_corto(x) for x in resultado_sd.get("disponibles") or []}
+                mejor = idioma_video.resolver_idioma_origen(titulo=req.title_hint, disponibles=resultado_sd.get("disponibles"))
+                if mejor["idioma"] and mejor["idioma"] != recibido and mejor["idioma"] in ofrecidos:
+                    _log_youtube("supadata_reintento_idioma", video_id or "", recibido=recibido, pedido=mejor["idioma"])
                     try:
-                        otro = (
-                            supadata.transcribir(req.url, mejor, True)
-                            if req.include_timestamps
-                            else supadata.transcribir(req.url, mejor)
-                        )
-                        # Si el reintento se vuelve trabajo en segundo plano,
-                        # conservamos el texto que ya teníamos: peor idioma es
-                        # mejor que hacer esperar al usuario otra vez.
-                        if otro.get("texto"):
+                        otro = _supadata_transcribir(req.url, mejor["idioma"], bool(req.include_timestamps), modo)
+                        if otro.get("texto"):   # si se volvió trabajo largo, se queda lo que ya había
                             resultado_sd = otro
+                            resolucion = mejor
                     except SupadataError:
-                        pass  # nos quedamos con lo que ya teníamos
-            _log_youtube(
-                "supadata_listo",
-                video_id or "",
-                lang=resultado_sd.get("lang"),
-                elapsed_ms=round((time.monotonic() - inicio) * 1000),
-            )
+                        pass
+            _log_youtube("supadata_listo", video_id or "", lang=resultado_sd.get("lang"), modo=modo,
+                         elapsed_ms=round((time.monotonic() - inicio) * 1000))
             return _respuesta_subtitulos(
-                resultado_sd["texto"], resultado_sd.get("lang") or idioma_corto,
-                titulo or video_id, "subtitles", resultado_sd.get("segmentos"),
-                _detectar_idioma_audio(
-                    resultado_sd["texto"], resultado_sd.get("lang") or idioma_corto,
-                    None, video_id,
-                    permitir_consulta_extra=bool(req.include_timestamps),
-                ),
+                resultado_sd["texto"], resultado_sd.get("lang") or idioma_corto, titulo or video_id, "subtitles",
+                resultado_sd.get("segmentos"),
+                _detectar_idioma_audio(resultado_sd["texto"], resultado_sd.get("lang") or idioma_corto, None, video_id),
+                extra=_campos_idioma(resolucion, resultado_sd.get("lang"), resultado_sd.get("disponibles"), duracion_s),
             )
         except SupadataError as exc:
-            # Sin créditos o clave mala son problemas de cuenta: mejor decirlo
-            # claro que dejar que el usuario crea que el video es el problema.
-            _log_youtube(
-                "supadata_error",
-                video_id or "",
-                codigo=exc.codigo,
-                http_status=exc.http_status,
-                error=str(exc)[:240],
-            )
+            _log_youtube("supadata_error", video_id or "", codigo=exc.codigo, http_status=exc.http_status,
+                         modo=modo, error=str(exc)[:240])
             if exc.codigo in ("unauthorized", "limit-exceeded", "upgrade-required"):
                 raise HTTPException(status_code=402, detail=str(exc))
+            if modo == "native" and exc.codigo == "transcript-unavailable":
+                return JSONResponse(status_code=409, content={
+                    "detail": "Este video no tiene subtítulos. Se puede transcribir con IA, pero gasta créditos de Supadata.",
+                    "code": "sin_subtitulos",
+                    "duration_s": duracion_s,
+                    "estimated_credits": supadata.creditos_estimados_ia(duracion_s),
+                })
 
     # 3) Metadatos + subtítulos yt-dlp (respaldo; falla si YouTube ve datacenter)
     info = None
@@ -2525,6 +2549,7 @@ async def transcribe_youtube(req: YouTubeRequest):
             model=resultado.get("model", ""),
             elapsed_ms=round((time.monotonic() - inicio) * 1000),
         )
+        resultado.update({"requested_lang": resolucion["idioma"], "language_source": "audio", "language_resolution_confidence": 0.95, "available_langs": [], "duration_s": duracion_s})
         return JSONResponse(resultado)
     except HTTPException:
         raise

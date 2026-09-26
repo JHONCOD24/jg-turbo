@@ -14,6 +14,7 @@ Módulo puro (sin FastAPI) para que lo usen tanto `api/index.py` (Vercel) como
 
 from __future__ import annotations
 
+import math
 import os
 import time
 import urllib.parse
@@ -23,7 +24,7 @@ import requests
 
 API_KEY = (os.environ.get("SUPADATA_API_KEY") or "").strip()
 BASE_URL = os.environ.get("SUPADATA_BASE_URL", "https://api.supadata.ai/v1").rstrip("/")
-TIMEOUT_S = float(os.environ.get("SUPADATA_TIMEOUT_S", "30"))
+TIMEOUT_S = float(os.environ.get("SUPADATA_TIMEOUT_S", "45"))
 
 # Errores de cuenta: el usuario no puede arreglarlos reintentando el video.
 CODIGOS_DE_CUENTA = ("unauthorized", "limit-exceeded", "upgrade-required", "forbidden")
@@ -54,6 +55,16 @@ class SupadataError(RuntimeError):
 
 def configurado() -> bool:
     return bool(API_KEY)
+
+
+MODOS = ("auto", "native", "generate")
+
+
+def creditos_estimados_ia(segundos: float) -> int:
+    """Créditos que costaría generar el texto con IA: 2 por minuto (tarifa publicada).
+    0 si no se conoce la duración."""
+    minutos = math.ceil(max(0.0, float(segundos or 0)) / 60)
+    return 2 * minutos
 
 
 # Con «auto» la API devuelve la primera pista que encuentre, que puede ser una
@@ -166,19 +177,21 @@ def transcribir(
     url: str,
     idioma_corto: Optional[str] = None,
     con_tiempos: bool = False,
+    modo: str = "auto",
 ) -> dict:
     """Pide el texto del video.
 
     Devuelve {'texto', 'lang', 'disponibles', 'segmentos'} o {'job_id': ...}.
 
     `mode=auto` = usa los subtítulos si existen y, si no, los genera con IA.
+    `mode=native` = solo subtítulos existentes (no gasta créditos de IA).
 
     Ojo con `lang`: si no se manda, la API devuelve «la primera disponible», que
     es arbitraria — un video en inglés puede llegar en alemán. Por eso quien
     llama debe revisar `disponibles` cuando el usuario pidió «auto».
     """
     # text=false es el contrato documentado para recibir offset/duration.
-    params = {"url": url, "text": "false" if con_tiempos else "true", "mode": "auto"}
+    params = {"url": url, "text": "false" if con_tiempos else "true", "mode": modo if modo in MODOS else "auto"}
     if idioma_corto:
         params["lang"] = idioma_corto
     status, datos = _get("/transcript", params)
