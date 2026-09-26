@@ -5,8 +5,10 @@ function cargarApiYouTube() {
   if (promesaApi) return promesaApi;
   promesaApi = new Promise((resolver, rechazar) => {
     const anterior = window.onYouTubeIframeAPIReady;
+    let temporizador = null;
     window.onYouTubeIframeAPIReady = () => {
       if (typeof anterior === 'function') anterior();
+      clearTimeout(temporizador);
       resolver(window.YT);
     };
     let script = document.getElementById('youtube-iframe-api');
@@ -15,10 +17,10 @@ function cargarApiYouTube() {
       script.id = 'youtube-iframe-api';
       script.src = 'https://www.youtube.com/iframe_api';
       script.async = true;
-      script.onerror = () => rechazar(new Error('No se pudo cargar el reproductor de YouTube.'));
+      script.onerror = () => { promesaApi = null; rechazar(new Error('No se pudo cargar el reproductor de YouTube.')); };
       document.head.appendChild(script);
     }
-    setTimeout(() => rechazar(new Error('El reproductor de YouTube tardó demasiado en cargar.')), 15000);
+    temporizador = setTimeout(() => { promesaApi = null; rechazar(new Error('El reproductor de YouTube tardó demasiado en cargar.')); }, 15000);
   });
   return promesaApi;
 }
@@ -33,9 +35,10 @@ const ESTADOS = {
 };
 
 export class YouTubePlayer {
-  constructor(elemento, videoId) {
+  constructor(elemento, videoId, { pantallaCompletaPropia = false } = {}) {
     this.elemento = elemento;
     this.videoId = videoId;
+    this.pantallaCompletaPropia = pantallaCompletaPropia;
     this.player = null;
     this.estadoListeners = new Set();
     this.velocidadListeners = new Set();
@@ -48,11 +51,20 @@ export class YouTubePlayer {
         width: '100%',
         height: '100%',
         videoId: this.videoId,
-        playerVars: { playsinline: 1, rel: 0 },
+        playerVars: {
+          playsinline: 1,
+          rel: 0,
+          hl: 'es',                         // controles del reproductor en español
+          cc_load_policy: 0,                // no forzar subtítulos de YouTube: la app pone los suyos
+          iv_load_policy: 3,                // sin anotaciones encima del video
+          fs: this.pantallaCompletaPropia ? 0 : 1,
+          origin: window.location.origin,   // recomendado por la documentación de la IFrame API
+        },
         events: {
           onReady: () => resolver(),
           onStateChange: (evento) => {
             const estado = ESTADOS[evento.data] || 'unstarted';
+            if (estado === 'playing') this.ocultarSubtitulosDeYouTube();
             this.estadoListeners.forEach((listener) => listener(estado));
           },
           onPlaybackRateChange: (evento) => {
@@ -92,46 +104,24 @@ export class YouTubePlayer {
   }
 
   /**
-   * Pistas de subtítulos que el reproductor conoce, si las expone.
-   *
-   * Vale la pena aunque sea una API no documentada: el navegador del usuario
-   * consulta YouTube desde una IP doméstica, que no está bloqueada como sí lo
-   * está la de Vercel. Una pista con `kind: 'asr'` la genera YouTube escuchando
-   * el audio, así que su idioma **es** el idioma hablado — la única señal que
-   * demuestra el idioma del audio y que el servidor no logra conseguir.
-   *
-   * Devuelve [] ante cualquier problema: es una mejora, nunca un requisito.
-   */
-  getTracklist() {
-    for (const modulo of ['captions', 'cc']) {
-      try {
-        const pistas = this.player?.getOption?.(modulo, 'tracklist');
-        if (Array.isArray(pistas) && pistas.length) return pistas;
-      } catch (_) {
-        // El módulo de subtítulos aún no cargó o esta versión no lo expone.
-      }
-    }
-    return [];
-  }
+seekTo(segundos) {
+  this.player?.seekTo?.(Math.max(0, Number(segundos) || 0), true);
+}
 
-  /**
-   * Idioma del audio según las pistas: el de la pista automática, si existe.
-   * Devuelve `{ idioma, automatica }` o null si no se puede afirmar nada.
-   */
-  idiomaSegunPistas() {
-    const pistas = this.getTracklist();
-    if (!pistas.length) return null;
-    const codigo = (pista) => String(
-      pista?.languageCode || pista?.language_code || pista?.lc || '',
-    ).toLowerCase().split(/[-_]/)[0];
-    const esAutomatica = (pista) => String(pista?.kind || pista?.vss_id || '')
-      .toLowerCase().includes('asr');
+getPlayerState() {
+  return this.player?.getPlayerState?.();
+}
 
-    const automatica = pistas.find((pista) => esAutomatica(pista) && codigo(pista));
-    if (automatica) return { idioma: codigo(automatica), automatica: true };
-    const primera = pistas.find((pista) => codigo(pista));
-    return primera ? { idioma: codigo(primera), automatica: false } : null;
+/**
+ * Quita los subtítulos propios de YouTube (salieron en alemán encima de la voz
+ * en español, auditoría H12). `unloadModule` no está en la documentación
+ * oficial: si no existe, no pasa nada. [POR CONFIRMAR en navegador real, T4.3]
+ */
+ocultarSubtitulosDeYouTube() {
+  for (const modulo of ['captions', 'cc']) {
+    try { this.player?.unloadModule?.(modulo); } catch (_) { /* opcional */ }
   }
+}
 
   /** Volumen del video, 0 a 100. Permite bajar el original sin silenciarlo. */
   getVolume() {

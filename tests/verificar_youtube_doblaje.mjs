@@ -239,6 +239,18 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── T1.8: sin subtítulos de YouTube encima ───────────────────────');
+  {
+    const { contexto, pagina } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await reproducirConVoz(pagina); await esperar(800);
+    const modulos = await pagina.evaluate(() => window.__ytModulosDescargados || []);
+    comprobar('al reproducir se quitan los subtítulos propios de YouTube', modulos.includes('captions'), JSON.stringify(modulos));
+    const vars = await pagina.evaluate(() => window.__yt.opciones.playerVars || {});
+    comprobar('el reproductor va en español, sin anotaciones ni subtítulos forzados', vars.hl === 'es' && vars.iv_load_policy === 3 && vars.cc_load_policy === 0);
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();
