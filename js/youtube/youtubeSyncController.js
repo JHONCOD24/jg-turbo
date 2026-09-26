@@ -17,6 +17,7 @@ import { MotorPreparacion } from './motorPreparacion.js';
 import { crearLimitador } from './limitador.js';
 import { VOZ_INICIAL_S } from './planificador.js';
 import { decidirDoblaje, nombreIdioma, IDIOMAS_DOBLABLES } from './idiomaOrigen.js';
+import { leerDoblaje, guardarDoblaje } from './cacheDoblaje.js';
 
 const CLAVE_VOL_VOZ = 'jg_yt_vol_voz';
 const CLAVE_VOL_ORIGINAL = 'jg_yt_vol_original';
@@ -151,6 +152,7 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
   }
   function reiniciarVista() {
     ui.botonVoz.disabled = true;
+    $('ytDesdeInicio').hidden = true;
     ponerEstadoBotonVoz(false);
     ui.etiquetaVoz.textContent = 'Voz en español';
     ui.elegir.hidden = true;
@@ -167,11 +169,23 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
     progreso.terminar();
   }
 
+  /** Guarda traducciones y posición en la caché del video (H23). */
+  function guardarSesion(actual) {
+    if (!actual?.registro) return;
+    actual.registro.traducciones = [...(actual.motor?.traducciones || [])];
+    const posicion = actual.player?.getCurrentTime?.() || 0;
+    if (posicion > 0) actual.registro.posicionS = posicion;
+    guardarDoblaje(actual.registro);
+  }
+
   /** Detiene TODO lo de la sesión (H7) y, si se pide, devuelve el formulario (H8). */
   function terminarSesion({ restaurarFormulario = true } = {}) {
     const actual = sesion;
     sesion = null;
     if (actual) {
+      clearTimeout(actual.temporizadorCache);
+      clearInterval(actual.relojCache);
+      guardarSesion(actual);
       actual.controlador.abort();
       actual.motor?.detener();
       actual.motorVoz?.destruir();
@@ -189,6 +203,10 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
   }
   ui.cerrar.addEventListener('click', () => terminarSesion());
   ui.cancelar.addEventListener('click', () => terminarSesion());
+  $('ytDesdeInicio').addEventListener('click', () => {
+    if (sesion) sesion.retomarEn = 0;
+    $('ytDesdeInicio').hidden = true;
+  });
 
   ui.botonVoz.addEventListener('click', () => {
     const motorVoz = sesion?.motorVoz;
@@ -206,6 +224,11 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
   ui.reproducir.addEventListener('click', () => {
     const motorVoz = sesion?.motorVoz;
     if (!motorVoz) return;
+    if (sesion.retomarEn) {
+      sesion.player.seekTo(sesion.retomarEn);   // el salto va con el clic: antes, la API lo pone a reproducir sola
+      sesion.retomarEn = 0;
+      $('ytDesdeInicio').hidden = true;
+    }
     motorVoz.activarYReproducir();
     ponerEstadoBotonVoz(true);
     display.mostrarVoz('activo');
@@ -292,7 +315,7 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
   }
 
   /** Preparación por ventanas (H3): lo de ahora primero; el resto, mientras se ve. */
-  async function prepararDoblaje(actual, { datos, origen, tituloVideo, signal }) {
+  async function prepararDoblaje(actual, { datos, origen, tituloVideo, signal, traduccionesGuardadas = [] }) {
     const { player } = actual;
     const limitador = crearLimitador();
     const servicioVoz = new DubbingService({ generarAudio: (texto) => generarAudioEspanol(texto, { signal }), limitador });
@@ -300,15 +323,20 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
     actual.servicioVoz = servicioVoz;
     const motor = new MotorPreparacion({
       segmentos: datos.segmentos, servicioVoz, traductor,
-      posicion: () => player.getCurrentTime(),
+      posicion: () => actual.retomarEn || player.getCurrentTime(),
       origen, tituloVideo, limitadorVoz: limitador, signal,
       onCambio: (evento) => {
         if (evento?.tipo === 'pausa') ui.estado.textContent = evento.mensaje;
         pintarBuffer(actual);
       },
-      onTraduccion: () => display.refrescar(),
+      onTraduccion: () => {
+        display.refrescar();
+        clearTimeout(actual.temporizadorCache);
+        actual.temporizadorCache = setTimeout(() => guardarSesion(actual), 3000);
+      },
     });
     actual.motor = motor;
+    motor.sembrar(traduccionesGuardadas);
     display.definirSegmentos(datos.segmentos, (i) => {
       if (!motor.traducciones.has(i)) return null;
       return motor.traducciones.get(i) ?? datos.segmentos[i].text;   // sin traducción: se lee el original
@@ -357,6 +385,7 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
     if (!ui.reproducir.hidden) ui.reproducir.focus({ preventScroll: true });
     ui.estado.textContent = 'Listo. El resto del doblaje se prepara mientras ves el video.';
     pintarBuffer(actual);
+    actual.relojCache = setInterval(() => guardarSesion(actual), 5000);
   }
 
   async function iniciarSesion() {
@@ -381,16 +410,27 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
       if (tituloVideo) ui.titulo.textContent = tituloVideo;
       if (duracionS > 1800) progreso.ayuda('Video largo: la primera vez puede tardar unos 30 s en leerse. Puedes darle play mientras tanto.');
 
-      let datos = await pedirTexto(url, { idiomaOrigen: ui.idioma?.value || 'auto', tituloVideo, duracionS, signal });
-      let decision = decidirDoblaje(datos);
-      if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
-        progreso.mensaje('Confirma el idioma del video para seguir.');
-        const elegido = await elegirIdioma(decision, signal);
-        if (!elegido) { terminarSesion(); return; }
-        if (elegido !== datos.idioma) {
-          datos = await pedirTexto(url, { idiomaOrigen: elegido, tituloVideo, duracionS, signal });
+      const guardado = await leerDoblaje(videoId);
+      const elegidoEnFormulario = ui.idioma?.value || 'auto';
+      const sirve = Boolean(guardado?.segmentos?.length)
+        && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === guardado.idiomaOrigen);
+      let datos;
+      let decision;
+      if (sirve) {
+        datos = { segmentos: guardado.segmentos, idioma: guardado.idiomaOrigen, confianza: 1, fuente: 'usuario', conflicto: false };
+        decision = { accion: 'doblar', idioma: guardado.idiomaOrigen, mensaje: '' };
+      } else {
+        datos = await pedirTexto(url, { idiomaOrigen: elegidoEnFormulario, tituloVideo, duracionS, signal });
+        decision = decidirDoblaje(datos);
+        if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
+          progreso.mensaje('Confirma el idioma del video para seguir.');
+          const elegido = await elegirIdioma(decision, signal);
+          if (!elegido) { terminarSesion(); return; }
+          if (elegido !== datos.idioma) {
+            datos = await pedirTexto(url, { idiomaOrigen: elegido, tituloVideo, duracionS, signal });
+          }
+          decision = { accion: 'doblar', idioma: elegido, mensaje: '' };
         }
-        decision = { accion: 'doblar', idioma: elegido, mensaje: '' };
       }
       if (decision.accion === 'sin_doblaje') {
         mostrarIdioma('El video ya está en español', 'ok');
@@ -398,7 +438,25 @@ export function inicializarYoutubeSincronizado({ fetchApi, traducirTexto, genera
         return;
       }
       mostrarIdioma(`Idioma del video: ${nombreIdioma(decision.idioma)}`, 'ok');
-      await prepararDoblaje(actual, { datos, origen: decision.idioma, tituloVideo, signal });
+      actual.registro = {
+        videoId,
+        idiomaOrigen: decision.idioma,
+        titulo: tituloVideo,
+        duracionS,
+        segmentos: datos.segmentos,
+        traducciones: sirve ? guardado.traducciones : [],
+        posicionS: sirve ? guardado.posicionS : 0,
+      };
+      guardarDoblaje(actual.registro);
+      if (sirve && 15 < guardado.posicionS && guardado.posicionS < duracionS - 30) {
+        actual.retomarEn = guardado.posicionS;
+        ui.estado.textContent = `Retomamos donde ibas (${formatoTiempo(actual.retomarEn)}).`;
+        $('ytDesdeInicio').hidden = false;
+      }
+      await prepararDoblaje(actual, {
+        datos, origen: decision.idioma, tituloVideo, signal,
+        traduccionesGuardadas: actual.registro.traducciones,
+      });
     } catch (error) {
       if (signal.aborted || error?.name === 'AbortError') return;
       mostrarIdioma('No se pudo preparar el doblaje', 'no');

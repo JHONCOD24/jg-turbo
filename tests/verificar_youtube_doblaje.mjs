@@ -384,6 +384,28 @@ try {
     await contexto.close();
   }
 
+  console.log('\n── T3.1: volver a abrir el mismo video no gasta nada ────────────');
+  {
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await esperar(3500);   // deja guardar la caché
+    await pagina.click('#btnYtSyncClose');
+    const traducciones = reg.translate.length;
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn');
+    const t0 = Date.now(); await esperarListo(pagina); const segundos = (Date.now() - t0) / 1000;
+    comprobar('la segunda vez no se vuelve a pedir el texto (créditos)', reg.youtube.length === 1, `${reg.youtube.length}`);
+    comprobar('ni se vuelve a traducir lo ya traducido', reg.translate.length === traducciones, `${traducciones} → ${reg.translate.length}`);
+    comprobar('y queda listo en menos de 4 s', segundos < 4, `${segundos.toFixed(1)} s`);
+    await pagina.evaluate(() => window.__yt.seekTo(700));
+    await esperar(600);
+    await pagina.click('#btnYtSyncClose');
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await pagina.click('#ytDubReproducir'); await esperar(800);
+    const t = await pagina.evaluate(() => window.__yt.getCurrentTime());
+    comprobar('al volver, retoma donde ibas', t >= 695, `${t.toFixed(0)} s`);
+    await contexto.close();
+  }
+
 } finally {
   await navegador.close();
   servidor.close();
