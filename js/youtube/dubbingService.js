@@ -167,6 +167,10 @@ export class DubbingService {
     this.unidades = [];
     this.completadas = 0;
     this.destruido = false;
+    // Sube con cada cambio de voz: un audio que se estaba generando con la voz
+    // anterior se descarta al llegar (antes sonaba intercalado con la nueva).
+    this.versionVoz = 0;
+    this.invalidadoDesde = Number.POSITIVE_INFINITY;
   }
 
   /** Frases ya armadas con `agruparPorTiempo` (sin texto todavía). */
@@ -215,6 +219,8 @@ export class DubbingService {
 
   /** Descarta la voz ya generada desde un instante (cambio de voz, T3.2). */
   invalidarDesde(tiempoS) {
+    this.versionVoz += 1;
+    this.invalidadoDesde = tiempoS;
     for (const unidad of this.unidades) {
       if (unidad.startTime < tiempoS || unidad.estado !== 'listo') continue;
       if (unidad.url) URL.revokeObjectURL(unidad.url);
@@ -236,6 +242,7 @@ export class DubbingService {
       return Promise.reject(new Error('La frase aún no tiene texto para decir.'));
     }
     unidad.estado = 'cargando';
+    const version = this.versionVoz;
     unidad.promesa = (async () => {
       try {
         await this.#cupo();
@@ -247,6 +254,11 @@ export class DubbingService {
         if (!blob?.size) throw new Error('El servicio no devolvió audio.');
         if (this.destruido) throw new Error('La preparación de voz fue cancelada.');
         if (resultado?.respaldoHdr) this.onRespaldo?.(resultado, unidad);
+        if (version !== this.versionVoz && unidad.startTime >= this.invalidadoDesde) {
+          // La voz cambió mientras se generaba: este audio es de la voz vieja.
+          unidad.estado = 'pendiente';
+          return unidad;
+        }
         unidad.blob = blob;
         unidad.url = URL.createObjectURL(blob);
         // La duración real deja al plan de ritmo frenar el video ANTES de que haga falta.

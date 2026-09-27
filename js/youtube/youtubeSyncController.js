@@ -109,6 +109,19 @@ export function inicializarYoutubeSincronizado({
       guardar('jg_yt_subtitulos', ui.toggleCaption.checked ? '1' : '0');
     });
 
+    // Tamaño del subtítulo (Pequeño = el de siempre). Mediano por defecto: el
+    // dueño notó el texto pequeño. Solo cambia el tamaño de letra.
+    const tamano = $('ytTamanoSubtitulo');
+    const TAMANOS = ['pequeno', 'mediano', 'grande'];
+    const aplicarTamano = (valor) => {
+      const elegido = TAMANOS.includes(valor) ? valor : 'mediano';
+      ui.caption.dataset.tamano = elegido;
+      if (tamano) tamano.value = elegido;
+      return elegido;
+    };
+    aplicarTamano(leer('jg_yt_subtitulo_tamano'));
+    tamano?.addEventListener('change', () => guardar('jg_yt_subtitulo_tamano', aplicarTamano(tamano.value)));
+
     // ── Ritmo automático (encendido por defecto, se recuerda) ──────────────
     // Frena el video lo justo cuando el español necesita más tiempo que el
     // inglés, para que la voz diga todo sin saltarse líneas. Apagado, la voz
@@ -130,6 +143,8 @@ export function inicializarYoutubeSincronizado({
     const CLAVE_VOZ = 'jg_yt_voz';
     const CLAVE_VOZ2 = 'jg_yt_voz2';
     const VALOR_AUTO = 'auto';
+    // 2.ª voz «Ninguna»: todo el video con la voz principal, aunque sea un diálogo.
+    const VALOR_SIN_SEGUNDA = 'ninguna';
     function llenarSelectorVoz(select, conAuto) {
       const grupos = new Map();
       for (const item of listarVoces()) {
@@ -164,6 +179,9 @@ export function inicializarYoutubeSincronizado({
         });
         actual.voz = auto.principal;
         actual.vozSecundaria = auto.secundaria;
+        // En automático también manda la 2.ª voz que la persona eligió a mano.
+        const segunda = ui.voz2?.value;
+        if (segunda && segunda !== VALOR_SIN_SEGUNDA && vozValida(ui.voz2, segunda) && leer(CLAVE_VOZ2)) actual.vozSecundaria = segunda;
       } else {
         actual.voz = elegida;
         const genero = generoDeVoz(elegida);
@@ -173,6 +191,7 @@ export function inicializarYoutubeSincronizado({
           ? segunda
           : (contraria ? contraria.value : `neural:auto:${genero === 'male' ? 'female' : 'male'}`);
       }
+      if (ui.voz2?.value === VALOR_SIN_SEGUNDA) actual.vozSecundaria = null;
       // La 2.ª voz solo se ofrece cuando el video trae diálogo.
       const dialogo = hayDialogo(actual.segmentos || []);
       if (ui.voz2Wrap) ui.voz2Wrap.hidden = !dialogo;
@@ -193,6 +212,7 @@ export function inicializarYoutubeSincronizado({
     }
     if (ui.voz2) {
       llenarSelectorVoz(ui.voz2, false);
+      ui.voz2.prepend(new Option('Ninguna: una sola voz para todo', VALOR_SIN_SEGUNDA));
       const recordada2 = leer(CLAVE_VOZ2);
       ui.voz2.value = (recordada2 && vozValida(ui.voz2, recordada2)) ? recordada2 : vozPorDefecto();
       ui.voz2.addEventListener('change', () => vozNuevaDesde(ui.voz2, CLAVE_VOZ2));

@@ -4118,6 +4118,14 @@ class TtsRequest(BaseModel):
         "",
         description="Slug del catálogo Fish (nico-robin, colombiana…). Vacío usa female/male.",
     )
+    idioma_fijo: bool = Field(
+        False,
+        description=(
+            "True = leer todo con la voz del idioma pedido, sin pasar tramos «solo en "
+            "inglés» a una voz inglesa. El doblaje lo usa: su texto ya es español y "
+            "una frase como «Claude, ChatGPT.» sonaba con OTRA voz (en-US)."
+        ),
+    )
 
 
 def _tts_gender(voice: str) -> str:
@@ -4843,7 +4851,8 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
             gender, req.language, req.locale, bool(req.prefer_fish)
         )
     else:
-        language = _tts_resolve_language(req.language, text)
+        # Doblaje (`idioma_fijo`): sin force-EN, la misma voz en todas las frases.
+        language = _tts_language(req.language) if req.idioma_fijo else _tts_resolve_language(req.language, text)
         modo = "regional"
         voice_id, _, gender = _tts_pick_voice(req.voice, language, req.locale)
         candidates = [voice_id] + [
@@ -4960,6 +4969,7 @@ async def tts_neural_get(
     source: str = "",
     prefer_fish: bool = False,
     fish_voice: str = "",
+    idioma_fijo: bool = False,
 ):
     """Misma síntesis por GET, cacheable en el navegador y en el CDN.
 
@@ -4978,6 +4988,7 @@ async def tts_neural_get(
             source=source,
             prefer_fish=prefer_fish,
             fish_voice=fish_voice,
+            idioma_fijo=idioma_fijo,
         ),
         cache_seconds=86400,
     )
@@ -4995,7 +5006,7 @@ async def tts_warmup():
 
     motor = "edge"
     try:
-        audio, motor, _ = await _tts_synthesize(
+        audio, motor, *_ = await _tts_synthesize(
             ".", TTS_VOICE_CATALOG["es-CO"]["female"], "+0%", "+0Hz", "+0%"
         )
         listo = bool(audio)

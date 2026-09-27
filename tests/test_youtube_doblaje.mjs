@@ -530,6 +530,29 @@ const se = await modulo('syncEngine.js');
   comprobar(servicio.unidades[0].duracionVoz === 0, 'al cambiar de voz, la duración se vuelve a medir');
 }
 
+// ── Voz constante (v152) ────────────────────────────────────────────────
+// Al cambiar de voz, una frase que se estaba generando con la voz vieja sonaba
+// intercalada con la nueva. Ahora ese audio se descarta y se rehace.
+{
+  let soltar = null;
+  let llamadas = 0;
+  const servicio = new ds.DubbingService({ generarAudio: (texto) => { llamadas += 1; return llamadas === 1 ? new Promise((r) => { soltar = () => r({ blob: new Blob(['vieja']) }); }) : Promise.resolve({ blob: new Blob(['nueva']) }); } });
+  servicio.definirUnidades(ds.agruparPorTiempo(ts.normalizarSegmentos(fixture.segments)));
+  servicio.fijarTexto(0, 'Hola');
+  const enCurso = servicio.asegurar(0);
+  await new Promise((r) => setTimeout(r, 0));   // la síntesis ya salió
+  servicio.invalidarDesde(0);   // la persona cambió de voz
+  soltar();
+  await enCurso;
+  comprobar(servicio.unidades[0].estado === 'pendiente' && !servicio.unidades[0].url, 'el audio que se generaba con la voz vieja se descarta');
+  await servicio.asegurar(0);
+  comprobar(servicio.unidades[0].estado === 'listo' && llamadas === 2, 'y la frase se rehace con la voz nueva');
+}
+{
+  const html = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
+  comprobar(/\{ text: texto, lang: 'es', idiomaFijo: true \}/.test(html), 'el doblaje pide la voz con idioma fijo (sin voz inglesa para frases con nombres)');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

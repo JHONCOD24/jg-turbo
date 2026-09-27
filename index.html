@@ -1438,6 +1438,12 @@
     text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none;
   }
   .yt-caption[hidden]{display:none}
+  /* Tamaño del subtítulo a elección (v152). Solo cambia el tamaño de letra: el
+     diseño establecido (fondo, tipografía, posición) es el de .yt-caption. */
+  .yt-caption[data-tamano="mediano"]{font-size:clamp(17px,2.6vw,24px)}
+  .yt-caption[data-tamano="grande"]{font-size:clamp(20px,3.2vw,30px)}
+  /* Selectores del doblaje: ≥44 px para el dedo en pantallas táctiles (medían 38). */
+  @media (max-width:1023px){.yt-sync-extras select{min-height:44px}}
   /* ── Lector de PDF: sacar el texto de un documento o de un libro ── */
   /* Sistema del panel: radios, ritmo y paddings salen de aquí, nada suelto. */
   .pdf-area{
@@ -3916,6 +3922,8 @@
 .yt-player-shell:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0;background:#000}
 .yt-player-shell.yt-pantalla-completa{position:fixed;inset:0;z-index:1000;width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0;background:#000}
 .yt-player-shell:fullscreen .yt-caption,.yt-player-shell.yt-pantalla-completa .yt-caption{font-size:clamp(18px,3vw,30px);bottom:12%}
+.yt-player-shell:fullscreen .yt-caption[data-tamano="mediano"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-tamano="mediano"]{font-size:clamp(22px,3.7vw,38px)}
+.yt-player-shell:fullscreen .yt-caption[data-tamano="grande"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-tamano="grande"]{font-size:clamp(26px,4.5vw,46px)}
 .yt-player-shell .yt-salir-pantalla{display:none}
 .yt-player-shell.yt-pantalla-completa .yt-salir-pantalla{display:inline-flex;position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;z-index:2;min-height:44px}
 .yt-mixer-fila[hidden]{display:none !important}   /* el selector de clase le ganaba a [hidden] (TRAMPAS «Un selector con identificador le gana a hidden») */
@@ -6694,6 +6702,13 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <label class="yt-opcion yt-opcion-check" for="ytRitmoAuto" title="Frena el video un poco cuando el español necesita más tiempo, para que la voz diga todo sin saltarse líneas. La velocidad a mano se elige en el engranaje de YouTube.">
                 <input type="checkbox" id="ytRitmoAuto" checked>
                 Ritmo automático (frena el video si la voz lo necesita)
+              </label>
+              <label class="yt-opcion" for="ytTamanoSubtitulo">Tamaño del subtítulo
+                <select id="ytTamanoSubtitulo" class="tts-voice-select" aria-label="Tamaño del texto del subtítulo">
+                  <option value="pequeno">Pequeño</option>
+                  <option value="mediano">Mediano</option>
+                  <option value="grande">Grande</option>
+                </select>
               </label>
               <label class="yt-opcion yt-opcion-check" for="ytToggleCaption">
                 <input type="checkbox" id="ytToggleCaption">
@@ -16009,8 +16024,10 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintent
     // Modo "misma voz": la voz multilingüe pronuncia cada idioma sin ayuda.
     // Sin guías, sin frenar el inglés, sin cambio de voz entre fragmentos.
     language = 'es'; // el servidor ignora el idioma cuando unified=true
-  }else{
-    // Red de seguridad: tramos que quedaron mal etiquetados como ES pero son EN/tech
+  }else if(!(item && item.idiomaFijo)){
+    // Red de seguridad: tramos que quedaron mal etiquetados como ES pero son EN/tech.
+    // El doblaje (`idiomaFijo`) no la usa: su texto ya es español y una frase
+    // corta con nombres («Claude, ChatGPT.») sonaba con OTRA voz.
     if(language === 'es') language = ttsForzarIdiomaSiInglesPuro(text, language);
     if(language === 'en'){
       text = ttsPrepararTextoIngles(text);
@@ -16032,6 +16049,7 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintent
     prefer_fish: !!prefs.preferFish,
     fish_voice: prefs.preferFish ? (prefs.fishId || '') : '',
   };
+  if(item && item.idiomaFijo) cuerpo.idioma_fijo = true;
   const resp = await ttsPedirAudio(cuerpo, reintento, signal);
   if(!resp.ok){
     let detail = resp.statusText || 'Error TTS';
@@ -16075,6 +16093,8 @@ async function ttsPedirAudio(cuerpo, reintento = 0, signal = null){
     source: cuerpo.source || '',
     prefer_fish: cuerpo.prefer_fish ? 'true' : 'false',
     fish_voice: cuerpo.fish_voice || '',
+    // Solo el doblaje lo manda: así la dirección (y su caché) del resto no cambia.
+    ...(cuerpo.idioma_fijo ? { idioma_fijo: 'true' } : {}),
   }).toString();
   /* Reintentar el MISMO bloque por GET no servía de nada: la dirección era
    * idéntica y el navegador devolvía al instante la respuesta guardada, que es
@@ -18554,7 +18574,7 @@ function asegurarYoutubeSincronizado(){
         signal: opciones.signal,
       }),
       generarAudioEspanol: (texto, opciones = {}) => ttsFetchNeuralChunk(
-        { text: texto, lang: 'es' },
+        { text: texto, lang: 'es', idiomaFijo: true },
         opciones.voz ? ttsPrefsParaVoz(opciones.voz) : ttsPrefs(),
         1, 'yt', 0, opciones.signal,
       ),

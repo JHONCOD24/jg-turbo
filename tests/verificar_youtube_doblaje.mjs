@@ -188,7 +188,7 @@ async function abrir(navegador, escenario = {}) {
   await pagina.route(/\/tts(\?|$)/, async (r) => {
     const req = r.request();
     const datos = req.method() === 'GET' ? Object.fromEntries(new URL(req.url()).searchParams) : JSON.parse(req.postData() || '{}');
-    reg.tts.push({ t: Date.now(), texto: datos.text || '', voz: String(datos.voice || ''), fish: String(datos.prefer_fish) === 'true', fishVoz: datos.fish_voice || '' });
+    reg.tts.push({ t: Date.now(), texto: datos.text || '', voz: String(datos.voice || ''), fish: String(datos.prefer_fish) === 'true', fishVoz: datos.fish_voice || '', fijo: String(datos.idioma_fijo) === 'true' });
     await esperar(escenario.demoraVozMs ?? 150);
     const respaldo = escenario.vozRespaldo && String(datos.prefer_fish) === 'true';
     await responder(r, {
@@ -602,6 +602,42 @@ try {
     comprobar('un monólogo no ofrece segunda voz', !(await pagina.isVisible('#ytVoz2Wrap')));
     const voces = [...new Set(reg.tts.map((t) => t.voz))];
     comprobar('y todo suena con una sola voz', voces.length === 1, voces.join(','));
+    comprobar('cada frase del doblaje pide la voz con idioma fijo (nunca una voz inglesa a mitad)', reg.tts.length > 0 && reg.tts.every((t) => t.fijo));
+    await contexto.close();
+  }
+  {
+    // Diálogo con «Segunda voz: Ninguna»: una sola voz constante (v152).
+    const dialogo = [
+      { startTime: 0, endTime: 3, duration: 3, text: 'Hello, welcome to the show' },
+      { startTime: 3, endTime: 6, duration: 3, text: '>> Thanks, happy to be here today' },
+      { startTime: 6, endTime: 9, duration: 3, text: '>> Tell us about your new book' },
+      { startTime: 9, endTime: 12, duration: 3, text: '>> It is about marketing in the age of AI' },
+    ];
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ segmentos: dialogo, fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    comprobar('la segunda voz ofrece «Ninguna: una sola voz»', (await pagina.locator('#ytVoz2Select option[value="ninguna"]').count()) === 1);
+    const antes = reg.tts.length;
+    await pagina.selectOption('#ytVoz2Select', 'ninguna');
+    await reproducirConVoz(pagina); await esperar(3000);
+    const voces = [...new Set(reg.tts.slice(antes).map((t) => t.voz))];
+    comprobar('con «Ninguna», desde ese momento el diálogo suena con una sola voz', reg.tts.length > antes && voces.length === 1, voces.join(','));
+    await contexto.close();
+  }
+  {
+    // Tamaño del subtítulo: Pequeño (el de siempre), Mediano (inicial) y Grande. Solo el tamaño.
+    const { contexto, pagina } = await abrir(navegador, { viewport: { width: 1366, height: 900 }, youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    comprobar('el subtítulo arranca en tamaño Mediano', (await pagina.inputValue('#ytTamanoSubtitulo')) === 'mediano');
+    const medir = () => pagina.evaluate(() => { const c = getComputedStyle(document.getElementById('ytCaption')); return { tam: parseFloat(c.fontSize), fondo: c.backgroundColor, letra: c.fontFamily, peso: c.fontWeight }; });
+    await pagina.selectOption('#ytTamanoSubtitulo', 'pequeno'); const pequeno = await medir();
+    await pagina.selectOption('#ytTamanoSubtitulo', 'mediano'); const mediano = await medir();
+    await pagina.selectOption('#ytTamanoSubtitulo', 'grande'); const grande = await medir();
+    comprobar('Pequeño < Mediano < Grande', pequeno.tam < mediano.tam && mediano.tam < grande.tam, `${pequeno.tam} / ${mediano.tam} / ${grande.tam} px`);
+    comprobar('Pequeño es el tamaño de siempre (19 px en escritorio)', pequeno.tam === 19, `${pequeno.tam}`);
+    comprobar('el fondo, la letra y el peso no cambian', [mediano, grande].every((m) => m.fondo === pequeno.fondo && m.letra === pequeno.letra && m.peso === pequeno.peso));
+    await pagina.reload(); await pagina.waitForSelector('#ytTamanoSubtitulo', { state: 'attached' });
+    await pagina.waitForFunction(() => document.getElementById('ytCaption')?.dataset.tamano, null, { timeout: 10000 }).catch(() => {});
+    comprobar('la elección se recuerda', (await pagina.inputValue('#ytTamanoSubtitulo')) === 'grande');
     await contexto.close();
   }
 
