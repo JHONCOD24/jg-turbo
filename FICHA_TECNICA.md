@@ -238,14 +238,19 @@ resto del video se prepara mientras lo ves. Detalle técnico e historial:
 - **Voz:** arranca en **«Automática (según el video)»** (elige sola voz de
   hombre o mujer según lo que habla el video, siempre rápida). Puedes fijar
   la que quieras (no cambia la voz del resto de la app). Las voces marcadas
-  «(más lenta)» suenan con otro estilo pero tardan más en generarse. Si el
-  video es una conversación (entrevista, dos personas), aparece **«Segunda
-  voz»** para que cada una suene distinto.
-- **Velocidad:** además de los pasos de YouTube hay pasos finos (0.80×,
-  0.85×, 0.97×…) y **«Otra…»** para escribir la que quieras (0.25–2). Se
-  recuerda entre videos. Truco: si el video habla muy rápido y la voz no
-  alcanza, frénalo a 0.85×–0.95×: cada frase gana tiempo y el doblaje va más
-  a tono (la voz sigue sola la velocidad que pongas).
+  «(tarda más en cargar)» son de Fish: suenan con otro estilo pero tardan
+  6-8 s en preparar cada tramo. Si el video es una conversación (entrevista,
+  dos personas), aparece **«Segunda voz»** para que cada una suene distinto.
+- **La voz no se salta nada (v4):** cada frase en español suena entera; la
+  siguiente espera su turno. El subtítulo muestra la línea que dice la voz.
+- **Ritmo automático (encendido por defecto):** cuando el español necesita
+  más tiempo que el inglés, la voz acelera un poco y, si no alcanza, el video
+  se frena solo (hasta 0,75×) y vuelve a su velocidad cuando sobra tiempo. Se
+  puede apagar en el interruptor «Ritmo automático»: entonces el video no se
+  toca y la voz se pone al día en las pausas.
+- **Velocidad a mano:** en el engranaje del propio YouTube (⚙ → Velocidad de
+  reproducción). La app la respeta, la voz la acompaña y se recuerda para el
+  siguiente video. (El selector propio de velocidad se retiró en v150.)
 - **Voz en español / Audio original:** dos deslizadores para mezclar. En iPhone
   el original se silencia mientras suena la voz (Safari no deja bajar el volumen
   desde la página) y se avisa con una nota.
@@ -256,7 +261,8 @@ resto del video se prepara mientras lo ves. Detalle técnico e historial:
 - **Cancelar / Cerrar:** «Cancelar» detiene TODO (traducción, voz y peticiones);
   «Cerrar» vuelve al formulario sin gastar nada más.
 - Si el traductor pide una pausa por límite de uso, la app espera sola
-  (15 → 30 → 60 s) y sigue: no hay que hacer nada, solo esperar.
+  (15 → 30 → 60 s) y sigue: no hay que hacer nada, solo esperar. Un fallo de
+  red se reintenta a los 3 s (luego 8 y 15 s).
 - Si vuelves a abrir un video ya doblado, **no se vuelve a pagar**: la app lo
   recuerda (sin guardar los audios) y retoma donde ibas.
 

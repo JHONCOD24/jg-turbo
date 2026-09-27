@@ -7,6 +7,61 @@ o el troceo del frontend).
 
 ---
 
+## Corrección 2026-09-26 · La cadena de IA prueba cada clave una vez y nombra el límite de uso
+
+### Falla (medida en producción)
+
+Al doblar un video de 88 min: **13 llamadas a `/api/translate` y dos HTTP 500**
+antes del primer sonido (15 s solo de traducción). Además, una sesión abierta
+repetía un 500 cada ~62 s.
+
+### Causas verificadas
+
+- `GEMINI_API_KEY` está **bloqueada** (403, API desactivada en su proyecto de
+  Google) y `_proveedor_ia_servidor()` la ponía primera: cada traducción pagaba
+  ese intento fallido.
+- Si justo entonces Mistral daba **429** (plan gratis ≈ 1 petición/s), el
+  respaldo lo tragaba y el error final decía «gemini: clave no autorizada
+  (401)». El navegador no lo reconocía como límite y **partía el lote en
+  mitades**: más llamadas, más 429.
+- Con una clave de Mistral **del navegador** en límite, la `MISTRAL_API_KEY` del
+  servidor nunca se probaba: el respaldo excluía por nombre de proveedor, no
+  por clave.
+- En modo doblaje (`literal`) caía a **MyMemory**, que traduce con memorias
+  ajenas: «Hello, this is a short test» → «Esta es una nueva prueba…» (medido).
+- Con un texto sin marcadores, el modelo copiaba el `[[JG_SEG_000000]]` del
+  ejemplo del prompt y llegaba al subtítulo y a la voz:
+  `_validar_marcadores_segmento` devolvía el texto limpio pero nadie lo usaba.
+
+### Solución (`api/index.py`)
+
+- `_candidatos_ia` + `_llamar_ia_con_respaldo`: cada **clave** distinta se prueba
+  una vez (navegador → preferida del servidor → resto). Las rechazadas (401/403)
+  quedan **10 min en cuarentena** por instancia. Mistral **repite una vez** ante
+  un 429 (espera 1,2 s). Si lo agotado fue el cupo, el error dice «límite de uso
+  … (429)». Misma firma y mismos mensajes de antes para el resto de la app.
+- `/api/translate` con `literal: true` ya no usa MyMemory: responde **429**
+  (límite), **422** (problema del texto: se parte el lote) o **503** (sin IA: se
+  repite el lote tras 3 s). Fuera del doblaje, el respaldo de siempre sigue igual.
+- Un marcador suelto se quita si el original no traía marcadores.
+
+En el navegador (`js/youtube/translationService.js`): un fallo de red o del
+servidor ya no parte el lote (1 llamada, no 13); solo se parte si el problema es
+del texto. La traducción de respaldo sin IA (`ia_used: false`) no se usa para
+doblar.
+
+### Pruebas
+
+`backend/tests/test_ia_respaldo.py` **10 passed** (orden de claves, cuarentena,
+reintento de Mistral, clave del servidor como respaldo de la del navegador,
+429 del doblaje sin MyMemory, marcador suelto). Preexistentes y ajenos:
+6 fallos de `test_traduccion_doblaje.py` (esperan el prompt viejo en inglés) y
+2 de `prefer_fast` en `test_traducir_largo.py` (comprobado con `git stash`).
+
+**Pendiente del dueño:** habilitar «Generative Language API» en el proyecto de
+Google de `GEMINI_API_KEY` (o crear una clave en AI Studio). Mientras tanto la
+cuarentena evita pagar su latencia en cada traducción.
+
 ## Entrega 2026-08-24 · Español natural en YouTube
 
 **Pedido:** ejecutar `PLAN_MEJORA_TRADUCCION_ES.md` para corregir traducciones literales, entrecortadas, sin tildes o sin concordancia en el flujo inglés → español de YouTube.

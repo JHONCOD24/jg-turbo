@@ -73,8 +73,13 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
   voz propia del doblaje de YouTube. No toca la voz global (`jg_tts_voice`).
   `auto` (valor inicial desde v147) = neural rápida según el video.
 - `jg_yt_voz2` (v147): segunda voz del doblaje, solo para videos con diálogo.
-- `jg_yt_rate` (v148): velocidad del video del doblaje (0.25–2, p. ej. `0.85`).
-  Se recuerda entre videos.
+- `jg_yt_rate` (v148): velocidad del video del doblaje (0.25–2, p. ej. `1.25`).
+  Desde v150 solo guarda lo que la persona elige en el **engranaje de YouTube**
+  (lo que baja el ritmo automático NO se guarda). Con el ritmo automático
+  encendido, un valor menor que 1 (del selector que existía en v148-v149) no se
+  reaplica: frenar ya lo hace el motor.
+- `jg_yt_ritmo_auto` (v150, `1` por defecto / `0`): ritmo automático del
+  doblaje: frena el video lo justo cuando el español necesita más tiempo.
 - `jg_yt_subtitulos` (`1` / `0`): si se ven los subtítulos del doblaje sobre el
   video.
 

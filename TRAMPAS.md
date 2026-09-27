@@ -1400,3 +1400,61 @@ LA MISMA instancia dos veces (`() => audioDoblaje`); la precarga del siguiente t
 le pisaba el `src` al que estaba sonando. **Regla:** la fábrica del motor de voz
 devuelve elementos DISTINTOS (los dos desbloqueados en el gesto, por iOS), y
 `#precargarSiguiente` no toca nada si el libre es el activo.
+
+## Una voz esclava del reloj del video se corta en cada frase (2026-09-26, v4)
+
+**Síntoma:** «empieza a leer una línea y, como ya pasaba la otra, deja de leerla»;
+se saltaban trozos. **Causa:** el motor elegía la frase por el reloj del video: al
+entrar en la siguiente cortaba la voz de la anterior (0,45 s de gracia) y arrancaba
+la nueva a mitad (`currentTime = esperado`). El español ocupa 20-30 % más que el
+inglés y la voz solo aceleraba hasta 1,20×. Simulado: con frases que necesitan 1,4×
+su tiempo, **0 de 38 completas, 37 cortadas**. **Regla:** la frase que suena termina
+entera; la siguiente espera. Si la voz no cabe, primero acelera (hasta 1,25×) y
+luego se frena el VIDEO (pasos de 0,05, mínimo 0,75×). Solo se salta algo con más
+de 5 s de atraso. Pruebas: `tests/test_youtube_sincronia.mjs` (simulador con reloj
+virtual que cuenta cortes, saltos y orden).
+
+## Redondear siempre hacia abajo hace serrucho (2026-09-26)
+
+**Síntoma (simulado, en desarrollo):** 32 cambios de velocidad del video en 3 min
+(0,80 ↔ 0,75). **Causa:** el plan necesitaba 0,80 exacto y un ruido de milésimas lo
+hacía cruzar el escalón al redondear hacia abajo. **Regla:** redondear al paso más
+cercano y no mover el video por diferencias menores que la holgura de la voz
+(±0,04): lo pequeño lo absorbe la voz. Se prueba contando `cambiosTasa`.
+
+## Dar una frase por terminada «casi al final» le corta la última sílaba (2026-09-26)
+
+**Síntoma (simulado, en desarrollo, error del agente):** solo la mitad de las frases
+constaban como completas aunque no había cortes a la vista. **Causa:** el motor
+daba la frase por dicha con `currentTime >= duration - 0.01` y la siguiente pausaba
+a la anterior: 10 ms antes de su final. **Regla:** el fin es `ended` (o la voz
+detenida en su último instante). Nunca «casi».
+
+## Un 429 disfrazado de 401 multiplica las llamadas (2026-09-26)
+
+**Síntoma (producción):** 13 llamadas y dos HTTP 500 antes del primer sonido del
+doblaje. **Causa:** el respaldo de IA probaba primero una clave bloqueada (Gemini,
+403) y, si Mistral daba 429 en ese instante, el error final decía «clave no
+autorizada (401)»; el navegador no lo veía como límite y partía el lote en mitades.
+**Regla:** el error final nombra la causa que de verdad frenó (si hubo 429, dice
+«límite de uso (429)»); las claves rechazadas se apartan un rato; y un fallo de red
+o de servidor repite el mismo lote: solo un problema DEL TEXTO justifica partirlo.
+Pruebas: `backend/tests/test_ia_respaldo.py`.
+
+## Una validación que devuelve el texto limpio y nadie lo usa (2026-09-26)
+
+**Síntoma:** un `[[JG_SEG_000000]]` copiado del ejemplo del prompt llegaba al
+subtítulo y a la voz. **Causa:** `_validar_marcadores_segmento` se llamaba sin usar
+su valor de retorno. **Regla:** si una función devuelve el texto corregido,
+asígnalo (`x = validar(x)`); una prueba debe mirar el texto que sale, no solo que
+no haya excepción.
+
+## Una prueba con datos imposibles falla por el dato, no por el código (2026-09-26)
+
+**Síntoma (en desarrollo):** la prueba de navegador del doblaje v4 daba la voz
+4,6 s atrasada. **Causa:** la voz simulada a 10 car/s hacía que la primera frase
+del video real necesitara 2,2× su tiempo, fuera de lo que el diseño cubre (video
+≥ 0,75× y voz ≤ 1,25× ⇒ hasta 1,67×); una voz real va a 17,5 car/s (medido).
+**Regla:** calibrar los datos de prueba con valores medidos (aquí 14 car/s ⇒ 1,39×,
+más exigente que lo real pero posible) y, antes de relajar un umbral, calcular si
+el caso era alcanzable.

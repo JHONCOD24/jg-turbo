@@ -1,5 +1,113 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Entrega 2026-09-26 · Doblaje v4: la voz no se salta nada y el ritmo es automático
+
+### Pedido del dueño
+
+1. La voz no iba a la par de la lectura: «empieza a leer una línea y, como ya
+   pasaba la otra, deja de leerla», se saltaba trozos y no se escuchaba fluido.
+   Que la voz se acomode sola al video (cambiando velocidad o de voz si hace falta;
+   Fish Audio permitido).
+2. El selector de velocidad no le gustó; la velocidad a mano ya funciona desde el
+   engranaje de YouTube.
+3. Pegar el enlace y esperar ~30 s (video largo) es mucho: más rápido.
+4. **Regla:** los subtítulos (diseño, fondo, texto) NO se tocan.
+
+### Causas medidas
+
+- **Saltos de la voz** (`dubbingEngine.js`, motor anterior): mandaba el reloj del
+  video. Al entrar en la frase siguiente se **cortaba** la voz de la anterior
+  (0,45 s de gracia) y la nueva arrancaba **a mitad**. El español ocupa 20-30 % más
+  que el inglés y la voz solo podía acelerar hasta 1,20×. Con el mismo simulador
+  (40 frases de 4 s de video en habla continua):
+
+  | El español necesita… | Motor anterior | Motor v4 |
+  |---|---|---|
+  | 0,8× (cabe) | 37/38 completas | 37/38 completas · video 1× |
+  | 1,25× | 37/38 completas | 33/34 · video 0,90× |
+  | **1,4×** | **0 completas · 37 cortadas a mitad** | **30/31 completas · 0 cortes** · video 0,80× |
+  | 1,6× | — | 28/29 · 0 cortes · video 0,75× |
+
+  (La frase que falta en cada caso es la que sonaba al cortar la simulación.) Un
+  orador rápido real (el fixture: 18 car/s en inglés) con traducción 25 % más larga
+  y una voz de 17,5 car/s necesita **1,28×**: justo donde el motor anterior cortaba.
+- **Carga de 46 s** (medida en producción con `dNWkwrqAkcM`, 88 min, sesión nueva):
+  `/api/youtube` 29,2 s (YouTube bloquea el paso gratuito en 1,2 s y **Supadata tarda
+  ~28 s**: externo) + **15 s nuestros**: 13 llamadas a `/api/translate` con dos 500.
+  Causa de los 500: la clave de Gemini bloqueada se probaba primero y un 429 de
+  Mistral salía como «401», así que el navegador partía los lotes en mitades (detalle
+  en `CAMBIOS_TRADUCCION.md` §2026-09-26).
+- **Velocidad del reproductor** (medido con la IFrame API real): acepta pasos de 0,05
+  (0,95 · 0,90 · 0,85 · 0,80 · 0,75 exactas; 0,97 → 0,95). `getAvailablePlaybackRates`
+  sigue listando solo los pasos clásicos, pero los finos funcionan.
+
+### Solución
+
+- **Motor v4** (`js/youtube/ritmoDoblaje.js` puro + `dubbingEngine.js`): cada frase
+  suena **entera** y la siguiente espera su turno (doble audio precargado). La voz
+  va a su ritmo natural (1×), acelera lo justo (cómoda hasta 1,12×, techo 1,25×) y,
+  si no alcanza, **el video se frena solo** mirando 20 s por delante (paso más
+  cercano de 0,05, mínimo 0,75×, histéresis ±0,04 para no hacer serrucho) y vuelve a
+  la velocidad elegida cuando sobra tiempo. Si el video no admite otra velocidad
+  (directos), deja de pedirla y lo dice. Solo con más de 5 s de atraso se salta al
+  punto del video. Mientras espera una voz que no llegó, el video no se frena.
+- **Subtítulos que siguen a la voz:** muestran la línea que se OYE (fracciones de
+  texto por segmento). Su diseño no se tocó (`.yt-caption` intacto).
+- **«Ritmo automático»** (interruptor, encendido por defecto, `jg_yt_ritmo_auto`)
+  reemplaza al selector de velocidad propio. La velocidad a mano va en el engranaje
+  de YouTube: la app la respeta, la voz la acompaña y se recuerda (`jg_yt_rate`);
+  lo que baja el automático no se guarda.
+- **Arranque:** el texto del video ya no espera al reproductor (van en paralelo);
+  la voz se precalienta (`/api/tts-warmup`) mientras Supadata trabaja; primer lote
+  de traducción de 4 segmentos; hasta 2 lotes en vuelo con ≥1,1 s entre salidas;
+  arranca con 10 s de voz lista (antes 20); un fallo de red repite el mismo lote a
+  los 3 s (antes lo partía en mitades y esperaba 15 s).
+- **Servidor:** cadena de IA por claves con cuarentena y 429 bien nombrado; el
+  doblaje ya no recibe traducciones de MyMemory; marcador suelto eliminado.
+- Diagnóstico de solo lectura en consola: `jgDoblajeDiagnostico()` (frases
+  habladas/saltadas, retraso p95, cambios de velocidad).
+
+### Voces (medido 2026-09-26, mismo texto de 239 caracteres a 1×)
+
+| Voz | car/s | síntesis | | Voz | car/s | síntesis |
+|---|---|---|---|---|---|---|
+| Camila (PE) ♀ | 18,7 | 0,8 s | | **Gonzalo (CO) ♂** | **19,3** | 1,0 s |
+| Paloma (US) ♀ | 17,8 | 0,9 s | | Lorenzo (CL) ♂ | 18,4 | 1,0 s |
+| **Salomé (CO) ♀** | **17,5** | 0,9 s | | Tomás (AR) ♂ | 17,7 | 1,0 s |
+| Dalia (MX) ♀ | 17,0 | 0,6 s | | Jorge (MX) ♂ | 16,7 | 0,6 s |
+| Fish · JG Narradora ♀ | 16,5 | **8,3 s** | | Fish · Roberto ♂ | **23,3** | **6,1 s** |
+
+La voz automática (Salomé/Gonzalo, Colombia) ya está entre las más ágiles: cambiar
+de voz no resolvía la sincronía. Fish Roberto habla muy rápido, pero tarda 6-8 s en
+preparar cada tramo y el plan gratuito tiene caídas: queda **a mano**, con la
+etiqueta «(tarda más en cargar)» (antes «(más lenta)», que confundía).
+
+### Pruebas y sus cuentas
+
+| Batería | Resultado |
+|---|---|
+| `node tests/test_youtube_sincronia.mjs` (nueva) | **65 OK · 0 fallos** |
+| `node tests/test_youtube_doblaje.mjs` | **131 OK · 0 fallos** (118 antes; −6 obsoletas del selector y del rango viejo, +19) |
+| `node tests/verificar_youtube_doblaje.mjs` | **102 OK · 0 fallos** (94 antes; −6 del selector, +14: 0 cortes y 0 saltos en navegador, video frenado solo, subtítulo = voz) |
+| Unitarias de referencia (19 archivos) | **1.192 OK · 0 fallos** (sin retroceder) |
+| `backend/tests/test_ia_respaldo.py` (nueva) | **10 passed** |
+| pytest YouTube/traducción (9 archivos) | 108 passed · 8 fallos **preexistentes** (6 de `test_traduccion_doblaje.py`, 2 de `prefer_fast`; comprobado con `git stash`) |
+| `verificar_arranque_ligero.mjs` | 9 OK + 1 fallo preexistente (1031 KB, ajeno) |
+| `verificar_movil_pantalla.mjs` / `verificar_pestanas.mjs` | 60 / 31, como antes |
+
+### Lo que no se puede prometer (y por qué)
+
+- **Los ~28 s de Supadata** la primera vez en un video de hora y media son del
+  servicio externo (medido en su registro). Lo nuestro se recortó; la segunda vez
+  el video sale de la caché del navegador y no espera.
+- **Sincronía labial:** imposible sin el audio original (la IFrame API no lo da).
+- Si el español necesitara más de ~1,67× el tiempo del inglés (video a 0,75× y voz
+  a 1,25×), la voz se atrasa y, pasados 5 s, salta al punto del video.
+
+### Despliegue
+
+`v150` / `jg-turbo-shell-v150` · `dpl_` [POR ANOTAR tras el despliegue].
+
 ## Corrección 2026-09-26 · El traductor ya no se auto-limita (ritmo + espera creciente)
 
 ### Falla reportada
