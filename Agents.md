@@ -158,7 +158,7 @@ node tests/test_youtube_sincronia.mjs
 ```
 
 Referencia al 2026-09-26 (v150): los 19 archivos de PDF/TTS suman **1.192 OK**;
-`test_youtube_doblaje` **136** y `test_youtube_sincronia` **65** (0 fallos).
+`test_youtube_doblaje` **139** y `test_youtube_sincronia` **65** (0 fallos).
 Referencia al 2026-09-05 (v2.41.0): **1.120 comprobaciones OK, 0 fallos** (24 archivos).
 Referencia anterior (v2.39.0): ~1.000 comprobaciones
 (20 archivos; `test_pdf_mejora_apartado` aporta 50). Si salen menos, la prueba
@@ -177,7 +177,7 @@ se cortó.
 | `node tests/verificar_pdf_unir_palabras.mjs` | «Unir palabras» sobre una palabra partida de verdad, con su Deshacer | 18 |
 | `node tests/verificar_arranque_ligero.mjs` | **Obligatoria al tocar lo que se carga al arrancar**: que el lector de PDF no viaje con quien solo abre la app | 7 |
 | `node tests/verificar_movil_pantalla.mjs` | **Obligatoria al tocar alturas, scroll o zona segura**: quién desplaza, que se llegue al final del contenido y que no sobre hueco, en 5 pestañas × 4 teléfonos | 62 |
-| `node tests/verificar_youtube_doblaje.mjs` | **Obligatoria al tocar el doblaje de YouTube**: idioma antes del texto, ventana de preparación (voz sin traducirlo todo), cancelar que corta verdad, caché por video, voz/subtítulos/pantalla completa, permiso de IA, texto completo bajo demanda y (v4) **0 frases de voz cortadas o saltadas con el español más largo que el inglés**, ritmo automático y subtítulo = voz — todo con API y reproductor simulados | 102 |
+| `node tests/verificar_youtube_doblaje.mjs` | **Obligatoria al tocar el doblaje de YouTube**: idioma antes del texto, ventana de preparación (voz sin traducirlo todo), cancelar que corta verdad, caché por video, voz/subtítulos/pantalla completa, permiso de IA, texto completo bajo demanda y (v4) **0 frases de voz cortadas o saltadas con el español más largo que el inglés**, ritmo automático y subtítulo = voz — todo con API y reproductor simulados | 110 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -240,7 +240,9 @@ nombra el 429 (`backend/tests/test_ia_respaldo.py`). Pruebas:
 `tests/test_youtube_sincronia.mjs` (simulador con reloj virtual). Consola:
 `jgDoblajeDiagnostico()`. Medido en producción con un video real: 0 frases
 cortadas (antes 8 en 90 s) y listo en 22 s (antes 40,8; ~15 s son de Supadata).
-`JG_JS_V='v151'`, prod `dpl_FFQcBqaGscwLh4s7nw1izWF4yT5G`. Desplegar desde
+**v152:** el doblaje pide la voz con `idioma_fijo` (nunca voz inglesa a mitad),
+descarta audio de una voz anterior (`versionVoz`), 2.ª voz «Ninguna» y tamaño del
+subtítulo (`data-tamano`, solo `font-size`). `JG_JS_V='v152'`, prod `dpl_` [POR ANOTAR]. Desplegar desde
 `git archive` del commit (ver `CAMBIOS_YOUTUBE.md` §Despliegues).
 
 **Estado desde 2026-08-01: la extracción es automática otra vez.** Documento
@@ -422,7 +424,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v151`** (doblaje de YouTube v4, 2026-09-26). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v152`** (doblaje de YouTube v4, 2026-09-26). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

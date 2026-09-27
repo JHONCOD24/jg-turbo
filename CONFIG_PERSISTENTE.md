@@ -80,6 +80,9 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
   reaplica: frenar ya lo hace el motor.
 - `jg_yt_ritmo_auto` (v150, `1` por defecto / `0`): ritmo automático del
   doblaje: frena el video lo justo cuando el español necesita más tiempo.
+- `jg_yt_subtitulo_tamano` (v152, `pequeno` / `mediano` (inicial) / `grande`):
+  tamaño de letra del subtítulo del doblaje. Solo el tamaño; el diseño no cambia.
+- `jg_yt_voz2` admite además `ninguna` (v152): una sola voz aunque sea diálogo.
 - `jg_yt_subtitulos` (`1` / `0`): si se ven los subtítulos del doblaje sobre el
   video.
 

@@ -1,5 +1,52 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Corrección 2026-09-26 (v152) · Voz constante y tamaño del subtítulo
+
+### Pedido del dueño
+
+Con la sincronía ya aprobada («no quiero que eso cambie»): (1) al probar voces,
+«suena una voz y de repente vuelve a sonar otra»; (2) poder agrandar el
+subtítulo (el actual es el pequeño; uno mediano y uno grande), sin cambiar su
+diseño ni su tipografía.
+
+### Causas verificadas de la voz que cambia
+
+- **Frases cortas con nombres** («Claude, ChatGPT.»): la red de seguridad «tramo
+  solo en inglés» (cliente `ttsForzarIdiomaSiInglesPuro` y servidor
+  `_tts_resolve_language`) las mandaba a una voz en-US a media escena.
+- **Cambio de voz en curso:** `invalidarDesde` solo descartaba lo ya listo; lo que
+  se estaba generando con la voz vieja llegaba después y sonaba intercalado.
+  Igual con el relevo de Fish a neural.
+- **Diálogos:** la 2.ª voz es intencional, pero no había forma de quitarla, y en
+  modo automático el selector de 2.ª voz ni se respetaba.
+
+### Solución
+
+- `idioma_fijo` (TtsRequest y `GET /api/tts`, solo lo manda el doblaje): siempre la
+  voz del idioma pedido. El resto de la app no cambia (ni su caché de audio).
+- `DubbingService.versionVoz`: un audio generado con una voz anterior se descarta y
+  se rehace con la nueva.
+- 2.ª voz: opción «Ninguna: una sola voz para todo»; en automático se respeta la
+  2.ª voz elegida a mano.
+- `/api/tts-warmup` desempaquetaba 3 valores de 4 y siempre respondía «falló».
+- **Tamaño del subtítulo:** Pequeño (el de siempre, 19 px en escritorio) · Mediano
+  (inicial) · Grande, recordado en `jg_yt_subtitulo_tamano`. Reglas nuevas por
+  `[data-tamano]`: solo cambia `font-size`; fondo, letra, peso y posición medidos
+  iguales. Los selectores del panel miden ≥44 px en pantallas táctiles.
+- La sincronía (motor v4) no se tocó: `test_youtube_sincronia` 65 OK sin cambios.
+
+### Pruebas
+
+`test_youtube_doblaje` **139 OK** · `test_youtube_sincronia` **65 OK** ·
+`verificar_youtube_doblaje` **110 OK** (+8: idioma fijo, «Ninguna», tamaños y
+diseño intacto) · `backend/tests/test_tts_idioma_fijo.py` **4 passed** ·
+`test_tts_fish_estable.py` + `test_ia_respaldo.py` 22 passed · `test_tts_*` y
+`test_pdf_voz` sin cambios (la prueba de versión ahora compara JS y caché entre sí).
+
+### Despliegue
+
+`v152` / `jg-turbo-shell-v152` · `dpl_` [POR ANOTAR].
+
 ## Entrega 2026-09-26 · Doblaje v4: la voz no se salta nada y el ritmo es automático
 
 ### Pedido del dueño

@@ -254,6 +254,9 @@ resto del video se prepara mientras lo ves. Detalle técnico e historial:
 - **Voz en español / Audio original:** dos deslizadores para mezclar. En iPhone
   el original se silencia mientras suena la voz (Safari no deja bajar el volumen
   desde la página) y se avisa con una nota.
+- **Tamaño del subtítulo:** Pequeño (el de siempre), Mediano o Grande. Solo cambia
+  el tamaño de la letra; el diseño es el mismo. Se recuerda.
+- **Segunda voz → «Ninguna»:** todo el video con una sola voz aunque sea un diálogo.
 - **Subtítulo sobre el video (diseño establecido):** el interruptor recuerda
   tu elección. Puedes leer o no; la voz siempre suena. Su aspecto actual no
   se cambia por decisión del dueño.
