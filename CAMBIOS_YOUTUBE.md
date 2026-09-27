@@ -85,7 +85,8 @@ El doblaje en español no iba a la par (frenos entre frases), las voces no
 siempre eran las propicias y se pidió: mismas voces en PDF y YouTube, mejor
 sincronía, más voces de referencia y voz automática según el video (hombre /
 mujer, 2 voces si hay 2 interlocutores). Los subtítulos NO se tocaron: su
-diseño quedó establecido tal cual.
+diseño quedó **ESTABLECIDO** por decisión del dueño (no cambiar su aspecto;
+ver `FICHA_TECNICA.md` § Controles del doblaje).
 
 ### Causas verificadas
 

@@ -211,6 +211,14 @@ Sin subtítulos: `409 sin_subtitulos` y permiso con créditos estimados. Pruebas
 `tests/test_youtube_doblaje.mjs`, `tests/verificar_youtube_doblaje.mjs`,
 `backend/tests/test_youtube_idioma_origen.py`. Detalle: `CAMBIOS_YOUTUBE.md`.
 
+**Doblaje v3.1–v149 (2026-09-26):** voz inicial `auto` (neural rápida según el
+video, `jg_yt_voz`; 2.ª voz `jg_yt_voz2` solo con diálogo `>>` confirmado);
+doble `<audio>` alternado (la fábrica entrega 2 elementos distintos,
+desbloqueados en el gesto); voz 0,95×–1,20× con 2 s prestados; velocidad del
+video a gusto (presets + libre, `jg_yt_rate`); traducción con ritmo ≥1,1 s y
+espera 15→30→60 s ante 429. **Subtítulos: diseño ESTABLECIDO por el dueño, no
+cambiar su aspecto.** `JG_JS_V='v149'`, prod `dpl_4ed7JLNkQKxfB4jbabpZnpTMGcaF`.
+
 **Estado desde 2026-08-01: la extracción es automática otra vez.** Documento
 maestro: **`CAMBIOS_YOUTUBE.md`** (diagnóstico medido, alternativas con fuente,
 arquitectura, validación y guía de activación).

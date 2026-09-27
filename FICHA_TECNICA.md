@@ -235,16 +235,28 @@ resto del video se prepara mientras lo ves. Detalle técnico e historial:
 
 #### Controles del doblaje
 
-- **Voz:** elige la voz del doblaje (no cambia la voz del resto de la app). Las
-  voces marcadas «(más lenta)» suenan más naturales pero tardan más en generarse.
+- **Voz:** arranca en **«Automática (según el video)»** (elige sola voz de
+  hombre o mujer según lo que habla el video, siempre rápida). Puedes fijar
+  la que quieras (no cambia la voz del resto de la app). Las voces marcadas
+  «(más lenta)» suenan con otro estilo pero tardan más en generarse. Si el
+  video es una conversación (entrevista, dos personas), aparece **«Segunda
+  voz»** para que cada una suene distinto.
+- **Velocidad:** además de los pasos de YouTube hay pasos finos (0.80×,
+  0.85×, 0.97×…) y **«Otra…»** para escribir la que quieras (0.25–2). Se
+  recuerda entre videos. Truco: si el video habla muy rápido y la voz no
+  alcanza, frénalo a 0.85×–0.95×: cada frase gana tiempo y el doblaje va más
+  a tono (la voz sigue sola la velocidad que pongas).
 - **Voz en español / Audio original:** dos deslizadores para mezclar. En iPhone
   el original se silencia mientras suena la voz (Safari no deja bajar el volumen
   desde la página) y se avisa con una nota.
-- **Subtítulo sobre el video:** el interruptor recuerda tu elección. Puedes leer
-  o no; la voz siempre suena.
+- **Subtítulo sobre el video (diseño establecido):** el interruptor recuerda
+  tu elección. Puedes leer o no; la voz siempre suena. Su aspecto actual no
+  se cambia por decisión del dueño.
 - **Pantalla completa:** agranda el video conservando los subtítulos propios.
 - **Cancelar / Cerrar:** «Cancelar» detiene TODO (traducción, voz y peticiones);
   «Cerrar» vuelve al formulario sin gastar nada más.
+- Si el traductor pide una pausa por límite de uso, la app espera sola
+  (15 → 30 → 60 s) y sigue: no hay que hacer nada, solo esperar.
 - Si vuelves a abrir un video ya doblado, **no se vuelve a pagar**: la app lo
   recuerda (sin guardar los audios) y retoma donde ibas.
 
