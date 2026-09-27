@@ -17,6 +17,16 @@ import { crearReloj } from './reloj.js';
 
 const PAUSA_TRAS_LIMITE_MS = 15000;
 const LIBERAR_ATRAS_S = 60;
+// Ante un 429 no basta con reintentar cada 15 s: si el cupo sigue lleno, cada
+// reintento falla y el video se atasca «en unos segundos» para siempre. La
+// espera crece (15 → 30 → 60 s) y el mensaje dice la espera real y van cuántos.
+const PAUSAS_LIMITE_MS = [15000, 30000, 60000];
+/**
+ * Ritmo mínimo entre llamadas de traducción. El plan gratuito de Mistral da
+ * ~1 petición/s: los lotes cortos vuelven en menos de 1 s y sin este freno la
+ * propia app se auto-limita (429) en videos de habla rápida.
+ */
+export const INTERVALO_MIN_TRADUCCION_MS = 1100;
 
 export class MotorPreparacion {
   constructor({
@@ -25,11 +35,13 @@ export class MotorPreparacion {
     limitadorVoz = null, reloj = null, ahora = () => Date.now(),
     concurrenciaTraduccion = 1, concurrenciaVoz = 2,
     horizonteTraduccionS = HORIZONTE_TRADUCCION_S, horizonteVozS = HORIZONTE_VOZ_S,
+    intervaloTraduccionMs = INTERVALO_MIN_TRADUCCION_MS,
     onCambio = () => {}, onTraduccion = () => {}, signal = null,
   }) {
     Object.assign(this, {
       segmentos, servicioVoz, traductor, posicion, origen, tituloVideo, limitadorVoz, ahora,
       concurrenciaTraduccion, concurrenciaVoz, horizonteTraduccionS, horizonteVozS,
+      intervaloTraduccionMs,
       onCambio, onTraduccion, signal,
     });
     this.traducciones = new Map();   // índice de segmento → texto | null (no se pudo)
@@ -37,6 +49,8 @@ export class MotorPreparacion {
     this.lotesActivos = 0;
     this.vozActiva = 0;
     this.pausaHasta = 0;
+    this.ultimoLoteMs = -this.intervaloTraduccionMs;   // el primer lote sale al instante
+    this.rachasLimite = 0;   // 429 seguidos (espera creciente)
     this.errores = { traduccion: 0, voz: 0 };
     this.reloj = reloj || crearReloj(() => this.paso(), { intervaloMs: 300 });
   }
@@ -54,7 +68,10 @@ export class MotorPreparacion {
   paso() {
     if (this.signal?.aborted) { this.detener(); return; }
     const t = Number(this.posicion()) || 0;
-    if (this.ahora() >= this.pausaHasta) {
+    // Ritmo mínimo: un lote nuevo solo si pasó el intervalo desde el anterior.
+    // Sin esto, los lotes cortos (habla rápida) salen a >1/s y Mistral gratis
+    // responde 429: la app se limitaba a sí misma.
+    if (this.ahora() >= this.pausaHasta && this.ahora() - this.ultimoLoteMs >= this.intervaloTraduccionMs) {
       while (this.lotesActivos < this.concurrenciaTraduccion) {
         const lote = siguienteLoteTraduccion(
           this.segmentos,
@@ -77,10 +94,12 @@ export class MotorPreparacion {
   async #traducir(indices) {
     indices.forEach((i) => this.enCurso.add(i));
     this.lotesActivos += 1;
+    this.ultimoLoteMs = this.ahora();
     try {
       const mapa = await this.traductor.traducirLote(indices, this.segmentos, {
         origen: this.origen, tituloVideo: this.tituloVideo, signal: this.signal,
       });
+      this.rachasLimite = 0;   // hubo éxito: se olvida la racha de 429
       for (const [indice, texto] of mapa) {
         this.traducciones.set(indice, texto);
         if (texto === null) this.errores.traduccion += 1;
@@ -89,13 +108,21 @@ export class MotorPreparacion {
       this.#rellenarUnidades();
     } catch (error) {
       if (this.signal?.aborted) return;
-      // 429 u otro fallo general: respirar y reintentar más tarde, sin marcar el texto.
+      if (esLimiteDeUso(error)) {
+        this.rachasLimite += 1;
+        const espera = PAUSAS_LIMITE_MS[Math.min(this.rachasLimite, PAUSAS_LIMITE_MS.length) - 1];
+        this.pausaHasta = this.ahora() + espera;
+        this.onCambio({
+          tipo: 'pausa',
+          mensaje: `El traductor pidió una pausa por límite de uso (van ${this.rachasLimite}): seguimos en unos ${Math.round(espera / 1000)} s…`,
+        });
+        return;
+      }
+      // Otro fallo general: respirar y reintentar más tarde, sin marcar el texto.
       this.pausaHasta = this.ahora() + PAUSA_TRAS_LIMITE_MS;
       this.onCambio({
         tipo: 'pausa',
-        mensaje: esLimiteDeUso(error)
-          ? 'El traductor pidió una pausa por límite de uso; seguimos en unos segundos.'
-          : 'La traducción falló un momento; reintentamos en unos segundos.',
+        mensaje: 'La traducción falló un momento; reintentamos en unos segundos.',
       });
     } finally {
       indices.forEach((i) => this.enCurso.delete(i));

@@ -394,7 +394,9 @@ try {
     await pegarEnlace(pagina); await pagina.click('#ytSyncBtn');
     const t0 = Date.now(); await esperarListo(pagina); const segundos = (Date.now() - t0) / 1000;
     comprobar('la segunda vez no se vuelve a pedir el texto (créditos)', reg.youtube.length === 1, `${reg.youtube.length}`);
-    comprobar('ni se vuelve a traducir lo ya traducido', reg.translate.length === traducciones, `${traducciones} → ${reg.translate.length}`);
+    // +1: el lote que iba volando al pulsar Cerrar se aborta y al reabrir se
+    // pide de nuevo (nunca se guardó su respuesta). Misma tolerancia que T1.5.
+    comprobar('ni se vuelve a traducir lo ya traducido', reg.translate.length <= traducciones + 1, `${traducciones} → ${reg.translate.length}`);
     comprobar('y queda listo en menos de 4 s', segundos < 4, `${segundos.toFixed(1)} s`);
     await pagina.evaluate(() => window.__yt.seekTo(700));
     await esperar(600);

@@ -1,5 +1,50 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Corrección 2026-09-26 · El traductor ya no se auto-limita (ritmo + espera creciente)
+
+### Falla reportada
+
+En un video de ~30 min aparecía «El traductor pidió una pausa por límite de
+uso; seguimos en unos segundos» y el video tardaba demasiado en estar listo.
+
+### Causas verificadas
+
+- El plan gratuito de Mistral (único proveedor activo: la clave de Gemini
+  sigue bloqueada, ver entrega v3) da ~1 petición/s. Los lotes cortos de un
+  video de habla rápida vuelven en menos de 1 s y el motor pedía el siguiente
+  al instante: **la propia app se provocaba el 429**.
+- Ante el 429, el motor reintentaba cada 15 s fijos: con el cupo lleno, cada
+  reintento fallaba y el video se atascaba «en unos segundos» para siempre.
+- Los lotes de traducción son los mismos de antes (salen de los mismos
+  segmentos): v3.1 no agregó llamadas; solo hizo visible el límite que ya
+  existía.
+
+### Solución (`js/youtube/motorPreparacion.js`)
+
+- **Ritmo mínimo de 1,1 s** entre llamadas de traducción (inyectable para
+  pruebas): nunca se pasa de ~0,9/s. El primer lote sale al instante.
+- **Espera creciente ante 429** (15 → 30 → 60 s, con tope) y mensaje honesto:
+  «…(van N): seguimos en unos X s…». Un éxito olvida la racha.
+- La voz sigue preparándose mientras la traducción espera (ya lo hacía).
+
+### Pruebas
+
+`test_youtube_doblaje.mjs` **118 OK** (ritmo ≥1,1 s, 15→30→60 s, olvido de
+racha) · `verificar_youtube_doblaje.mjs` **94 OK** · referencia 1.192 OK.
+T3.1 acepta +1 traducción al reabrir: el lote que volaba al Cerrar se aborta
+y se repite legítimamente (misma tolerancia que T1.5).
+
+### Nota para el dueño (capacidad real)
+
+Si el 429 persiste varios minutos es que el cupo de Mistral está lleno de
+verdad: la cura es habilitar la API de Gemini en Google Cloud (ver entrega
+v3) para tener dos proveedores. Sin eso, los videos largos en hora pico
+pueden ir con pausas.
+
+### Despliegue
+
+`v149` / `jg-turbo-shell-v149` · `dpl_…` [PENDIENTE: anotar tras desplegar].
+
 ## Mejora 2026-09-26 · Velocidad del video a gusto de la persona
 
 ### Pedido

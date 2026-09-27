@@ -206,7 +206,7 @@ const { MotorPreparacion } = await modulo('motorPreparacion.js');
   const traductor = { traducirLote: async (indices) => { lotes.push(indices); return new Map(indices.map((i) => [i, `ES ${segmentos[i].text}`])); } };
   let posicion = 0;
   const reloj = { iniciar() {}, detener() {}, activo: false };   // los pasos se dan a mano
-  const motor = new MotorPreparacion({ segmentos, servicioVoz, traductor, posicion: () => posicion, limitadorVoz: limitador, reloj, ahora: () => ahora });
+  const motor = new MotorPreparacion({ segmentos, servicioVoz, traductor, posicion: () => posicion, limitadorVoz: limitador, reloj, ahora: () => ahora, intervaloTraduccionMs: 0 });
   const pasos = async (n) => { for (let i = 0; i < n; i += 1) { motor.paso(); await new Promise((r) => setTimeout(r, 0)); } };
   await pasos(60);
   const maximo = Math.max(...lotes.flat());
@@ -219,6 +219,70 @@ const { MotorPreparacion } = await modulo('motorPreparacion.js');
   const nuevos = lotes.slice(antes).flat();
   // −10 s: el primer segmento que sigue sonando en 1198 s puede haber empezado unos segundos antes.
   comprobar(nuevos.length > 0 && segmentos[nuevos[0]].startTime >= 1200 - 10, 'tras un salto, lo primero que se traduce es lo de la nueva posición');
+}
+// ── Ritmo de traducción y espera creciente ante 429 (2026-09-26) ─────────
+{
+  const segmentos = ts.normalizarSegmentos(repetir(fixture.segments, 4));
+  const fabrica = ({ falla429 = 0 } = {}) => {
+    const reloj = { iniciar() {}, detener() {} };
+    const tiempo = { ms: 0 };
+    const inicios = [];
+    let llamadas = 0;
+    const traductor = { traducirLote: async (indices) => {
+      llamadas += 1;
+      inicios.push(tiempo.ms);
+      if (llamadas <= falla429) throw new Error('429 Too Many Requests');
+      return new Map(indices.map((i) => [i, `ES ${segmentos[i].text}`]));
+    } };
+    const unidades = ds.agruparPorTiempo(segmentos);
+    const servicioVoz = new ds.DubbingService({ generarAudio: async () => ({ blob: new Blob(['x']) }) });
+    servicioVoz.definirUnidades(unidades);
+    const mensajes = [];
+    const motor = new MotorPreparacion({
+      segmentos, servicioVoz, traductor, posicion: () => 0, reloj,
+      ahora: () => tiempo.ms,
+      onCambio: (e) => { if (e?.tipo === 'pausa') mensajes.push(e.mensaje); },
+    });
+    return { motor, tiempo, inicios, mensajes, traductor };
+  };
+  const tick = async (motor, n = 1) => { for (let i = 0; i < n; i += 1) { motor.paso(); await new Promise((r) => setTimeout(r, 0)); } };
+  {
+    // Ritmo mínimo: los lotes arrancan con ≥1,1 s entre sí (Mistral gratis ≈1/s).
+    const { motor, tiempo, inicios } = fabrica();
+    await tick(motor, 3);
+    tiempo.ms += 500;
+    await tick(motor, 3);
+    comprobar(inicios.length <= 1, 'a los 0,5 s solo arrancó un lote (no ráfaga)');
+    tiempo.ms += 700;
+    await tick(motor, 3);
+    const pausas = inicios.slice(1).map((t, i) => t - inicios[i]);
+    comprobar(inicios.length >= 2 && pausas.every((p) => p >= 1100), `los lotes respetan 1,1 s entre sí (${pausas.join(', ')})`);
+  }
+  {
+    // 429: espera 15 → 30 s y mensaje con la espera real (nada de «segundos» a secas).
+    const { motor, tiempo, mensajes } = fabrica({ falla429: 99 });
+    await tick(motor, 3);
+    comprobar(/15 s/.test(mensajes[0] || ''), `el primer 429 espera 15 s y lo dice («${mensajes[0] || ''}»)`);
+    tiempo.ms += 15000;
+    await tick(motor, 3);
+    comprobar(/30 s/.test(mensajes[1] || '') && /van 2/.test(mensajes[1] || ''), `el segundo 429 espera 30 s («${mensajes[1] || ''}»)`);
+    tiempo.ms += 30000;
+    await tick(motor, 3);
+    comprobar(/60 s/.test(mensajes[2] || ''), 'el tercero espera 60 s (tope)');
+  }
+  {
+    // Un éxito olvida la racha: el siguiente 429 vuelve a 15 s.
+    const { motor, tiempo, mensajes } = fabrica({ falla429: 1 });
+    await tick(motor, 3);
+    comprobar(/15 s/.test(mensajes[0] || ''), 'primer 429: 15 s');
+    tiempo.ms += 15000 + 1100;
+    await tick(motor, 5);   // reintento sale bien (solo fallaba 1 vez)
+    const n = mensajes.length;
+    motor.traductor = { traducirLote: async () => { throw new Error('429 rate limit'); } };
+    tiempo.ms += 1100;
+    await tick(motor, 3);
+    comprobar(/15 s/.test(mensajes[n] || ''), 'tras un éxito, el siguiente 429 vuelve a 15 s');
+  }
 }
 
 // ── T1.6: regla de idioma ───────────────────────────────────────────────
