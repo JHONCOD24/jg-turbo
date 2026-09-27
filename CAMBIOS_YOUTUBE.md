@@ -43,7 +43,7 @@ pueden ir con pausas.
 
 ### Despliegue
 
-`v149` / `jg-turbo-shell-v149` · `dpl_…` [PENDIENTE: anotar tras desplegar].
+`v149` / `jg-turbo-shell-v149` · `dpl_4ed7JLNkQKxfB4jbabpZnpTMGcaF` (2026-09-26, READY, alias verificado: `JG_JS_V='v149'`).
 
 ## Mejora 2026-09-26 · Velocidad del video a gusto de la persona
 
