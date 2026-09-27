@@ -41,7 +41,9 @@ const ts = await modulo('transcriptionService.js');
 }
 const de = await modulo('dubbingEngine.js');
 {
-  comprobar(de.ajusteFino(0.1) === 1, 'ajusteFino: dentro de 150 ms no toca la velocidad');
+  // `ajusteFino` desapareció con el motor v4 (2026-09-26): corregía el desfase
+  // reposicionando y acelerando la voz para seguir al video, que es justo lo que
+  // cortaba frases. La sincronía nueva se prueba en tests/test_youtube_sincronia.mjs.
   comprobar(de.percentil([1, 2, 3, 4, 100], 0.95) === 100, 'percentil: p95');
 }
 
@@ -301,14 +303,17 @@ const io = await modulo('idiomaOrigen.js');
   comprobar(io.nombreIdioma('en-US') === 'inglés' && io.codigoCorto('pt_BR') === 'pt', 'nombres y códigos cortos');
 }
 
-// ── T2.6: velocidad estable ─────────────────────────────────────────────
-// Ajuste 2026-09-26: 0,95–1,20. El 0,90 se oía frenado («frenos en la voz») y
-// con 2 s de silencio prestado casi nunca hace falta bajar tanto ni pasar de 1,20.
+// ── T2.6: velocidad de la voz (motor v4, 2026-09-26) ──────────────────────
+// Antes: 0,95–1,20 dentro de una ventana fija y, si no cabía, se cortaba la
+// frase. Ahora la voz va de 1× (nunca en cámara lenta) a 1,25×, cómoda hasta
+// 1,12×, y si aun así no cabe se frena el VIDEO (tests/test_youtube_sincronia.mjs).
+const rd = await modulo('ritmoDoblaje.js');
 {
-  comprobar(de.VELOCIDAD_MINIMA === 0.95 && de.VELOCIDAD_MAXIMA === 1.2, 'la voz se mueve entre 0,95× y 1,20×');
-  comprobar(cerca(de.calcularVelocidadAudio(10, 5, 1), 1.2), 'si no cabe, acelera hasta 1,20× y no más');
-  comprobar(cerca(de.calcularVelocidadAudio(3, 6, 1), 0.95), 'si sobra tiempo, frena hasta 0,95× y no más');
-  comprobar(cerca(de.calcularVelocidadAudio(5.5, 5, 1.5), 1.1 * 1.5), 'la velocidad elegida para el video se respeta encima');
+  const rango = rd.rangoVoz(1);
+  comprobar(rango.min === 1 && rango.max === 1.25, 'la voz se mueve entre 1× y 1,25×');
+  comprobar(rd.velocidadVoz({ restanteS: 10, tiempoVideo: 0, limiteSuave: 5, limiteDuro: 5 }) === 1.25, 'si no cabe, acelera hasta 1,25× y no más');
+  comprobar(rd.velocidadVoz({ restanteS: 3, tiempoVideo: 0, limiteSuave: 6, limiteDuro: 6 }) === 1, 'si sobra tiempo, no se estira: suena a su ritmo natural');
+  comprobar(cerca(rd.velocidadVoz({ restanteS: 5.5, tiempoVideo: 0, limiteSuave: 5, limiteDuro: 5, tasaVideo: 1.5, tasaBase: 1.5 }), 1.65), 'la velocidad elegida para el video se respeta encima');
   const unidades = ds.agruparPorTiempo(ts.normalizarSegmentos(fixture.segments));
   comprobar(unidades.some((u) => u.duration > u.finHabla - u.startTime), 'las frases usan el silencio prestado como tiempo extra');
 }
@@ -390,20 +395,104 @@ const vd = await modulo('vocesDoblaje.js');
   comprobar(vd.vozParaUnidad({ hablante: 1 }, { vozPrincipal: 'A', vozSecundaria: 'B' }) === 'B', 'hablante 1 usa la secundaria');
 }
 
-// ── Velocidad a gusto de la persona (2026-09-26) ─────────────────────────
+// ── Velocidad del video (v4, 2026-09-26) ─────────────────────────────────
+// El selector propio (presets finos + «Otra…») se retiró a pedido del dueño: la
+// velocidad a mano va en el engranaje de YouTube y frenar lo hace el ritmo
+// automático. Queda `normalizarTasa` para leer la velocidad recordada.
 const se = await modulo('syncEngine.js');
 {
-  const tasas = se.tasasParaSelector([0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
-  comprobar(tasas.includes(0.8) && tasas.includes(0.85) && tasas.includes(0.97), 'el selector trae presets finos (0.80, 0.85, 0.97)');
-  comprobar(tasas.includes(0.25) && tasas.includes(2), 'y conserva lo que ofrece YouTube');
-  comprobar(JSON.stringify(tasas) === JSON.stringify([...tasas].sort((a, b) => a - b)), 'ordenadas y sin repetidos');
-  comprobar(new Set(tasas).size === tasas.length, 'sin duplicados al unir con YouTube');
+  comprobar(typeof se.tasasParaSelector === 'undefined' && typeof se.presetDeTasa === 'undefined', 'el selector de velocidad propio ya no existe');
   comprobar(se.normalizarTasa('0,97') === 0.97, 'acepta coma decimal (0,97)');
   comprobar(se.normalizarTasa('0.85') === 0.85, 'acepta 0.85 tal cual');
   comprobar(se.normalizarTasa('5') === 2 && se.normalizarTasa('0.1') === 0.25, 'recorta a 0.25–2');
   comprobar(se.normalizarTasa('hola') === 1 && se.normalizarTasa('') === 1, 'sin número vuelve a 1x');
-  comprobar(se.presetDeTasa(tasas, 0.97) === 0.97, '0.97 cae en su preset');
-  comprobar(se.presetDeTasa(tasas, 0.93) === null, '0.93 va por valor libre');
+}
+
+// ── Arranque rápido y traducción robusta (v4, 2026-09-26) ─────────────────
+// Medido en producción: 13 llamadas y dos 500 antes del primer sonido. Un 500
+// (Mistral en límite, disfrazado de «401» por el servidor) hacía partir el lote
+// en mitades y multiplicaba las llamadas; y cada fallo costaba 15 s de espera.
+{
+  const segmentos = ts.normalizarSegmentos(fixture.segments);
+  let llamadas = 0;
+  const caido = new tr.TranslationService({ traducirTexto: async () => { llamadas += 1; throw new Error('Error 500: gemini: clave no autorizada (401)'); } });
+  let lanzo = null;
+  try { await caido.traducirLote([0, 1, 2, 3], segmentos, {}); } catch (error) { lanzo = error; }
+  comprobar(lanzo && llamadas === 1, `un fallo del servidor no parte el lote: sube al motor para repetirlo entero (${llamadas} llamada)`);
+  comprobar(tr.esFalloDeContenido(new Error('La IA devolvió una traducción incompleta o mezclada')) && tr.esFalloDeContenido(new Error('La IA alteró los marcadores temporales del doblaje.')), 'un problema DEL TEXTO sí se reconoce (ese sí se parte en mitades)');
+  comprobar(!tr.esFalloDeContenido(new Error('No se pudo contactar al servidor')), 'un fallo de red no es un problema del texto');
+
+  let respaldo = 0;
+  const sinIA = new tr.TranslationService({ traducirTexto: async (texto) => { respaldo += 1; return { text: texto.replace(/\n(.+)/g, '\nMALA $1'), ia_used: false }; } });
+  let rechazo = null;
+  try { await sinIA.traducirLote([0, 1], segmentos, {}); } catch (error) { rechazo = error; }
+  comprobar(rechazo && respaldo === 1, 'la traducción de respaldo sin IA no se usa para doblar (se reintenta con IA)');
+
+  const conMarca = new tr.TranslationService({ traducirTexto: async (texto) => (/JG_SEG/.test(texto) ? { text: '' } : { text: '[[JG_SEG_000000]]\nHola, esto es una prueba', ia_used: true }) });
+  const suelta = await conMarca.traducirLote([0], segmentos, {});
+  comprobar(suelta.get(0) === 'Hola, esto es una prueba', `un marcador copiado del ejemplo no llega al subtítulo ni a la voz («${suelta.get(0)}»)`);
+}
+{
+  // Primer lote corto (4 segmentos) y hasta 2 en vuelo, siempre a ≥1,1 s entre salidas.
+  const segmentos = ts.normalizarSegmentos(repetir(fixture.segments, 4));
+  const tiempo = { ms: 0 };
+  const lotes = [];
+  const pendientes = [];
+  const traductor = { traducirLote: (indices) => new Promise((resolver) => { lotes.push({ indices, t: tiempo.ms }); pendientes.push(() => resolver(new Map(indices.map((i) => [i, `ES ${i}`])))); }) };
+  const servicioVoz = new ds.DubbingService({ generarAudio: async () => ({ blob: new Blob(['x']) }) });
+  servicioVoz.definirUnidades(ds.agruparPorTiempo(segmentos));
+  const motor = new MotorPreparacion({ segmentos, servicioVoz, traductor, posicion: () => 0, reloj: { iniciar() {}, detener() {} }, ahora: () => tiempo.ms });
+  motor.paso();
+  comprobar(lotes.length === 1 && lotes[0].indices.length <= pl.LOTE_ARRANQUE, `el primer lote es corto (${lotes[0]?.indices.length} segmentos): la IA contesta antes`);
+  motor.paso();
+  comprobar(lotes.length === 1, 'el segundo no sale en el mismo instante (ritmo de Mistral)');
+  tiempo.ms = 1100;
+  motor.paso();
+  comprobar(lotes.length === 2 && lotes[1].t - lotes[0].t >= 1100, 'a 1,1 s sale el segundo aunque el primero siga en vuelo (2 a la vez)');
+  tiempo.ms = 2200;
+  motor.paso();
+  comprobar(lotes.length === 2, 'nunca más de 2 en vuelo');
+  pendientes.forEach((f) => f());
+  await new Promise((r) => setTimeout(r, 0));
+  comprobar(pl.VOZ_INICIAL_S === 10, 'para arrancar bastan 10 s de voz lista (antes 20)');
+}
+{
+  // Un fallo que no es límite de uso: espera corta (3 s) y creciente, y repite el mismo lote.
+  const segmentos = ts.normalizarSegmentos(repetir(fixture.segments, 2));
+  const tiempo = { ms: 0 };
+  const mensajes = [];
+  const pedidos = [];
+  let fallar = 2;
+  const traductor = { traducirLote: async (indices) => {
+    pedidos.push(indices[0]);
+    if (fallar > 0) { fallar -= 1; throw new Error('No se pudo contactar al servidor'); }
+    return new Map(indices.map((i) => [i, `ES ${i}`]));
+  } };
+  const servicioVoz = new ds.DubbingService({ generarAudio: async () => ({ blob: new Blob(['x']) }) });
+  servicioVoz.definirUnidades(ds.agruparPorTiempo(segmentos));
+  const motor = new MotorPreparacion({ segmentos, servicioVoz, traductor, posicion: () => 0, reloj: { iniciar() {}, detener() {} }, ahora: () => tiempo.ms, onCambio: (e) => { if (e?.tipo === 'pausa') mensajes.push(e.mensaje); } });
+  const tick = async () => { motor.paso(); await new Promise((r) => setTimeout(r, 0)); };
+  await tick();
+  comprobar(/3 s/.test(mensajes[0] || ''), `el primer fallo espera 3 s, no 15 («${mensajes[0] || ''}»)`);
+  tiempo.ms = 3000; await tick();
+  comprobar(/8 s/.test(mensajes[1] || ''), 'el segundo, 8 s');
+  tiempo.ms = 11000; await tick();
+  comprobar(pedidos.length === 3 && pedidos.every((p) => p === pedidos[0]), 'y se repite el MISMO lote, sin marcar nada como intraducible');
+  comprobar(motor.traducciones.size > 0 && [...motor.traducciones.values()].every((t) => t !== null), 'al volver la red, el lote queda traducido');
+}
+{
+  // La voz: duración por tamaño (sin decodificar) y fracciones para el subtítulo.
+  const segundoMp3 = new Blob([new Uint8Array(6000)], { type: 'audio/mpeg' });   // 48 kbps = 6000 B/s
+  comprobar(cerca(await ds.duracionPorBytes(segundoMp3, 'azure-neural-regional'), 1), 'un MP3 neural de 6000 bytes dura 1 s (48 kbps fijos)');
+  comprobar(cerca(await ds.duracionPorBytes(new Blob([new Uint8Array(16000)], { type: 'audio/mpeg' }), 'fish-neural-regional'), 1), 'uno de Fish de 16000 bytes, 1 s (128 kbps)');
+  comprobar(await ds.duracionPorBytes(new Blob(['x'])) === null, 'sin tipo conocido no se inventa una duración');
+  const servicio = new ds.DubbingService({ generarAudio: async () => ({ blob: new Blob([new Uint8Array(12000)], { type: 'audio/mpeg' }), engineHdr: 'azure' }) });
+  servicio.definirUnidades(ds.agruparPorTiempo(ts.normalizarSegmentos(fixture.segments)));
+  servicio.fijarTexto(0, 'Hola mundo', [0.4, 1]);
+  await servicio.asegurar(0);
+  comprobar(cerca(servicio.unidades[0].duracionVoz, 2) && JSON.stringify(servicio.unidades[0].fracciones) === '[0.4,1]', 'cada frase guarda su duración real y dónde termina cada segmento');
+  servicio.invalidarDesde(0);
+  comprobar(servicio.unidades[0].duracionVoz === 0, 'al cambiar de voz, la duración se vuelve a medir');
 }
 
 // ── Resumen ─────────────────────────────────────────────────────────────
