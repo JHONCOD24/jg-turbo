@@ -87,7 +87,7 @@ etiqueta «(tarda más en cargar)» (antes «(más lenta)», que confundía).
 | Batería | Resultado |
 |---|---|
 | `node tests/test_youtube_sincronia.mjs` (nueva) | **65 OK · 0 fallos** |
-| `node tests/test_youtube_doblaje.mjs` | **131 OK · 0 fallos** (118 antes; −6 obsoletas del selector y del rango viejo, +19) |
+| `node tests/test_youtube_doblaje.mjs` | **136 OK · 0 fallos** (118 antes; −6 obsoletas del selector y del rango viejo, +24) |
 | `node tests/verificar_youtube_doblaje.mjs` | **102 OK · 0 fallos** (94 antes; −6 del selector, +14: 0 cortes y 0 saltos en navegador, video frenado solo, subtítulo = voz) |
 | Unitarias de referencia (19 archivos) | **1.192 OK · 0 fallos** (sin retroceder) |
 | `backend/tests/test_ia_respaldo.py` (nueva) | **10 passed** |
@@ -95,18 +95,65 @@ etiqueta «(tarda más en cargar)» (antes «(más lenta)», que confundía).
 | `verificar_arranque_ligero.mjs` | 9 OK + 1 fallo preexistente (1031 KB, ajeno) |
 | `verificar_movil_pantalla.mjs` / `verificar_pestanas.mjs` | 60 / 31, como antes |
 
+### Verificado en producción con el video real (mismo instrumento, 90 s reproduciendo)
+
+`medir_doblaje_real`: Playwright contra `https://jg-turbo.vercel.app`, reproductor
+de YouTube real, traducción y voz reales, video `dNWkwrqAkcM` (88 min, inglés
+rápido). Cuenta cortes de audio de verdad (pausa o cambio de `src` con la voz a
+mitad y el video andando) y lee `jgDoblajeDiagnostico()`.
+
+| | v149 (antes) | v150 | **v151 (final)** |
+|---|---|---|---|
+| Listo para escuchar (clic → listo) | 40,8 s | 38,4 s | **22,0 s** |
+| · de eso, Supadata (registro de Vercel) | ~28 s | 25,7 s | 15,0 s |
+| · de eso, lo nuestro | ~12 s | ~11 s | **~6 s** |
+| Traducciones antes de sonar | 12 (con 500) | 19 | **4** |
+| Frases de voz cortadas a mitad | **8** | 0 | **0** |
+| Frases saltadas | — | 0 | **0** |
+| Retraso de la voz (p95 / promedio) | — | 0,99 s / 0,25 s | **0,66 s / 0,17 s** |
+| Velocidad del video | 1× fija | 0,75–0,95× | 0,75–0,90× (automática) |
+| Llamadas de traducción en la sesión | 85 (con 500) | 47 (con 429) | **29 (sin 429)** |
+
+La v150 ya no cortaba frases, pero la medición real destapó dos cosas que solo se
+veían en el dominio (por eso hubo un segundo despliegue en la tanda): el umbral de
+longitud de la traducción rechazaba traducciones correctas y partía lotes (7
+llamadas por lote, ~5 s del arranque) y las mitades salían sin respetar el ritmo
+de Mistral (429). v151: zona gris 0,6–0,85 con un solo reintento del lote entero,
+ritmo de 1,1 s para toda llamada del traductor y arranque con la primera frase
+(`VOZ_INICIAL_S = 6`). Detalle en `CAMBIOS_TRADUCCION.md` §2026-09-26 (2).
+
 ### Lo que no se puede prometer (y por qué)
 
-- **Los ~28 s de Supadata** la primera vez en un video de hora y media son del
-  servicio externo (medido en su registro). Lo nuestro se recortó; la segunda vez
-  el video sale de la caché del navegador y no espera.
+- **La espera de Supadata** la primera vez: entre 15 y 28 s medidos en el mismo
+  video de hora y media (servicio externo, varía). Lo nuestro bajó a ~6 s; la
+  segunda vez el video sale de la caché del navegador y no espera.
 - **Sincronía labial:** imposible sin el audio original (la IFrame API no lo da).
 - Si el español necesitara más de ~1,67× el tiempo del inglés (video a 0,75× y voz
   a 1,25×), la voz se atrasa y, pasados 5 s, salta al punto del video.
+- Que la voz «suene bien» lo mide el oído: las pruebas miden que no se corte, no
+  se salte y vaya al día.
 
-### Despliegue
+### Despliegues
 
-`v150` / `jg-turbo-shell-v150` · `dpl_` [POR ANOTAR tras el despliegue].
+| `dpl_…` | Qué entró |
+|---|---|
+| `dpl_HsUo1UAkTdd7Du1pbJ88HhxBXp52` | v150: motor v4, ritmo automático, cadena de IA, arranque en paralelo |
+| `dpl_FFQcBqaGscwLh4s7nw1izWF4yT5G` | **v151** (`jg-turbo-shell-v151`): zona gris de la traducción, ritmo común de 1,1 s, arranque con la primera frase |
+
+Ambos desde una copia exacta del commit (`git archive`): producción dejó de servir
+archivos sin seguimiento (`debug.log`, `tmp/`, `.mcp.json`, muestras de voz de
+`audio/`, docs internos: ahora 404). Verificado: 18/18 archivos idénticos al commit
+(sha256), `JG_JS_V = 'v151'`, `/api/health` ok.
+
+### Pruebas finales
+
+`test_youtube_doblaje` **136 OK** · `test_youtube_sincronia` **65 OK** ·
+`verificar_youtube_doblaje` **102 OK** · 19 unitarias de referencia **1.192 OK** ·
+`test_ia_respaldo.py` **10 passed** · `verificar_pdf_navegador` 115 OK + 1 fallo
+**preexistente** (aviso de OCR; idéntico en `main`, comprobado con un árbol aparte)
+· `verificar_pdf_scroll` 39 · `verificar_pdf_movil` 57 · `verificar_pdf_voz_acordeon`
+21 · `verificar_pdf_mini_flotante` 7 · `verificar_pdf_unir_palabras` 18 ·
+`verificar_pdf_geometria` ✔.
 
 ## Corrección 2026-09-26 · El traductor ya no se auto-limita (ritmo + espera creciente)
 

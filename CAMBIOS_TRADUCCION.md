@@ -7,6 +7,45 @@ o el troceo del frontend).
 
 ---
 
+## Corrección 2026-09-26 (2) · El umbral de longitud rechazaba traducciones correctas
+
+### Falla (medida en producción con v150)
+
+19 llamadas de traducción antes del primer sonido del doblaje y 429 de Mistral
+durante la reproducción. Reproducido en Node con los segmentos reales del video
+contra `/api/translate` de producción: un lote de 4 segmentos volvió al **83 %**
+del largo del inglés, el navegador lo rechazó (umbral 85 %) y lo partió hasta frase
+por frase: **7 llamadas, ~5 s** en el camino del arranque, y sin contexto.
+
+### Causa
+
+`MIN_PROPORCION_TRADUCCION = 0,85` se calibró el 2026-08-24 con un solo lote
+(correctos ≈1,0; con segmentos perdidos 0,77–0,80, ver §10.1). Hoy se midieron
+traducciones **correctas** de 0,74–0,83: el español a veces es más compacto
+(«and that would be worth a million» → «eso valdría un millón»). Los dos rangos se
+pisan: la longitud sola no los distingue. Y las mitades de un lote partido salían
+seguidas, sin el ritmo de Mistral (≈1 petición/s): de ahí los 429.
+
+### Solución (`js/youtube/translationService.js`)
+
+- **Zona gris 0,6–0,85:** se repite UNA vez el lote entero. Si vuelve completo
+  (≥0,85) se usa; si vuelve igual de compacto (±0,1) es el idioma y se acepta. Por
+  debajo de 0,6 (falta texto casi seguro) se parte como antes. Lotes de 1-2
+  segmentos en zona gris se aceptan sin repetir. Perder segmentos es intermitente
+  (3 de 6 el 24/08, 1 de 6 tras arreglar el prompt), así que dos respuestas
+  compactas seguidas y parecidas no son ese fallo.
+- **Ritmo común:** toda llamada del traductor (lotes, mitades, último intento,
+  texto completo) sale a ≥1,1 s de la anterior (`intervaloMinMs`).
+
+Medido de nuevo con los mismos segmentos: el lote que costó 7 llamadas costó 2
+(el segundo intento volvió completo); primer minuto del video: **8 llamadas en vez
+de 12**, ninguna partida. En producción (v151): 4 traducciones antes de sonar y
+0 errores 429 en 90 s de reproducción.
+
+Pruebas: `tests/test_youtube_doblaje.mjs` (compacto aceptado en 2 llamadas,
+segundo intento completo, mitad del texto → se parte, lote corto sin repetir,
+llamadas espaciadas aunque se pidan a la vez).
+
 ## Corrección 2026-09-26 · La cadena de IA prueba cada clave una vez y nombra el límite de uso
 
 ### Falla (medida en producción)

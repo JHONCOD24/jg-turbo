@@ -1449,6 +1449,19 @@ su valor de retorno. **Regla:** si una función devuelve el texto corregido,
 asígnalo (`x = validar(x)`); una prueba debe mirar el texto que sale, no solo que
 no haya excepción.
 
+## Un umbral calibrado con un solo lote rechaza traducciones correctas (2026-09-26)
+
+**Síntoma (producción, v150):** 19 llamadas de traducción antes del primer sonido y
+429 de Mistral. **Causa:** el navegador rechazaba un lote si el español medía <85 %
+del inglés (calibrado el 24/08 con UN lote) y lo partía hasta frase por frase; pero
+traducciones correctas miden 0,74–0,83 (el español a veces es más compacto): 7
+llamadas por lote, sin contexto y sin respetar el ritmo del proveedor. **Regla:** un
+umbral que separa «bien» de «roto» se valida con varios lotes reales de videos
+distintos; si los rangos se pisan, la longitud sola no decide: repetir una vez y
+comparar. Y todo reintento pasa por el mismo ritmo que las llamadas normales.
+Se midió con una sonda en Node contra la API de producción (gratis en créditos
+de Supadata: solo usa la traducción).
+
 ## Una prueba con datos imposibles falla por el dato, no por el código (2026-09-26)
 
 **Síntoma (en desarrollo):** la prueba de navegador del doblaje v4 daba la voz

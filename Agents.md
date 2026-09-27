@@ -158,7 +158,7 @@ node tests/test_youtube_sincronia.mjs
 ```
 
 Referencia al 2026-09-26 (v150): los 19 archivos de PDF/TTS suman **1.192 OK**;
-`test_youtube_doblaje` **131** y `test_youtube_sincronia` **65** (0 fallos).
+`test_youtube_doblaje` **136** y `test_youtube_sincronia` **65** (0 fallos).
 Referencia al 2026-09-05 (v2.41.0): **1.120 comprobaciones OK, 0 fallos** (24 archivos).
 Referencia anterior (v2.39.0): ~1.000 comprobaciones
 (20 archivos; `test_pdf_mejora_apartado` aporta 50). Si salen menos, la prueba
@@ -231,11 +231,17 @@ interruptor «Ritmo automático» (`jg_yt_ritmo_auto`, encendido). El selector d
 velocidad propio se retiró a pedido del dueño: la velocidad a mano va en el
 engranaje de YouTube (`jg_yt_rate` guarda solo esa). El subtítulo muestra la línea
 que dice la voz (`indiceSegmentoVoz`). Arranque: texto en paralelo con el
-reproductor, voz precalentada, primer lote de 4, 2 lotes en vuelo, 10 s de voz
-para empezar. Servidor: la cadena de IA prueba cada CLAVE una vez, aparta las
-rechazadas y nombra el 429 (`backend/tests/test_ia_respaldo.py`). Pruebas:
+reproductor, voz precalentada, primer lote de 4, 2 lotes en vuelo, arranca con la
+primera frase (`VOZ_INICIAL_S = 6`). Traducción: zona gris 0,6–0,85 = un solo
+reintento del lote (el español correcto puede medir 0,74–0,83 del inglés; **no
+volver a subir el umbral a ojo**) y ≥1,1 s entre TODA llamada del traductor.
+Servidor: la cadena de IA prueba cada CLAVE una vez, aparta las rechazadas y
+nombra el 429 (`backend/tests/test_ia_respaldo.py`). Pruebas:
 `tests/test_youtube_sincronia.mjs` (simulador con reloj virtual). Consola:
-`jgDoblajeDiagnostico()`. `JG_JS_V='v150'`, prod `dpl_` [POR ANOTAR].
+`jgDoblajeDiagnostico()`. Medido en producción con un video real: 0 frases
+cortadas (antes 8 en 90 s) y listo en 22 s (antes 40,8; ~15 s son de Supadata).
+`JG_JS_V='v151'`, prod `dpl_FFQcBqaGscwLh4s7nw1izWF4yT5G`. Desplegar desde
+`git archive` del commit (ver `CAMBIOS_YOUTUBE.md` §Despliegues).
 
 **Estado desde 2026-08-01: la extracción es automática otra vez.** Documento
 maestro: **`CAMBIOS_YOUTUBE.md`** (diagnóstico medido, alternativas con fuente,
@@ -416,7 +422,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v150`** (doblaje de YouTube v4, 2026-09-26). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v151`** (doblaje de YouTube v4, 2026-09-26). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

@@ -14,6 +14,26 @@ lastUpdated: 2026-08-02
 Clones de JG Voice en el PDF: receta para agentes en
 [docs/INTEGRAR-VOZ-JG-VOICE.md](docs/INTEGRAR-VOZ-JG-VOICE.md).
 
+## Publicación YouTube v151 (doblaje v4), 2026-09-26 · desde una copia exacta del commit
+
+El CLI sube el DISCO, no Git: `list_deployment_files` del despliegue anterior
+mostró en producción `debug.log`, `tmp/`, `.mcp.json`, `.grok/config.toml`,
+muestras de voz de `audio/` y documentos sin seguimiento, servidos con 200
+(`.env` sí daba 404). Además `.pytest_cache` de la raíz sigue ilegible y tumba el
+CLI (EPERM). Se despliega desde una copia del commit:
+
+```bash
+D="$TEMP/jg-turbo-deploy" && rm -rf "$D" && mkdir -p "$D/.vercel"
+git archive HEAD | tar -x -C "$D"
+cp .vercel/project.json "$D/.vercel/project.json"   # prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8
+cd "$D" && npx vercel --prod --yes --scope jhoncod24s-projects
+```
+
+Verificación: cada archivo servido igual al commit (`sha256` de `git show HEAD:<ruta>`
+frente a `curl` con `?nocache=`), marcador `JG_JS_V`, `CACHE_SHELL`, `/api/health`
+y que lo que no está en Git dé 404. Despliegues: `dpl_HsUo1UAkTdd7Du1pbJ88HhxBXp52`
+(v150) y `dpl_FFQcBqaGscwLh4s7nw1izWF4yT5G` (v151). Detalle en `CAMBIOS_YOUTUBE.md`.
+
 ## Publicación PDF v2.84.0, 2026-09-14
 
 Carátula canónica de *Esto es marketing* (y Pre-suasión) en biblioteca, «Seguir leyendo» y lector, en todos los aparatos.
