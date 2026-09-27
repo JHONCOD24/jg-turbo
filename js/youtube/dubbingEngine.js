@@ -476,6 +476,10 @@ export class DubbingEngine {
       return;
     }
     const siguiente = (this.hablando >= 0 ? this.hablando : this.ultima) + 1;
+    // Esperando una voz que aún no llegó (traducción o síntesis demoradas):
+    // frenar el video solo dejaría el inglés en cámara lenta. No se toca.
+    const pendiente = this.servicio.unidades[siguiente];
+    if (this.hablando < 0 && pendiente && pendiente.startTime <= t && pendiente.estado !== 'listo') return;
     const plan = {
       ...demandaVoz({
         unidades: this.servicio.unidades, tiempoVideo: t, siguiente,

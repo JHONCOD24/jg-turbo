@@ -298,6 +298,8 @@ function enOrdenSinHuecos(completas) {
   s.motor.activarYReproducir();
   await s.correr(17.5);   // el video ya entró en la frase 4 (16–20 s) sin voz lista
   comprobar(typeof listaEn === 'function', 'el motor pide la voz de la frase que falta');
+  await s.correr(2);
+  comprobar(s.jugador.tasa === 1, 'mientras espera una voz que no llegó, no frena el video (sería inglés en cámara lenta)');
   listaEn();
   await s.correr(20);
   comprobar(s.registro.completas.includes('voz-4') && s.registro.cortes.length === 0, 'al llegar, la frase suena entera (con el retraso que la espera impuso)');
