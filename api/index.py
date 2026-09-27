@@ -591,6 +591,69 @@ def _resolver_ia(client_key: str = "", provider: str = "") -> tuple:
     return _get_ai_key("", sp), sp
 
 
+# ── Cadena de proveedores de IA (2026-09-26) ────────────────────────────────
+# Medido en producción: GEMINI_API_KEY está bloqueada (403, API desactivada en
+# su proyecto de Google) y se probaba PRIMERO en cada traducción; si en ese
+# instante Mistral daba 429 (plan gratis ≈ 1 petición/s), el error final salía
+# como «gemini: clave no autorizada (401)» y el navegador, sin reconocer el
+# límite, partía el lote en mitades: 13 llamadas y dos 500 antes del primer
+# sonido del doblaje. Y con una clave de Mistral del navegador en límite, nunca
+# se probaba la MISTRAL_API_KEY del servidor (se excluía por nombre de
+# proveedor, no por clave).
+# Ahora: se prueba cada CLAVE distinta una vez, en orden (navegador → preferida
+# del servidor → resto), las rechazadas quedan fuera un rato, Mistral repite
+# una vez ante un 429 de un segundo y, si lo que se agotó fue el cupo, el error
+# lo dice («límite de uso … 429») para que quien llama espere en vez de insistir.
+IA_CUARENTENA_SEG = 600.0
+IA_ESPERA_429_S = 1.2
+_ia_cuarentena: dict[str, float] = {}
+
+_CLAVES_IA_SERVIDOR = (
+    ("GEMINI_API_KEY", "gemini"),
+    ("GOOGLE_API_KEY", "gemini"),
+    ("OPENROUTER_API_KEY", "openrouter"),
+    ("MISTRAL_API_KEY", "mistral"),
+    ("XAI_API_KEY", "xai"),
+    ("GROK_API_KEY", "xai"),
+    ("ANTHROPIC_API_KEY", "anthropic"),
+)
+
+
+def _ia_en_cuarentena(clave: str, ahora: float | None = None) -> bool:
+    t = time.monotonic() if ahora is None else ahora
+    return _ia_cuarentena.get(clave, 0.0) > t
+
+
+def _ia_poner_en_cuarentena(clave: str, ahora: float | None = None) -> None:
+    t = time.monotonic() if ahora is None else ahora
+    _ia_cuarentena[clave] = t + IA_CUARENTENA_SEG
+
+
+def _candidatos_ia(client_key: str, provider: str) -> list:
+    """(proveedor, clave, origen) en el orden en que se prueban, sin repetir clave."""
+    candidatos: list = []
+    vistas: set = set()
+
+    def sumar(prov: str, clave: Optional[str], origen: str) -> None:
+        clave = (clave or "").strip()
+        if not clave or prov in ("none", "groq") or clave in vistas:
+            return
+        vistas.add(clave)
+        candidatos.append((prov, clave, origen))
+
+    cliente = (client_key or "").strip()
+    if cliente:
+        api_key, provider_ef = _resolver_ia(cliente, provider)
+        if api_key == cliente:   # una clave Groq del navegador se ignora en `_resolver_ia`
+            sumar(provider_ef, api_key, "navegador")
+    preferido = _proveedor_ia_servidor()
+    if preferido != "none":
+        sumar(preferido, _get_ai_key("", preferido), "servidor")
+    for env, prov in _CLAVES_IA_SERVIDOR:
+        sumar(prov, os.environ.get(env), "servidor")
+    return candidatos
+
+
 def _llamar_ia_con_respaldo(
     client_key: str,
     provider: str,
@@ -598,84 +661,54 @@ def _llamar_ia_con_respaldo(
     openrouter_model: Optional[str] = None,
     max_tokens: Optional[int] = None,
 ) -> tuple:
-    """Llama a la IA; si la clave del navegador da 401/403, reintenta con la del servidor.
-    Si hay 429 (rate limit), intenta con un proveedor alternativo del servidor (Gemini/OpenRouter) antes de fallar."""
-    api_key, provider_ef = _resolver_ia(client_key, provider)
-    if not api_key or provider_ef == "none":
+    """Llama a la IA probando cada clave disponible (ver bloque de arriba)."""
+    candidatos = _candidatos_ia(client_key, provider)
+    if not candidatos:
         raise Exception(
             "No hay clave de IA. Configura Gemini/Mistral/OpenRouter en el servidor "
             "o pega una clave válida en Configuración → IA para pulir texto."
         )
-
-    try:
-        return _llamar_ia(provider_ef, api_key, prompt, openrouter_model, max_tokens)
-    except Exception as e:
-        es_auth = _es_error_auth_ia(e)
-        es_rate = _es_error_rate_limit_ia(e)
-        if not es_auth and not es_rate:
-            raise
-        # Reintento con credenciales puras del servidor (ignora clave del navegador)
-        server_key, server_prov = _resolver_ia("", "")
-        if (
-            not server_key
-            or server_prov == "none"
-            or (server_key == api_key and server_prov == provider_ef)
-        ):
-            # Misma clave/que falló: probar el resto del servidor antes de rendirse
-            for alt_env, alt_prov in [
-                ("GEMINI_API_KEY", "gemini"),
-                ("OPENROUTER_API_KEY", "openrouter"),
-                ("MISTRAL_API_KEY", "mistral"),
-                ("XAI_API_KEY", "xai"),
-            ]:
-                alt_key = os.environ.get(alt_env)
-                if alt_key and alt_prov != provider_ef:
-                    try:
-                        return _llamar_ia(alt_prov, alt_key.strip(), prompt, openrouter_model, max_tokens)
-                    except Exception:
+    # Si todas están en cuarentena se prueban igual: mejor un intento que nada.
+    orden = [c for c in candidatos if not _ia_en_cuarentena(c[1])] or candidatos
+    errores: list = []
+    for prov, clave, origen in orden:
+        for intento in range(2):
+            try:
+                return _llamar_ia(prov, clave, prompt, openrouter_model, max_tokens)
+            except Exception as e:
+                if _es_error_rate_limit_ia(e):
+                    if intento == 0 and prov == "mistral":
+                        time.sleep(IA_ESPERA_429_S)   # su límite es por segundo
                         continue
-            if es_auth:
-                raise Exception(
-                    f"{provider_ef}: clave no autorizada (401). "
-                    "Abre Configuración → IA para pulir texto y borra la clave inválida (jg_api_key) o pega una válida. "
-                    "Si dejas el campo vacío, se usará la del servidor. Actualiza MISTRAL_API_KEY / GEMINI_API_KEY en Vercel si la del servidor también falla. "
-                    f"Detalle: {e}"
-                ) from e
-            if es_rate:
-                raise Exception(
-                    f"{provider_ef}: límite de uso alcanzado (429). Espera 60s o cambia en Configuración el proveedor a Gemini (más generoso). "
-                    f"Detalle: {e}"
-                ) from e
-            raise
-        try:
-            return _llamar_ia(server_prov, server_key, prompt, openrouter_model, max_tokens)
-        except Exception as e2:
-            # Si el servidor también falla (429 o clave/API bloqueada), probar el resto
-            # de proveedores configurados. Así añadir GEMINI_API_KEY no tumba la
-            # traducción si esa API está desactivada en el proyecto de Google.
-            if (
-                _es_error_rate_limit_ia(e2)
-                or _es_error_rate_limit_ia(e)
-                or _es_error_auth_ia(e2)
-                or _es_error_auth_ia(e)
-            ):
-                for alt_env, alt_prov in [
-                    ("GEMINI_API_KEY", "gemini"),
-                    ("OPENROUTER_API_KEY", "openrouter"),
-                    ("MISTRAL_API_KEY", "mistral"),
-                    ("XAI_API_KEY", "xai"),
-                ]:
-                    alt_key = os.environ.get(alt_env)
-                    if alt_key and alt_prov not in (provider_ef, server_prov):
-                        try:
-                            return _llamar_ia(alt_prov, alt_key.strip(), prompt, openrouter_model, max_tokens)
-                        except Exception:
-                            continue
-            raise Exception(
-                f"La clave del navegador falló y la del servidor también. "
-                f"Navegador ({provider_ef}): {e}. Servidor ({server_prov}): {e2}. "
-                "Solución: borra la clave inválida en Configuración (deja vacío para usar la del servidor) y si el servidor está en 429, espera 60s o añade GEMINI_API_KEY en Vercel."
-            ) from e2
+                elif _es_error_auth_ia(e):
+                    _ia_poner_en_cuarentena(clave)
+                errores.append((prov, origen, e))
+                break
+
+    limite = next((x for x in errores if _es_error_rate_limit_ia(x[2])), None)
+    if limite:
+        prov, _, e = limite
+        raise Exception(
+            f"{prov}: límite de uso alcanzado (429). Espera 60s o cambia en Configuración el proveedor a Gemini (más generoso). "
+            f"Detalle: {e}"
+        ) from e
+    navegador = next((x for x in errores if x[1] == "navegador"), None)
+    servidor = next((x for x in errores if x[1] == "servidor"), None)
+    if navegador and servidor:
+        raise Exception(
+            f"La clave del navegador falló y la del servidor también. "
+            f"Navegador ({navegador[0]}): {navegador[2]}. Servidor ({servidor[0]}): {servidor[2]}. "
+            "Solución: borra la clave inválida en Configuración (deja vacío para usar la del servidor) y si el servidor está en 429, espera 60s o añade GEMINI_API_KEY en Vercel."
+        ) from servidor[2]
+    prov, _, e = errores[0]
+    if _es_error_auth_ia(e):
+        raise Exception(
+            f"{prov}: clave no autorizada (401). "
+            "Abre Configuración → IA para pulir texto y borra la clave inválida (jg_api_key) o pega una válida. "
+            "Si dejas el campo vacío, se usará la del servidor. Actualiza MISTRAL_API_KEY / GEMINI_API_KEY en Vercel si la del servidor también falla. "
+            f"Detalle: {e}"
+        ) from e
+    raise e
 
 
 # Preámbulos reales que sueltan Gemini/GPT/Claude antes del texto pedido.
@@ -3031,6 +3064,10 @@ def _validar_marcadores_segmento(original: str, salida: str) -> str:
     esperados = _marcadores_segmento(original)
     if esperados and _marcadores_segmento(salida) != esperados:
         raise Exception("La IA alteró los marcadores temporales del doblaje.")
+    if not esperados and _marcadores_segmento(salida):
+        # Sin marcadores en el original, el modelo copió el del ejemplo del
+        # prompt («[[JG_SEG_000000]]»): llegaba al subtítulo y a la voz.
+        salida = re.sub(r"\s*\[\[JG_SEG_\d{6}\]\]\s*", " ", salida).strip()
     return salida
 
 
@@ -3158,7 +3195,7 @@ async def translate(req: TranslateRequest):
                 if not corregido:
                     revision_aplicada = False
                     return traduccion
-                _validar_marcadores_segmento(original, corregido)
+                corregido = _validar_marcadores_segmento(original, corregido)
                 if _traduccion_parece_incompleta(original, corregido, src_code, trg_code):
                     revision_aplicada = False
                     return traduccion
@@ -3179,12 +3216,12 @@ async def translate(req: TranslateRequest):
             else:
                 translated, provider_name = ejecutar(construir(txt), _max_tokens_para(txt))
                 translated = _limpiar_respuesta_ia(translated or "")
-                _validar_marcadores_segmento(txt, translated)
+                translated = _validar_marcadores_segmento(txt, translated)
                 translated = revisar(txt, translated)
             if not translated or not str(translated).strip():
                 return None
             translated = _sin_enfasis_markdown(str(translated).strip())
-            _validar_marcadores_segmento(txt, translated)
+            translated = _validar_marcadores_segmento(txt, translated)
             if _traduccion_parece_incompleta(txt, translated, src_code, trg_code):
                 error_detail = (
                     "La IA devolvió una traducción incompleta o mezclada; "
@@ -3210,6 +3247,20 @@ async def translate(req: TranslateRequest):
         ia = _via_ia()
         if ia:
             return ia
+
+    if req.literal:
+        # Doblaje: MyMemory no sirve (rompe los marcadores y traduce con memorias
+        # ajenas: «Hello, this is a short test» → «Esta es una nueva prueba…»,
+        # medido 2026-09-26). Se dice qué pasó para que el navegador espere y
+        # repita el lote (429 / 503) o lo parta si el problema es del texto (422).
+        detalle = error_detail or "No hay IA de traducción disponible en este momento."
+        if _es_error_rate_limit_ia(Exception(detalle)):
+            estado = 429
+        elif re.search(r"incomplet|mezclad|marcador", detalle, re.IGNORECASE):
+            estado = 422
+        else:
+            estado = 503
+        return JSONResponse(status_code=estado, content={"detail": detalle, "ia_used": False})
 
     rapido = _via_mymemory()
     if rapido:
