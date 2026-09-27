@@ -74,7 +74,9 @@ export function inicializarYoutubeSincronizado({
   };
   const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
   const transcripciones = new TranscriptionService({ fetchApi });
-  const traductor = new TranslationService({ traducirTexto });
+  // Ritmo de Mistral gratis (≈1 petición/s) para TODA llamada del traductor:
+  // lotes, mitades de un lote partido y el texto completo.
+  const traductor = new TranslationService({ traducirTexto, intervaloMinMs: 1100 });
   // Doble audio alternado (sin micro-cortes entre frases): los dos se crean y
   // desbloquean dentro del primer toque (iOS solo deja desbloquear en gesto).
   const audioDoblaje = new Audio();

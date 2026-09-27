@@ -17,8 +17,19 @@ export const MIN_CHARS_PARA_CERRAR = 350;
 
    Umbral medido sobre 6 traducciones del mismo lote (24/08/2026): las tres
    correctas dieron 1,016 · 1,064 · 1,016 y las tres que perdieron segmentos
-   dieron 0,769 · 0,804 · 0,785. 0,85 queda en medio, con margen a los dos lados. */
+   dieron 0,769 · 0,804 · 0,785. 0,85 queda en medio, con margen a los dos lados.
+
+   Pero el 2026-09-26 se midieron traducciones CORRECTAS de 0,74–0,83 en un video
+   real («and that would be worth a million» → «eso valdría un millón»): el
+   español a veces es más compacto. Rechazarlas partía el lote hasta frase por
+   frase (7 llamadas y ~5 s en el arranque, y sin contexto). Como perder
+   segmentos es intermitente (3 de 6), en la zona gris se repite UNA vez el lote
+   entero: si vuelve completo se usa; si vuelve igual de compacto, es el idioma. */
 const MIN_PROPORCION_TRADUCCION = 0.85;
+/** Por debajo de esto falta texto casi seguro: se parte el lote sin más. */
+const MIN_PROPORCION_POSIBLE = 0.6;
+/** Dos intentos compactos «iguales» (±0,1) = español compacto, no un hueco. */
+const TOLERANCIA_REPETICION = 0.1;
 
 function marcador(indice) {
   return `[[JG_SEG_${String(indice).padStart(6, '0')}]]`;
@@ -103,16 +114,15 @@ function extraerTraducciones(texto, lote) {
   return salida.size === esperado.size ? salida : null;
 }
 
-/** ¿Volvió todo el texto del lote, o la IA se dejó segmentos por el camino? */
-function conservaElContenido(lote, traducciones) {
+/** Cuánto texto volvió frente al original (1 = lo mismo). */
+function proporcionDelLote(lote, traducciones) {
   let original = 0;
   let traducido = 0;
   for (const { indice, segmento } of lote) {
     original += String(segmento.text || '').length;
     traducido += String(traducciones.get(indice) || '').length;
   }
-  if (!original) return true;
-  return traducido / original >= MIN_PROPORCION_TRADUCCION;
+  return original ? traducido / original : 1;
 }
 
 async function mapaConLimite(items, limite, tarea) {
@@ -129,17 +139,56 @@ async function mapaConLimite(items, limite, tarea) {
 }
 
 export class TranslationService {
-  constructor({ traducirTexto }) {
+  /**
+   * `intervaloMinMs`: pausa mínima entre DOS llamadas cualesquiera de este
+   * servicio (Mistral gratis ≈ 1 petición/s para toda la app). Antes solo se
+   * espaciaban los lotes; las mitades de un lote partido salían seguidas y
+   * provocaban 429 (medido en producción el 2026-09-26).
+   */
+  constructor({ traducirTexto, intervaloMinMs = 0, ahora = () => Date.now(), esperar = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     if (typeof traducirTexto !== 'function') throw new Error('Falta el servicio de traducción.');
     this.traducirTexto = traducirTexto;
+    this.intervaloMinMs = intervaloMinMs;
+    this.ahora = ahora;
+    this.esperar = esperar;
+    this.proximoTurno = 0;
   }
 
-  /** Pide un lote y lo rechaza si volvió incompleto. Devuelve el mapa o null. */
-  async pedirLote(lote, opciones) {
-    const respuesta = await this.traducirTexto(lote.map(({ pieza }) => pieza).join('\n\n'), opciones);
+  /** Toda llamada pasa por aquí: respeta el ritmo mínimo entre peticiones. */
+  async #llamar(texto, opciones) {
+    if (this.intervaloMinMs > 0) {
+      const ahora = this.ahora();
+      const turno = Math.max(ahora, this.proximoTurno);
+      this.proximoTurno = turno + this.intervaloMinMs;
+      if (turno > ahora) await this.esperar(turno - ahora);
+      if (opciones?.signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
+    }
+    return this.traducirTexto(texto, opciones);
+  }
+
+  /** Pide un lote: `{ traducciones, proporcion }`, o `null` si los marcadores volvieron rotos. */
+  async #pedirConProporcion(lote, opciones) {
+    const respuesta = await this.#llamar(lote.map(({ pieza }) => pieza).join('\n\n'), opciones);
     const traducciones = extraerTraducciones(textoDeIA(respuesta), lote);
-    if (!traducciones) return null;
-    return conservaElContenido(lote, traducciones) ? traducciones : null;
+    return traducciones ? { traducciones, proporcion: proporcionDelLote(lote, traducciones) } : null;
+  }
+
+  /**
+   * Pide un lote y lo acepta solo si volvió completo. Devuelve el mapa o null.
+   * Zona gris (0,6–0,85): se repite una vez; dos respuestas igual de compactas
+   * son español compacto, no un segmento perdido (ver MIN_PROPORCION_TRADUCCION).
+   */
+  async pedirLote(lote, opciones) {
+    const primero = await this.#pedirConProporcion(lote, opciones);
+    if (!primero || primero.proporcion < MIN_PROPORCION_POSIBLE) return null;
+    if (primero.proporcion >= MIN_PROPORCION_TRADUCCION || lote.length <= 2) return primero.traducciones;
+    const segundo = await this.#pedirConProporcion(lote, opciones);
+    if (segundo && segundo.proporcion >= MIN_PROPORCION_TRADUCCION) return segundo.traducciones;
+    if (segundo && segundo.proporcion >= MIN_PROPORCION_POSIBLE
+      && Math.abs(segundo.proporcion - primero.proporcion) <= TOLERANCIA_REPETICION) {
+      return (segundo.proporcion > primero.proporcion ? segundo : primero).traducciones;
+    }
+    return null;
   }
 
   /**
@@ -176,7 +225,7 @@ export class TranslationService {
     if (indices.length === 1) {
       // Último intento, sin marcadores: a veces el modelo los pierde en una sola frase.
       try {
-        const respuesta = await this.traducirTexto(segmentos[primero].text, opciones);
+        const respuesta = await this.#llamar(segmentos[primero].text, opciones);
         const texto = sinMarcadores(textoDeIA(respuesta) ?? '');
         if (texto) return new Map([[primero, texto]]);
       } catch (error) {

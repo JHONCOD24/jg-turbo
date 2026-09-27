@@ -431,6 +431,41 @@ const se = await modulo('syncEngine.js');
   const conMarca = new tr.TranslationService({ traducirTexto: async (texto) => (/JG_SEG/.test(texto) ? { text: '' } : { text: '[[JG_SEG_000000]]\nHola, esto es una prueba', ia_used: true }) });
   const suelta = await conMarca.traducirLote([0], segmentos, {});
   comprobar(suelta.get(0) === 'Hola, esto es una prueba', `un marcador copiado del ejemplo no llega al subtítulo ni a la voz («${suelta.get(0)}»)`);
+
+  // Zona gris: el español a veces es más compacto de verdad (0,74–0,83 medido).
+  // Respuesta con cada segmento recortado a `fraccion` de su largo.
+  const recortada = (texto, fraccion) => ({ ia_used: true, text: [...texto.matchAll(/\[\[JG_SEG_(\d{6})\]\]\n([^\[]*)/g)]
+    .map((m) => `[[JG_SEG_${m[1]}]]\n${m[2].trim().slice(0, Math.max(1, Math.round(m[2].trim().length * fraccion)))}`).join('\n\n') });
+  const conSecuencia = (fracciones) => {
+    const pedidos = [];
+    const servicio = new tr.TranslationService({ traducirTexto: async (texto) => { pedidos.push(texto); return recortada(texto, fracciones[Math.min(pedidos.length - 1, fracciones.length - 1)]); } });
+    return { servicio, pedidos };
+  };
+  const compacto = conSecuencia([0.8, 0.78]);
+  const aceptado = await compacto.servicio.traducirLote([4, 5, 6, 7], segmentos, {});
+  comprobar(compacto.pedidos.length === 2 && [...aceptado.values()].every(Boolean), `dos respuestas igual de compactas se aceptan: es el idioma, no un hueco (${compacto.pedidos.length} llamadas; antes se partía hasta 7)`);
+  const segundaCompleta = conSecuencia([0.8, 1]);
+  const completo = await segundaCompleta.servicio.traducirLote([4, 5, 6, 7], segmentos, {});
+  comprobar(segundaCompleta.pedidos.length === 2 && completo.get(7) === segmentos[7].text, 'si el segundo intento vuelve completo, se usa ese');
+  const hueco = conSecuencia([0.5]);
+  await hueco.servicio.traducirLote([4, 5, 6, 7], segmentos, {});
+  comprobar(hueco.pedidos.length > 2 && /JG_SEG_000004[\s\S]*JG_SEG_000005/.test(hueco.pedidos[1]) && !/JG_SEG_000006/.test(hueco.pedidos[1]), 'con la mitad del texto (falta algo casi seguro), el lote se parte en mitades');
+  const corto = conSecuencia([0.75]);
+  await corto.servicio.traducirLote([4, 5], segmentos, {});
+  comprobar(corto.pedidos.length === 1, 'un lote de 1-2 segmentos algo compacto se acepta sin repetir');
+}
+{
+  // Ritmo común: ninguna llamada del traductor sale antes del intervalo mínimo
+  // desde la anterior, aunque se pidan a la vez (reloj real, intervalo de 60 ms).
+  const salidas = [];
+  const servicio = new tr.TranslationService({
+    intervaloMinMs: 60,
+    traducirTexto: async (texto) => { salidas.push(Date.now()); return { ia_used: true, text: texto.replace(/\n(?!\[\[)/g, '\nES ') }; },
+  });
+  const segmentos = ts.normalizarSegmentos(fixture.segments);
+  await Promise.all([servicio.traducirLote([0, 1], segmentos, {}), servicio.traducirLote([2, 3], segmentos, {}), servicio.traducirLote([4], segmentos, {})]);
+  const pausas = salidas.slice(1).map((t, i) => t - salidas[i]);
+  comprobar(salidas.length === 3 && pausas.every((p) => p >= 55), `las llamadas del traductor salen espaciadas aunque se pidan a la vez (${pausas.join(', ')} ms ≥ 60)`);
 }
 {
   // Primer lote corto (4 segmentos) y hasta 2 en vuelo, siempre a ≥1,1 s entre salidas.
@@ -454,7 +489,7 @@ const se = await modulo('syncEngine.js');
   comprobar(lotes.length === 2, 'nunca más de 2 en vuelo');
   pendientes.forEach((f) => f());
   await new Promise((r) => setTimeout(r, 0));
-  comprobar(pl.VOZ_INICIAL_S === 10, 'para arrancar bastan 10 s de voz lista (antes 20)');
+  comprobar(pl.VOZ_INICIAL_S === 6, 'para arrancar basta la primera frase (6 s de voz lista; antes 20)');
 }
 {
   // Un fallo que no es límite de uso: espera corta (3 s) y creciente, y repite el mismo lote.

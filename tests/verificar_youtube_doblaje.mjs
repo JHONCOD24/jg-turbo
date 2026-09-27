@@ -560,7 +560,11 @@ try {
     comprobar('mientras no se pide, no aparece una transcripción vacía', !(await pagina.isVisible('#ytResultArea')));
     await pagina.click('#ytTranscriptPanel > summary');
     await pagina.click('#ytTextoCompleto');
-    await pagina.waitForFunction(() => (document.getElementById('ytOutput').value.match(/ES /g) || []).length >= 130, null, { timeout: 30000 }).catch(() => {});
+    // Desde v150 TODA llamada del traductor respeta el ritmo de Mistral gratis
+    // (≥1,1 s entre peticiones, compartido con el doblaje): ~40 lotes tardan
+    // ~45 s aunque la API simulada responda al instante. Antes salían en ráfaga
+    // y en producción eso era 429. La prueba mide que el texto quede completo.
+    await pagina.waitForFunction(() => (document.getElementById('ytOutput').value.match(/ES /g) || []).length >= 130, null, { timeout: 120000 }).catch(() => {});
     const cuenta = await pagina.evaluate(() => (document.getElementById('ytOutput').value.match(/ES /g) || []).length);
     comprobar('el texto completo queda traducido en el cuadro de resultado', cuenta >= 130, `${cuenta}`);
     comprobar('y se muestra, listo para copiar, descargar o escuchar', await pagina.isVisible('#ytResultArea'));

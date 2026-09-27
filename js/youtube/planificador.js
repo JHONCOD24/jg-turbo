@@ -8,11 +8,13 @@ import {
 
 export const HORIZONTE_TRADUCCION_S = 180;
 export const HORIZONTE_VOZ_S = 90;
-// 10 s de voz lista bastan para arrancar: la preparación va mucho más rápido que
-// el video (≈1 s por lote de traducción, ≈1 s por frase de voz) y, si un tramo
-// no llega, el motor de voz lo espera sin cortar nada. Con 20 s se esperaba un
-// lote de traducción más antes del primer sonido (medido 2026-09-26).
-export const VOZ_INICIAL_S = 10;
+// 6 s de voz lista bastan para arrancar (en la práctica, la primera frase): la
+// preparación va mucho más rápido que el video (≈1 s por lote de traducción,
+// ≈1 s por frase de voz) y, si un tramo no llega a tiempo, el motor v4 lo espera
+// con el audio original y lo dice entero al llegar, sin cortar nada. Medido en
+// producción (2026-09-26): con 10 s, en un video real hacían falta TRES frases
+// (la tercera empezaba en 9,0 s) y tres lotes de traducción antes del primer sonido.
+export const VOZ_INICIAL_S = 6;
 export const MARGEN_ATRAS_S = 2;
 // Lote corto cuando no hay nada traducido cerca: la IA contesta antes con 4
 // segmentos que con 8 (2,4 s medidos en el primer lote de un video real).
