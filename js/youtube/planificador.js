@@ -8,8 +8,15 @@ import {
 
 export const HORIZONTE_TRADUCCION_S = 180;
 export const HORIZONTE_VOZ_S = 90;
-export const VOZ_INICIAL_S = 20;
+// 10 s de voz lista bastan para arrancar: la preparación va mucho más rápido que
+// el video (≈1 s por lote de traducción, ≈1 s por frase de voz) y, si un tramo
+// no llega, el motor de voz lo espera sin cortar nada. Con 20 s se esperaba un
+// lote de traducción más antes del primer sonido (medido 2026-09-26).
+export const VOZ_INICIAL_S = 10;
 export const MARGEN_ATRAS_S = 2;
+// Lote corto cuando no hay nada traducido cerca: la IA contesta antes con 4
+// segmentos que con 8 (2,4 s medidos en el primer lote de un video real).
+export const LOTE_ARRANQUE = 4;
 
 /** Primer elemento (ordenado por tiempo) que termina después de `t`. */
 export function indiceDesde(lista, t) {
@@ -28,7 +35,9 @@ export function indiceDesde(lista, t) {
  * traducidos ni en curso) desde la posición, cortado con las MISMAS reglas que
  * `crearLotes` para no partir ideas. `null` si no hay nada dentro del horizonte.
  */
-export function siguienteLoteTraduccion(segmentos, { traducido, enCurso }, posicionS, { horizonteS = HORIZONTE_TRADUCCION_S } = {}) {
+export function siguienteLoteTraduccion(segmentos, { traducido, enCurso }, posicionS, {
+  horizonteS = HORIZONTE_TRADUCCION_S, maxSegmentos = MAX_SEGMENTOS_POR_LOTE,
+} = {}) {
   const limite = posicionS + horizonteS;
   let i = indiceDesde(segmentos, Math.max(0, posicionS - MARGEN_ATRAS_S));
   while (i < segmentos.length && (traducido(i) || enCurso(i))) i += 1;
@@ -38,7 +47,7 @@ export function siguienteLoteTraduccion(segmentos, { traducido, enCurso }, posic
   for (; i < segmentos.length; i += 1) {
     if (traducido(i) || enCurso(i)) break;
     const pieza = piezaDeLote(i, segmentos[i].text);
-    if (lote.length && (lote.length >= MAX_SEGMENTOS_POR_LOTE || caracteres + pieza.length > MAX_CHARS_POR_LOTE)) break;
+    if (lote.length && (lote.length >= maxSegmentos || caracteres + pieza.length > MAX_CHARS_POR_LOTE)) break;
     lote.push(i);
     caracteres += pieza.length + 2;
     const siguiente = segmentos[i + 1];

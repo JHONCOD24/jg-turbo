@@ -9,10 +9,7 @@
 import { TranscriptionService, extraerVideoId } from './transcriptionService.js';
 import { TranslationService } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
-import { SyncEngine } from './syncEngine.js';
-import {
-  tasasParaSelector, normalizarTasa, presetDeTasa, VALOR_TASA_LIBRE,
-} from './syncEngine.js';
+import { SyncEngine, normalizarTasa } from './syncEngine.js';
 import { TranscriptionDisplay } from './TranscriptionDisplay.js';
 import { DubbingService, agruparPorTiempo } from './dubbingService.js';
 import { DubbingEngine } from './dubbingEngine.js';
@@ -28,7 +25,11 @@ import {
 const CLAVE_VOL_VOZ = 'jg_yt_vol_voz';
 const CLAVE_VOL_ORIGINAL = 'jg_yt_vol_original';
 const CLAVE_TASA = 'jg_yt_rate';
+const CLAVE_RITMO_AUTO = 'jg_yt_ritmo_auto';
 const ESPERA_REPRODUCTOR_MS = 8000;
+// El texto del video ya no espera al reproductor: si en este tiempo da título y
+// duración, viajan como pista; si no, el servidor los saca de la Data API.
+const ESPERA_PISTAS_MS = 1200;
 // 0,01 s de silencio: «desbloquea» el audio en Safari/iOS dentro del primer toque.
 const SILENCIO_WAV = 'data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
 
@@ -60,8 +61,7 @@ export function inicializarYoutubeSincronizado({
   const $ = (id) => document.getElementById(id);
   const ui = {
     boton: $('ytSyncBtn'), url: $('ytUrl'), idioma: $('ytLang'), area: $('ytSyncArea'), titulo: $('ytSyncTitle'),
-    estado: $('ytSyncStatus'), cerrar: $('btnYtSyncClose'), velocidad: $('ytSyncRate'),
-    tasaLibre: $('ytRateCustom'), tasaLibreWrap: $('ytRateCustomWrap'),
+    estado: $('ytSyncStatus'), cerrar: $('btnYtSyncClose'), ritmoAuto: $('ytRitmoAuto'),
     botonVoz: $('ytDubbingBtn'), etiquetaVoz: $('ytDubbingLabel'), insignia: $('ytLangBadge'),
     caption: $('ytCaption'), toggleCaption: $('ytToggleCaption'),
     elegir: $('ytLangConfirm'), elegirTexto: $('ytLangConfirmText'), elegirSelect: $('ytIdiomaElegido'),
@@ -107,17 +107,31 @@ export function inicializarYoutubeSincronizado({
       guardar('jg_yt_subtitulos', ui.toggleCaption.checked ? '1' : '0');
     });
 
+    // ── Ritmo automático (encendido por defecto, se recuerda) ──────────────
+    // Frena el video lo justo cuando el español necesita más tiempo que el
+    // inglés, para que la voz diga todo sin saltarse líneas. Apagado, la voz
+    // se pone al día en las pausas y el video va a la velocidad de la persona.
+    const ritmoAutomatico = () => !ui.ritmoAuto || ui.ritmoAuto.checked;
+    if (ui.ritmoAuto) {
+      ui.ritmoAuto.checked = leer(CLAVE_RITMO_AUTO) !== '0';
+      ui.ritmoAuto.addEventListener('change', () => {
+        guardar(CLAVE_RITMO_AUTO, ui.ritmoAuto.checked ? '1' : '0');
+        sesion?.motorVoz?.definirRitmoAutomatico(ui.ritmoAuto.checked);
+      });
+    }
+
     // ── Voz del doblaje (propia; la voz global no se toca) ─────────────────
     // «Automática (según el video)» = neural rápida del género detectado (o del
     // global si no hay pistas). Si el video trae diálogo (>>), aparece la 2.ª
-    // voz para el otro hablante. Fish sigue a mano, marcada «más lenta».
+    // voz para el otro hablante. Fish sigue a mano: tarda 6-8 s en preparar
+    // cada tramo (medido 2026-09-26) aunque hable rápido, de ahí su etiqueta.
     const CLAVE_VOZ = 'jg_yt_voz';
     const CLAVE_VOZ2 = 'jg_yt_voz2';
     const VALOR_AUTO = 'auto';
     function llenarSelectorVoz(select, conAuto) {
       const grupos = new Map();
       for (const item of listarVoces()) {
-        const etiqueta = String(item.value || '').startsWith('fish:') ? `${item.label} (más lenta)` : item.label;
+        const etiqueta = String(item.value || '').startsWith('fish:') ? `${item.label} (tarda más en cargar)` : item.label;
         if (!grupos.has(item.group)) grupos.set(item.group, document.createElement('optgroup'));
         grupos.get(item.group).label = item.group;
         const opcion = document.createElement('option');
@@ -309,7 +323,6 @@ export function inicializarYoutubeSincronizado({
   function reiniciarVista() {
     ui.botonVoz.disabled = true;
     if (ui.voz2Wrap) ui.voz2Wrap.hidden = true;
-    if (ui.tasaLibreWrap) ui.tasaLibreWrap.hidden = true;
     $('ytDesdeInicio').hidden = true;
     ponerEstadoBotonVoz(false);
     ui.etiquetaVoz.textContent = 'Voz en español';
@@ -320,7 +333,6 @@ export function inicializarYoutubeSincronizado({
     ui.estado.textContent = '';
     ui.caption.textContent = '';
     ui.titulo.textContent = 'Video doblado al español';
-    ui.velocidad.disabled = true;
     mostrarIdioma('Idioma del video: por confirmar', 'analizando');
     display.definirSegmentos([], () => null);
     display.mostrarVoz('cargando');
@@ -471,62 +483,27 @@ export function inicializarYoutubeSincronizado({
     return player;   // si tardó, se sigue: puede terminar de cargar después
   }
 
-  function configurarVelocidades(player) {
-    // Presets finos (0.80, 0.85, 0.97…) + lo que ofrezca YouTube + valor libre.
-    const tasas = tasasParaSelector(player.getAvailablePlaybackRates());
-    const opciones = tasas.map((tasa) => {
-      const opcion = document.createElement('option');
-      opcion.value = String(tasa);
-      opcion.textContent = `${tasa}x`;
-      return opcion;
-    });
-    const libre = document.createElement('option');
-    libre.value = VALOR_TASA_LIBRE;
-    libre.textContent = 'Otra…';
-    opciones.push(libre);
-    ui.velocidad.replaceChildren(...opciones);
-    ui.velocidad.disabled = false;
-    // Se recuerda entre videos: si la persona frenó un video rápido a 0.85,
-    // el siguiente arranca igual.
-    const guardada = normalizarTasa(leer(CLAVE_TASA));
-    aplicarTasa(player, guardada === 1 ? player.getPlaybackRate() : guardada);
-    ui.velocidad.onchange = () => {
-      if (ui.velocidad.value === VALOR_TASA_LIBRE) {
-        ui.tasaLibreWrap.hidden = false;
-        ui.tasaLibre.focus({ preventScroll: true });
-        return;
-      }
-      ui.tasaLibreWrap.hidden = true;
-      aplicarTasa(player, ui.velocidad.value);
-    };
-    ui.tasaLibre.onchange = () => aplicarTasa(player, ui.tasaLibre.value);
+  /**
+   * Velocidad de partida del video: la que la persona eligió en el engranaje de
+   * YouTube en videos anteriores. Con el ritmo automático no se reaplica una
+   * velocidad menor que 1: frenar ya lo hace el motor solo, y una 0.85 vieja
+   * (del selector manual que existía antes) dejaría el video lento sin motivo.
+   */
+  function aplicarTasaGuardada(player) {
+    let base = normalizarTasa(leer(CLAVE_TASA));
+    if (ritmoAutomatico() && base < 1) base = 1;
+    if (Math.abs(base - (Number(player.getPlaybackRate?.()) || 1)) > 0.001) player.setPlaybackRate(base);
+    display.mostrarVelocidad(Number(player.getPlaybackRate?.()) || base, false);
   }
 
-  /** Fija la velocidad del video y deja el selector mostrando la tasa REAL. */
-  function aplicarTasa(player, valor) {
-    const tasa = normalizarTasa(valor);
-    player.setPlaybackRate(tasa);
-    guardar(CLAVE_TASA, String(tasa));
-    // YouTube puede redondear un valor libre: se muestra lo que quedó de verdad.
-    const real = Number(player.getPlaybackRate?.()) || tasa;
-    fijarTasaEnSelector(real);
-  }
-
-  /** El selector refleja la tasa real (de la persona o del propio YouTube). */
-  function fijarTasaEnSelector(velocidad) {
-    const tasas = [...ui.velocidad.options]
-      .map((o) => o.value)
-      .filter((v) => v !== VALOR_TASA_LIBRE);
-    const preset = presetDeTasa(tasas, velocidad);
-    if (preset === null) {
-      ui.velocidad.value = VALOR_TASA_LIBRE;
-      ui.tasaLibreWrap.hidden = false;
-      ui.tasaLibre.value = String(velocidad);
-    } else {
-      ui.velocidad.value = String(preset);
-      ui.tasaLibreWrap.hidden = true;
+  /** La etiqueta del texto sincronizado cuenta la velocidad real y si el ritmo automático la bajó. */
+  function mostrarRitmo(actual, tasa, { automatica }) {
+    display.mostrarVelocidad(tasa, automatica);
+    if (automatica && !actual.avisoRitmo) {
+      // Una sola vez por video: que se entienda por qué el video va un poco más lento.
+      actual.avisoRitmo = true;
+      ui.estado.textContent = `Ritmo automático: el video va a ${String(tasa).replace('.', ',')}× en este tramo para que la voz diga todo sin saltarse nada.`;
     }
-    display.mostrarVelocidad(velocidad);
   }
 
   function textoDeError(error) {
@@ -638,24 +615,25 @@ export function inicializarYoutubeSincronizado({
         return new Audio();
       },
       modoSilenciarOriginal: esIOS,
+      ritmoAutomatico: ritmoAutomatico(),
       onStatus: (mensaje, tipo) => { ui.estado.textContent = mensaje; display.mostrarVoz(tipo); },
       onMetricas: (metricas) => { actual.metricas = metricas; },   // solo diagnóstico (H28)
       onFin: () => { ui.estado.textContent = 'El video terminó.'; display.mostrarVoz('fin'); },
+      onRitmo: (tasa, detalle) => mostrarRitmo(actual, tasa, detalle),
+      // La persona cambió la velocidad en el engranaje de YouTube: se recuerda
+      // para el próximo video (lo que baja el ritmo automático, no).
+      onTasaBase: (tasa) => guardar(CLAVE_TASA, String(normalizarTasa(tasa))),
     });
     actual.motorVoz.definirVolumenVoz(Number(ui.volVoz.value) / 100);
     actual.motorVoz.definirVolumenFondo(Number(ui.volOriginal.value));
     actual.sync = new SyncEngine({
       player, segmentos: datos.segmentos,
       onSegmentChange: (indice) => display.mostrar(indice),
-      onPlaybackRateChange: (velocidad) => {
-        // Si la tasa cambió en los controles del propio YouTube, se recuerda
-        // igual: la próxima vez el video arranca a ese ritmo.
-        guardar(CLAVE_TASA, String(normalizarTasa(velocidad)));
-        fijarTasaEnSelector(velocidad);
-      },
+      // Con la voz en español sonando, el texto muestra la línea que se OYE.
+      indiceExterno: () => actual.motorVoz?.indiceSegmentoVoz() ?? null,
     });
     actual.sync.iniciar();
-    configurarVelocidades(player);
+    aplicarTasaGuardada(player);
 
     progreso.terminar();
     ui.botonVoz.disabled = false;
@@ -686,12 +664,22 @@ export function inicializarYoutubeSincronizado({
     ui.area.scrollIntoView({ block: 'start', behavior: 'smooth' });
     audiosEntregados = 0;
     desbloquearAudio();
+    // La primera síntesis paga el arranque del servicio de voz (2-4 s medidos):
+    // se paga ahora, mientras se lee el video, y no cuando la persona espera oírla.
+    Promise.resolve().then(() => fetchApi('/tts-warmup', { signal }, 15000)).catch(() => {});
     try {
-      actual.player = await crearReproductor(videoId, signal);
-      const tituloVideo = actual.player.getVideoData()?.title || '';
-      const duracionS = actual.player.getDuration() || 0;
-      if (tituloVideo) ui.titulo.textContent = tituloVideo;
-      if (duracionS > 1800) progreso.ayuda('Video largo: la primera vez puede tardar unos 30 s en leerse. Puedes darle play mientras tanto.');
+      // El reproductor y el texto van EN PARALELO: antes el texto esperaba a que
+      // el reproductor estuviera listo (hasta 8 s en un teléfono lento).
+      const promesaPlayer = crearReproductor(videoId, signal).then((player) => {
+        if (sesion === actual) actual.player = player; else player.destruir();
+        const titulo = player.getVideoData()?.title || '';
+        if (titulo && sesion === actual) ui.titulo.textContent = titulo;
+        if (player.getDuration() > 1800 && sesion === actual && !ui.tarjeta.hidden) {
+          progreso.ayuda('Video largo: la primera vez se tarda más en leer el texto. Puedes darle play mientras tanto.');
+        }
+        return player;
+      });
+      promesaPlayer.catch(() => {});   // un fallo se atiende abajo, al esperarlo
 
       const guardado = await leerDoblaje(videoId);
       const elegidoEnFormulario = ui.idioma?.value || 'auto';
@@ -699,10 +687,18 @@ export function inicializarYoutubeSincronizado({
         && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === guardado.idiomaOrigen);
       let datos;
       let decision;
+      // Pistas del reproductor para el servidor (título y duración), solo si
+      // llegan pronto: el texto no espera al reproductor.
+      let tituloVideo = '';
+      let duracionS = 0;
       if (sirve) {
         datos = { segmentos: guardado.segmentos, idioma: guardado.idiomaOrigen, confianza: 1, fuente: 'usuario', conflicto: false };
         decision = { accion: 'doblar', idioma: guardado.idiomaOrigen, mensaje: '' };
       } else {
+        const pronto = await Promise.race([promesaPlayer.catch(() => null), new Promise((r) => setTimeout(() => r(null), ESPERA_PISTAS_MS))]);
+        if (signal.aborted) throw cancelado();
+        tituloVideo = pronto?.getVideoData()?.title || '';
+        duracionS = pronto?.getDuration() || 0;
         try {
           datos = await pedirTexto(url, { idiomaOrigen: elegidoEnFormulario, tituloVideo, duracionS, signal });
         } catch (error) {
@@ -736,6 +732,12 @@ export function inicializarYoutubeSincronizado({
         return;
       }
       mostrarIdioma(`Idioma del video: ${nombreIdioma(decision.idioma)}`, 'ok');
+      // Para doblar sí hace falta el reproductor (casi siempre ya está listo).
+      actual.player = await promesaPlayer;
+      if (signal.aborted) throw cancelado();
+      tituloVideo = actual.player.getVideoData()?.title || tituloVideo || datos.titulo || guardado?.titulo || '';
+      duracionS = actual.player.getDuration() || duracionS || datos.duracionS || guardado?.duracionS || 0;
+      if (tituloVideo) ui.titulo.textContent = tituloVideo;
       actual.registro = {
         videoId,
         idiomaOrigen: decision.idioma,

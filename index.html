@@ -6691,11 +6691,9 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <label class="yt-opcion" for="ytVoz2Select" id="ytVoz2Wrap" hidden>Segunda voz (diálogos)
                 <select id="ytVoz2Select" class="tts-voice-select" aria-label="Segunda voz del doblaje para diálogos"></select>
               </label>
-              <label class="yt-opcion" for="ytSyncRate">Velocidad
-                <select id="ytSyncRate" disabled><option value="1">1x</option></select>
-              </label>
-              <label class="yt-opcion" for="ytRateCustom" id="ytRateCustomWrap" hidden>Otra velocidad
-                <input id="ytRateCustom" type="number" min="0.25" max="2" step="0.01" value="0.97" aria-label="Velocidad personalizada del video (0.25 a 2)">
+              <label class="yt-opcion yt-opcion-check" for="ytRitmoAuto" title="Frena el video un poco cuando el español necesita más tiempo, para que la voz diga todo sin saltarse líneas. La velocidad a mano se elige en el engranaje de YouTube.">
+                <input type="checkbox" id="ytRitmoAuto" checked>
+                Ritmo automático (frena el video si la voz lo necesita)
               </label>
               <label class="yt-opcion yt-opcion-check" for="ytToggleCaption">
                 <input type="checkbox" id="ytToggleCaption">

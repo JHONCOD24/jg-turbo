@@ -99,8 +99,63 @@ export function textoDeUnidad(unidad, traducciones) {
   return partes.join(' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Duración de un audio por su tamaño, sin decodificarlo. La voz neural llega en
+ * MP3 de 48 kbps fijos (`audio-24khz-48kbitrate-mono-mp3`, Azure y Edge) y la de
+ * Fish en 128 kbps; un WAV trae su ritmo de bytes en la cabecera.
+ */
+export async function duracionPorBytes(blob, motor = '') {
+  const bytes = Number(blob?.size) || 0;
+  if (!bytes) return null;
+  const tipo = String(blob.type || '').toLowerCase();
+  if (tipo.includes('wav')) {
+    try {
+      const cabecera = new DataView(await blob.slice(0, 44).arrayBuffer());
+      const porSegundo = cabecera.getUint32(28, true);
+      return porSegundo > 0 ? Math.max(0, bytes - 44) / porSegundo : null;
+    } catch (_) { return null; }
+  }
+  if (!tipo.includes('mpeg') && !tipo.includes('mp3')) return null;   // tipo desconocido: por metadatos
+  const kbps = /fish/i.test(String(motor || '')) ? 128 : 48;
+  return (bytes * 8) / (kbps * 1000);
+}
+
+/**
+ * Duración real (s) de un audio ya generado. El plan de ritmo la necesita ANTES
+ * de que la frase suene para frenar el video a tiempo. Primero por el tamaño
+ * (instantáneo); si no se puede, por los metadatos. `null` si nada funcionó:
+ * entonces se estima por el texto.
+ */
+export async function medirDuracionAudio(url, {
+  blob = null, motor = '',
+  crear = () => (typeof Audio === 'function' ? new Audio() : null), esperaMs = 1500,
+} = {}) {
+  const porBytes = await duracionPorBytes(blob, motor);
+  if (porBytes > 0) return porBytes;
+  const audio = crear();
+  if (!audio || !url) return null;
+  return new Promise((resolver) => {
+    let hecho = false;
+    const terminar = (valor) => {
+      if (hecho) return;
+      hecho = true;
+      clearTimeout(temporizador);
+      try { audio.removeAttribute('src'); audio.load(); } catch (_) {}
+      resolver(valor);
+    };
+    const temporizador = setTimeout(() => terminar(null), esperaMs);
+    audio.preload = 'metadata';
+    audio.addEventListener('loadedmetadata', () => {
+      const duracion = Number(audio.duration);
+      terminar(Number.isFinite(duracion) && duracion > 0 ? duracion : null);
+    });
+    audio.addEventListener('error', () => terminar(null));
+    audio.src = url;
+  });
+}
+
 export class DubbingService {
-  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null }) {
+  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null, medirDuracion = medirDuracionAudio }) {
     if (typeof generarAudio !== 'function') {
       throw new Error('No está disponible el generador de voz en español.');
     }
@@ -108,6 +163,7 @@ export class DubbingService {
     this.onProgress = onProgress;
     this.limitador = limitador;
     this.onRespaldo = onRespaldo;
+    this.medirDuracion = medirDuracion;
     this.unidades = [];
     this.completadas = 0;
     this.destruido = false;
@@ -122,12 +178,17 @@ export class DubbingService {
     return this.unidades;
   }
 
-  /** Llegó la traducción de una frase: '' = sin voz (se oye el original). */
-  fijarTexto(indice, texto) {
+  /**
+   * Llegó la traducción de una frase: '' = sin voz (se oye el original).
+   * `fracciones` = dónde termina cada segmento dentro del texto (subtítulo que
+   * sigue a la voz, `ritmoDoblaje.fraccionesDeUnidad`).
+   */
+  fijarTexto(indice, texto, fracciones = null) {
     const unidad = this.unidades[indice];
     if (!unidad || unidad.estado !== 'sin_traducir') return;
     unidad.text = texto;
     unidad.estado = texto ? 'pendiente' : 'sin_voz';
+    if (Array.isArray(fracciones)) unidad.fracciones = fracciones;
   }
 
   /** Espera turno en el limitador (Azure F0: 20 síntesis/minuto). */
@@ -159,6 +220,7 @@ export class DubbingService {
       if (unidad.url) URL.revokeObjectURL(unidad.url);
       unidad.url = '';
       unidad.blob = null;
+      unidad.duracionVoz = 0;   // otra voz, otro ritmo: se vuelve a medir
       unidad.estado = 'pendiente';
     }
   }
@@ -187,6 +249,10 @@ export class DubbingService {
         if (resultado?.respaldoHdr) this.onRespaldo?.(resultado, unidad);
         unidad.blob = blob;
         unidad.url = URL.createObjectURL(blob);
+        // La duración real deja al plan de ritmo frenar el video ANTES de que haga falta.
+        const duracion = await Promise.resolve(this.medirDuracion?.(unidad.url, { blob, motor: resultado?.engineHdr })).catch(() => null);
+        if (Number(duracion) > 0) unidad.duracionVoz = Number(duracion);
+        if (this.destruido) throw new Error('La preparación de voz fue cancelada.');
         unidad.estado = 'listo';
         unidad.error = '';
         this.completadas += 1;

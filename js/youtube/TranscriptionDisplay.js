@@ -64,8 +64,10 @@ export class TranscriptionDisplay {
     this.indicador.textContent = pendiente ? 'Traduciendo…' : 'Sincronización activa';
   }
 
-  mostrarVelocidad(velocidad) {
-    this.velocidad.textContent = `${Number(velocidad || 1).toFixed(2).replace(/\.00$/, '')}x`;
+  /** `automatica` = la bajó el ritmo automático para que la voz quepa. */
+  mostrarVelocidad(velocidad, automatica = false) {
+    const tasa = `${Number(velocidad || 1).toFixed(2).replace(/\.00$/, '')}x`;
+    this.velocidad.textContent = automatica ? `${tasa} · ritmo automático` : tasa;
   }
 
   mostrarVoz(estado) {

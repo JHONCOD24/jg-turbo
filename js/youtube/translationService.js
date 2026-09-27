@@ -33,6 +33,29 @@ export function esLimiteDeUso(error) {
   return /\b429\b|l[ií]mite de uso|rate.?limit|too many requests/i.test(String(error?.message || error || ''));
 }
 
+/**
+ * ¿Falló por el TEXTO (la IA rompió marcadores o dejó la traducción a medias)?
+ * Solo entonces sirve partir el lote en mitades. Un fallo de red o del servidor
+ * se arregla repitiendo el mismo lote: partirlo multiplicaba las llamadas
+ * (13 llamadas y dos 500 antes del primer sonido, medido 2026-09-26).
+ */
+export function esFalloDeContenido(error) {
+  return /incomplet|mezclad|marcador|JG_SEG/i.test(String(error?.message || error || ''));
+}
+
+/** Quita marcadores sueltos: el modelo a veces copia el del ejemplo del prompt. */
+export function sinMarcadores(texto) {
+  return String(texto || '').replace(/\[\[\s*JG_SEG_\d+\s*\]\]/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Respuesta de la IA o error: la traducción de respaldo sin IA no sirve para doblar. */
+function textoDeIA(respuesta) {
+  if (respuesta && typeof respuesta === 'object' && respuesta.ia_used === false) {
+    throw new Error('La IA de traducción no respondió; se reintenta en unos segundos.');
+  }
+  return respuesta?.text ?? respuesta;
+}
+
 export function crearLotes(segmentos) {
   const lotes = [];
   let actual = [];
@@ -114,7 +137,7 @@ export class TranslationService {
   /** Pide un lote y lo rechaza si volvió incompleto. Devuelve el mapa o null. */
   async pedirLote(lote, opciones) {
     const respuesta = await this.traducirTexto(lote.map(({ pieza }) => pieza).join('\n\n'), opciones);
-    const traducciones = extraerTraducciones(respuesta?.text ?? respuesta, lote);
+    const traducciones = extraerTraducciones(textoDeIA(respuesta), lote);
     if (!traducciones) return null;
     return conservaElContenido(lote, traducciones) ? traducciones : null;
   }
@@ -140,6 +163,8 @@ export class TranslationService {
       mapa = await this.pedirLote(lote, opciones);
     } catch (error) {
       if (signal?.aborted || error?.name === 'AbortError' || esLimiteDeUso(error)) throw error;
+      // Red o servidor: el motor espera un poco y repite ESTE lote entero.
+      if (!esFalloDeContenido(error)) throw error;
     }
     if (mapa) return mapa;
     if (indices.length > 1 && profundidad < 3) {
@@ -152,10 +177,11 @@ export class TranslationService {
       // Último intento, sin marcadores: a veces el modelo los pierde en una sola frase.
       try {
         const respuesta = await this.traducirTexto(segmentos[primero].text, opciones);
-        const texto = String(respuesta?.text ?? respuesta ?? '').trim();
+        const texto = sinMarcadores(textoDeIA(respuesta) ?? '');
         if (texto) return new Map([[primero, texto]]);
       } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError' || esLimiteDeUso(error)) throw error;
+        if (!esFalloDeContenido(error)) throw error;
       }
     }
     return new Map(indices.map((indice) => [indice, null]));
@@ -170,12 +196,26 @@ export class TranslationService {
     let hechos = 0;
     onProgress(hechos, lotes.length);
     for (const indices of lotes) {
-      const mapa = await this.traducirLote(indices, segmentos, { origen, tituloVideo, signal });
+      const mapa = await this.#loteConReintentos(indices, segmentos, { origen, tituloVideo, signal });
       for (const [indice, texto] of mapa) resultado.set(indice, texto);
       hechos += 1;
       onProgress(hechos, lotes.length);
     }
     return resultado;
+  }
+
+  /** Un lote del texto completo: ante red, servidor o límite de uso, espera y repite (no se rinde a la primera). */
+  async #loteConReintentos(indices, segmentos, opciones, { intentos = 4, esperaMs = 3000 } = {}) {
+    for (let intento = 1; ; intento += 1) {
+      try {
+        return await this.traducirLote(indices, segmentos, opciones);
+      } catch (error) {
+        if (opciones.signal?.aborted || error?.name === 'AbortError') throw error;
+        if (intento >= intentos) return new Map(indices.map((indice) => [indice, null]));
+        const pausa = esLimiteDeUso(error) ? esperaMs * 5 : esperaMs * intento;
+        await new Promise((resolver) => setTimeout(resolver, pausa));
+      }
+    }
   }
 
 }
