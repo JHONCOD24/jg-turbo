@@ -45,7 +45,7 @@ diseño intacto) · `backend/tests/test_tts_idioma_fijo.py` **4 passed** ·
 
 ### Despliegue
 
-`v152` / `jg-turbo-shell-v152` · `dpl_` [POR ANOTAR].
+`v152` / `jg-turbo-shell-v152` · `dpl_3uWgYVLcwFuMCfhaK4CFu2TVFKr8` y, con el precalentamiento arreglado (sintetizaba «.» y Edge no devolvía audio), **`dpl_2a1EF9vPriohSGHWDJ9oYee6AHpM`** (vigente). Verificado en el dominio: 18/18 archivos idénticos al commit; `GET /api/tts` con «Claude, ChatGPT.» da `en-US-AvaNeural` sin `idioma_fijo` y `es-CO-SalomeNeural` con él; `/api/tts-warmup` → `ok: true` (Azure).
 
 ## Entrega 2026-09-26 · Doblaje v4: la voz no se salta nada y el ritmo es automático
 

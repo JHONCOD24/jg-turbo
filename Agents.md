@@ -242,7 +242,7 @@ nombra el 429 (`backend/tests/test_ia_respaldo.py`). Pruebas:
 cortadas (antes 8 en 90 s) y listo en 22 s (antes 40,8; ~15 s son de Supadata).
 **v152:** el doblaje pide la voz con `idioma_fijo` (nunca voz inglesa a mitad),
 descarta audio de una voz anterior (`versionVoz`), 2.ª voz «Ninguna» y tamaño del
-subtítulo (`data-tamano`, solo `font-size`). `JG_JS_V='v152'`, prod `dpl_` [POR ANOTAR]. Desplegar desde
+subtítulo (`data-tamano`, solo `font-size`). `JG_JS_V='v152'`, prod `dpl_2a1EF9vPriohSGHWDJ9oYee6AHpM`. Desplegar desde
 `git archive` del commit (ver `CAMBIOS_YOUTUBE.md` §Despliegues).
 
 **Estado desde 2026-08-01: la extracción es automática otra vez.** Documento
