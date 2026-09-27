@@ -774,5 +774,21 @@ export function inicializarYoutubeSincronizado({
     });
   });
 
+  // Diagnóstico de solo lectura (consola y pruebas): cómo va la sincronía de
+  // la voz. No cambia nada; sirve para medir en un video real que ninguna
+  // frase se corta ni se salta (tests/verificar_youtube_doblaje.mjs).
+  window.jgDoblajeDiagnostico = () => {
+    const motor = sesion?.motorVoz;
+    if (!motor) return null;
+    const unidad = sesion.servicioVoz?.unidades?.[motor.hablando];
+    return {
+      ...motor.metricas(),
+      activo: motor.activo,
+      hablando: motor.hablando,
+      frase: unidad ? { desde: unidad.desde, hasta: unidad.hasta, inicio: unidad.startTime } : null,
+      segmentoVoz: motor.indiceSegmentoVoz(),
+    };
+  };
+
   return { destruir: () => terminarSesion(), actualizarBoton };
 }

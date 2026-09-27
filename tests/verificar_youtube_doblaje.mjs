@@ -136,8 +136,28 @@ async function abrir(navegador, escenario = {}) {
   pagina.on('pageerror', (e) => reg.errores.push(String(e).slice(0, 200)));
   await pagina.addInitScript(({ sinRaf }) => {
     window.__plays = 0;
+    window.__cortes = [];
     const play = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function (...a) { window.__plays += 1; return play.apply(this, a); };
+    // Un corte = una voz que sonaba y se detuvo (o se cambió) antes de su final
+    // con el video andando. Es lo que reportó el dueño: «salta líneas».
+    const cortada = (el) => {
+      const d = Number(el.duration);
+      return !el.paused && Number.isFinite(d) && el.currentTime < d - 0.15 && window.__yt && window.__yt.estado === 1;
+    };
+    const pausar = HTMLMediaElement.prototype.pause;
+    HTMLMediaElement.prototype.pause = function (...a) {
+      if (cortada(this)) window.__cortes.push({ en: this.currentTime, de: this.duration });
+      return pausar.apply(this, a);
+    };
+    const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+    Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+      ...src,
+      set(valor) {
+        if (cortada(this)) window.__cortes.push({ en: this.currentTime, de: this.duration, cambio: true });
+        return src.set.call(this, valor);
+      },
+    });
     if (sinRaf) { window.requestAnimationFrame = () => 0; window.cancelAnimationFrame = () => {}; }
   }, { sinRaf: Boolean(escenario.sinRaf) });
   const responder = (r, datos) => r.fulfill(datos).catch(() => { /* la página ya abortó: correcto al cancelar */ });
@@ -174,7 +194,8 @@ async function abrir(navegador, escenario = {}) {
     await responder(r, {
       status: 200, contentType: 'audio/wav',
       headers: { 'X-TTS-Engine': respaldo ? 'azure-neural-regional' : 'azure-neural-regional', 'X-TTS-Voice': 'es-CO-SalomeNeural', 'X-TTS-Fallback': respaldo ? '1' : '0' },
-      body: wavSilencio(Math.max(0.6, String(datos.text || '').length / 16)),
+      // `vozCps` bajo = voz que ocupa más que el inglés (el caso que salta líneas).
+      body: wavSilencio(Math.max(0.6, String(datos.text || '').length / (escenario.vozCps ?? 16))),
     });
   });
   await pagina.goto(`${base}/?tab=yt`, { waitUntil: 'domcontentloaded' });
@@ -580,21 +601,59 @@ try {
     await contexto.close();
   }
 
-  console.log('\n── Velocidad a gusto de la persona (2026-09-26) ────────────────');
+  console.log('\n── Doblaje v4: la voz no se corta y el ritmo es automático ─────');
   {
-    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    // Voz a 14 car/s: el español ocupa 1,39 veces lo que el inglés en este video rápido
+    // (18 car/s). Una voz real con traducción 25 % más larga da 1,28×: el caso que «salta líneas».
+    const segmentos = segmentosRepetidos(2);
+    const { normalizarSegmentos } = await import(pathToFileURL(join(app, 'js/youtube/transcriptionService.js')).href);
+    const normalizados = normalizarSegmentos(segmentos);
+    const { contexto, pagina, reg } = await abrir(navegador, { vozCps: 14, youtube: () => respuestaYoutube({ segmentos, fuente: 'usuario', confianza: 1 }) });
+    await pagina.waitForSelector('#ytRitmoAuto', { state: 'attached' });
+    comprobar('el selector de velocidad propio ya no está (la velocidad a mano va en el engranaje de YouTube)', (await pagina.locator('#ytSyncRate, #ytRateCustom').count()) === 0);
+    comprobar('«Ritmo automático» viene encendido', await pagina.isChecked('#ytRitmoAuto'));
     await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
-    const presets = await pagina.locator('#ytSyncRate option').count();
-    comprobar('el selector trae presets finos además de los de YouTube', presets >= 12, `${presets}`);
-    await pagina.selectOption('#ytSyncRate', '0.85');
-    comprobar('elegir 0.85 frena el video a 0.85x', (await pagina.evaluate(() => window.__yt.tasa)) === 0.85);
-    comprobar('y se recuerda entre videos', (await pagina.evaluate(() => localStorage.getItem('jg_yt_rate'))) === '0.85');
-    await pagina.selectOption('#ytSyncRate', 'libre');
-    comprobar('«Otra…» muestra el campo libre', await pagina.isVisible('#ytRateCustomWrap'));
-    await pagina.fill('#ytRateCustom', '0.97');
-    await pagina.dispatchEvent('#ytRateCustom', 'change');
-    comprobar('0.97 libre se aplica al video', (await pagina.evaluate(() => window.__yt.tasa)) === 0.97);
+    await pagina.check('#ytToggleCaption');
+    await reproducirConVoz(pagina);
+    const muestras = [];
+    for (let i = 0; i < 44; i += 1) {
+      await esperar(500);
+      muestras.push(await pagina.evaluate(() => ({ diag: window.jgDoblajeDiagnostico(), subtitulo: document.getElementById('ytCaption').textContent, tasa: window.__yt.tasa })));
+    }
+    const cortes = await pagina.evaluate(() => window.__cortes);
+    const tasaMinima = Math.min(...muestras.map((m) => m.tasa));
+    const final = muestras[muestras.length - 1].diag || {};
+    comprobar('con el español más largo que el inglés, el video se frena solo', tasaMinima < 1 && tasaMinima >= 0.75, `${tasaMinima}×`);
+    comprobar('ninguna frase de voz se corta a mitad', cortes.length === 0, JSON.stringify(cortes.slice(0, 3)));
+    comprobar('ni se salta ninguna', final.frasesSaltadas === 0 && final.frasesHabladas >= 3, `habladas ${final.frasesHabladas} · saltadas ${final.frasesSaltadas}`);
+    comprobar('la voz no se queda atrás del video', final.retrasoP95Ms <= 1500, `p95 ${final.retrasoP95Ms} ms`);
+    // El subtítulo muestra una línea de la frase que suena (o la última de la
+    // anterior, por los 150 ms que tarda en refrescarse).
+    const conVoz = muestras.filter((m) => m.diag?.frase && m.subtitulo);
+    const fuera = conVoz.filter((m) => {
+      const i = normalizados.findIndex((s) => m.subtitulo === `ES ${s.text}`);
+      return i < m.diag.frase.desde - 1 || i > m.diag.frase.hasta;
+    });
+    comprobar('el subtítulo dice lo mismo que la voz en español', conVoz.length >= 10 && fuera.length === 0, `${fuera.length} de ${conVoz.length} fuera de la frase que sonaba`);
+    comprobar('la etiqueta del texto dice que el ritmo es automático', /ritmo automático/.test(await pagina.textContent('[data-sync-rate-label]')));
+    await pagina.uncheck('#ytRitmoAuto');
+    await esperar(600);
+    comprobar('al apagarlo, el video vuelve a su velocidad', (await pagina.evaluate(() => window.__yt.tasa)) === 1);
+    comprobar('y la elección se recuerda', (await pagina.evaluate(() => localStorage.getItem('jg_yt_ritmo_auto'))) === '0');
+    comprobar('la velocidad frenada por el ritmo automático no se guarda como preferencia', (await pagina.evaluate(() => localStorage.getItem('jg_yt_rate'))) !== String(tasaMinima));
     comprobar('sin errores de JavaScript', reg.errores.length === 0, reg.errores.join(' | '));
+    await contexto.close();
+  }
+  {
+    // La persona elige otra velocidad en el engranaje de YouTube: se respeta y se recuerda.
+    const { contexto, pagina } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await reproducirConVoz(pagina);
+    await esperar(800);
+    await pagina.evaluate(() => window.__yt.setPlaybackRate(1.25));
+    await esperar(800);
+    comprobar('la velocidad del engranaje se recuerda para el próximo video', (await pagina.evaluate(() => localStorage.getItem('jg_yt_rate'))) === '1.25');
+    comprobar('y la voz la acompaña', (await pagina.evaluate(() => window.jgDoblajeDiagnostico().tasaBase)) === 1.25);
     await contexto.close();
   }
 
