@@ -5007,7 +5007,8 @@ async def tts_warmup():
     motor = "edge"
     try:
         audio, motor, *_ = await _tts_synthesize(
-            ".", TTS_VOICE_CATALOG["es-CO"]["female"], "+0%", "+0Hz", "+0%"
+            # Una palabra real: con «.» solo, Edge responde «No audio was received».
+            "Hola.", TTS_VOICE_CATALOG["es-CO"]["female"], "+0%", "+0Hz", "+0%"
         )
         listo = bool(audio)
         detalle = ""
