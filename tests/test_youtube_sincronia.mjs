@@ -91,15 +91,17 @@ class JugadorVirtual {
 }
 
 class AudioVirtual {
-  constructor(duraciones, registro, jugador) {
-    Object.assign(this, { duraciones, registro, jugador });
+  constructor(duraciones, registro, jugador, finesVoz = new Map()) {
+    Object.assign(this, { duraciones, registro, jugador, finesVoz });
     this.srcActual = ''; this.currentTimeInterno = 0; this.duration = Number.NaN;
     this.paused = true; this.ended = false; this.playbackRate = 1; this.volume = 1;
     this.oyentes = {}; this.cargando = false;
   }
   get src() { return this.srcActual; }
+  /** Hasta dónde hay voz: cortar después (en el silencio final) no pierde nada. */
+  finVoz() { return this.finesVoz.get(this.srcActual) ?? this.duration; }
   set src(valor) {
-    if (!this.paused && !this.ended && this.currentTimeInterno < this.duration - 0.05 && this.jugador.estado === 1) {
+    if (!this.paused && !this.ended && this.currentTimeInterno < this.finVoz() - 0.05 && this.jugador.estado === 1) {
       this.registro.cortes.push({ url: this.srcActual, en: this.currentTimeInterno, de: this.duration });
     }
     this.srcActual = valor;
@@ -122,9 +124,10 @@ class AudioVirtual {
     return Promise.resolve();
   }
   pause() {
-    if (!this.paused && this.currentTimeInterno < this.duration - 0.05 && this.jugador.estado === 1) {
+    if (!this.paused && this.currentTimeInterno < this.finVoz() - 0.05 && this.jugador.estado === 1) {
       this.registro.cortes.push({ url: this.srcActual, en: this.currentTimeInterno, de: this.duration });
     }
+    if (!this.paused && this.currentTimeInterno >= this.finVoz() - 0.05) this.registro.completas.push(this.srcActual);
     this.paused = true;
   }
   avanzar(ms) {
@@ -161,14 +164,16 @@ function unidadesContinuas(cantidad, { ventana = 4, voz = 5.6, segmentosPorFrase
 function escenario(unidades, { ritmoAutomatico = true, pasoMs = 20, servicio = null } = {}) {
   let ahora = 0;
   const registro = { cortes: [], completas: [], plays: [], saltosDentro: [], tasasVoz: [], estados: [], tasasBase: [] };
-  const duraciones = new Map(unidades.map((u) => [u.url, u.duracionVoz]));
+  // `audioS`: lo que dura el archivo (con silencios); `duracionVoz`: lo que se habla.
+  const duraciones = new Map(unidades.map((u) => [u.url, u.audioS ?? u.duracionVoz]));
+  const finesVoz = new Map(unidades.filter((u) => u.finVozS).map((u) => [u.url, u.finVozS]));
   const jugador = new JugadorVirtual();
   const audios = [];
   let tic = null;
   const motor = new DubbingEngine({
     player: jugador,
     servicio: servicio || { unidades, asegurar: (i) => Promise.resolve(unidades[i]) },
-    crearAudio: () => { const a = new AudioVirtual(duraciones, registro, jugador); audios.push(a); return a; },
+    crearAudio: () => { const a = new AudioVirtual(duraciones, registro, jugador, finesVoz); audios.push(a); return a; },
     reloj: (f) => { tic = f; return { iniciar() {}, detener() {}, activo: true }; },
     ahora: () => ahora,
     ritmoAutomatico,
@@ -353,6 +358,39 @@ function enOrdenSinHuecos(completas) {
   comprobar(pedidas <= 2, `si el video no admite otra velocidad, se deja de pedir (${pedidas} intentos)`);
   comprobar(s.registro.estados.some((e) => /no deja cambiar su velocidad/.test(e)), 'y se explica');
   comprobar(s.registro.cortes.length === 0, 'aun así ninguna frase se corta a mitad');
+}
+
+// ── La voz real trae silencio delante (0,21 s) y detrás (0,85 s) ───────
+// Medido en producción el 2026-09-28 (edge-tts y Azure). Antes el motor lo
+// esperaba y lo contaba como voz por decir: frenaba el video de más.
+{
+  const DELANTE = 0.21;
+  const DETRAS = 0.85;
+  const conSilencio = (medido) => unidadesContinuas(40, { voz: 4.2 }).map((u) => ({
+    ...u,
+    audioS: u.duracionVoz + DELANTE + DETRAS,
+    // Sin medición: el motor solo conoce el archivo entero (como antes).
+    ...(medido
+      ? { vozDesdeS: DELANTE - 0.02, vozHastaS: DELANTE + u.duracionVoz + 0.08, duracionVoz: u.duracionVoz + 0.1, finVozS: DELANTE + u.duracionVoz }
+      : { duracionVoz: u.duracionVoz + DELANTE + DETRAS, finVozS: DELANTE + u.duracionVoz }),
+  }));
+  const correrCaso = async (medido) => {
+    const s = escenario(conSilencio(medido));
+    s.motor.activarYReproducir();
+    await s.correr(170);
+    return { s, m: s.motor.metricas(), minima: Math.min(1, ...s.jugador.tasasVistas) };
+  };
+  const antes = await correrCaso(false);
+  const ahora = await correrCaso(true);
+  comprobar(ahora.s.registro.cortes.length === 0, `con el silencio recortado ninguna frase pierde voz · cortes=${ahora.s.registro.cortes.length}`);
+  comprobar(ahora.s.registro.plays.every((p) => Math.abs(p.desde - (DELANTE - 0.02)) < 0.03), 'cada frase arranca donde empieza la voz (se salta el silencio de delante)');
+  comprobar(enOrdenSinHuecos(ahora.s.registro.completas.filter((u, i, l) => l.indexOf(u) === i)) && ahora.m.frasesSaltadas === 0, 'y todas suenan, en orden, sin saltarse ninguna');
+  comprobar(ahora.minima > antes.minima + 0.04,
+    `el video se frena menos: mínimo ${ahora.minima}× (antes ${antes.minima}×)`);
+  comprobar(ahora.m.retrasoP95Ms <= 500 && ahora.m.dentroObjetivo >= 0.95,
+    `y la voz sigue pegada al video: p95 ${ahora.m.retrasoP95Ms} ms, ${Math.round(ahora.m.dentroObjetivo * 100)} % de muestras ≤ 0,5 s`);
+  comprobar(ahora.s.jugador.t > antes.s.jugador.t + 5,
+    `en el mismo tiempo real se ve más video: ${ahora.s.jugador.t.toFixed(1)} s (antes ${antes.s.jugador.t.toFixed(1)} s)`);
 }
 
 comprobar(RETRASO_MAXIMO_S === 5, 'la voz solo se rinde con más de 5 s de atraso');

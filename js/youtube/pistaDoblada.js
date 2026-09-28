@@ -32,13 +32,15 @@ export function tasaNecesaria(duracionVoz, espacioS, tasaMax = TASA_MAX) {
  */
 export function planearPista(unidades, { duracionVideoS = Infinity, acelerar = true, tasaMax = TASA_MAX } = {}) {
   const lista = Array.isArray(unidades) ? unidades : [];
+  // Duración desconocida (0 o vacía): la última frase no tiene pared, no «no cabe».
+  const finVideoS = Number(duracionVideoS) > 0 ? Number(duracionVideoS) : Infinity;
   const plan = [];
   let finAnterior = 0;
   let corridas = 0;
   let maxRetrasoS = 0;
   lista.forEach((unidad, k) => {
     const siguiente = lista[k + 1];
-    const limite = siguiente ? Number(siguiente.startTime) : duracionVideoS;
+    const limite = siguiente ? Number(siguiente.startTime) : finVideoS;
     const inicio = Math.max(Number(unidad.startTime) || 0, k ? finAnterior + RESPIRO_S : 0);
     const tasa = acelerar ? tasaNecesaria(unidad.duracionVoz, limite - inicio, tasaMax) : (Number(unidad.tasa) || 1);
     const duracion = acelerar ? (Number(unidad.duracionVoz) || 0) / tasa : (Number(unidad.duracionVoz) || 0);
@@ -48,7 +50,7 @@ export function planearPista(unidades, { duracionVideoS = Infinity, acelerar = t
     plan.push({ indice: unidad.indice, inicioS: redondear(inicio), tasa, duracionS: redondear(duracion), finS: redondear(fin) });
     finAnterior = fin;
   });
-  const cierre = Number.isFinite(duracionVideoS) ? Math.max(finAnterior, duracionVideoS) : finAnterior;
+  const cierre = Number.isFinite(finVideoS) ? Math.max(finAnterior, finVideoS) : finAnterior;
   return { plan, corridas, maxRetrasoS: redondear(maxRetrasoS), duracionS: redondear(cierre) };
 }
 

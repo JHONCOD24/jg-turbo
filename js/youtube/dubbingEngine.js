@@ -226,14 +226,29 @@ export class DubbingEngine {
     return Number(this.player.getPlaybackRate?.()) || 1;
   }
 
+  /**
+   * Parte del audio en la que de verdad se habla: sin el silencio que la voz
+   * trae delante (~0,2 s) y detrás (~0,85 s), medido en `hablaVoz.js`. Sin
+   * medición, el audio entero (como antes). null = aún sin duración.
+   */
+  #tramo(el = this.audio, unidad = this.servicio.unidades[this.hablando]) {
+    const duracion = Number(el.duration);
+    if (!Number.isFinite(duracion) || duracion <= 0) return null;
+    const desde = Math.min(Math.max(0, Number(unidad?.vozDesdeS) || 0), duracion);
+    const medido = Number(unidad?.vozHastaS);
+    const hasta = medido > desde ? Math.min(duracion, medido) : duracion;
+    return { desde, hasta, duracion };
+  }
+
   #avance() {
-    const duracion = Number(this.audio.duration);
-    return Number.isFinite(duracion) && duracion > 0 ? Math.min(1, this.audio.currentTime / duracion) : 0;
+    const tramo = this.#tramo();
+    if (!tramo) return 0;
+    return Math.max(0, Math.min(1, (this.audio.currentTime - tramo.desde) / Math.max(0.01, tramo.hasta - tramo.desde)));
   }
 
   #restanteAudio() {
-    const duracion = Number(this.audio.duration);
-    if (Number.isFinite(duracion) && duracion > 0) return Math.max(0, duracion - this.audio.currentTime);
+    const tramo = this.#tramo();
+    if (tramo) return Math.max(0, tramo.hasta - this.audio.currentTime);
     return duracionVozEstimada(this.servicio.unidades[this.hablando]);
   }
 
@@ -302,19 +317,21 @@ export class DubbingEngine {
   /** La frase que suena: termina entera, a la velocidad que le toque. */
   #seguirFrase(t, tasa) {
     const el = this.audio;
-    const duracion = Number(el.duration);
-    const conDuracion = Number.isFinite(duracion) && duracion > 0;
-    // Terminó de verdad: `ended`, o quedó detenida en su último instante. Nunca
-    // «casi al final»: dar la frase por dicha antes cortaba su última sílaba.
-    if (el.ended || (conDuracion && el.paused && el.currentTime >= duracion - 0.05)) {
+    const tramo = this.#tramo(el);
+    // Terminó de verdad: `ended`, quedó detenida en su último instante o llegó
+    // al final MEDIDO de la voz (lo que sigue es silencio: hablaVoz.js). Nunca
+    // «casi al final» a ojo: dar la frase por dicha antes cortaba su última sílaba.
+    const vozDicha = tramo && tramo.hasta < tramo.duracion - 0.01 && el.currentTime >= tramo.hasta;
+    if (el.ended || vozDicha || (tramo && el.paused && el.currentTime >= tramo.duracion - 0.05)) {
+      if (vozDicha && !el.paused) { try { el.pause(); } catch (_) {} }
       this.ultimaDicha = this.hablando;
       this.hablando = -1;
       return;
     }
-    if (conDuracion) {
+    if (tramo) {
       const { suave, duro } = limitesDeUnidad(this.servicio.unidades, this.hablando);
       const velocidad = velocidadVoz({
-        restanteS: duracion - el.currentTime, tiempoVideo: t, limiteSuave: suave, limiteDuro: duro,
+        restanteS: tramo.hasta - el.currentTime, tiempoVideo: t, limiteSuave: suave, limiteDuro: duro,
         tasaVideo: tasa, tasaBase: this.tasaBase,
       });
       if (Math.abs((Number(el.playbackRate) || 1) - velocidad) >= 0.03) el.playbackRate = velocidad;
@@ -373,9 +390,11 @@ export class DubbingEngine {
   /** Sitúa la frase en su punto en cuanto se conoce su duración. */
   #aplicarAvancePendiente() {
     if (this.hablando < 0 || this.avancePendiente === null) return;
-    const duracion = Number(this.audio.duration);
-    if (!Number.isFinite(duracion) || duracion <= 0) return;
-    try { this.audio.currentTime = Math.min(this.avancePendiente * duracion, Math.max(0, duracion - 0.05)); } catch (_) {}
+    const tramo = this.#tramo();
+    if (!tramo) return;
+    // Avance 0 = donde empieza la voz: el silencio de delante no se oye.
+    const punto = tramo.desde + this.avancePendiente * (tramo.hasta - tramo.desde);
+    try { this.audio.currentTime = Math.min(punto, Math.max(0, tramo.hasta - 0.05)); } catch (_) {}
     this.avancePendiente = null;
   }
 

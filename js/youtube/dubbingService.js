@@ -1,3 +1,5 @@
+import { medirHabla as medirHablaAudio } from './hablaVoz.js';
+
 // Unidades de voz: trozos cortos y con sentido, no bloques largos.
 //
 // Por qué cambió: antes se fusionaban en bloques de 26 a 34 segundos y dentro
@@ -155,7 +157,7 @@ export async function medirDuracionAudio(url, {
 }
 
 export class DubbingService {
-  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null, medirDuracion = medirDuracionAudio, buscarGuardada = null }) {
+  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null, medirDuracion = medirDuracionAudio, buscarGuardada = null, medirHabla = medirHablaAudio }) {
     if (typeof generarAudio !== 'function') {
       throw new Error('No está disponible el generador de voz en español.');
     }
@@ -165,6 +167,7 @@ export class DubbingService {
     this.onRespaldo = onRespaldo;
     this.medirDuracion = medirDuracion;
     this.buscarGuardada = buscarGuardada;
+    this.medirHabla = medirHabla;
     this.unidades = [];
     this.completadas = 0;
     this.destruido = false;
@@ -228,6 +231,8 @@ export class DubbingService {
       unidad.url = '';
       unidad.blob = null;
       unidad.duracionVoz = 0;   // otra voz, otro ritmo: se vuelve a medir
+      unidad.vozDesdeS = 0;
+      unidad.vozHastaS = 0;
       unidad.estado = 'pendiente';
     }
   }
@@ -269,6 +274,14 @@ export class DubbingService {
         // La duración real deja al plan de ritmo frenar el video ANTES de que haga falta.
         const duracion = await Promise.resolve(this.medirDuracion?.(unidad.url, { blob, motor: resultado?.engineHdr })).catch(() => null);
         if (Number(duracion) > 0) unidad.duracionVoz = Number(duracion);
+        // Sin el silencio que la voz trae delante y detrás (~1 s por frase,
+        // hablaVoz.js): el motor salta el de delante, no espera el de detrás y
+        // el plan de ritmo cuenta solo lo que de verdad se dice.
+        const habla = await Promise.resolve(this.medirHabla?.(blob)).catch(() => null);
+        const conHabla = habla && habla.hastaS > habla.desdeS;
+        unidad.vozDesdeS = conHabla ? habla.desdeS : 0;
+        unidad.vozHastaS = conHabla ? habla.hastaS : 0;
+        if (conHabla) unidad.duracionVoz = habla.hastaS - habla.desdeS;
         if (this.destruido) throw new Error('La preparación de voz fue cancelada.');
         unidad.estado = 'listo';
         unidad.error = '';

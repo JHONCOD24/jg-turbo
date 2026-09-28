@@ -14,6 +14,7 @@
  */
 import { planearPista, ventanasDeMezcla, frasesEnVentana } from './pistaDoblada.js';
 import { cargarMedios, asegurarMp3, asegurarAac, RUTA_MEDIOS } from './medios.js';
+import { limitesDeBuffer } from './hablaVoz.js';
 
 export const HZ_MP3 = 24000;          // la voz neural llega a 24 kHz: más no suma calidad
 export const HZ_MP4 = 48000;
@@ -54,24 +55,30 @@ export async function prepararVoces(frases, {
 }) {
   const conTexto = (frases || []).filter((f) => String(f.texto || '').trim());
   const audios = new Map();
-  const pedir = async (frase, tasa) => decodificar(await sintetizar(frase.texto, { tasa, signal, frase }));
+  // Cada voz se guarda con su tramo hablado: el silencio que trae delante y
+  // detrás (~1 s por frase, hablaVoz.js) no cuenta para el espacio ni suena.
+  const pedir = async (frase, tasa) => {
+    const buffer = await decodificar(await sintetizar(frase.texto, { tasa, signal, frase }));
+    const { desdeS, hastaS } = limitesDeBuffer(buffer);
+    return { buffer, tasa, desdeS, hastaS };
+  };
   let hechas = 0;
   await enParalelo(conTexto, PARALELO_VOZ, async (frase) => {
-    audios.set(frase.indice, { buffer: await pedir(frase, 1), tasa: 1 });
+    audios.set(frase.indice, await pedir(frase, 1));
     hechas += 1;
     onProgreso({ fase: 'voz', hechas, total: conTexto.length });
   }, signal);
 
   const medir = (acelerar) => planearPista(conTexto.map((f) => ({
     indice: f.indice, startTime: f.startTime,
-    duracionVoz: audios.get(f.indice).buffer.duration, tasa: audios.get(f.indice).tasa,
+    duracionVoz: audios.get(f.indice).hastaS - audios.get(f.indice).desdeS, tasa: audios.get(f.indice).tasa,
   })), { duracionVideoS, acelerar });
 
   const aAcelerar = medir(true).plan.filter((p) => p.tasa > 1);
   let ajustadas = 0;
   await enParalelo(aAcelerar, PARALELO_VOZ, async (p) => {
     const frase = conTexto.find((f) => f.indice === p.indice);
-    audios.set(p.indice, { buffer: await pedir(frase, p.tasa), tasa: p.tasa });
+    audios.set(p.indice, await pedir(frase, p.tasa));
     ajustadas += 1;
     onProgreso({ fase: 'ajuste', hechas: ajustadas, total: aAcelerar.length });
   }, signal);
@@ -84,12 +91,16 @@ export async function mezclarVentana({ desdeS, hastaS }, {
   plan, audios, hz, canales, original = null, volumenOriginal = VOLUMEN_ORIGINAL,
 }) {
   const ctx = new OfflineAudioContext(canales, Math.max(1, Math.round((hastaS - desdeS) * hz)), hz);
-  const colocar = (buffer, instanteS, destino) => {
+  // `recorteDesde`/`recorteHasta`: la parte del audio que suena (la voz sin su silencio).
+  const colocar = (buffer, instanteS, destino, recorteDesde = 0, recorteHasta = buffer.duration) => {
+    const t = instanteS - desdeS;
+    const largo = recorteHasta - recorteDesde;
+    if (largo <= 0 || t + largo <= 0) return;
     const fuente = ctx.createBufferSource();
     fuente.buffer = buffer;
     fuente.connect(destino);
-    const t = instanteS - desdeS;
-    if (t >= 0) fuente.start(t); else fuente.start(0, -t);
+    if (t >= 0) fuente.start(t, recorteDesde, largo);
+    else fuente.start(0, recorteDesde - t, largo + t);
   };
   if (original) {
     const ganancia = ctx.createGain();
@@ -97,7 +108,10 @@ export async function mezclarVentana({ desdeS, hastaS }, {
     ganancia.connect(ctx.destination);
     for await (const { buffer, timestamp } of original.buffers(desdeS, hastaS)) colocar(buffer, timestamp, ganancia);
   }
-  for (const frase of frasesEnVentana(plan, desdeS, hastaS)) colocar(audios.get(frase.indice).buffer, frase.inicioS, ctx.destination);
+  for (const frase of frasesEnVentana(plan, desdeS, hastaS)) {
+    const voz = audios.get(frase.indice);
+    colocar(voz.buffer, frase.inicioS, ctx.destination, voz.desdeS ?? 0, voz.hastaS ?? voz.buffer.duration);
+  }
   return ctx.startRendering();
 }
 

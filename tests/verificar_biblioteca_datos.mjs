@@ -175,6 +175,37 @@ async function pasada(etiqueta, opciones) {
       const original = await ex.descargarOriginalX({ mp4Url: '/tests/fixtures/biblioteca/video_x_20s.mp4', destino: d3 });
       salida.original = { bytes: original.bytes, iguales: d3.buffer.byteLength === original.bytes };
 
+      // Voz REAL de producción (edge-tts, 2026-09-28): 0,21 s de silencio delante y 0,85 s detrás.
+      const hv = await import('/js/youtube/hablaVoz.js');
+      const real = await (await fetch('/tests/fixtures/biblioteca/voz_real_es.mp3')).blob();
+      salida.habla = await hv.medirHabla(real);
+      // El motor en vivo recorta sobre el <audio>: su reloj debe coincidir con la decodificación.
+      salida.duracionElemento = await new Promise((listo) => {
+        const el = new Audio();
+        el.addEventListener('loadedmetadata', () => listo(el.duration), { once: true });
+        el.addEventListener('error', () => listo(-1), { once: true });
+        el.src = URL.createObjectURL(real);
+      });
+      const pedidasReal = [];
+      const d4 = memoria();
+      const conReal = await ex.exportarMp3({
+        frases: [{ indice: 0, startTime: 1, texto: 'real' }, { indice: 1, startTime: 6, texto: '' }], duracionVideoS: 8,
+        sintetizar: async (t, { tasa }) => { pedidasReal.push(tasa); return real; }, destino: d4,
+      });
+      const salidaReal = await ex.decodificarAudio(new Blob([d4.buffer]));
+      // Primer instante audible (−40 dB) en el archivo y en la voz original.
+      const inicioAudible = (buffer) => {
+        const canal = buffer.getChannelData(0);
+        for (let i = 0; i < canal.length; i += 1) if (Math.abs(canal[i]) > 0.01) return i / buffer.sampleRate;
+        return -1;
+      };
+      const enLaVoz = inicioAudible(await ex.decodificarAudio(real));
+      const r3 = (x) => Math.round(x * 1000) / 1000;
+      salida.real = {
+        aceleradas: conReal.aceleradas, pedidas: pedidasReal.join(),
+        arrancaS: r3(inicioAudible(salidaReal)), sinRecorteS: r3(1 + enLaVoz), esperadoS: r3(1 + enLaVoz - salida.habla.desdeS),
+      };
+
       // Cancelar a mitad corta con AbortError y no deja el archivo a medias
       const control = new AbortController();
       const lenta = async (texto, o) => { await new Promise((r) => setTimeout(r, 200)); return sintetizar(texto, o); };
@@ -191,6 +222,12 @@ async function pasada(etiqueta, opciones) {
     comprobar(`[${etiqueta}] MP4: el progreso pasa por voz y archivo`, a.mp4.fases.includes('voz') && a.mp4.fases.includes('archivo'), a.mp4.fases);
     comprobar(`[${etiqueta}] MP4 original de X: llega entero`, a.original.iguales && a.original.bytes === 172412, JSON.stringify(a.original));
     comprobar(`[${etiqueta}] cancelar a mitad corta con AbortError`, a.cancelar === 'AbortError', a.cancelar);
+    comprobar(`[${etiqueta}] voz real: se mide dónde se habla (sin el silencio de los lados)`, a.habla && a.habla.desdeS > 0.15 && a.habla.desdeS < 0.25 && a.habla.hastaS > 4.6 && a.habla.hastaS < 4.95 && a.habla.duracionS > 5.4, JSON.stringify(a.habla));
+    comprobar(`[${etiqueta}] voz real: el <audio> y la decodificación miden igual (${a.duracionElemento} s)`, Math.abs(a.duracionElemento - a.habla.duracionS) < 0.06, `${a.duracionElemento} vs ${a.habla?.duracionS}`);
+    comprobar(`[${etiqueta}] voz real: 4,5 s de habla caben en 5 s sin acelerar (con el silencio pedía 1,15×)`, a.real.aceleradas === 0 && a.real.pedidas === '1', JSON.stringify(a.real));
+    // Margen: el retardo del códec MP3 del archivo (~0,05 s). Sin recorte arrancaría en `sinRecorteS`.
+    comprobar(`[${etiqueta}] voz real: suena en su segundo, sin el silencio de delante (${a.real.arrancaS} s; sin recorte ${a.real.sinRecorteS} s)`,
+      a.real.arrancaS >= a.real.esperadoS - 0.01 && a.real.arrancaS <= a.real.esperadoS + 0.07 && a.real.arrancaS < a.real.sinRecorteS - 0.12, JSON.stringify(a.real));
     comprobar(`[${etiqueta}] sin errores de JavaScript`, errores.length === 0, errores.join(' | '));
     console.log(`   medidas: MP3 ${a.mp3.ms} ms · MP4 ${a.mp4.ms} ms (${a.mp4.kb} KB) · audio original mezclado: ${a.mp4.conOriginal ? 'sí' : 'no (este navegador no decodifica AAC)'}`);
     await contexto.close();
