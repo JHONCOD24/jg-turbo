@@ -98,6 +98,128 @@ const ax = await modulo('audioX.js');
   comprobar(ax.elegirMp4([]) === null, 'sin variantes → null');
 }
 
+// ── T6: servicio de X con dobles (sin red) ──────────────────────────────
+const sx = await modulo('servicioX.js');
+{
+  // fetchTwimg SIEMPRE manda sin Referer (H3)
+  const fetchReal = globalThis.fetch;
+  let opcionesVistas = null;
+  globalThis.fetch = async (_url, opciones) => { opcionesVistas = opciones; return new Response('ok'); };
+  await sx.fetchTwimg('https://video.twimg.com/a.m4s');
+  globalThis.fetch = fetchReal;
+  comprobar(opcionesVistas?.referrerPolicy === 'no-referrer', 'fetchTwimg pide sin Referer (X responde 403 con Referer ajeno)');
+
+  comprobar(sx.tituloX({ autor: 'BrooklynNets', texto: 'WATCH: Sean Marks' }) === '@BrooklynNets · WATCH: Sean Marks', 'título: @autor · texto');
+  comprobar(sx.tituloX({ autor: 'a', texto: '' }) === 'Video de @a', 'título sin texto');
+
+  /** Un video sintético: N trozos de 3 s, audio de 64 kbps (24 000 bytes por trozo). */
+  function escenario({ trozos = 250, idiomas = [], respuestas = [] } = {}) {
+    const maestra = '#EXTM3U\n#EXT-X-MEDIA:NAME="Audio",TYPE=AUDIO,GROUP-ID="audio-64000",URI="/v/pl/mp4a/64000/a.m3u8"\n';
+    const lista = ['#EXTM3U', '#EXT-X-MAP:URI="/v/aud/init.mp4"',
+      ...Array.from({ length: trozos }, (_, i) => `#EXTINF:3.000,\n/v/aud/${i}.m4s`), '#EXT-X-ENDLIST'].join('\n');
+    const registro = { twimg: [], subidas: [] };
+    const pedirTwimg = async (url, { signal } = {}) => {
+      if (signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
+      registro.twimg.push(url);
+      if (url.endsWith('master.m3u8')) return new Response(maestra);
+      if (url.endsWith('a.m3u8')) return new Response(lista);
+      return new Response(new Uint8Array(url.endsWith('init.mp4') ? 800 : 24000));
+    };
+    const fetchApi = async (ruta, opciones = {}) => {
+      if (opciones.signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
+      if (ruta.startsWith('/x-video')) return Response.json({ id: '1', autor: 'a', texto: 't', duracion_s: trozos * 3, hls: 'https://video.twimg.com/v/pl/master.m3u8', mp4: [] });
+      const n = registro.subidas.length;
+      const archivo = opciones.body.get('file');
+      registro.subidas.push({ bytes: archivo.size, idioma: opciones.body.get('language'), nombre: archivo.name });
+      const forzada = respuestas[n];
+      if (forzada) return forzada();
+      return Response.json({ language: idiomas[n] ?? 'en', segments: [{ start: 10, end: 13, text: `Frase de la parte ${n + 1}.` }] });
+    };
+    return { registro, fetchApi, pedirTwimg };
+  }
+  const info = { id: '1', autor: 'a', texto: 't', duracion_s: 750, hls: 'https://video.twimg.com/v/pl/master.m3u8', mp4: [] };
+
+  {
+    const { registro, fetchApi, pedirTwimg } = escenario();
+    const progreso = [];
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg, esperar: async () => {} });
+    const r = await servicio.obtenerParaDoblaje(info, { onProgress: (m, f) => progreso.push(f) });
+    comprobar(registro.subidas.length === 3, `750 s → 3 partes subidas (${registro.subidas.length})`);
+    comprobar(registro.subidas.every((s) => s.bytes <= 3.2 * 1024 * 1024), 'ninguna parte pasa de 3,2 MB');
+    comprobar(registro.subidas[0].idioma === 'auto' && registro.subidas.slice(1).every((s) => s.idioma === 'en'), 'la 1.ª parte detecta el idioma y las demás lo reciben fijo');
+    comprobar(registro.subidas.every((s) => s.nombre.endsWith('.m4a')), 'cada parte viaja como .m4a');
+    comprobar(r.segmentos.length === 3 && r.segmentos[1].startTime > 300, 'los tiempos de cada parte se desplazan');
+    comprobar(r.idioma === 'en' && r.fuente === 'audio' && r.confianza >= 0.9 && !r.conflicto, 'idioma oído por Whisper = fuente firme');
+    comprobar(progreso.at(-1) === 1, 'el progreso termina en 1');
+  }
+  {
+    const { registro, fetchApi, pedirTwimg } = escenario();
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg, esperar: async () => {} });
+    const r = await servicio.obtenerParaDoblaje(info, { idiomaOrigen: 'fr' });
+    comprobar(registro.subidas.every((s) => s.idioma === 'fr') && r.fuente === 'usuario', 'si la persona elige el idioma, todas las partes lo usan');
+  }
+  {
+    const { registro, fetchApi, pedirTwimg } = escenario({ idiomas: ['es'] });
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg, esperar: async () => {} });
+    const r = await servicio.obtenerParaDoblaje(info);
+    comprobar(r.idioma === 'es' && registro.subidas.length === 1, 'video en español: se detiene tras la 1.ª parte (no gasta cuota)');
+  }
+  {
+    const limite = () => Response.json({ detail: 'Límite de uso de Groq alcanzado. Espera un minuto e inténtalo de nuevo.' }, { status: 500 });
+    const { registro, fetchApi, pedirTwimg } = escenario({ trozos: 20, respuestas: [limite] });
+    const esperas = [];
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg, esperar: async (ms) => { esperas.push(ms); } });
+    const r = await servicio.obtenerParaDoblaje({ ...info, duracion_s: 60 });
+    comprobar(esperas[0] === 20000 && registro.subidas.length === 2 && r.segmentos.length === 1, 'ante «Límite de uso» espera 20 s y reintenta');
+  }
+  {
+    const limite = () => Response.json({ detail: 'Límite de uso de Groq alcanzado.' }, { status: 500 });
+    const { fetchApi, pedirTwimg } = escenario({ trozos: 20, respuestas: [limite, limite, limite] });
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg, esperar: async () => {} });
+    let error = null;
+    try { await servicio.obtenerParaDoblaje({ ...info, duracion_s: 60 }); } catch (e) { error = e; }
+    comprobar(error?.codigo === 'x_transcripcion' && /Límite de uso/.test(error.message), 'tras 2 reintentos, el motivo real llega a la persona');
+  }
+  {
+    const { registro, fetchApi, pedirTwimg } = escenario();
+    const control = new AbortController();
+    const fetchQueCancela = async (ruta, opciones) => {
+      const r = await fetchApi(ruta, opciones);
+      if (registro.subidas.length === 1) control.abort();
+      return r;
+    };
+    const servicio = new sx.ServicioX({ fetchApi: fetchQueCancela, pedirTwimg, esperar: async () => {} });
+    let error = null;
+    try { await servicio.obtenerParaDoblaje(info, { signal: control.signal }); } catch (e) { error = e; }
+    comprobar(error?.name === 'AbortError', 'cancelar corta con AbortError');
+    comprobar(registro.subidas.length === 1, `tras cancelar no se sube nada más (${registro.subidas.length})`);
+  }
+  {
+    const { registro, fetchApi, pedirTwimg } = escenario();
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg });
+    let error = null;
+    try { await servicio.obtenerParaDoblaje({ ...info, duracion_s: 2 * 3600 }); } catch (e) { error = e; }
+    comprobar(error?.codigo === 'x_largo' && registro.twimg.length === 0, 'un video de 2 h se rechaza sin descargar nada');
+  }
+  {
+    const servicio = new sx.ServicioX({
+      fetchApi: async () => { throw new Error('no debía llamar'); },
+      pedirTwimg: async () => new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\n/v.m3u8'),
+    });
+    let error = null;
+    try { await servicio.obtenerParaDoblaje(info); } catch (e) { error = e; }
+    comprobar(error?.codigo === 'x_sin_audio', 'sin pista de audio → mensaje claro');
+  }
+  {
+    const servicio = new sx.ServicioX({
+      fetchApi: async () => Response.json({ detail: 'Ese post de X es un GIF: no tiene sonido que doblar.', code: 'gif' }, { status: 422 }),
+    });
+    let error = null;
+    try { await servicio.info('https://x.com/a/status/123456'); } catch (e) { error = e; }
+    comprobar(error?.codigo === 'x_gif' && /GIF/.test(error.message), 'info(): el motivo del servidor llega tal cual');
+  }
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);

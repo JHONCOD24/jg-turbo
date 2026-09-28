@@ -1245,7 +1245,7 @@ export function elegirMp4(variantes, { ahorroDatos = false } = {}) {
       `decidirDoblaje` no distingan la plataforma.
 - Códigos de `ErrorYoutube` nuevos: `x_largo`, `x_sin_audio`, `x_red`, `x_transcripcion`.
 
-- [ ] **Paso 1: escribir la prueba** (sección T6)
+- [x] **Paso 1: escribir la prueba** (sección T6)
 
 ```js
 // ── T6: servicio de X con dobles (sin red) ──────────────────────────────
@@ -1371,9 +1371,9 @@ const sx = await modulo('servicioX.js');
 }
 ```
 
-- [ ] **Paso 2: ejecutar y ver que falla** — `node tests/test_x_doblaje.mjs` → `ERR_MODULE_NOT_FOUND … servicioX.js`.
+- [x] **Paso 2: ejecutar y ver que falla** — `node tests/test_x_doblaje.mjs` → `ERR_MODULE_NOT_FOUND … servicioX.js`.
 
-- [ ] **Paso 3: implementar** `js/youtube/servicioX.js`:
+- [x] **Paso 3: implementar** `js/youtube/servicioX.js`:
 
 ```js
 /**
@@ -1552,11 +1552,14 @@ export class ServicioX {
 }
 ```
 
-- [ ] **Paso 4: ejecutar** — `node tests/test_x_doblaje.mjs` → `64 comprobaciones OK · 0 fallos`
+- [x] **Paso 4: ejecutar** — `node tests/test_x_doblaje.mjs` → `64 comprobaciones OK · 0 fallos`
   (45 + 19 de T6).
-- [ ] **Paso 5: commit** — `git add js/youtube/servicioX.js tests/test_x_doblaje.mjs && git commit -m "feat(x): transcribir el audio de X por partes con Whisper, sin Referer y cancelable"`
+- [x] **Paso 5: commit** — `git add js/youtube/servicioX.js tests/test_x_doblaje.mjs && git commit -m "feat(x): transcribir el audio de X por partes con Whisper, sin Referer y cancelable"`
 
 ### Tarea 6b (solo si la Tarea 3 lo exige): respaldo directo a FxTwitter desde el navegador
+
+> **OMITIDA** por la decisión de la Tarea 3: los tres posts respondieron 200 por
+> sindicación desde las IP de Vercel (ver `CAMBIOS_X.md` §Medición desde Vercel).
 
 **Cuándo:** si en la Tarea 3 la sindicación no respondió desde Vercel (respaldo) o ninguna fuente
 respondió (camino principal). Si la Tarea 3 dio `"fuente": "sindicacion"`, **sáltala** y anótalo.

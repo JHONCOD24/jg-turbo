@@ -56,3 +56,9 @@ retomar la sesión. Ejecutada: 19 comprobaciones OK, 0 fallos.
 
 Prueba previa: ERR_MODULE_NOT_FOUND de audioX.js. Tras copiar el módulo:
 45 comprobaciones OK, 0 fallos (19 + 26).
+
+## Tarea 6
+
+Prueba previa: ERR_MODULE_NOT_FOUND de servicioX.js. Tras copiar el módulo:
+64 comprobaciones OK, 0 fallos (45 + 19). La Tarea 6b se omite según la
+decisión tomada en la Tarea 3 (sindicación responde desde Vercel).
