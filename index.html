@@ -1430,6 +1430,7 @@
   /* El video manda: ancho completo del panel. La transcripción ya no le quita
      la mitad de la pantalla; vive en un desplegable debajo. */
   .yt-player-shell{position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#050608}
+  .yt-area .yt-url-nota{margin:6px 0 0;font-size:13px;line-height:1.45;color:var(--muted-2)}
   #ytPlayer{position:absolute;inset:0;width:100%;height:100%}
   .yt-caption{
     position:absolute;left:50%;transform:translateX(-50%);bottom:9%;width:min(92%,760px);
@@ -6486,20 +6487,21 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     <div class="card">
       <div class="yt-area">
         <div class="panel-lead">
-          <h2>Mira videos de YouTube en español</h2>
-          <p>Pega el enlace y pulsa <b>Doblar al español</b>: la voz empieza en segundos y el resto se prepara mientras ves. Funciona con videos en inglés, portugués, francés, alemán o italiano.</p>
+          <h2>Mira videos de YouTube y X en español</h2>
+          <p>Pega el enlace de YouTube o de X (Twitter) y pulsa <b>Doblar al español</b>: la voz empieza en segundos y el resto se prepara mientras ves. Funciona con videos en inglés, portugués, francés, alemán o italiano.</p>
         </div>
 
         <div id="ytServerWarn" class="notice warn" style="margin:0 0 12px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <div>Conecta el servidor (indicador de arriba) para usar YouTube.</div>
+          <div>Conecta el servidor (indicador de arriba) para usar YouTube y X.</div>
         </div>
 
         <div class="ytrow">
           <label class="task-field" for="ytUrl">
             <span class="task-field-label">Enlace del video</span>
-            <input type="url" id="ytUrl" name="enlace_youtube" inputmode="url" autocomplete="off" placeholder="https://youtube.com/watch?v=…">
+            <input type="url" id="ytUrl" name="enlace_video" inputmode="url" autocomplete="off" placeholder="https://youtube.com/watch?v=… o https://x.com/…/status/…">
           </label>
+          <p class="yt-url-nota" id="ytUrlNota" hidden>Enlace de X: pulsa <b>Doblar al español</b>. El texto completo traducido sale después con el botón <b>Texto completo</b>.</p>
         </div>
 
         <div class="yt-opts" aria-label="Idioma del video">

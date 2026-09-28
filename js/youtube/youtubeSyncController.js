@@ -6,7 +6,11 @@
  * ventanas alrededor de lo que se ve → voz encendida por defecto. Una sola sesión viva;
  * «Cancelar» y «Cerrar» la detienen entera.
  */
-import { TranscriptionService, extraerVideoId } from './transcriptionService.js';
+import { TranscriptionService, ErrorYoutube } from './transcriptionService.js';
+import { detectarFuente } from './fuenteVideo.js';
+import { ServicioX, tituloX } from './servicioX.js';
+import { elegirMp4 } from './audioX.js';
+import { XVideoPlayer } from './XVideoPlayer.js';
 import { TranslationService } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
 import { SyncEngine, normalizarTasa } from './syncEngine.js';
@@ -74,6 +78,7 @@ export function inicializarYoutubeSincronizado({
   };
   const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
   const transcripciones = new TranscriptionService({ fetchApi });
+  const servicioX = new ServicioX({ fetchApi });
   // Ritmo de Mistral gratis (≈1 petición/s) para TODA llamada del traductor:
   // lotes, mitades de un lote partido y el texto completo.
   const traductor = new TranslationService({ traducirTexto, intervaloMinMs: 1100 });
@@ -317,7 +322,7 @@ export function inicializarYoutubeSincronizado({
   // ── Botón principal: ocupado mientras trabaja (auditoría H7) ────────────
   const estaOcupado = () => ui.boton.dataset.ocupado === '1';
   function actualizarBoton() {
-    ui.boton.disabled = estaOcupado() || !extraerVideoId(ui.url.value) || !estaServidorOnline();
+    ui.boton.disabled = estaOcupado() || !detectarFuente(ui.url.value) || !estaServidorOnline();
   }
   function marcarOcupado(activo) {
     if (activo) ui.boton.dataset.ocupado = '1';
@@ -328,6 +333,15 @@ export function inicializarYoutubeSincronizado({
   ui.url.addEventListener('input', actualizarBoton);
   window.addEventListener('jg:server-status', actualizarBoton);
   actualizarBoton();
+
+  // Un enlace de X no sirve para «Solo el texto» (ese camino es de YouTube): se explica, no se esconde.
+  const notaUrl = $('ytUrlNota');
+  const pintarNotaUrl = () => {
+    if (!notaUrl) return;
+    notaUrl.hidden = detectarFuente(ui.url.value)?.plataforma !== 'x';
+  };
+  ui.url.addEventListener('input', pintarNotaUrl);
+  pintarNotaUrl();
 
   // ── Vista ───────────────────────────────────────────────────────────────
   const mostrarIdioma = (texto, tipo) => { ui.insignia.textContent = texto; ui.insignia.dataset.estado = tipo; };
@@ -503,6 +517,17 @@ export function inicializarYoutubeSincronizado({
     await Promise.race([listo, tardo]);
     if (signal.aborted) { player.destruir(); throw cancelado(); }
     return player;   // si tardó, se sigue: puede terminar de cargar después
+  }
+
+  async function crearReproductorX(info, signal) {
+    recrearDestino();
+    const mp4 = elegirMp4(info.mp4, { ahorroDatos: Boolean(navigator.connection?.saveData) });
+    if (!mp4) throw new ErrorYoutube('Este post de X no trae un video que el navegador pueda reproducir.', 'x_sin_video');
+    const player = new XVideoPlayer('ytPlayer', { mp4: mp4.url, portada: info.portada || '', titulo: tituloX(info) });
+    // A diferencia de YouTube, un fallo de carga sí se informa: sin video no hay qué doblar.
+    await Promise.race([player.inicializar(), new Promise((r) => setTimeout(r, ESPERA_REPRODUCTOR_MS))]);
+    if (signal.aborted) { player.destruir(); throw cancelado(); }
+    return player;
   }
 
   /**
@@ -715,8 +740,10 @@ export function inicializarYoutubeSincronizado({
 
   async function iniciarSesion() {
     const url = ui.url.value.trim();
-    const videoId = extraerVideoId(url);
-    if (!videoId || !estaServidorOnline()) return;
+    const fuente = detectarFuente(url);
+    if (!fuente || !estaServidorOnline()) return;
+    if (fuente.plataforma === 'x') return iniciarSesionX(url, fuente);
+    const videoId = fuente.id;
     const actual = abrirSesion(videoId);
     const { signal } = actual.controlador;
     try {
@@ -790,6 +817,67 @@ export function inicializarYoutubeSincronizado({
       tituloVideo = actual.player.getVideoData()?.title || tituloVideo || datos.titulo || guardado?.titulo || '';
       duracionS = actual.player.getDuration() || duracionS || datos.duracionS || guardado?.duracionS || 0;
       if (tituloVideo) ui.titulo.textContent = tituloVideo;
+      await completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve });
+    } catch (error) {
+      if (signal.aborted || error?.name === 'AbortError') return;
+      mostrarIdioma('No se pudo preparar el doblaje', 'no');
+      progreso.error(textoDeError(error));
+    } finally {
+      if (sesion === actual) marcarOcupado(false);
+    }
+  }
+
+  async function iniciarSesionX(url, fuente) {
+    const actual = abrirSesion(fuente.clave);
+    const { signal } = actual.controlador;
+    try {
+      progreso.paso('leer', 'Buscando el video en X…');
+      const info = await servicioX.info(url, { signal });
+      if (signal.aborted) throw cancelado();
+      const tituloVideo = tituloX(info);
+      ui.titulo.textContent = tituloVideo;
+      const promesaPlayer = crearReproductorX(info, signal).then((player) => {
+        if (sesion === actual) actual.player = player; else player.destruir();
+        return player;
+      });
+      promesaPlayer.catch(() => {});   // un fallo se atiende abajo, al esperarlo
+
+      const guardado = await leerDoblaje(fuente.clave);
+      const elegidoEnFormulario = ui.idioma?.value || 'auto';
+      const sirve = Boolean(guardado?.segmentos?.length)
+        && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === guardado.idiomaOrigen);
+      const transcribir = (idiomaOrigen) => servicioX.obtenerParaDoblaje(info, {
+        idiomaOrigen, signal,
+        apiKey: leer('jg_groq_api_key') || '',
+        context: leer('jg_glossary') || '',
+        onProgress: (mensaje, fraccion) => { progreso.mensaje(mensaje); progreso.barra(fraccion ?? null); },
+      });
+      let datos;
+      let decision;
+      if (sirve) {
+        datos = { segmentos: guardado.segmentos, idioma: guardado.idiomaOrigen, confianza: 1, fuente: 'usuario', conflicto: false };
+        decision = { accion: 'doblar', idioma: guardado.idiomaOrigen, mensaje: '' };
+      } else {
+        progreso.ayuda('X no trae subtítulos: escuchamos el audio del video para sacar el texto (gratis). Mientras tanto puedes darle play.');
+        datos = await transcribir(elegidoEnFormulario);
+        decision = decidirDoblaje(datos);
+        if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
+          progreso.mensaje('Confirma el idioma del video para seguir.');
+          const elegido = await elegirIdioma(decision, signal);
+          if (!elegido) { terminarSesion(); return; }
+          if (elegido !== datos.idioma) datos = await transcribir(elegido);
+          decision = { accion: 'doblar', idioma: elegido, mensaje: '' };
+        }
+      }
+      if (decision.accion === 'sin_doblaje') {
+        mostrarIdioma('El video ya está en español', 'ok');
+        progreso.error(decision.mensaje);
+        return;
+      }
+      mostrarIdioma(`Idioma del video: ${nombreIdioma(decision.idioma)}`, 'ok');
+      actual.player = await promesaPlayer;
+      if (signal.aborted) throw cancelado();
+      const duracionS = actual.player.getDuration() || Number(info.duracion_s) || datos.duracionS || 0;
       await completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve });
     } catch (error) {
       if (signal.aborted || error?.name === 'AbortError') return;

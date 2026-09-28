@@ -76,3 +76,18 @@ plan. Regresión YouTube: doblaje 139 OK · 0 fallos (una primera corrida dio
 138/1 con un fallo transitorio de tiempos que no se reprodujo en dos
 ejecuciones limpias seguidas), sincronía 65 OK · 0 fallos, navegador
 110 OK · 0 fallos. Idénticos a la línea base.
+
+## Tarea 9
+
+Integración copiada del plan (imports, `servicioX`, nota de enlace,
+`crearReproductorX`, `iniciarSesionX`, desvío al pulsar, textos del panel).
+`extraerVideoId` ya no aparece en el controlador. Paso 7 verificado con un
+servidor local estático + `/health` simulado: enlace de X → botón habilitado
+y nota visible; `x.com/home` → deshabilitado y sin nota; YouTube → habilitado
+y sin nota (3/3). Nota: con `python -m http.server` a secas el botón queda
+deshabilitado para TODO enlace porque no hay `/health` (conducta previa).
+Regresión: doblaje 139/0, sincronía 65/0, navegador 110/0, arranque ligero
+9 OK + el fallo preexistente de 1 MB (1033 KB, como predice el plan).
+El doblaje volvió a dar 138/1 una vez justo tras editar el controlador;
+en 10 corridas de repetición (incluida la misma combinación de comandos)
+dio siempre 139/0. Patrón: primera carga del archivo recién modificado.

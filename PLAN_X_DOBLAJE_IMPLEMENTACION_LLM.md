@@ -1989,7 +1989,7 @@ node tests/verificar_youtube_doblaje.mjs | tail -3
 - Produce: con un enlace de X el botón «Doblar al español» se habilita y el flujo completo funciona; el
   elemento `#ytUrlNota` explica qué hacer con un enlace de X.
 
-- [ ] **Paso 1: imports** (junto a los existentes, al inicio del controlador):
+- [x] **Paso 1: imports** (junto a los existentes, al inicio del controlador):
 
 ```js
 import { TranscriptionService, ErrorYoutube } from './transcriptionService.js';
@@ -2003,7 +2003,7 @@ import { XVideoPlayer } from './XVideoPlayer.js';
   tras los pasos 2 y 5, `extraerVideoId` ya no se usa en el controlador. Compruébalo con
   `grep -n extraerVideoId js/youtube/youtubeSyncController.js`, que debe salir vacío.)
 
-- [ ] **Paso 2: servicio y botón.** Junto a `const transcripciones = new TranscriptionService({ fetchApi });`:
+- [x] **Paso 2: servicio y botón.** Junto a `const transcripciones = new TranscriptionService({ fetchApi });`:
 
 ```js
   const servicioX = new ServicioX({ fetchApi });
@@ -2023,7 +2023,7 @@ import { XVideoPlayer } from './XVideoPlayer.js';
   pintarNotaUrl();
 ```
 
-- [ ] **Paso 3: reproductor de X** (junto a `crearReproductor`):
+- [x] **Paso 3: reproductor de X** (junto a `crearReproductor`):
 
 ```js
   async function crearReproductorX(info, signal) {
@@ -2038,7 +2038,7 @@ import { XVideoPlayer } from './XVideoPlayer.js';
   }
 ```
 
-- [ ] **Paso 4: la sesión de X** (función nueva, después de `iniciarSesion`):
+- [x] **Paso 4: la sesión de X** (función nueva, después de `iniciarSesion`):
 
 ```js
   async function iniciarSesionX(url, fuente) {
@@ -2103,7 +2103,7 @@ import { XVideoPlayer } from './XVideoPlayer.js';
   }
 ```
 
-- [ ] **Paso 5: desviar a X al pulsar.** Al inicio de `iniciarSesion()`, reemplazar:
+- [x] **Paso 5: desviar a X al pulsar.** Al inicio de `iniciarSesion()`, reemplazar:
 
 ```js
     const url = ui.url.value.trim();
@@ -2121,7 +2121,7 @@ import { XVideoPlayer } from './XVideoPlayer.js';
     const videoId = fuente.id;
 ```
 
-- [ ] **Paso 6: textos del panel en `index.html`** (antes, la comprobación de trabajo concurrente de la
+- [x] **Paso 6: textos del panel en `index.html`** (antes, la comprobación de trabajo concurrente de la
   restricción 13):
 
   - `<h2>Mira videos de YouTube en español</h2>` → `<h2>Mira videos de YouTube y X en español</h2>`
@@ -2142,15 +2142,15 @@ import { XVideoPlayer } from './XVideoPlayer.js';
   .yt-area .yt-url-nota{margin:6px 0 0;font-size:13px;line-height:1.45;color:var(--muted-2)}
 ```
 
-- [ ] **Paso 7: verificar a mano en local** (sin simular nada): `python -m http.server 8765` en la raíz,
+- [x] **Paso 7: verificar a mano en local** (sin simular nada): `python -m http.server 8765` en la raíz,
   abrir `http://localhost:8765/?tab=yt`, pegar `https://x.com/BrooklynNets/status/1349794411333394432` y
   comprobar que el botón se habilita y la nota aparece; pegar `https://x.com/home` → botón deshabilitado y
   sin nota. (Local no tiene API: el flujo completo se prueba en T10 con la API simulada.)
 
-- [ ] **Paso 8: verificar que YouTube no cambió** — los tres comandos del paso 2 de la Tarea 8 y
+- [x] **Paso 8: verificar que YouTube no cambió** — los tres comandos del paso 2 de la Tarea 8 y
   `node tests/verificar_arranque_ligero.mjs` → mismos números de la línea base.
 
-- [ ] **Paso 9: commit** — `git add js/youtube/youtubeSyncController.js index.html && git commit -m "feat(x): doblar videos de X desde el mismo panel de YouTube"`
+- [x] **Paso 9: commit** — `git add js/youtube/youtubeSyncController.js index.html && git commit -m "feat(x): doblar videos de X desde el mismo panel de YouTube"`
 
 ---
 
