@@ -1700,7 +1700,7 @@ documento del mismo origen que declara `no-referrer` (H3, medido: así carga, ca
   `setVolume(0..100)`, `mute()`, `unMute()`, `isMuted()`, `ocultarSubtitulosDeYouTube()` (no hace nada),
   `suscribirEstado(fn) -> desuscribir`, `suscribirVelocidad(fn) -> desuscribir`, `destruir()`.
 
-- [ ] **Paso 1: prueba de lo puro** (sección T7):
+- [x] **Paso 1: prueba de lo puro** (sección T7):
 
 ```js
 // ── T7: estado del <video> con los nombres del contrato de YouTube ────────
@@ -1715,9 +1715,9 @@ const xp = await modulo('XVideoPlayer.js');
 }
 ```
 
-- [ ] **Paso 2:** `node tests/test_x_doblaje.mjs` → falla con `ERR_MODULE_NOT_FOUND … XVideoPlayer.js`.
+- [x] **Paso 2:** `node tests/test_x_doblaje.mjs` → falla con `ERR_MODULE_NOT_FOUND … XVideoPlayer.js`.
 
-- [ ] **Paso 3: crear `x-reproductor.html`**
+- [x] **Paso 3: crear `x-reproductor.html`**
 
 ```html
 <!doctype html>
@@ -1746,7 +1746,7 @@ const xp = await modulo('XVideoPlayer.js');
 (`nofullscreen`: la pantalla completa la pone la app sobre `.yt-player-shell` para que el subtítulo se
 vea encima; igual que `fs: 0` en YouTube.)
 
-- [ ] **Paso 4: cabecera en `vercel.json`** (añadir como un elemento más del arreglo `headers`):
+- [x] **Paso 4: cabecera en `vercel.json`** (añadir como un elemento más del arreglo `headers`):
 
 ```json
     {
@@ -1757,7 +1757,7 @@ vea encima; igual que `fs: 0` en YouTube.)
     }
 ```
 
-- [ ] **Paso 5: crear `js/youtube/XVideoPlayer.js`**
+- [x] **Paso 5: crear `js/youtube/XVideoPlayer.js`**
 
 ```js
 /**
@@ -1879,9 +1879,9 @@ export class XVideoPlayer {
 }
 ```
 
-- [ ] **Paso 6:** `node tests/test_x_doblaje.mjs` → `70 comprobaciones OK · 0 fallos` (64 + 6; 72 si
+- [x] **Paso 6:** `node tests/test_x_doblaje.mjs` → `70 comprobaciones OK · 0 fallos` (64 + 6; 72 si
   hiciste la 6b).
-- [ ] **Paso 7: commit** — `git add x-reproductor.html js/youtube/XVideoPlayer.js vercel.json tests/test_x_doblaje.mjs && git commit -m "feat(x): reproductor de X con el contrato de YouTubePlayer y sin Referer"`
+- [x] **Paso 7: commit** — `git add x-reproductor.html js/youtube/XVideoPlayer.js vercel.json tests/test_x_doblaje.mjs && git commit -m "feat(x): reproductor de X con el contrato de YouTubePlayer y sin Referer"`
 
 ---
 

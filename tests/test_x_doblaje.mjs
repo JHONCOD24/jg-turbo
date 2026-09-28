@@ -220,6 +220,17 @@ const sx = await modulo('servicioX.js');
   }
 }
 
+// ── T7: estado del <video> con los nombres del contrato de YouTube ────────
+const xp = await modulo('XVideoPlayer.js');
+{
+  comprobar(xp.estadoDeVideo({ ended: true, paused: true, readyState: 4 }) === 'ended', 'terminado → ended');
+  comprobar(xp.estadoDeVideo({ ended: false, paused: true, readyState: 4 }) === 'unstarted', 'pausado sin haber arrancado → unstarted');
+  comprobar(xp.estadoDeVideo({ ended: false, paused: true, readyState: 4 }, { arranco: true }) === 'paused', 'pausado tras arrancar → paused');
+  comprobar(xp.estadoDeVideo({ ended: false, paused: false, readyState: 2 }) === 'buffering', 'sin datos suficientes → buffering');
+  comprobar(xp.estadoDeVideo({ ended: false, paused: false, readyState: 4 }) === 'playing', 'reproduciendo → playing');
+  comprobar(xp.CODIGO_ESTADO.playing === 1 && xp.CODIGO_ESTADO.paused === 2, 'códigos numéricos iguales a los de YouTube');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);

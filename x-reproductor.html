@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<!-- video.twimg.com responde 403 si la petición trae Referer de otro dominio
+     (medido 2026-09-27). <video> no tiene atributo referrerpolicy: por eso el
+     video de X vive en este documento, que no manda Referer. Lo maneja
+     js/youtube/XVideoPlayer.js desde la página (mismo origen). No lo borres. -->
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reproductor de X · JG Turbo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
+</style>
+</head>
+<body>
+<video playsinline controls preload="metadata" controlslist="nofullscreen noremoteplayback nodownload" disablepictureinpicture></video>
+</body>
+</html>

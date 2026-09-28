@@ -62,3 +62,9 @@ Prueba previa: ERR_MODULE_NOT_FOUND de audioX.js. Tras copiar el módulo:
 Prueba previa: ERR_MODULE_NOT_FOUND de servicioX.js. Tras copiar el módulo:
 64 comprobaciones OK, 0 fallos (45 + 19). La Tarea 6b se omite según la
 decisión tomada en la Tarea 3 (sindicación responde desde Vercel).
+
+## Tarea 7
+
+Prueba previa: ERR_MODULE_NOT_FOUND de XVideoPlayer.js. Creados
+`x-reproductor.html`, `XVideoPlayer.js` y la cabecera de `vercel.json`
+(JSON válido). Resultado: 70 comprobaciones OK, 0 fallos (64 + 6).
