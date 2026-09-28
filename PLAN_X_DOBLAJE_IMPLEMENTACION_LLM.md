@@ -2485,21 +2485,21 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
 
 ### Tarea 11: documentación
 
-- [ ] **`CAMBIOS_X.md`** (creado en T3): completar con estas secciones — «Qué hace» (2 párrafos), «Hechos
+- [x] **`CAMBIOS_X.md`** (creado en T3): completar con estas secciones — «Qué hace» (2 párrafos), «Hechos
   medidos» (copiar la tabla H1–H12 de este plan), «Arquitectura» (el diagrama en texto: enlace →
   `/api/x-video` → HLS de audio sin Referer → partes ≤ 3,2 MB → `/api/transcribe` → unión → mismo motor de
   doblaje; video en `/x-reproductor.html`), «Contrato de `/api/x-video`» (forma y códigos de la T1–T2),
   «Límites» (60 min, Groq 20 pet/min, 7 200 s/h), «Pruebas» (comandos y números obtenidos), «Qué hacer si X
   cambia» (síntomas `503 x_red` / `404` en `/api/x-video`; mirar `api/x_video.py` y los registros de Vercel)
   y «Despliegues» (se llena en T12).
-- [ ] **`AGENTS.md`:** sección nueva «## X / Twitter (leer antes de tocar `api/x_video.py` o
+- [x] **`AGENTS.md`:** sección nueva «## X / Twitter (leer antes de tocar `api/x_video.py` o
   `js/youtube/*X*`)» con 6 viñetas: documento maestro `CAMBIOS_X.md`; **video.twimg.com rechaza el Referer
   ajeno** (no quitar `/x-reproductor.html` ni el `referrerPolicy`); el audio se trocea en el navegador en
   partes de ≤ 3,2 MB (no moverlo al servidor); X no usa Supadata (créditos) sino Whisper de Groq; la
   sindicación exige un token cualquiera; la caché usa `x:<id>` en `jg_youtube`. Y en la tabla de
   «Verificación» añadir `node tests/test_x_doblaje.mjs` (unitarias) y la fila de
   `tests/verificar_x_doblaje.mjs` («Obligatoria al tocar el doblaje de X», con su número).
-- [ ] **`TRAMPAS.md`:** entrada nueva con el formato del archivo:
+- [x] **`TRAMPAS.md`:** entrada nueva con el formato del archivo:
 
 ```markdown
 ## video.twimg.com rechaza el Referer de otro dominio
@@ -2516,10 +2516,10 @@ simplificar». Probar desde el navegador, no con `curl`; `tests/verificar_x_dobl
 petición a X lleva Referer.
 ```
 
-- [ ] **`CONFIG_PERSISTENTE.md`:** en la parte de IndexedDB `jg_youtube`, anotar que los videos de X se
+- [x] **`CONFIG_PERSISTENTE.md`:** en la parte de IndexedDB `jg_youtube`, anotar que los videos de X se
   guardan con clave `x:<id>` (o `x:<id>:<n>`) en el mismo almacén `doblajes`, y que comparten el tope de
   `MAX_VIDEOS = 20`. Sin claves nuevas de `localStorage`.
-- [ ] **Commit:** `git add CAMBIOS_X.md AGENTS.md TRAMPAS.md CONFIG_PERSISTENTE.md && git commit -m "docs(x): doblaje de videos de X documentado"`
+- [x] **Commit:** `git add CAMBIOS_X.md AGENTS.md TRAMPAS.md CONFIG_PERSISTENTE.md && git commit -m "docs(x): doblaje de videos de X documentado"`
 
 ### Tarea 12: versión, batería completa, vista previa real, producción y push
 

@@ -140,6 +140,11 @@ descartan los más antiguos. Reabrir un video ya doblado no gasta créditos de
 Supadata ni traducciones y retoma donde ibas. Un deploy no la borra; si se
 limpian los datos del sitio, la siguiente vez se vuelve a preparar sin más.
 
+Doblaje de X (2026-09-27): los videos de X se guardan en el **mismo** almacén
+`doblajes` con clave **`x:<id>`** (o `x:<id>:<n>` si el post trae varios
+videos) y comparten el mismo tope de **20**. Sin claves nuevas de
+`localStorage`; la base no cambia de versión.
+
 ## Qué NO es persistente (normal)
 
 - Texto de la última transcripción (no se guarda en el servidor).

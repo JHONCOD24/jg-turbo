@@ -101,3 +101,13 @@ Contraprueba del Referer: quitando el `no-referrer` de `servicioX.js` y de
 lleva Referer» y lista las 3 URLs (master, lista de audio y MP4); restaurados,
 vuelve a 24 OK. Regresión: doblaje 139/0, sincronía 65/0, navegador 110/0,
 arranque ligero 9 OK + fallo preexistente de 1 MB (1033 KB).
+El video de prueba necesitó una excepción en `.gitignore` (`*.webm`); se
+commiteó aparte.
+
+## Tarea 11
+
+`CAMBIOS_X.md` completo (Qué hace, H1–H12, arquitectura, contrato,
+límites, pruebas, «si X cambia», desvíos). Sección nueva en `AGENTS.md`
+(X/Twitter, 6 viñetas) y filas en la tabla de verificación (`test_x_doblaje`
+unitaria y `verificar_x_doblaje` con 24). Entrada del Referer en
+`TRAMPAS.md` y nota de la caché `x:<id>` en `CONFIG_PERSISTENTE.md`.

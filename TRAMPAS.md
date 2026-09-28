@@ -1471,3 +1471,16 @@ del video real necesitara 2,2× su tiempo, fuera de lo que el diseño cubre (vid
 **Regla:** calibrar los datos de prueba con valores medidos (aquí 14 car/s ⇒ 1,39×,
 más exigente que lo real pero posible) y, antes de relajar un umbral, calcular si
 el caso era alcanzable.
+
+## video.twimg.com rechaza el Referer de otro dominio
+
+**Síntoma:** el video de X sale negro (error 4, «no supported sources») y la lista HLS da 403 en el
+navegador, pero con `curl` todo responde 200/206.
+
+**Causa:** protección anti-hotlink de X. Con `Referer: https://jg-turbo.vercel.app/` responde 403; sin
+Referer, o con `https://x.com/`, 206 (medido 2026-09-27). `curl` no manda Referer: por eso engaña.
+
+**Regla:** toda petición a `video.twimg.com` va sin Referer: `fetch(url, { referrerPolicy: 'no-referrer' })`
+y el `<video>` dentro de `/x-reproductor.html` (meta `no-referrer`). No sacar el video de ese iframe «para
+simplificar». Probar desde el navegador, no con `curl`; `tests/verificar_x_doblaje.mjs` falla si alguna
+petición a X lleva Referer.
