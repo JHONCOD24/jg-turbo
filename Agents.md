@@ -276,6 +276,9 @@ arquitectura, validación y guía de activación).
   `test_x_video.py` 35 passed.
 - **v154 (2026-09-28):** biblioteca de videos y descargas en producción.
   `JG_JS_V='v154'`, prod `dpl_2aBp79FCqtjHvzdj866t77J2deTc`.
+- **v155 (2026-09-28):** el menú de opciones de la tarjeta se superpone a las
+  tarjetas de abajo en vez de quedar detrás (`vid-con-menu`, `z-index:30`).
+  `JG_JS_V='v155'`, prod `dpl_5HyrMbD3MD64do9tmF22XWUCPGij`.
 
 ## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
 
