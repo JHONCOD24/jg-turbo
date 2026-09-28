@@ -670,13 +670,10 @@ export function inicializarYoutubeSincronizado({
     actual.relojCache = setInterval(() => guardarSesion(actual), 5000);
   }
 
-  async function iniciarSesion() {
-    const url = ui.url.value.trim();
-    const videoId = extraerVideoId(url);
-    if (!videoId || !estaServidorOnline()) return;
+  /** Lo común al abrir cualquier video (YouTube o X): corta la sesión anterior y prepara la vista. */
+  function abrirSesion(videoId) {
     terminarSesion({ restaurarFormulario: false });
     const controlador = new AbortController();
-    const { signal } = controlador;
     const actual = { controlador, videoId };
     sesion = actual;
     marcarOcupado(true);
@@ -688,7 +685,40 @@ export function inicializarYoutubeSincronizado({
     desbloquearAudio();
     // La primera síntesis paga el arranque del servicio de voz (2-4 s medidos):
     // se paga ahora, mientras se lee el video, y no cuando la persona espera oírla.
-    Promise.resolve().then(() => fetchApi('/tts-warmup', { signal }, 15000)).catch(() => {});
+    Promise.resolve().then(() => fetchApi('/tts-warmup', { signal: controlador.signal }, 15000)).catch(() => {});
+    return actual;
+  }
+
+  /** Lo común con el idioma ya decidido: caché del video, «retomar donde ibas» y preparación. */
+  async function completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve }) {
+    const { signal } = actual.controlador;
+    actual.registro = {
+      videoId: actual.videoId,
+      idiomaOrigen: decision.idioma,
+      titulo: tituloVideo,
+      duracionS,
+      segmentos: datos.segmentos,
+      traducciones: sirve ? guardado.traducciones : [],
+      posicionS: sirve ? guardado.posicionS : 0,
+    };
+    guardarDoblaje(actual.registro);
+    if (sirve && 15 < guardado.posicionS && guardado.posicionS < duracionS - 30) {
+      actual.retomarEn = guardado.posicionS;
+      ui.estado.textContent = `Retomamos donde ibas (${formatoTiempo(actual.retomarEn)}).`;
+      $('ytDesdeInicio').hidden = false;
+    }
+    await prepararDoblaje(actual, {
+      datos, origen: decision.idioma, tituloVideo, signal,
+      traduccionesGuardadas: actual.registro.traducciones,
+    });
+  }
+
+  async function iniciarSesion() {
+    const url = ui.url.value.trim();
+    const videoId = extraerVideoId(url);
+    if (!videoId || !estaServidorOnline()) return;
+    const actual = abrirSesion(videoId);
+    const { signal } = actual.controlador;
     try {
       // El reproductor y el texto van EN PARALELO: antes el texto esperaba a que
       // el reproductor estuviera listo (hasta 8 s en un teléfono lento).
@@ -760,25 +790,7 @@ export function inicializarYoutubeSincronizado({
       tituloVideo = actual.player.getVideoData()?.title || tituloVideo || datos.titulo || guardado?.titulo || '';
       duracionS = actual.player.getDuration() || duracionS || datos.duracionS || guardado?.duracionS || 0;
       if (tituloVideo) ui.titulo.textContent = tituloVideo;
-      actual.registro = {
-        videoId,
-        idiomaOrigen: decision.idioma,
-        titulo: tituloVideo,
-        duracionS,
-        segmentos: datos.segmentos,
-        traducciones: sirve ? guardado.traducciones : [],
-        posicionS: sirve ? guardado.posicionS : 0,
-      };
-      guardarDoblaje(actual.registro);
-      if (sirve && 15 < guardado.posicionS && guardado.posicionS < duracionS - 30) {
-        actual.retomarEn = guardado.posicionS;
-        ui.estado.textContent = `Retomamos donde ibas (${formatoTiempo(actual.retomarEn)}).`;
-        $('ytDesdeInicio').hidden = false;
-      }
-      await prepararDoblaje(actual, {
-        datos, origen: decision.idioma, tituloVideo, signal,
-        traduccionesGuardadas: actual.registro.traducciones,
-      });
+      await completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve });
     } catch (error) {
       if (signal.aborted || error?.name === 'AbortError') return;
       mostrarIdioma('No se pudo preparar el doblaje', 'no');

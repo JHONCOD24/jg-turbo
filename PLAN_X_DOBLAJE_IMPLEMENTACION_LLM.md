@@ -1900,7 +1900,7 @@ prueba de YouTube cambia su número, la extracción está mal.
 - `async completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve })` — hace lo
   que hoy hacen las líneas desde `actual.registro = {` hasta el `await prepararDoblaje(...)` inclusive.
 
-- [ ] **Paso 1: implementar la extracción.** Mover a `abrirSesion(videoId)` exactamente estas líneas de
+- [x] **Paso 1: implementar la extracción.** Mover a `abrirSesion(videoId)` exactamente estas líneas de
   `iniciarSesion` (≈ 677–691) y devolver `actual`:
 
 ```js
@@ -1964,7 +1964,7 @@ prueba de YouTube cambia su número, la extracción está mal.
   (Las líneas de `mostrarIdioma`, `await promesaPlayer`, título y duración que van **antes** se quedan
   donde están.)
 
-- [ ] **Paso 2: verificar que YouTube no cambió**
+- [x] **Paso 2: verificar que YouTube no cambió**
 
 ```bash
 node tests/test_youtube_doblaje.mjs | tail -1
@@ -1973,7 +1973,7 @@ node tests/verificar_youtube_doblaje.mjs | tail -3
 ```
   Esperado: **los mismos números de la línea base del paso 0**, 0 fallos.
 
-- [ ] **Paso 3: commit** — `git commit -am "refactor(youtube): abrirSesion y completarSesion reutilizables (sin cambio de conducta)"`
+- [x] **Paso 3: commit** — `git commit -am "refactor(youtube): abrirSesion y completarSesion reutilizables (sin cambio de conducta)"`
 
 ---
 

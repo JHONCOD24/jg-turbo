@@ -68,3 +68,11 @@ decisión tomada en la Tarea 3 (sindicación responde desde Vercel).
 Prueba previa: ERR_MODULE_NOT_FOUND de XVideoPlayer.js. Creados
 `x-reproductor.html`, `XVideoPlayer.js` y la cabecera de `vercel.json`
 (JSON válido). Resultado: 70 comprobaciones OK, 0 fallos (64 + 6).
+
+## Tarea 8
+
+Extracción mecánica de `abrirSesion`/`completarSesion` tal como la trae el
+plan. Regresión YouTube: doblaje 139 OK · 0 fallos (una primera corrida dio
+138/1 con un fallo transitorio de tiempos que no se reprodujo en dos
+ejecuciones limpias seguidas), sincronía 65 OK · 0 fallos, navegador
+110 OK · 0 fallos. Idénticos a la línea base.
