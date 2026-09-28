@@ -51,3 +51,8 @@ la Tarea 6b se omite. `/api/health` reporta `x_video: true`.
 
 Prueba y módulo copiados tal cual del plan; ya estaban en disco al
 retomar la sesión. Ejecutada: 19 comprobaciones OK, 0 fallos.
+
+## Tarea 5
+
+Prueba previa: ERR_MODULE_NOT_FOUND de audioX.js. Tras copiar el módulo:
+45 comprobaciones OK, 0 fallos (19 + 26).

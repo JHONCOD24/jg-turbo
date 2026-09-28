@@ -1026,7 +1026,7 @@ empieza antes de que termine la última conservada (−0,25 s) se descarta (es l
 veces). Así cada frase conserva ~6 s de audio antes y después de la frontera y no se corta a mitad de
 palabra.
 
-- [ ] **Paso 1: escribir la prueba** (sección T5 en `tests/test_x_doblaje.mjs`)
+- [x] **Paso 1: escribir la prueba** (sección T5 en `tests/test_x_doblaje.mjs`)
 
 ```js
 // ── T5: audio HLS en partes ─────────────────────────────────────────────
@@ -1094,9 +1094,9 @@ const ax = await modulo('audioX.js');
 }
 ```
 
-- [ ] **Paso 2: ejecutar y ver que falla** — `node tests/test_x_doblaje.mjs` → `ERR_MODULE_NOT_FOUND … audioX.js`.
+- [x] **Paso 2: ejecutar y ver que falla** — `node tests/test_x_doblaje.mjs` → `ERR_MODULE_NOT_FOUND … audioX.js`.
 
-- [ ] **Paso 3: implementar** `js/youtube/audioX.js`:
+- [x] **Paso 3: implementar** `js/youtube/audioX.js`:
 
 ```js
 /**
@@ -1217,9 +1217,9 @@ export function elegirMp4(variantes, { ahorroDatos = false } = {}) {
 > queda fuera porque empieza antes de la frontera. La primera frase que se conserva de la parte dos es
 > «Sigue la parte dos.» (369,2 s). Si tu prueba da otra cosa, revisa la regla del solape, no la prueba.
 
-- [ ] **Paso 4: ejecutar** — `node tests/test_x_doblaje.mjs` → `45 comprobaciones OK · 0 fallos`
+- [x] **Paso 4: ejecutar** — `node tests/test_x_doblaje.mjs` → `45 comprobaciones OK · 0 fallos`
   (19 de T4 + 26 de T5).
-- [ ] **Paso 5: commit** — `git add js/youtube/audioX.js tests/test_x_doblaje.mjs && git commit -m "feat(x): audio HLS en partes de 3,2 MB y unión de tiempos sin duplicados"`
+- [x] **Paso 5: commit** — `git add js/youtube/audioX.js tests/test_x_doblaje.mjs && git commit -m "feat(x): audio HLS en partes de 3,2 MB y unión de tiempos sin duplicados"`
 
 ---
 
