@@ -51,6 +51,13 @@ caben en 5 s sin acelerar (antes pedía 1,15×) y la voz suena en su segundo
 `verificar_biblioteca_videos` 51. Detalle de la auditoría:
 `CAMBIOS_BIBLIOTECA_VIDEOS.md` §Auditoría.
 
+### Despliegue
+
+`v156` / `jg-turbo-shell-v156` · **`dpl_8EbXfNEPLECrn2RA2gWemshoJETS`**. En el dominio,
+con voz recién generada: 0,92 s de silencio quitados por frase (edge-tts) y 0,89 s
+(Azure). Pendiente del dueño: oírlo con un video real (`jgDoblajeDiagnostico()` en la
+consola da el retraso y las frases saltadas).
+
 ## Corrección 2026-09-26 (v152) · Voz constante y tamaño del subtítulo
 
 ### Pedido del dueño

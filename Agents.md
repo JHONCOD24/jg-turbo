@@ -287,7 +287,7 @@ arquitectura, validación y guía de activación).
   descargas. **No volver a usar la duración del archivo como duración de la voz.**
   Más: descargas con la 2.ª voz y el tono del video, «Guardar archivo» en el
   teléfono, tarjeta que retoma bien. `CAMBIOS_YOUTUBE.md` §v156 y
-  `CAMBIOS_BIBLIOTECA_VIDEOS.md` §Auditoría. `JG_JS_V='v156'`, prod `[DATO PENDIENTE: dpl]`.
+  `CAMBIOS_BIBLIOTECA_VIDEOS.md` §Auditoría. `JG_JS_V='v156'`, prod `dpl_8EbXfNEPLECrn2RA2gWemshoJETS`.
 
 ## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
 
