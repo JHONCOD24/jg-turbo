@@ -829,7 +829,7 @@ def x_video_info(url: str = ""):
 - [x] **Paso 4: ejecutar** — `python -m pytest backend/tests/test_x_video.py -q`
   Esperado: `35 passed`. Luego la línea base del servidor (los mismos archivos del paso 0): mismos números.
 
-- [ ] **Paso 5: commit**
+- [x] **Paso 5: commit**
 
 ```bash
 git add api/index.py backend/tests/test_x_video.py
@@ -844,7 +844,7 @@ git commit -m "feat(x): ruta /api/x-video y marca x_video en /api/health"
 saber si X hace lo mismo **antes** de construir el navegador encima. Es la excepción 2 de `AGENTS.md`
 («algo que solo se puede comprobar en el dominio real»), pero sin tocar producción.
 
-- [ ] **Paso 1: desplegar una vista previa desde una copia exacta del commit** (la raíz sube archivos sin
+- [x] **Paso 1: desplegar una vista previa desde una copia exacta del commit** (la raíz sube archivos sin
   seguimiento y `.pytest_cache` tumba el CLI; ver `TRAMPAS.md`):
 
 ```bash
@@ -856,7 +856,7 @@ cd "$TMP" && npx vercel --yes --scope jhoncod24s-projects
 
 Anota la URL de vista previa que imprime (`https://jg-turbo-<algo>.vercel.app`). **Sin `--prod`.**
 
-- [ ] **Paso 2: consultar los tres posts de las capturas**
+- [x] **Paso 2: consultar los tres posts de las capturas**
 
 ```bash
 for u in https://x.com/BrooklynNets/status/1349794411333394432 https://x.com/elonmusk/status/1585341984679469056 https://x.com/jamestalarico/status/2023659473466687994; do
@@ -868,7 +868,7 @@ curl -s "<URL_VISTA_PREVIA>/api/health"
 Si la vista previa pide iniciar sesión (401 o redirección a vercel.com), abre esas mismas URLs en el
 navegador del dueño (ya tiene la sesión de Vercel) y copia el JSON.
 
-- [ ] **Paso 3: decidir y anotar** (en `CAMBIOS_X.md`, que se crea aquí con la sección «Medición desde
+- [x] **Paso 3: decidir y anotar** (en `CAMBIOS_X.md`, que se crea aquí con la sección «Medición desde
   Vercel»: fecha, URL de vista previa, código HTTP, `fuente` y tiempo de cada post):
 
 | Resultado | Decisión |
