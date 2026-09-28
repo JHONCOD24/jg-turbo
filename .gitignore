@@ -34,6 +34,7 @@ backend/temp/
 *.wav
 *.mp3
 !audio/musica/*.mp3
+!tests/fixtures/biblioteca/*.mp3
 *.webm
 # El video de prueba del doblaje de X sí va en Git (232 KB; lo usa tests/verificar_x_doblaje.mjs)
 !tests/fixtures/x/video_prueba.webm
