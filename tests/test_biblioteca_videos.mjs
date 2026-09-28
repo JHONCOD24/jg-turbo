@@ -51,6 +51,9 @@ const bv = await modulo('bibliotecaVideos.js');
   comprobar(luego.etiquetas.join() === 'IA' && luego.favorito === true, 'lo automático nunca borra etiquetas ni favorito');
   comprobar(luego.titulo === 'Charla de IA' && luego.estado === 'viendo' && luego.creado === AHORA, 'un título vacío no pisa el bueno; el avance sí se actualiza');
   comprobar(bv.fusionarEntrada(null, { clave: 'x:9' }, AHORA).titulo === 'Video de X', 'sin título: nombre genérico por plataforma');
+  const conVoces = bv.fusionarEntrada(null, { clave: 'v2', voz: 'neural:es-CO:female', vozSecundaria: 'ninguna' }, AHORA);
+  comprobar(bv.fusionarEntrada(conVoces, { clave: 'v2', posicionS: 40 }, AHORA).vozSecundaria === 'ninguna', 'la 2.ª voz elegida se conserva (las descargas suenan como el video)');
+  comprobar(bv.fusionarEntrada(null, { clave: 'v3' }, AHORA).vozSecundaria === undefined, 'sin elección guardada queda sin definir (fichas viejas)');
 
   const migrada = bv.entradaDesdeDoblaje({ videoId: 'x:5', titulo: 'Clip', duracionS: 120, idiomaOrigen: 'en', posicionS: 40, actualizado: AHORA - DIA, segmentos: [], traducciones: [] }, AHORA);
   comprobar(migrada.plataforma === 'x' && migrada.creado === AHORA - DIA && migrada.abierto === AHORA - DIA && migrada.estado === 'viendo', 'migración v1: la fecha de la caché se conserva');
@@ -130,6 +133,47 @@ const pd = await modulo('pistaDoblada.js');
   comprobar(pd.frasesEnVentana(plan, 3, 3.5).length === 0, 'una frase que termina justo donde empieza la ventana no entra');
   const costo = pd.resumenCosto(['Hola a todos.', '', 'x'.repeat(4987)]);
   comprobar(costo.frases === 2 && costo.caracteres === 5000 && costo.porcentajeAzureMes === 1, 'costo: 5 000 caracteres = 1 % de la cuota mensual de Azure');
+}
+
+// ── Silencio de la voz (hablaVoz.js · auditoría 2026-09-28) ─────────────
+// Medido en producción: ~0,21 s de silencio delante y ~0,85 s detrás en cada frase.
+const hv = await modulo('hablaVoz.js');
+{
+  const hz = 24000;
+  const voz = (delante, habla, detras, nivel = 0.3) => {
+    const muestras = new Float32Array(Math.round((delante + habla + detras) * hz));
+    const desde = Math.round(delante * hz);
+    for (let i = 0; i < Math.round(habla * hz); i += 1) muestras[desde + i] = nivel * Math.sin(i / 7);
+    return muestras;
+  };
+  const medida = hv.limitesDeHabla(voz(0.21, 4.48, 0.85), hz);
+  comprobar(Math.abs(medida.desdeS - 0.19) < 0.015 && Math.abs(medida.hastaS - 4.77) < 0.015,
+    `el tramo hablado se encuentra con su margen (${medida.desdeS}–${medida.hastaS} s de ${medida.duracionS} s)`);
+  const debil = hv.limitesDeHabla(voz(0.2, 1, 0.8, 0.004), hz);
+  comprobar(debil && debil.hastaS > 1.2, 'una voz muy suave (−48 dB) no se toma por silencio');
+  comprobar(hv.limitesDeHabla(new Float32Array(hz), hz) === null, 'un audio todo silencio no se recorta (null)');
+  comprobar(hv.limitesDeHabla(new Float32Array(0), hz) === null && hv.limitesDeHabla(voz(0, 1, 0), 0) === null, 'sin muestras o sin frecuencia: null');
+  const sinCola = hv.limitesDeHabla(voz(0, 2, 0), hz);
+  comprobar(sinCola.desdeS === 0 && sinCola.hastaS === 2, 'si no hay silencio, el tramo es el audio entero (sin pasarse)');
+  const buffer = { duration: 5.54, sampleRate: hz, getChannelData: () => voz(0.21, 4.48, 0.85) };
+  comprobar(hv.limitesDeBuffer(buffer).hastaS < 4.8, 'un AudioBuffer se mide igual');
+  comprobar(hv.limitesDeBuffer({ duration: 3 }).hastaS === 3, 'sin muestras (buffer simulado) se usa el audio entero');
+  comprobar(await hv.medirHabla(new Blob(['x'])) === null, 'fuera del navegador (sin Web Audio) no mide: null, sin romper');
+
+  // La pista usa el tramo hablado: el silencio no le quita espacio a nadie.
+  const ex = await modulo('exportadorDoblaje.js');
+  const frases = [{ indice: 0, startTime: 0, texto: 'uno' }, { indice: 1, startTime: 5, texto: 'dos' }];
+  const tasas = [];
+  const voces = await ex.prepararVoces(frases, {
+    sintetizar: async (texto, { tasa }) => { tasas.push(tasa); return texto; },
+    decodificar: async () => ({ duration: 5.54, sampleRate: hz, getChannelData: () => voz(0.21, 4.48, 0.85) }),
+    duracionVideoS: 12,
+  });
+  comprobar(voces.aceleradas === 0 && tasas.every((t) => t === 1), '4,5 s de voz en 5 s de espacio: no se acelera (con el silencio contado habría pedido 1,15×)');
+  comprobar(voces.plan[1].inicioS === 5 && voces.corridas === 0, 'y la frase siguiente entra en su segundo exacto');
+  comprobar(voces.audios.get(0).desdeS > 0.15 && voces.audios.get(0).hastaS < 4.8, 'cada voz guarda su tramo para la mezcla');
+  const sinDuracion = pd.planearPista([{ indice: 0, startTime: 0, duracionVoz: 3 }], { duracionVideoS: 0 });
+  comprobar(sinDuracion.plan[0].tasa === 1 && sinDuracion.corridas === 0, 'video sin duración conocida: la última frase no se acelera ni se da por corrida');
 }
 
 // ── Descargas ────────────────────────────────────────────────────────────

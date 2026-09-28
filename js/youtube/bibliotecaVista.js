@@ -37,13 +37,26 @@ function textoFase(progreso) {
   const hechas = Number(progreso.hechas) || 0;
   const total = Number(progreso.total) || 0;
   const cuenta = total ? ` ${hechas} de ${total}` : '';
+  const porcentaje = total ? ` ${Math.min(100, Math.round((hechas / total) * 100))} %` : '';
+  // Las fases que emite exportadorDoblaje.js: cada una dice qué pasa y cuánto va.
   return ({
     traduccion: `Completando traducción…${cuenta}`,
     voz: `Preparando voz…${cuenta}`,
-    descarga: 'Descargando el video…',
-    mezcla: 'Uniendo video y voz…',
-    escritura: 'Guardando el archivo…',
+    ajuste: `Acelerando las frases que no caben…${cuenta}`,
+    archivo: `Armando el archivo…${porcentaje}`,
+    descarga: `Descargando el video…${porcentaje || ` ${formatearBytes(hechas)}`}`,
   }[progreso.fase] || 'Preparando el archivo…');
+}
+
+/** Lo que pasó con la voz al armar el archivo, dicho sin adornos (PRODUCT.md). */
+function textoFinal(resultado) {
+  if (resultado?.cancelado) return 'Descarga cancelada.';
+  const partes = ['Archivo guardado.'];
+  const aceleradas = Number(resultado?.aceleradas) || 0;
+  const corridas = Number(resultado?.corridas) || 0;
+  if (aceleradas) partes.push(`${aceleradas} ${aceleradas === 1 ? 'frase va' : 'frases van'} un poco más rápido para caber.`);
+  if (corridas) partes.push(`${corridas} ${corridas === 1 ? 'frase empieza' : 'frases empiezan'} un poco tarde: no cabían ni acelerando.`);
+  return partes.join(' ');
 }
 
 export function montarBibliotecaVideos(raiz, deps) {
@@ -52,7 +65,7 @@ export function montarBibliotecaVideos(raiz, deps) {
     'vidFiltros', 'vidTemas', 'vidOrden', 'vidLista', 'vidSinResultados', 'vidLimpiar', 'vidAviso',
     'vidDeshacer', 'vidTemasDialogo', 'vidTemasTitulo', 'vidTemasActuales', 'vidTemaNuevo', 'vidTemasSugerencias',
     'vidTemasMensaje', 'vidTemasListo', 'vidDescargasDialogo', 'vidDescargasAyuda', 'vidCalidad',
-    'vidDescargaEstado', 'vidDescargar', 'vidDescargaCancelar', 'vidDescargasCerrar',
+    'vidDescargaEstado', 'vidDescargar', 'vidDescargaCancelar', 'vidDescargasCerrar', 'vidGuardarOtraVez',
   ].map((id) => [id, document.getElementById(id)]));
   let videos = [];
   let conVoz = new Set();
@@ -63,6 +76,11 @@ export function montarBibliotecaVideos(raiz, deps) {
   let videoDescarga = null;
   let opcionesDescarga = null;
   let controladorDescarga = null;
+  let guardarOtraVez = null;   // el archivo en memoria, por si el navegador no lo guardó solo
+  function soltarArchivo() {
+    guardarOtraVez = null;
+    if (ui.vidGuardarOtraVez) ui.vidGuardarOtraVez.hidden = true;
+  }
   let deshecho = null;
   let temporizadorDeshacer = null;
   let colaTemas = Promise.resolve();
@@ -157,15 +175,29 @@ export function montarBibliotecaVideos(raiz, deps) {
     });
   }
 
+  // Buscar en lo que se dijo lee TODOS los textos: se espera a que la persona
+  // deje de teclear y solo pinta la búsqueda más reciente (una lenta que
+  // terminara después pintaba resultados de lo que ya no está escrito).
+  let turnoBusqueda = 0;
+  let esperaBusqueda = null;
   async function buscarTexto() {
-    coincidencias = new Map();
+    const turno = ++turnoBusqueda;
+    const nuevas = new Map();
     if (ui.vidEnTexto.checked && filtro.texto.trim()) {
+      const texto = filtro.texto;
       for (const registro of await deps.listarDoblajes()) {
-        const coincidencia = buscarEnTranscripcion(registro, filtro.texto);
-        if (coincidencia) coincidencias.set(registro.videoId, coincidencia);
+        const coincidencia = buscarEnTranscripcion(registro, texto);
+        if (coincidencia) nuevas.set(registro.videoId, coincidencia);
       }
     }
+    if (turno !== turnoBusqueda) return;
+    coincidencias = nuevas;
     pintar();
+  }
+  function buscarAlTeclear() {
+    clearTimeout(esperaBusqueda);
+    if (!ui.vidEnTexto.checked) { buscarTexto().catch(console.error); return; }
+    esperaBusqueda = setTimeout(() => buscarTexto().catch(console.error), 250);
   }
 
   async function refrescar() {
@@ -183,7 +215,9 @@ export function montarBibliotecaVideos(raiz, deps) {
     }
   }
 
-  function abrirVideo(video, segundo = video?.posicionS || 0) {
+  // Sin segundo, el controlador retoma donde ibas (o desde el inicio si ya lo
+  // terminaste). Un segundo explícito es solo para «Abrir aquí».
+  function abrirVideo(video, segundo = 0) {
     const resultado = deps.abrir(video, { segundo });
     if (resultado?.abierto) plegar(true);
     else avisar(resultado?.motivo || 'No pudimos abrir este video.');
@@ -241,6 +275,7 @@ export function montarBibliotecaVideos(raiz, deps) {
   }
 
   async function abrirDescargas(video) {
+    soltarArchivo();
     videoDescarga = video;
     opcionesDescarga = null;
     pintarTiposDescarga(video);
@@ -274,6 +309,7 @@ export function montarBibliotecaVideos(raiz, deps) {
     if (!videoDescarga || !opcionesDescarga) return;
     const tipo = tipoDescarga();
     const calidad = opcionesDescarga.calidades?.[Number(ui.vidCalidad.value)] || null;
+    soltarArchivo();
     controladorDescarga = new AbortController();
     ui.vidDescargar.disabled = true;
     ui.vidDescargaCancelar.hidden = false;
@@ -284,7 +320,12 @@ export function montarBibliotecaVideos(raiz, deps) {
         onProgreso: (progreso) => { ui.vidDescargaEstado.textContent = textoFase(progreso); },
       });
       const resultado = await promesa;
-      ui.vidDescargaEstado.textContent = resultado?.cancelado ? 'Descarga cancelada.' : 'Archivo guardado.';
+      ui.vidDescargaEstado.textContent = textoFinal(resultado);
+      if (!resultado?.cancelado && typeof resultado?.guardarOtraVez === 'function') {
+        guardarOtraVez = resultado.guardarOtraVez;
+        ui.vidDescargaEstado.textContent += ' Si no aparece en tus descargas, toca «Guardar archivo».';
+        if (ui.vidGuardarOtraVez) ui.vidGuardarOtraVez.hidden = false;
+      }
     } catch (error) {
       if (error?.name === 'AbortError') ui.vidDescargaEstado.textContent = 'Descarga cancelada.';
       else if (error instanceof ErrorDestino && error.codigo === 'grande') ui.vidDescargaEstado.textContent = `El archivo supera ${formatearBytes(error.limite)}. Elige una calidad menor.`;
@@ -340,7 +381,7 @@ export function montarBibliotecaVideos(raiz, deps) {
   }
 
   ui.vidPlegar.addEventListener('click', () => plegar(ui.vidPlegar.getAttribute('aria-expanded') === 'true'));
-  ui.vidBuscar.addEventListener('input', () => { filtro.texto = ui.vidBuscar.value; buscarTexto().catch(console.error); });
+  ui.vidBuscar.addEventListener('input', () => { filtro.texto = ui.vidBuscar.value; buscarAlTeclear(); });
   ui.vidEnTexto.addEventListener('change', () => buscarTexto().catch(console.error));
   ui.vidOrden.addEventListener('change', () => { filtro.orden = ui.vidOrden.value; pintar(); });
   ui.vidLimpiar.addEventListener('click', () => {
@@ -407,8 +448,9 @@ export function montarBibliotecaVideos(raiz, deps) {
   });
   ui.vidDescargar.addEventListener('click', descargar);
   ui.vidDescargaCancelar.addEventListener('click', () => controladorDescarga?.abort());
-  ui.vidDescargasCerrar.addEventListener('click', () => { controladorDescarga?.abort(); cerrarDialogo(ui.vidDescargasDialogo); });
-  ui.vidDescargasDialogo.addEventListener('cancel', () => controladorDescarga?.abort());
+  ui.vidGuardarOtraVez?.addEventListener('click', () => { guardarOtraVez?.(); });
+  ui.vidDescargasCerrar.addEventListener('click', () => { controladorDescarga?.abort(); soltarArchivo(); cerrarDialogo(ui.vidDescargasDialogo); });
+  ui.vidDescargasDialogo.addEventListener('cancel', () => { controladorDescarga?.abort(); soltarArchivo(); });
 
   refrescar();
   return { refrescar, plegar };

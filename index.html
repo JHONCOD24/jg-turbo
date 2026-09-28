@@ -6722,7 +6722,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               </fieldset>
               <label class="vid-calidad" for="vidCalidad">Calidad<select id="vidCalidad"></select></label>
               <p id="vidDescargaEstado" role="status" aria-live="polite">Calculando tamaño…</p>
-              <div class="vid-descarga-acciones"><button class="btn primary" id="vidDescargar" type="button">Descargar</button><button class="btn" id="vidDescargaCancelar" type="button" hidden>Cancelar</button></div>
+              <div class="vid-descarga-acciones"><button class="btn primary" id="vidDescargar" type="button">Descargar</button><button class="btn" id="vidDescargaCancelar" type="button" hidden>Cancelar</button><button class="btn" id="vidGuardarOtraVez" type="button" hidden>Guardar archivo</button></div>
             </div>
           </dialog>
         </section>
@@ -18660,6 +18660,9 @@ function asegurarYoutubeSincronizado(){
             language: 'es',
             locale: ttsResolveNeuralLocale(prefs, 'es'),
             rate: Math.min(1.25, Math.max(1, Number(opciones.tasa) || 1)),
+            // El mismo tono que la voz en vivo: el archivo reutiliza sus frases
+            // guardadas y, sin esto, las aceleradas sonaban con otro carácter.
+            tone: prefs.tone || 'neutral',
             idioma_fijo: true,
             evitar_azure: opciones.evitarAzure !== false,
             source: 'yt',

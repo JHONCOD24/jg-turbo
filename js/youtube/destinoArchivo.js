@@ -57,11 +57,17 @@ export async function crearDestino({ nombre, tipoMime, bytesEstimados = 0, esMov
       cancelar: () => escritura.abort?.().catch(() => {}),
     };
   }
+  // En memoria el archivo sale con un clic automático MINUTOS después del toque
+  // de la persona: Safari (iPhone) puede no guardarlo sin un gesto reciente.
+  // `guardarOtraVez` lo vuelve a entregar desde un botón (con gesto nuevo).
+  let listo = null;
+  const entregar = (blob) => { listo = blob; guardarBlob(blob, nombre); };
   return {
     tipo: 'memoria',
     crearTarget: (mb) => new mb.BufferTarget(),
-    terminar: async (output) => guardarBlob(new Blob([output.target.buffer], { type: tipoMime }), nombre),
-    recibirFlujo: async (flujo) => guardarBlob(await new Response(flujo).blob(), nombre),
-    cancelar: () => {},
+    terminar: async (output) => entregar(new Blob([output.target.buffer], { type: tipoMime })),
+    recibirFlujo: async (flujo) => entregar(await new Response(flujo).blob()),
+    guardarOtraVez: () => { if (listo) guardarBlob(listo, nombre); return Boolean(listo); },
+    cancelar: () => { listo = null; },
   };
 }

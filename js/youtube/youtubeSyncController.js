@@ -224,6 +224,7 @@ export function inicializarYoutubeSincronizado({
       guardar(clave, select.value);
       if (!sesion) return;
       resolverVocesSesion(sesion);
+      if (sesion.registro) registrarVideo({ clave: sesion.videoId, voz: sesion.voz || '', vozSecundaria: sesion.vozSecundaria || 'ninguna' });
       // La voz nueva entra desde la próxima frase, sin cortar la actual.
       if (sesion?.servicioVoz) sesion.servicioVoz.invalidarDesde((sesion.player?.getCurrentTime?.() || 0) + 1);
     }
@@ -789,8 +790,9 @@ export function inicializarYoutubeSincronizado({
       datos, origen: decision.idioma, tituloVideo, signal,
       traduccionesGuardadas: actual.registro.traducciones,
     });
-    // La voz ya resuelta («auto» → la neural del video): la usan las descargas.
-    registrarVideo({ clave: actual.videoId, voz: actual.voz || '' });
+    // Las voces ya resueltas («auto» → la neural del video): las usan las
+    // descargas, para que el archivo suene como sonó el video.
+    registrarVideo({ clave: actual.videoId, voz: actual.voz || '', vozSecundaria: actual.vozSecundaria || 'ninguna' });
   }
 
   async function iniciarSesion() {
@@ -973,11 +975,18 @@ export function inicializarYoutubeSincronizado({
 
   const esMovil = () => Boolean(navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 
-  /** Voz neural de los archivos: la del video si era neural; si era Fish o «auto», la neural de su género. */
+  /**
+   * Voz neural de los archivos: la que sonó en el video si era neural; si era
+   * Fish o «auto», la neural de su género (Fish tarda 6-8 s por frase). La 2.ª
+   * voz sigue la elección del dueño («Ninguna» = todo con la principal).
+   */
   function vozDeArchivo(video, hablante = 0) {
-    const guardada = String(video?.voz || '');
-    const principal = guardada.startsWith('neural:') ? guardada : `neural:auto:${generoDeVoz(guardada || vozPorDefecto())}`;
+    const neural = (voz) => (String(voz).startsWith('neural:') ? String(voz) : `neural:auto:${generoDeVoz(voz)}`);
+    const principal = neural(String(video?.voz || '') || vozPorDefecto());
     if (hablante !== 1) return principal;
+    const segunda = video?.vozSecundaria;
+    if (segunda === 'ninguna') return principal;
+    if (segunda) return neural(segunda);
     return `neural:auto:${generoDeVoz(principal) === 'male' ? 'female' : 'male'}`;
   }
 
@@ -1063,18 +1072,19 @@ export function inicializarYoutubeSincronizado({
       esMovil: esMovil(),
     });
     if (!destino) return { cancelado: true };
+    const conRespaldo = (resultado) => ({ ...resultado, guardarOtraVez: destino.guardarOtraVez || null });
     try {
       const archivos = await import('./exportadorDoblaje.js');
-      if (tipo === 'original') return await archivos.descargarOriginalX({ mp4Url: calidad.url, destino, signal, onProgreso });
+      if (tipo === 'original') return conRespaldo(await archivos.descargarOriginalX({ mp4Url: calidad.url, destino, signal, onProgreso }));
       const frases = await frasesParaArchivo(video, { signal, onProgreso });
       const sintetizar = (texto, opciones) => sintetizarArchivo(video, texto, opciones);
       if (tipo === 'mp3') {
-        return await archivos.exportarMp3({ frases, duracionVideoS: video.duracionS, sintetizar, destino, signal, onProgreso });
+        return conRespaldo(await archivos.exportarMp3({ frases, duracionVideoS: video.duracionS, sintetizar, destino, signal, onProgreso }));
       }
-      return await archivos.exportarMp4DobladoX({
+      return conRespaldo(await archivos.exportarMp4DobladoX({
         mp4Url: calidad.url, frases, sintetizar, destino, signal, onProgreso,
         volumenOriginal: Number(ui.volOriginal.value) / 100,
-      });
+      }));
     } catch (error) {
       await destino.cancelar?.();
       throw error;

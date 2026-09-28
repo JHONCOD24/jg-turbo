@@ -97,6 +97,9 @@ export function fusionarEntrada(previa, nueva, ahora = Date.now()) {
     duracionS,
     idiomaOrigen: nueva?.idiomaOrigen || base.idiomaOrigen || '',
     voz: nueva?.voz || base.voz || '',
+    // 2.ª voz de los diálogos tal como sonó: 'ninguna' = todo con la principal.
+    // undefined en fichas anteriores a la auditoría (entonces, la del otro género).
+    vozSecundaria: nueva?.vozSecundaria ?? base.vozSecundaria,
     etiquetas: Array.isArray(base.etiquetas) ? base.etiquetas : [],
     favorito: Boolean(base.favorito),
     posicionS,

@@ -301,6 +301,14 @@ try {
     const [mp3] = await Promise.all([pagina.waitForEvent('download', { timeout: 60000 }).catch(() => null), pagina.click('#vidDescargar')]);
     comprobar('el MP3 doblado se descarga con buen nombre', /^jg-turbo-youtube-curso-de-python-desde-cero-audio-es\.mp3$/.test(mp3?.suggestedFilename() || ''), mp3?.suggestedFilename());
     comprobar('las frases del archivo se piden sin Azure (evitar_azure)', reg.tts.length > 0 && reg.tts.every((t) => t.evitarAzure), JSON.stringify(reg.tts.slice(0, 3)));
+    // Auditoría 2026-09-28: en memoria (teléfono) el archivo sale minutos después del toque;
+    // Safari puede no guardarlo sin gesto, así que queda un botón para entregarlo otra vez.
+    comprobar('al terminar se dice «Archivo guardado» y se ofrece «Guardar archivo» por si no se guardó', await hastaQue(() => pagina.isVisible('#vidGuardarOtraVez')) && /Archivo guardado\./.test(await pagina.textContent('#vidDescargaEstado')), await pagina.textContent('#vidDescargaEstado'));
+    const [otraVez] = await Promise.all([pagina.waitForEvent('download', { timeout: 10000 }).catch(() => null), pagina.click('#vidGuardarOtraVez')]);
+    comprobar('«Guardar archivo» vuelve a entregar el mismo MP3 (con el toque nuevo)', otraVez?.suggestedFilename() === mp3?.suggestedFilename(), otraVez?.suggestedFilename());
+    await pagina.click('#vidDescargasCerrar');
+    await menuDe(pagina, 'b2c3d4e5f6g', 'descargar');
+    comprobar('al cerrar y volver a abrir, el botón de respaldo no queda colgado', !(await pagina.isVisible('#vidGuardarOtraVez')));
     await pagina.click('#vidDescargasCerrar');
 
     await menuDe(pagina, 'x:1349794411333394432', 'descargar');

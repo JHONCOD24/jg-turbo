@@ -20,6 +20,7 @@ const DOBLAJES = 'doblajes';
 const VIDEOS = 'videos';
 const VOCES = 'voces';
 export const PRESUPUESTO_VOCES_BYTES = 300 * 1024 * 1024;
+const DIA_MS = 24 * 60 * 60 * 1000;
 
 function abrir() {
   return new Promise((resolver, rechazar) => {
@@ -177,7 +178,11 @@ export async function leerVoz(clave) {
   try {
     const registro = await operar(VOCES, 'readonly', (a) => a.get(clave));
     if (!registro?.blob) return null;
-    operar(VOCES, 'readwrite', (a) => a.put({ ...registro, usado: Date.now() })).catch(() => {});
+    // «Usado» solo ordena la poda: basta con anotarlo una vez al día. Hacerlo en
+    // cada lectura reescribía el audio entero por cada frase que sonaba.
+    if (Date.now() - (registro.usado || 0) > DIA_MS) {
+      operar(VOCES, 'readwrite', (a) => a.put({ ...registro, usado: Date.now() })).catch(() => {});
+    }
     return { blob: registro.blob, motor: registro.motor || '' };
   } catch (_) {
     return null;
