@@ -91,3 +91,13 @@ Regresión: doblaje 139/0, sincronía 65/0, navegador 110/0, arranque ligero
 El doblaje volvió a dar 138/1 una vez justo tras editar el controlador;
 en 10 corridas de repetición (incluida la misma combinación de comandos)
 dio siempre 139/0. Patrón: primera carga del archivo recién modificado.
+
+## Tarea 10
+
+Video de prueba fabricado con el FFmpeg 8.1.2 de winget (el de `.marscode`
+no trae `lavfi`): 232 099 bytes. Prueba copiada tal cual: 24 OK · 0 fallos.
+Contraprueba del Referer: quitando el `no-referrer` de `servicioX.js` y de
+`x-reproductor.html` falla exactamente «NINGUNA petición a video.twimg.com
+lleva Referer» y lista las 3 URLs (master, lista de audio y MP4); restaurados,
+vuelve a 24 OK. Regresión: doblaje 139/0, sincronía 65/0, navegador 110/0,
+arranque ligero 9 OK + fallo preexistente de 1 MB (1033 KB).

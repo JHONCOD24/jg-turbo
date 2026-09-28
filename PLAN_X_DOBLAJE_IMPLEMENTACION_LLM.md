@@ -2164,7 +2164,7 @@ interfaz. Todo simulado (sin red ni créditos), igual que `verificar_youtube_dob
   H.264, por eso WebM)
 - Crear: `tests/verificar_x_doblaje.mjs`
 
-- [ ] **Paso 1: fabricar el video de prueba** (120 s de color plano con un tono; ~230 KB):
+- [x] **Paso 1: fabricar el video de prueba** (120 s de color plano con un tono; ~230 KB):
 
 ```bash
 ffmpeg -hide_banner -loglevel error -y -f lavfi -i color=c=0x223344:size=160x90:rate=5 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 120 -c:v libvpx -b:v 12k -c:a libopus -b:a 12k tests/fixtures/x/video_prueba.webm
@@ -2172,7 +2172,7 @@ ls -l tests/fixtures/x/video_prueba.webm
 ```
   Esperado: unos 230 KB. (Con `testsrc` en vez de `color` salió de 1,2 MB: no vale la pena en el repo.)
 
-- [ ] **Paso 2: escribir la prueba** — crear `tests/verificar_x_doblaje.mjs` con este contenido (validado:
+- [x] **Paso 2: escribir la prueba** — crear `tests/verificar_x_doblaje.mjs` con este contenido (validado:
   24 OK sobre una copia con las Tareas 1–9 aplicadas; y **falla** si se quita el `no-referrer`):
 
 ```js
@@ -2463,21 +2463,21 @@ console.log(`\n${ok} comprobaciones OK · ${fallos.length} fallos`);
 if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); process.exit(1); }
 ```
 
-- [ ] **Paso 3: ejecutar** — `node tests/verificar_x_doblaje.mjs`
+- [x] **Paso 3: ejecutar** — `node tests/verificar_x_doblaje.mjs`
   Esperado: `24 comprobaciones OK · 0 fallos` (tarda ~1 min). Si alguna falla, arregla **el código**, no
   la prueba (ver `TRAMPAS.md` §2).
 
-- [ ] **Paso 3b: contraprueba obligatoria** (TRAMPAS §1: una prueba en verde puede no probar nada).
+- [x] **Paso 3b: contraprueba obligatoria** (TRAMPAS §1: una prueba en verde puede no probar nada).
   Quita temporalmente `referrerPolicy: 'no-referrer', ` de `fetchTwimg` en `servicioX.js` y la línea
   `<meta name="referrer" …>` de `x-reproductor.html`; corre la prueba: **debe** fallar en «NINGUNA
   petición a video.twimg.com lleva Referer» listando las URLs. Restaura los dos archivos
   (`git checkout -- js/youtube/servicioX.js x-reproductor.html`: son tuyos y ya están commiteados) y
   vuelve a correrla: 24 OK.
 
-- [ ] **Paso 4: regresión completa de YouTube** — los tres comandos de la Tarea 8 paso 2 +
+- [x] **Paso 4: regresión completa de YouTube** — los tres comandos de la Tarea 8 paso 2 +
   `node tests/verificar_arranque_ligero.mjs` → mismos números de la línea base.
 
-- [ ] **Paso 5: commit** — `git add tests/verificar_x_doblaje.mjs tests/fixtures/x/video_prueba.webm && git commit -m "test(x): doblaje de X de punta a punta con API y reproductor simulados"`
+- [x] **Paso 5: commit** — `git add tests/verificar_x_doblaje.mjs tests/fixtures/x/video_prueba.webm && git commit -m "test(x): doblaje de X de punta a punta con API y reproductor simulados"`
 
 ---
 
