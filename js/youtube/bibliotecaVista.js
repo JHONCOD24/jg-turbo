@@ -81,6 +81,7 @@ export function montarBibliotecaVideos(raiz, deps) {
     const boton = $('.vid-menu-btn', menuAbierto);
     $('.vid-menu', menuAbierto)?.setAttribute('hidden', '');
     boton?.setAttribute('aria-expanded', 'false');
+    menuAbierto.classList.remove('vid-con-menu');
     menuAbierto = null;
     if (devolverFoco) boton?.focus();
   }
@@ -375,6 +376,7 @@ export function montarBibliotecaVideos(raiz, deps) {
       cerrarMenu();
       if (!mismo) {
         menuAbierto = tarjeta;
+        tarjeta.classList.add('vid-con-menu');
         $('.vid-menu', tarjeta).hidden = false;
         botonMenu.setAttribute('aria-expanded', 'true');
         $('.vid-menu [role="menuitem"]', tarjeta)?.focus();

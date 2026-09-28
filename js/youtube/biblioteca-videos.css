@@ -45,6 +45,9 @@
 .vid-favorito{position:absolute;top:9px;left:9px;background:rgba(8,10,16,.85);color:#f4c866}
   .vid-menu-btn{position:absolute;right:8px;top:calc(56.25% + 8px);z-index:2;display:grid;place-items:center;min-width:44px;min-height:44px;border:0;border-radius:50%;background:rgba(8,10,16,.78);color:var(--text);cursor:pointer}.vid-menu-btn svg{width:20px;height:20px}
 .vid-menu{position:absolute;right:8px;top:calc(56.25% + 48px);z-index:12;width:min(230px,calc(100% - 16px));padding:7px;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:#171c29;box-shadow:0 16px 40px rgba(0,0,0,.42)}
+/* El transform del hover crea un contexto de apilamiento: sin elevar la tarjeta abierta,
+   su menú (z-index:12) queda encerrado detrás de las tarjetas de las filas de abajo. */
+.vid-tarjeta.vid-con-menu{z-index:30}
 .vid-menu button{display:block;width:100%;min-height:44px;padding:0 11px;border:0;border-radius:8px;background:transparent;color:var(--text);font:600 13px inherit;text-align:left;cursor:pointer}.vid-menu button:hover,.vid-menu button:focus-visible{background:rgba(255,255,255,.08)}
   .vid-coincidencia{margin:0 12px 12px;padding:11px;border:1px solid rgba(39,225,193,.25);border-radius:9px;background:rgba(39,225,193,.06)}.vid-coincidencia p{margin:0 0 6px;color:var(--muted);font-size:13px;line-height:1.45}.vid-coincidencia button{min-height:44px;border:0;background:transparent;color:var(--cyan);font:700 13px inherit;cursor:pointer}
 .vid-sin-resultados{text-align:center;padding:34px 16px}.vid-sin-resultados p{color:var(--muted)}.vid-sin-resultados .btn{min-height:44px}
