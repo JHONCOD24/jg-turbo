@@ -111,3 +111,22 @@ límites, pruebas, «si X cambia», desvíos). Sección nueva en `AGENTS.md`
 (X/Twitter, 6 viñetas) y filas en la tabla de verificación (`test_x_doblaje`
 unitaria y `verificar_x_doblaje` con 24). Entrada del Referer en
 `TRAMPAS.md` y nota de la caché `x:<id>` en `CONFIG_PERSISTENTE.md`.
+
+## Tarea 12 (parcial)
+
+Paso 1: `JG_JS_V` v153 y `CACHE_SHELL jg-turbo-shell-v153`, commit 8af85c3.
+Paso 2 — batería completa en local:
+19 PDF/TTS **1.192 OK** (referencia 1.192) · doblaje **139** · sincronía
+**65** · x **70** · verificar_x **24** · navegador YouTube **110** ·
+arranque ligero **9 OK + 1 fallo preexistente** (1 033 KB) · móvil pantalla
+**60 OK** (main también da 60 hoy: la referencia «62» de AGENTS.md está
+desactualizada; probado en worktree de main) · pytest 5 archivos
+**109 passed** (74 + 35, como predice el plan).
+Paso 3: vista previa desplegada desde copia `git archive` del commit:
+https://jg-turbo-ohjoq6bvz-jhoncod24s-projects.vercel.app
+`/api/health` (con `vercel curl`): `x_video: true`;
+`/x-reproductor.html` sirve `Referrer-Policy: no-referrer` (lo verificado
+antes sin sesión era la página de login del SSO).
+BLOQUEO para la prueba real de doblaje en vista previa: las claves de
+entorno están solo en Production (`vercel env ls`); sin `GROQ_API_KEY`
+la vista previa no transcribe. Pendiente decisión del dueño.
