@@ -5337,6 +5337,7 @@
     .tts-nav{transition:none}
     .tts-nav:active{transform:none}
   }
+
 </style>
 <style id="pdf-libro-v39">
 /* v2.39 · Lector tipo libro (encapsulado en el apartado PDF) */
@@ -6527,90 +6528,6 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           <span class="task-action-hint">Traducción fiel y voz natural, con las voces de la app. Tú decides si ver subtítulos.</span>
         </div>
 
-        <details class="yt-opciones-texto">
-          <summary>Solo el texto (sin doblaje)</summary>
-          <div class="yt-opts">
-            <label class="task-field" for="ytOutputLang">
-              <span class="task-field-label">Idioma del texto final</span>
-              <select id="ytOutputLang" title="Idioma del texto resultante">
-                <option value="same">Mismo idioma del audio</option>
-                <option value="es">Español</option>
-                <option value="en">Inglés</option>
-                <option value="fr">Francés</option>
-                <option value="pt">Portugués</option>
-                <option value="de">Alemán</option>
-              </select>
-            </label>
-            <label class="task-field" for="ytSubPref">
-              <span class="task-field-label">Cómo obtener el texto</span>
-              <select id="ytSubPref">
-                <option value="true">Rápido: subtítulos si hay (recomendado)</option>
-                <option value="false">Whisper turbo (sin subtítulos / más lento)</option>
-              </select>
-            </label>
-          </div>
-          <div class="task-action">
-            <button class="btn primary" id="ytBtn" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              Transcribir video
-            </button>
-            <span class="task-action-hint" id="ytActionHint">Primero pega un enlace de YouTube válido.</span>
-          </div>
-        </details>
-
-        <!-- Red de seguridad: el servidor ya trae el texto solo. Esto queda
-             plegado y cerrado para los casos raros (video privado, sin audio
-             claro, o el servicio caído), no como paso esperado. -->
-        <details class="yt-manual" id="ytManual">
-          <summary>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span id="ytManualTitulo">¿Este video no funcionó? Pega el texto tú mismo</span>
-            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
-          </summary>
-          <div class="yt-manual-body">
-            <p>Normalmente no necesitas esto: <b>Transcribir video</b> trae el texto solo. Úsalo si un video concreto falla (privado, restringido o sin audio claro). Lo que pegues aquí se puede <b>traducir, escuchar y descargar</b> igual que el resto.</p>
-            <div class="yt-guide" id="ytGuide" role="status" aria-live="polite">
-              <strong>Guía rápida · en la pestaña de YouTube</strong>
-              <ol>
-                <li>Toca <b>··· Más</b> (debajo del video) → <b>Mostrar transcripción</b>.</li>
-                <li>En el panel de la derecha, selecciona todo el texto y cópialo (<b>Ctrl+C</b> o <b>⌘C</b>).</li>
-                <li>Vuelve aquí y pulsa <b>Pegar del portapapeles</b>.</li>
-              </ol>
-            </div>
-            <ol class="yt-steps" id="ytStepsDefault">
-              <li>Pega el enlace arriba y pulsa <b>Abrir en YouTube</b> (o abre el video tú).</li>
-              <li>En YouTube: <b>··· Más</b> → <b>Mostrar transcripción</b>.</li>
-              <li>Copia el texto del panel y vuelve aquí.</li>
-              <li>Pulsa <b>Pegar del portapapeles</b> o pégalo en el recuadro y <b>Usar este texto</b>.</li>
-            </ol>
-            <label class="sr-only" for="ytPasteInput">Transcripción copiada de YouTube</label>
-            <textarea id="ytPasteInput" spellcheck="false" placeholder="Pega aquí la transcripción. Da igual si trae horas (0:14) o formato SRT: se limpian solas."></textarea>
-            <div class="yt-manual-acts">
-              <button class="btn primary" id="btnYtPasteClip" type="button" title="Lee lo que copiaste en YouTube">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                Pegar del portapapeles
-              </button>
-              <button class="btn" id="btnYtUsePaste" type="button" disabled title="Si ya pegaste el texto en el recuadro">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                Usar este texto
-              </button>
-              <button class="btn" id="btnYtOpenVideo" type="button" disabled>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                Abrir en YouTube
-              </button>
-              <span class="task-action-hint" id="ytPasteHint">Las marcas de tiempo y líneas repetidas se quitan solas. Después puedes traducir.</span>
-            </div>
-          </div>
-        </details>
-
-        <div class="result-promise">
-          <div class="result-promise-inner">
-            <span class="result-promise-kicker">Resultado</span>
-            <strong>La transcripción aparecerá aquí</strong>
-            <span>Podrás editarla, copiarla, traducirla, descargarla o escucharla sin cambiar de pestaña.</span>
-          </div>
-        </div>
-
         <div id="ytProgArea" role="status" aria-live="polite" style="display:none;margin-bottom:16px">
           <div class="prog-bar"><div class="prog-fill" id="ytProg"></div></div>
           <div class="prog-label" id="ytProgLabel">Analizando…</div>
@@ -6737,6 +6654,154 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             </div>
           </details>
         </section>
+
+        <section class="vid-biblioteca" id="vidBiblioteca" data-estado="cargando" aria-labelledby="vidTitulo">
+          <header class="vid-cabecera">
+            <div>
+              <h3 id="vidTitulo">Tus videos</h3>
+              <p id="vidConteo" aria-live="polite">Cargando biblioteca…</p>
+            </div>
+            <button class="mini-btn vid-plegar" id="vidPlegar" type="button" aria-expanded="true" aria-controls="vidCuerpo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              <span>Plegar</span>
+            </button>
+          </header>
+          <div id="vidCuerpo">
+            <div class="vid-cargando" id="vidCargando" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="vid-vacio" id="vidVacio" hidden>
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="7"/><path d="m21 18 10 6-10 6z"/><path d="M14 6h20"/></svg>
+              <strong>Tu biblioteca empieza con el próximo video</strong>
+              <p>Dobla un enlace con el botón de arriba. Aquí quedará listo para retomarlo, organizarlo y descargar su voz.</p>
+            </div>
+            <article class="vid-seguir" id="vidSeguir" hidden></article>
+            <div class="vid-herramientas">
+              <label class="vid-busqueda" for="vidBuscar">
+                <span class="sr-only">Buscar en tus videos</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                <input id="vidBuscar" type="search" autocomplete="off" placeholder="Buscar por título, canal o tema">
+              </label>
+              <label class="vid-en-texto" for="vidEnTexto"><input id="vidEnTexto" type="checkbox"> Buscar también en lo que se dice</label>
+            </div>
+            <div class="vid-filtros" id="vidFiltros" role="group" aria-label="Filtrar videos">
+              <button type="button" data-vista="todos" aria-pressed="true">Todos</button>
+              <button type="button" data-plataforma="youtube" aria-pressed="false">YouTube</button>
+              <button type="button" data-plataforma="x" aria-pressed="false">X</button>
+              <button type="button" data-vista="favoritos" aria-pressed="false">Favoritos</button>
+              <button type="button" data-vista="viendo" aria-pressed="false">En curso</button>
+              <button type="button" data-vista="vistos" aria-pressed="false">Vistos</button>
+            </div>
+            <div class="vid-temas-fila">
+              <div class="vid-temas" id="vidTemas" role="group" aria-label="Filtrar por tema"></div>
+              <label class="vid-orden" for="vidOrden"><span>Ordenar</span><select id="vidOrden"><option value="recientes">Recientes</option><option value="antiguos">Más antiguos</option><option value="titulo">Título</option><option value="duracion">Duración</option></select></label>
+            </div>
+            <ul class="vid-lista" id="vidLista" role="list"></ul>
+            <div class="vid-sin-resultados" id="vidSinResultados" hidden><strong>No encontramos ese video</strong><p>Prueba otra palabra o vuelve a ver toda la biblioteca.</p><button class="btn" id="vidLimpiar" type="button">Limpiar búsqueda</button></div>
+          </div>
+          <div class="vid-aviso-fila"><p id="vidAviso" role="status" aria-live="polite"></p><button class="mini-btn" id="vidDeshacer" type="button" hidden>Deshacer</button></div>
+
+          <dialog class="vid-dialogo vid-dialogo-temas" id="vidTemasDialogo" aria-labelledby="vidTemasTitulo">
+            <form method="dialog" class="vid-dialogo-caja">
+              <header><div><h3 id="vidTemasTitulo">Temas del video</h3><p>Úsalos para encontrarlo como tú piensas.</p></div><button class="mini-btn vid-dialogo-cerrar" value="cancel" aria-label="Cerrar editor de temas" type="submit">Cerrar</button></header>
+              <div id="vidTemasActuales" class="vid-temas-actuales"></div>
+              <label for="vidTemaNuevo">Añadir un tema<input id="vidTemaNuevo" type="text" maxlength="30" autocomplete="off" placeholder="Ejemplo: Inteligencia artificial"></label>
+              <div id="vidTemasSugerencias" class="vid-sugerencias" aria-label="Temas sugeridos"></div>
+              <p id="vidTemasMensaje" role="status" aria-live="polite"></p>
+              <button class="btn primary" id="vidTemasListo" type="button">Listo</button>
+            </form>
+          </dialog>
+
+          <dialog class="vid-dialogo vid-dialogo-descargas" id="vidDescargasDialogo" aria-labelledby="vidDescargasTitulo">
+            <div class="vid-dialogo-caja">
+              <header><div><h3 id="vidDescargasTitulo">Descargar</h3><p id="vidDescargasAyuda">Elige lo que quieres guardar.</p></div><button class="mini-btn vid-dialogo-cerrar" id="vidDescargasCerrar" type="button">Cerrar</button></header>
+              <fieldset class="vid-tipos"><legend>Archivo</legend>
+                <label data-tipo="original"><input type="radio" name="vidTipo" value="original"> Video original</label>
+                <label data-tipo="mp3"><input type="radio" name="vidTipo" value="mp3" checked> Audio doblado MP3</label>
+                <label data-tipo="mp4"><input type="radio" name="vidTipo" value="mp4"> Video doblado MP4</label>
+              </fieldset>
+              <label class="vid-calidad" for="vidCalidad">Calidad<select id="vidCalidad"></select></label>
+              <p id="vidDescargaEstado" role="status" aria-live="polite">Calculando tamaño…</p>
+              <div class="vid-descarga-acciones"><button class="btn primary" id="vidDescargar" type="button">Descargar</button><button class="btn" id="vidDescargaCancelar" type="button" hidden>Cancelar</button></div>
+            </div>
+          </dialog>
+        </section>
+
+        <details class="yt-opciones-texto">
+          <summary>Solo el texto (sin doblaje)</summary>
+          <div class="yt-opts">
+            <label class="task-field" for="ytOutputLang">
+              <span class="task-field-label">Idioma del texto final</span>
+              <select id="ytOutputLang" title="Idioma del texto resultante">
+                <option value="same">Mismo idioma del audio</option>
+                <option value="es">Español</option>
+                <option value="en">Inglés</option>
+                <option value="fr">Francés</option>
+                <option value="pt">Portugués</option>
+                <option value="de">Alemán</option>
+              </select>
+            </label>
+            <label class="task-field" for="ytSubPref">
+              <span class="task-field-label">Cómo obtener el texto</span>
+              <select id="ytSubPref">
+                <option value="true">Rápido: subtítulos si hay (recomendado)</option>
+                <option value="false">Whisper turbo (sin subtítulos / más lento)</option>
+              </select>
+            </label>
+          </div>
+          <div class="task-action">
+            <button class="btn primary" id="ytBtn" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Transcribir video
+            </button>
+            <span class="task-action-hint" id="ytActionHint">Primero pega un enlace de YouTube válido.</span>
+          </div>
+        </details>
+
+        <!-- Red de seguridad: el servidor ya trae el texto solo. Esto queda
+             plegado y cerrado para los casos raros (video privado, sin audio
+             claro, o el servicio caído), no como paso esperado. -->
+        <details class="yt-manual" id="ytManual">
+          <summary>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span id="ytManualTitulo">¿Este video no funcionó? Pega el texto tú mismo</span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+          </summary>
+          <div class="yt-manual-body">
+            <p>Normalmente no necesitas esto: <b>Transcribir video</b> trae el texto solo. Úsalo si un video concreto falla (privado, restringido o sin audio claro). Lo que pegues aquí se puede <b>traducir, escuchar y descargar</b> igual que el resto.</p>
+            <div class="yt-guide" id="ytGuide" role="status" aria-live="polite">
+              <strong>Guía rápida · en la pestaña de YouTube</strong>
+              <ol>
+                <li>Toca <b>··· Más</b> (debajo del video) → <b>Mostrar transcripción</b>.</li>
+                <li>En el panel de la derecha, selecciona todo el texto y cópialo (<b>Ctrl+C</b> o <b>⌘C</b>).</li>
+                <li>Vuelve aquí y pulsa <b>Pegar del portapapeles</b>.</li>
+              </ol>
+            </div>
+            <ol class="yt-steps" id="ytStepsDefault">
+              <li>Pega el enlace arriba y pulsa <b>Abrir en YouTube</b> (o abre el video tú).</li>
+              <li>En YouTube: <b>··· Más</b> → <b>Mostrar transcripción</b>.</li>
+              <li>Copia el texto del panel y vuelve aquí.</li>
+              <li>Pulsa <b>Pegar del portapapeles</b> o pégalo en el recuadro y <b>Usar este texto</b>.</li>
+            </ol>
+            <label class="sr-only" for="ytPasteInput">Transcripción copiada de YouTube</label>
+            <textarea id="ytPasteInput" spellcheck="false" placeholder="Pega aquí la transcripción. Da igual si trae horas (0:14) o formato SRT: se limpian solas."></textarea>
+            <div class="yt-manual-acts">
+              <button class="btn primary" id="btnYtPasteClip" type="button" title="Lee lo que copiaste en YouTube">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Pegar del portapapeles
+              </button>
+              <button class="btn" id="btnYtUsePaste" type="button" disabled title="Si ya pegaste el texto en el recuadro">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                Usar este texto
+              </button>
+              <button class="btn" id="btnYtOpenVideo" type="button" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Abrir en YouTube
+              </button>
+              <span class="task-action-hint" id="ytPasteHint">Las marcas de tiempo y líneas repetidas se quitan solas. Después puedes traducir.</span>
+            </div>
+          </div>
+        </details>
 
         <div id="ytResultArea" style="display:none">
           <div class="out-head" style="padding:10px 0 8px;gap:6px;flex-wrap:wrap">
