@@ -877,7 +877,7 @@ navegador del dueño (ya tiene la sesión de Vercel) y copia el JSON.
 | 200 con `"fuente": "fxtwitter"` en los tres | Seguir. Anotar que la sindicación bloquea a Vercel. La Tarea 6b **sí** se hace (si FxTwitter cae, el navegador lo intenta directo). |
 | 503 `x_red` en los tres | La Tarea 6b pasa a ser el camino **principal**: el navegador consulta FxTwitter directo (H8). Avisa al dueño antes de seguir. |
 
-- [ ] **Paso 4: commit** — `git add CAMBIOS_X.md && git commit -m "docs(x): medición de /api/x-video desde Vercel"`
+- [x] **Paso 4: commit** — `git add CAMBIOS_X.md && git commit -m "docs(x): medición de /api/x-video desde Vercel"`
 
 ---
 
@@ -896,7 +896,7 @@ navegador del dueño (ya tiene la sesión de Vercel) y copia el JSON.
   `clave` de YouTube = el id tal cual (compatibilidad con la caché existente); de X = `x:<id>` o
   `x:<id>:<indice>` si `indice > 0`.
 
-- [ ] **Paso 1: escribir la prueba**
+- [x] **Paso 1: escribir la prueba**
 
 Crear `tests/test_x_doblaje.mjs`:
 
@@ -942,10 +942,10 @@ console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);
 ```
 
-- [ ] **Paso 2: ejecutar y ver que falla** — `node tests/test_x_doblaje.mjs`
+- [x] **Paso 2: ejecutar y ver que falla** — `node tests/test_x_doblaje.mjs`
   Esperado: `ERR_MODULE_NOT_FOUND … fuenteVideo.js`.
 
-- [ ] **Paso 3: implementar** `js/youtube/fuenteVideo.js`:
+- [x] **Paso 3: implementar** `js/youtube/fuenteVideo.js`:
 
 ```js
 /**
@@ -993,8 +993,8 @@ export function detectarFuente(url) {
 }
 ```
 
-- [ ] **Paso 4: ejecutar** — `node tests/test_x_doblaje.mjs` → `19 comprobaciones OK · 0 fallos`.
-- [ ] **Paso 5: commit** — `git add js/youtube/fuenteVideo.js tests/test_x_doblaje.mjs && git commit -m "feat(x): reconocer enlaces de X junto a los de YouTube"`
+- [x] **Paso 4: ejecutar** — `node tests/test_x_doblaje.mjs` → `19 comprobaciones OK · 0 fallos`.
+- [x] **Paso 5: commit** — `git add js/youtube/fuenteVideo.js tests/test_x_doblaje.mjs && git commit -m "feat(x): reconocer enlaces de X junto a los de YouTube"`
 
 ---
 

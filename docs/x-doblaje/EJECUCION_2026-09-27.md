@@ -39,3 +39,15 @@ Tras copiar literalmente el módulo: 31 passed, 0 fallos.
 Prueba previa: 31 passed y los 4 fallos esperados de ruta/salud.
 Después: 35 passed. Regresión servidor: 74 passed, 0 fallos.
 Implementación extraída literalmente del plan; api/index.py conserva CRLF.
+
+## Tarea 3
+
+Vista previa desplegada desde copia `git archive` del commit `c6749db`.
+Los tres posts respondieron 200 por sindicación: BrooklynNets 0,835 s,
+Elon Musk 0,621 s y James Talarico 0,761 s. Según la tabla del plan,
+la Tarea 6b se omite. `/api/health` reporta `x_video: true`.
+
+## Tarea 4
+
+Prueba y módulo copiados tal cual del plan; ya estaban en disco al
+retomar la sesión. Ejecutada: 19 comprobaciones OK, 0 fallos.
