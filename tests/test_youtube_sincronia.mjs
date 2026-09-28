@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const modulo = (nombre) => import(pathToFileURL(path.join(raiz, 'js/youtube', nombre)).href);
 const ritmo = await modulo('ritmoDoblaje.js');
-const { DubbingEngine, RETRASO_MAXIMO_S } = await modulo('dubbingEngine.js');
+const { DubbingEngine, RETRASO_MAXIMO_S, ANTICIPO_ARRANQUE_S } = await modulo('dubbingEngine.js');
 const { SyncEngine } = await modulo('syncEngine.js');
 
 let ok = 0;
@@ -391,6 +391,23 @@ function enOrdenSinHuecos(completas) {
     `y la voz sigue pegada al video: p95 ${ahora.m.retrasoP95Ms} ms, ${Math.round(ahora.m.dentroObjetivo * 100)} % de muestras ≤ 0,5 s`);
   comprobar(ahora.s.jugador.t > antes.s.jugador.t + 5,
     `en el mismo tiempo real se ve más video: ${ahora.s.jugador.t.toFixed(1)} s (antes ${antes.s.jugador.t.toFixed(1)} s)`);
+}
+
+// ── Cada frase entra en su segundo, no un tic tarde ─────────────────────
+// Los inicios caen ENTRE tics (paso de 4,137 s), como en un video real: con
+// inicios múltiplos de 100 ms el simulador coincidía siempre con el tic y
+// nunca mostraba el atraso de arranque.
+{
+  const unidades = unidadesContinuas(30, { voz: 3 }).map((u, i) => ({ ...u, startTime: i * 4.137, finHabla: i * 4.137 + 3.9, endTime: (i + 1) * 4.137 }));
+  const s = escenario(unidades);
+  s.motor.activarYReproducir();
+  await s.correr(130);
+  const desfases = s.registro.plays.map((p) => p.video - unidades[Number(p.url.split('-')[1])].startTime);
+  const media = desfases.reduce((a, b) => a + b, 0) / desfases.length;
+  comprobar(ANTICIPO_ARRANQUE_S === 0.08 && desfases.length === 30, `las 30 frases arrancan (adelanto ${ANTICIPO_ARRANQUE_S} s)`);
+  comprobar(Math.abs(media) <= 0.03, `la voz entra centrada en su segundo: ${Math.round(media * 1000)} ms de media (antes +40 ms)`);
+  comprobar(Math.max(...desfases) <= 0.05 && Math.min(...desfases) >= -0.07,
+    `ninguna llega un tic tarde ni se adelanta de forma notoria (${Math.round(Math.min(...desfases) * 1000)} a ${Math.round(Math.max(...desfases) * 1000)} ms)`);
 }
 
 comprobar(RETRASO_MAXIMO_S === 5, 'la voz solo se rinde con más de 5 s de atraso');

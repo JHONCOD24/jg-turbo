@@ -21,6 +21,13 @@ import {
 export const RETRASO_MAXIMO_S = 5;
 /** Un salto del reloj que el avance normal no explica = la persona buscó otro punto. */
 const SALTO_S = 1.5;
+/**
+ * La frase entra este tanto ANTES de su segundo. El motor mira cada 100 ms y
+ * el navegador tarda ~30-50 ms en sonar tras `play()`: con 0,03 s la voz
+ * llegaba en promedio 40 ms tarde (p95 84 ms) sin contar esa demora. Con 0,08
+ * queda centrada (simulado: −10 ms de media, p95 +35 ms, nunca antes de −60 ms).
+ */
+export const ANTICIPO_ARRANQUE_S = 0.08;
 /** Tras un salto, tan cerca del inicio de una frase se dice desde el principio. */
 const ARRANQUE_DESDE_INICIO_S = 0.6;
 /** Frenar el video como mucho una vez cada 1,5 s; volver a acelerar exige 4 s de calma. */
@@ -350,7 +357,7 @@ export class DubbingEngine {
       j += 1;
     }
     const unidad = unidades[j];
-    if (!unidad || unidad.startTime > t + 0.03) return;   // aún no le toca: pausa natural
+    if (!unidad || unidad.startTime > t + ANTICIPO_ARRANQUE_S) return;   // aún no le toca: pausa natural
     if (t - unidad.startTime > RETRASO_MAXIMO_S) {
       this.#resincronizar(t, { omitir: true });
       return;
