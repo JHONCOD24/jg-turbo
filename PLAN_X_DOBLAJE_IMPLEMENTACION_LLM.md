@@ -256,7 +256,7 @@ video en formas distintas. Este módulo las reduce a una sola forma y filtra las
   - Códigos de error → HTTP: `enlace` 400 · `no_disponible` 404 · `sin_video` 404 · `gif` 422 ·
     `red` 503.
 
-- [ ] **Paso 1: copiar las capturas como fixtures y escribir los casos de enlaces**
+- [x] **Paso 1: copiar las capturas como fixtures y escribir los casos de enlaces**
 
 ```bash
 mkdir -p tests/fixtures/x
@@ -286,7 +286,7 @@ de enlaces no se desalinee):
 ]
 ```
 
-- [ ] **Paso 2: escribir las pruebas (fallan porque el módulo no existe)**
+- [x] **Paso 2: escribir las pruebas (fallan porque el módulo no existe)**
 
 Crear `backend/tests/test_x_video.py`:
 
@@ -475,12 +475,12 @@ def test_un_gif_no_se_busca_en_la_otra_fuente():
     assert exc.value.codigo == "gif" and len(http.llamadas) == 1
 ```
 
-- [ ] **Paso 3: ejecutar y ver que falla**
+- [x] **Paso 3: ejecutar y ver que falla**
 
 Run: `python -m pytest backend/tests/test_x_video.py -q`
 Esperado: error de colección `ModuleNotFoundError: No module named 'api.x_video'`.
 
-- [ ] **Paso 4: implementar `api/x_video.py`**
+- [x] **Paso 4: implementar `api/x_video.py`**
 
 ```python
 """Videos de X (antes Twitter): de un enlace a las URLs del video.
@@ -723,7 +723,7 @@ def consultar(url: str, http=requests) -> dict:
     raise errores[-1]
 ```
 
-- [ ] **Paso 5: ejecutar y ver que pasa**
+- [x] **Paso 5: ejecutar y ver que pasa**
 
 Run: `python -m pytest backend/tests/test_x_video.py -q`
 Esperado: `31 passed` (15 casos de enlaces + 16 pruebas; la de «borrado o privado» cuenta 2). Si el

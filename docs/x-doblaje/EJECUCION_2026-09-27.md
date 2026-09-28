@@ -28,3 +28,8 @@ Se leyó su habilidad y se usa lectura directa de los archivos indicados por el 
 Las variantes executing-plans y subagent-driven-development no están disponibles.
 Se consultó Context7 para la ruta FastAPI y el despliegue de vista previa con Vercel.
 La prueba en iPhone real sigue siendo obligatoria antes de producción.
+
+## Tarea 1
+
+Prueba previa: error de colección al importar el módulo inexistente.
+Tras copiar literalmente el módulo: 31 passed, 0 fallos.
