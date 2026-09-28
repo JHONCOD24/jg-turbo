@@ -155,7 +155,7 @@ export async function medirDuracionAudio(url, {
 }
 
 export class DubbingService {
-  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null, medirDuracion = medirDuracionAudio }) {
+  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null, medirDuracion = medirDuracionAudio, buscarGuardada = null }) {
     if (typeof generarAudio !== 'function') {
       throw new Error('No está disponible el generador de voz en español.');
     }
@@ -164,6 +164,7 @@ export class DubbingService {
     this.limitador = limitador;
     this.onRespaldo = onRespaldo;
     this.medirDuracion = medirDuracion;
+    this.buscarGuardada = buscarGuardada;
     this.unidades = [];
     this.completadas = 0;
     this.destruido = false;
@@ -245,11 +246,15 @@ export class DubbingService {
     const version = this.versionVoz;
     unidad.promesa = (async () => {
       try {
-        await this.#cupo();
+        // Voz ya guardada (biblioteca): no gasta turno del limitador de Azure,
+        // que existe para no pasar de 20 síntesis/min; sin esto, volver a un
+        // video con toda su voz guardada seguiría sonando a 18 frases por minuto.
+        const guardada = await Promise.resolve(this.buscarGuardada?.(unidad.text, unidad)).catch(() => null);
+        if (!guardada) await this.#cupo();
         // Se pasa la unidad completa: el controlador elige la voz según el
         // hablante (diálogos con 2 voces). Las funciones viejas que solo
         // reciben el texto siguen funcionando: el 2.º argumento se ignora.
-        const resultado = await this.generarAudio(unidad.text, unidad);
+        const resultado = guardada || await this.generarAudio(unidad.text, unidad);
         const blob = resultado instanceof Blob ? resultado : resultado?.blob;
         if (!blob?.size) throw new Error('El servicio no devolvió audio.');
         if (this.destruido) throw new Error('La preparación de voz fue cancelada.');

@@ -6015,7 +6015,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     <nav class="tabs" role="tablist" aria-label="Formas de trabajar">
       <button class="tab active" id="tabMic" role="tab" aria-selected="true" aria-controls="panelMic" tabindex="0" data-tab="mic"><span class="em" aria-hidden="true">🎤</span><span class="lbl">Micrófono</span></button>
       <button class="tab" id="tabFile" role="tab" aria-selected="false" aria-controls="panelFile" tabindex="-1" data-tab="file"><span class="em" aria-hidden="true">🎧</span><span class="lbl">Archivo</span></button>
-      <button class="tab" id="tabYt" role="tab" aria-selected="false" aria-controls="panelYt" tabindex="-1" data-tab="yt"><span class="em" aria-hidden="true">▶️</span><span class="lbl">YouTube</span></button>
+      <button class="tab" id="tabYt" role="tab" aria-selected="false" aria-controls="panelYt" tabindex="-1" data-tab="yt"><span class="em" aria-hidden="true">▶️</span><span class="lbl">Videos</span></button>
       <button class="tab" id="tabPdf" role="tab" aria-selected="false" aria-controls="panelPdf" tabindex="-1" data-tab="pdf"><span class="em" aria-hidden="true">📄</span><span class="lbl">PDF</span></button>
       <button class="tab" id="tabTrans" role="tab" aria-selected="false" aria-controls="panelTrans" tabindex="-1" data-tab="trans"><span class="em" aria-hidden="true">🌐</span><span class="lbl">Traducir</span></button>
     </nav>
@@ -18580,6 +18580,32 @@ function asegurarYoutubeSincronizado(){
         opciones.voz ? ttsPrefsParaVoz(opciones.voz) : ttsPrefs(),
         1, 'yt', 0, opciones.signal,
       ),
+      // Archivos de la biblioteca (MP3 / MP4 doblados): cada frase a la velocidad
+      // que pida el plan de la pista (`rate` con prosodia: no cambia el tono) y,
+      // por defecto, por edge-tts (`evitar_azure`): la misma voz neural sin la
+      // cuota de 20 síntesis/min de Azure F0. Nunca Fish (6-8 s por frase).
+      generarAudioArchivo: async (texto, opciones = {}) => {
+        const prefs = opciones.voz ? ttsPrefsParaVoz(opciones.voz) : ttsPrefs();
+        const resp = await fetchApi('/tts', {
+          method: 'POST',
+          signal: opciones.signal,
+          body: JSON.stringify({
+            text: texto,
+            voice: prefs.gender === 'male' ? 'male' : 'female',
+            language: 'es',
+            locale: ttsResolveNeuralLocale(prefs, 'es'),
+            rate: Math.min(1.25, Math.max(1, Number(opciones.tasa) || 1)),
+            idioma_fijo: true,
+            evitar_azure: opciones.evitarAzure !== false,
+            source: 'yt',
+          }),
+        }, 45000);
+        if (!resp.ok) {
+          const datos = await resp.json().catch(() => ({}));
+          throw new Error(typeof datos.detail === 'string' ? datos.detail : `La voz no respondió (HTTP ${resp.status}).`);
+        }
+        return resp.blob();
+      },
       listarVoces: () => ttsVocesParaDoblaje(),
       vozPorDefecto: () => {
         // Neural del mismo género que la voz global: rápida (0,4–1,1 s por frase) y estable.

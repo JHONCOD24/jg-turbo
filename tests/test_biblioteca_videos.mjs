@@ -157,6 +157,38 @@ const dd = await modulo('descargaDestino.js');
   comprobar(dd.nombreArchivo({ titulo: '', tipo: 'audio', extension: 'mp3' }) === 'jg-turbo-youtube-video-audio-es.mp3', 'sin título: «video»');
 }
 
+// ── Voz guardada: no gasta el limitador de Azure (dubbingService.js) ──────
+const ds = await modulo('dubbingService.js');
+{
+  let turnos = 0;
+  let generadas = 0;
+  const limitador = { disponible: () => true, esperaMs: () => 0, registrar: () => { turnos += 1; } };
+  const blob = new Blob([new Uint8Array(6000)], { type: 'audio/mpeg' });
+  const servicio = new ds.DubbingService({
+    generarAudio: async () => { generadas += 1; return { blob }; },
+    buscarGuardada: async (texto) => (texto === 'guardada' ? { blob, engineHdr: 'azure' } : null),
+    limitador,
+    medirDuracion: async () => 1,
+  });
+  servicio.definirUnidades([
+    { indice: 0, startTime: 0, endTime: 2, estado: 'sin_traducir' },
+    { indice: 1, startTime: 2, endTime: 4, estado: 'sin_traducir' },
+  ]);
+  servicio.fijarTexto(0, 'guardada');
+  servicio.fijarTexto(1, 'nueva');
+  await servicio.asegurar(0);
+  await servicio.asegurar(1);
+  comprobar(turnos === 1 && generadas === 1, 'la voz guardada no gasta turno del limitador ni se vuelve a pedir');
+  comprobar(servicio.unidades[0].estado === 'listo' && servicio.unidades[0].duracionVoz === 1, 'la frase guardada queda lista y medida');
+  const sinGuardado = new ds.DubbingService({ generarAudio: async () => ({ blob }), limitador, medirDuracion: async () => 1 });
+  sinGuardado.definirUnidades([{ indice: 0, startTime: 0, endTime: 2, estado: 'sin_traducir' }]);
+  sinGuardado.fijarTexto(0, 'x');
+  await sinGuardado.asegurar(0);
+  comprobar(turnos === 2, 'sin buscarGuardada todo sigue igual que antes (una frase = un turno)');
+  servicio.liberar();
+  sinGuardado.liberar();
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);

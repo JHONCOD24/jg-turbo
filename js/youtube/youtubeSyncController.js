@@ -15,13 +15,19 @@ import { TranslationService } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
 import { SyncEngine, normalizarTasa } from './syncEngine.js';
 import { TranscriptionDisplay } from './TranscriptionDisplay.js';
-import { DubbingService, agruparPorTiempo } from './dubbingService.js';
+import { DubbingService, agruparPorTiempo, textoDeUnidad } from './dubbingService.js';
 import { DubbingEngine } from './dubbingEngine.js';
 import { MotorPreparacion } from './motorPreparacion.js';
 import { crearLimitador } from './limitador.js';
 import { VOZ_INICIAL_S } from './planificador.js';
 import { decidirDoblaje, nombreIdioma, IDIOMAS_DOBLABLES } from './idiomaOrigen.js';
-import { leerDoblaje, guardarDoblaje } from './cacheDoblaje.js';
+import {
+  leerDoblaje, guardarDoblaje, registrarVideo, leerVoz, guardarVoz, podarVoces, pedirPersistencia,
+  listarVideos, listarDoblajes, videosConVoz, actualizarVideo, quitarVideo, restaurarVideo, espacioYPersistencia,
+} from './cacheDoblaje.js';
+import { claveDeVoz } from './bibliotecaVideos.js';
+import { estimarBytesMp3, estimarBytesVideo, opcionesCalidadX, nombreArchivo, BITRATE_AUDIO_DOBLADO } from './descargaDestino.js';
+import { crearDestino } from './destinoArchivo.js';
 import {
   hayDialogo, elegirVocesAutomaticas, vozParaUnidad, generoDeVoz,
 } from './vocesDoblaje.js';
@@ -57,6 +63,7 @@ export function inicializarYoutubeSincronizado({
   fetchApi,
   traducirTexto,
   generarAudioEspanol,
+  generarAudioArchivo = null,
   estaServidorOnline,
   listarVoces = () => [],
   vozPorDefecto = () => 'neural:auto:female',
@@ -88,6 +95,17 @@ export function inicializarYoutubeSincronizado({
   const audioDoblaje2 = new Audio();
   let audiosEntregados = 0;
   let sesion = null;
+  // Biblioteca (bibliotecaVista.js): se monta sola si existe #vidBiblioteca.
+  let biblioteca = null;
+  let abrirEnPendiente = 0;
+  let vocesDesdePoda = 0;
+  const avisarBiblioteca = () => { Promise.resolve(biblioteca?.refrescar?.()).catch(() => {}); };
+  /** La voz guardada tiene tope (300 MB): se revisa cada 50 frases nuevas, no en cada una. */
+  const contarVozGuardada = (guardada) => {
+    if (!guardada) return;
+    vocesDesdePoda += 1;
+    if (vocesDesdePoda >= 50) { vocesDesdePoda = 0; podarVoces(); }
+  };
 
   // ── Volúmenes y subtítulo (se recuerdan) ────────────────────────────────
   ui.volVoz.value = String(leerNumero(CLAVE_VOL_VOZ, 100));
@@ -375,13 +393,14 @@ export function inicializarYoutubeSincronizado({
     progreso.terminar();
   }
 
-  /** Guarda traducciones y posición en la caché del video (H23). */
+  /** Guarda traducciones y posición en la caché del video (H23) y el avance en la biblioteca. */
   function guardarSesion(actual) {
     if (!actual?.registro) return;
     actual.registro.traducciones = [...(actual.motor?.traducciones || [])];
     const posicion = actual.player?.getCurrentTime?.() || 0;
     if (posicion > 0) actual.registro.posicionS = posicion;
     guardarDoblaje(actual.registro);
+    if (posicion > 0) registrarVideo({ clave: actual.videoId, posicionS: posicion, duracionS: actual.registro.duracionS });
   }
 
   /** Detiene TODO lo de la sesión (H7) y, si se pide, devuelve el formulario (H8). */
@@ -407,6 +426,8 @@ export function inicializarYoutubeSincronizado({
     marcarOcupado(false);
     reiniciarVista();
     if (restaurarFormulario) {
+      biblioteca?.plegar?.(false);
+      if (actual) avisarBiblioteca();   // el avance y «Listo al instante» cambian al cerrar
       ui.area.hidden = true;
       document.querySelector('.yt-area')?.classList.remove('has-results', 'modo-doblaje', 'con-texto');
       ui.url.focus({ preventScroll: true });
@@ -604,10 +625,23 @@ export function inicializarYoutubeSincronizado({
     const limitador = crearLimitador();
     const servicioVoz = new DubbingService({
       // Cada frase suena con su hablante: monólogo = 1 voz, diálogo = 2.
-      generarAudio: (texto, unidad) => generarAudioEspanol(texto, {
-        voz: vozParaUnidad(unidad, { vozPrincipal: actual.voz, vozSecundaria: actual.vozSecundaria }),
-        signal,
-      }),
+      // La voz ya generada se reutiliza (biblioteca: «Listo al instante») y no
+      // gasta turno del limitador de Azure: DubbingService la consulta ANTES.
+      buscarGuardada: async (texto, unidad) => {
+        const voz = vozParaUnidad(unidad, { vozPrincipal: actual.voz, vozSecundaria: actual.vozSecundaria });
+        const guardada = await leerVoz(claveDeVoz(actual.videoId, voz, texto));
+        return guardada ? { blob: guardada.blob, engineHdr: guardada.motor } : null;
+      },
+      generarAudio: async (texto, unidad) => {
+        const voz = vozParaUnidad(unidad, { vozPrincipal: actual.voz, vozSecundaria: actual.vozSecundaria });
+        const resultado = await generarAudioEspanol(texto, { voz, signal });
+        const blob = resultado instanceof Blob ? resultado : resultado?.blob;
+        // Un respaldo (sonó otra voz) no se guarda: al volver al video sonaría con otro timbre.
+        if (blob?.size && !resultado?.respaldoHdr) {
+          guardarVoz(claveDeVoz(actual.videoId, voz, texto), actual.videoId, blob, resultado?.engineHdr || '').then(contarVozGuardada);
+        }
+        return resultado;
+      },
       limitador,
       onRespaldo: () => pasarANeural(actual),
     });
@@ -699,11 +733,13 @@ export function inicializarYoutubeSincronizado({
   function abrirSesion(videoId) {
     terminarSesion({ restaurarFormulario: false });
     const controlador = new AbortController();
-    const actual = { controlador, videoId };
+    const actual = { controlador, videoId, abrirEn: abrirEnPendiente };
+    abrirEnPendiente = 0;
     sesion = actual;
     marcarOcupado(true);
     ui.area.hidden = false;
     document.querySelector('.yt-area')?.classList.add('has-results', 'modo-doblaje');
+    biblioteca?.plegar?.(true);   // mientras se ve un video, la biblioteca no estorba
     progreso.iniciar();
     ui.area.scrollIntoView({ block: 'start', behavior: 'smooth' });
     audiosEntregados = 0;
@@ -714,8 +750,12 @@ export function inicializarYoutubeSincronizado({
     return actual;
   }
 
-  /** Lo común con el idioma ya decidido: caché del video, «retomar donde ibas» y preparación. */
-  async function completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve }) {
+  /**
+   * Lo común con el idioma ya decidido: caché del video, ficha de la biblioteca,
+   * «retomar donde ibas» (o el segundo que se buscó) y preparación.
+   * `meta`: { autor, portada } de la plataforma, para la tarjeta.
+   */
+  async function completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve, meta = {} }) {
     const { signal } = actual.controlador;
     actual.registro = {
       videoId: actual.videoId,
@@ -727,7 +767,20 @@ export function inicializarYoutubeSincronizado({
       posicionS: sirve ? guardado.posicionS : 0,
     };
     guardarDoblaje(actual.registro);
-    if (sirve && 15 < guardado.posicionS && guardado.posicionS < duracionS - 30) {
+    registrarVideo({
+      clave: actual.videoId, titulo: tituloVideo, duracionS, idiomaOrigen: decision.idioma,
+      autor: meta.autor || '', portada: meta.portada || '', posicionS: actual.registro.posicionS, abierto: Date.now(),
+    }).then((entrada) => {
+      if (!entrada) return;
+      pedirPersistencia();   // sin esto iOS borra la biblioteca tras días sin uso
+      avisarBiblioteca();
+    });
+    const abrirEn = Number(actual.abrirEn) || 0;
+    if (abrirEn > 0 && abrirEn < duracionS - 1) {
+      actual.retomarEn = abrirEn;
+      ui.estado.textContent = `Abrimos en ${formatoTiempo(abrirEn)}, donde se dice lo que buscaste.`;
+      $('ytDesdeInicio').hidden = false;
+    } else if (sirve && 15 < guardado.posicionS && guardado.posicionS < duracionS - 30) {
       actual.retomarEn = guardado.posicionS;
       ui.estado.textContent = `Retomamos donde ibas (${formatoTiempo(actual.retomarEn)}).`;
       $('ytDesdeInicio').hidden = false;
@@ -736,6 +789,8 @@ export function inicializarYoutubeSincronizado({
       datos, origen: decision.idioma, tituloVideo, signal,
       traduccionesGuardadas: actual.registro.traducciones,
     });
+    // La voz ya resuelta («auto» → la neural del video): la usan las descargas.
+    registrarVideo({ clave: actual.videoId, voz: actual.voz || '' });
   }
 
   async function iniciarSesion() {
@@ -817,7 +872,10 @@ export function inicializarYoutubeSincronizado({
       tituloVideo = actual.player.getVideoData()?.title || tituloVideo || datos.titulo || guardado?.titulo || '';
       duracionS = actual.player.getDuration() || duracionS || datos.duracionS || guardado?.duracionS || 0;
       if (tituloVideo) ui.titulo.textContent = tituloVideo;
-      await completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve });
+      await completarSesion(actual, {
+        decision, datos, tituloVideo, duracionS, guardado, sirve,
+        meta: { autor: actual.player.getVideoData?.()?.author || '' },
+      });
     } catch (error) {
       if (signal.aborted || error?.name === 'AbortError') return;
       mostrarIdioma('No se pudo preparar el doblaje', 'no');
@@ -878,7 +936,10 @@ export function inicializarYoutubeSincronizado({
       actual.player = await promesaPlayer;
       if (signal.aborted) throw cancelado();
       const duracionS = actual.player.getDuration() || Number(info.duracion_s) || datos.duracionS || 0;
-      await completarSesion(actual, { decision, datos, tituloVideo, duracionS, guardado, sirve });
+      await completarSesion(actual, {
+        decision, datos, tituloVideo, duracionS, guardado, sirve,
+        meta: { autor: info.autor || '', portada: info.portada || '' },
+      });
     } catch (error) {
       if (signal.aborted || error?.name === 'AbortError') return;
       mostrarIdioma('No se pudo preparar el doblaje', 'no');
@@ -886,6 +947,153 @@ export function inicializarYoutubeSincronizado({
     } finally {
       if (sesion === actual) marcarOcupado(false);
     }
+  }
+
+  // ── Biblioteca: abrir un video guardado y bajar sus archivos ───────────
+
+  /**
+   * Abre un video de la biblioteca por el camino de siempre: la caché hace que
+   * no se vuelva a pedir texto ni traducción, y la voz guardada suena al
+   * instante. `segundo`: abrir donde se dijo lo que se buscó.
+   */
+  function abrirDesdeBiblioteca(video, { segundo = 0 } = {}) {
+    if (!video?.url) return { abierto: false, motivo: 'Este video no tiene enlace guardado.' };
+    if (estaOcupado()) return { abierto: false, motivo: 'Espera a que termine de prepararse el video actual.' };
+    if (!estaServidorOnline()) return { abierto: false, motivo: 'Conecta el servidor (indicador de arriba) para abrir el video.' };
+    ui.url.value = video.url;
+    if (ui.idioma) ui.idioma.value = 'auto';   // con «auto» la caché del video sirve siempre
+    ui.url.dispatchEvent(new Event('input'));
+    abrirEnPendiente = Number(segundo) || 0;
+    iniciarSesion().catch((error) => {
+      console.error('[jg-youtube]', error);
+      progreso.error('Algo falló al abrir el video. Vuelve a intentarlo.');
+    });
+    return { abierto: true, motivo: '' };
+  }
+
+  const esMovil = () => Boolean(navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+
+  /** Voz neural de los archivos: la del video si era neural; si era Fish o «auto», la neural de su género. */
+  function vozDeArchivo(video, hablante = 0) {
+    const guardada = String(video?.voz || '');
+    const principal = guardada.startsWith('neural:') ? guardada : `neural:auto:${generoDeVoz(guardada || vozPorDefecto())}`;
+    if (hablante !== 1) return principal;
+    return `neural:auto:${generoDeVoz(principal) === 'male' ? 'female' : 'male'}`;
+  }
+
+  /**
+   * Una frase del archivo: primero la voz guardada; si no, edge-tts (sin cuota,
+   * `evitarAzure`) dos veces y, al tercer intento, Azure. Se guarda para la próxima.
+   */
+  async function sintetizarArchivo(video, texto, { tasa = 1, signal = null, frase = null } = {}) {
+    if (typeof generarAudioArchivo !== 'function') throw new Error('Falta el generador de voz para archivos.');
+    const voz = vozDeArchivo(video, frase?.hablante);
+    const clave = claveDeVoz(video.clave, voz, texto, tasa);
+    const guardada = await leerVoz(clave);
+    if (guardada) return guardada.blob;
+    let ultimoError = null;
+    for (const evitarAzure of [true, true, false]) {
+      if (signal?.aborted) throw cancelado();
+      try {
+        const blob = await generarAudioArchivo(texto, { voz, tasa, signal, evitarAzure });
+        if (blob?.size) {
+          guardarVoz(clave, video.clave, blob, evitarAzure ? 'edge' : 'azure').then(contarVozGuardada);
+          return blob;
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) throw cancelado();
+        ultimoError = error;
+      }
+    }
+    throw new Error(`No se pudo generar la voz de una frase: ${ultimoError?.message || 'el servicio no respondió'}`);
+  }
+
+  /** Frases del video entero, traduciendo solo lo que falte (y guardándolo). */
+  async function frasesParaArchivo(video, { signal = null, onProgreso = () => {} } = {}) {
+    const registro = await leerDoblaje(video.clave);
+    if (!registro?.segmentos?.length) throw new Error('Este video todavía no tiene texto guardado. Ábrelo una vez para doblarlo.');
+    const mapa = await traductor.traducirTodo(registro.segmentos, {
+      origen: registro.idiomaOrigen, tituloVideo: registro.titulo, signal,
+      ya: new Map(registro.traducciones || []),
+      onProgress: (hechas, total) => onProgreso({ fase: 'traduccion', hechas, total }),
+    });
+    registro.traducciones = [...mapa];
+    guardarDoblaje(registro);
+    return agruparPorTiempo(registro.segmentos).map((unidad) => ({
+      indice: unidad.indice, startTime: unidad.startTime, hablante: unidad.hablante,
+      texto: textoDeUnidad(unidad, mapa) || '',
+    }));
+  }
+
+  /** Lo que el diálogo de descargas necesita ANTES del clic (tamaños, calidades). */
+  async function opcionesDescarga(video) {
+    const movil = esMovil();
+    const salida = {
+      esMovil: movil,
+      puedeGuardarEnDisco: typeof window.showSaveFilePicker === 'function' && !movil,
+      mp3: { bytes: estimarBytesMp3(video.duracionS) },
+      calidades: [],
+    };
+    if (video.plataforma === 'x') {
+      const info = await servicioX.info(video.url);
+      salida.calidades = opcionesCalidadX(info.mp4, Number(info.duracion_s) || video.duracionS);
+    }
+    return salida;
+  }
+
+  /**
+   * `tipo`: 'original' (MP4 de X) · 'mp3' (audio doblado) · 'mp4' (video de X doblado).
+   * Se llama DIRECTO en el clic: `crearDestino` abre el selector de archivo y el
+   * navegador solo lo permite durante el gesto. Cerrar el selector = `{ cancelado: true }`.
+   */
+  async function descargarDeBiblioteca(video, tipo, { calidad = null, signal = null, onProgreso = () => {} } = {}) {
+    const esX = video?.plataforma === 'x';
+    if (tipo !== 'mp3' && !esX) throw new Error('De YouTube solo se descarga el audio doblado.');
+    if (tipo !== 'mp3' && !calidad?.url) throw new Error('Elige una calidad del video.');
+    const bytesEstimados = tipo === 'mp3'
+      ? estimarBytesMp3(video.duracionS)
+      : calidad.bytes + (tipo === 'mp4' ? estimarBytesVideo(BITRATE_AUDIO_DOBLADO, video.duracionS) : 0);
+    const destino = await crearDestino({
+      nombre: nombreArchivo({
+        titulo: video.titulo, plataforma: video.plataforma,
+        tipo: { original: 'original', mp3: 'audio', mp4: 'doblado' }[tipo], extension: tipo === 'mp3' ? 'mp3' : 'mp4',
+      }),
+      tipoMime: tipo === 'mp3' ? 'audio/mpeg' : 'video/mp4',
+      bytesEstimados,
+      esMovil: esMovil(),
+    });
+    if (!destino) return { cancelado: true };
+    try {
+      const archivos = await import('./exportadorDoblaje.js');
+      if (tipo === 'original') return await archivos.descargarOriginalX({ mp4Url: calidad.url, destino, signal, onProgreso });
+      const frases = await frasesParaArchivo(video, { signal, onProgreso });
+      const sintetizar = (texto, opciones) => sintetizarArchivo(video, texto, opciones);
+      if (tipo === 'mp3') {
+        return await archivos.exportarMp3({ frases, duracionVideoS: video.duracionS, sintetizar, destino, signal, onProgreso });
+      }
+      return await archivos.exportarMp4DobladoX({
+        mp4Url: calidad.url, frases, sintetizar, destino, signal, onProgreso,
+        volumenOriginal: Number(ui.volOriginal.value) / 100,
+      });
+    } catch (error) {
+      await destino.cancelar?.();
+      throw error;
+    }
+  }
+
+  // La vista vive en su propio módulo: se carga solo si el panel trae la sección.
+  const raizBiblioteca = $('vidBiblioteca');
+  if (raizBiblioteca) {
+    import('./bibliotecaVista.js').then(({ montarBibliotecaVideos }) => {
+      biblioteca = montarBibliotecaVideos(raizBiblioteca, {
+        listarVideos, listarDoblajes, videosConVoz, actualizarVideo, quitarVideo, restaurarVideo, espacioYPersistencia,
+        abrir: abrirDesdeBiblioteca, opcionesDescarga, descargar: descargarDeBiblioteca,
+        servidorEnLinea: () => Boolean(estaServidorOnline()),
+      });
+    }).catch((error) => {
+      console.error('[jg-biblioteca]', error);
+      raizBiblioteca.hidden = true;   // sin biblioteca, el doblaje sigue igual
+    });
   }
 
   ui.boton.addEventListener('click', () => {
