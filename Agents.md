@@ -162,6 +162,8 @@ Referencia al 2026-09-26 (v150): los 19 archivos de PDF/TTS suman **1.192 OK**;
 `test_youtube_doblaje` **139** y `test_youtube_sincronia` **65** (0 fallos).
 Referencia al 2026-09-27 (doblaje de X): `test_x_doblaje` **70 OK · 0 fallos**.
 Referencia al 2026-09-28 (biblioteca de videos): `test_biblioteca_videos` **83 OK · 0 fallos**.
+Referencia al 2026-09-28 (auditoría, v156): `test_biblioteca_videos` **97** y
+`test_youtube_sincronia` **71** (0 fallos).
 Referencia al 2026-09-05 (v2.41.0): **1.120 comprobaciones OK, 0 fallos** (24 archivos).
 Referencia anterior (v2.39.0): ~1.000 comprobaciones
 (20 archivos; `test_pdf_mejora_apartado` aporta 50). Si salen menos, la prueba
@@ -182,8 +184,8 @@ se cortó.
 | `node tests/verificar_movil_pantalla.mjs` | **Obligatoria al tocar alturas, scroll o zona segura**: quién desplaza, que se llegue al final del contenido y que no sobre hueco, en 5 pestañas × 4 teléfonos | 62 |
 | `node tests/verificar_youtube_doblaje.mjs` | **Obligatoria al tocar el doblaje de YouTube**: idioma antes del texto, ventana de preparación (voz sin traducirlo todo), cancelar que corta verdad, caché por video, voz/subtítulos/pantalla completa, permiso de IA, texto completo bajo demanda y (v4) **0 frases de voz cortadas o saltadas con el español más largo que el inglés**, ritmo automático y subtítulo = voz — todo con API y reproductor simulados | 110 |
 | `node tests/verificar_x_doblaje.mjs` | **Obligatoria al tocar el doblaje de X**: enlace de X en el mismo campo, audio en partes de ≤3,2 MB, **ninguna petición a video.twimg.com con Referer** (falla si lo lleva), iframe `/x-reproductor.html`, caché `x:<id>`, cancelar que corta verdad, errores que se leen y teléfono sin desborde | 24 |
-| `node tests/verificar_biblioteca_datos.mjs` | **Obligatoria al tocar `cacheDoblaje.js` o los archivos doblados**: migración v1→v2, «lo automático nunca pisa lo que organizó la persona», deshacer, tope de voces, MP3/MP4 con voces reales y cancelar — en Chromium sin códecs **y** Chrome instalado | 38 |
-| `node tests/verificar_biblioteca_videos.mjs` | **Obligatoria al tocar la biblioteca de videos** (`bibliotecaVista.js` o su marcado/CSS): migración al abrir, «Seguir viendo», búsqueda (también en lo que se dijo), filtros, temas, deshacer, teclado, «Listo al instante» sin gastar limitador y las tres descargas — con API, reproductor y red simulados | 48 |
+| `node tests/verificar_biblioteca_datos.mjs` | **Obligatoria al tocar `cacheDoblaje.js` o los archivos doblados**: migración v1→v2, «lo automático nunca pisa lo que organizó la persona», deshacer, tope de voces, MP3/MP4 con voces reales, **recorte del silencio de una voz real de producción** y cancelar — en Chromium sin códecs **y** Chrome instalado | 46 |
+| `node tests/verificar_biblioteca_videos.mjs` | **Obligatoria al tocar la biblioteca de videos** (`bibliotecaVista.js` o su marcado/CSS): migración al abrir, «Seguir viendo», búsqueda (también en lo que se dijo), filtros, temas, deshacer, teclado, «Listo al instante» sin gastar limitador, las tres descargas y el botón «Guardar archivo» — con API, reproductor y red simulados | 51 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -279,6 +281,13 @@ arquitectura, validación y guía de activación).
 - **v155 (2026-09-28):** el menú de opciones de la tarjeta se superpone a las
   tarjetas de abajo en vez de quedar detrás (`vid-con-menu`, `z-index:30`).
   `JG_JS_V='v155'`, prod `dpl_5HyrMbD3MD64do9tmF22XWUCPGij`.
+- **v156 (2026-09-28, auditoría):** la voz ya no espera su propio silencio
+  (~0,21 s delante + ~0,85 s detrás en cada frase, medido): `hablaVoz.js` mide el
+  tramo hablado y lo usan el motor en vivo, el plan de ritmo y la mezcla de las
+  descargas. **No volver a usar la duración del archivo como duración de la voz.**
+  Más: descargas con la 2.ª voz y el tono del video, «Guardar archivo» en el
+  teléfono, tarjeta que retoma bien. `CAMBIOS_YOUTUBE.md` §v156 y
+  `CAMBIOS_BIBLIOTECA_VIDEOS.md` §Auditoría. `JG_JS_V='v156'`, prod `[DATO PENDIENTE: dpl]`.
 
 ## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
 
@@ -475,7 +484,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v153`** (doblaje de videos de X, 2026-09-27). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v156`** (auditoría de la biblioteca y sincronía de voz, 2026-09-28). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

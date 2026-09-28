@@ -106,9 +106,9 @@ Decisión: continuar con edge-tts como primera ruta para las descargas largas. C
 
 | Prueba | Resultado |
 |---|---|
-| `node tests/test_biblioteca_videos.mjs` | **83 OK · 0 fallos** (lógica pura + gancho `buscarGuardada`) |
-| `node tests/verificar_biblioteca_datos.mjs` | **38 OK · 0 fallos** (Chromium sin códecs **y** Chrome instalado) |
-| `node tests/verificar_biblioteca_videos.mjs` | **48 OK · 0 fallos** (contrato de la interfaz, móvil incluido) |
+| `node tests/test_biblioteca_videos.mjs` | **83 OK · 0 fallos** (lógica pura + gancho `buscarGuardada`) · 97 tras la auditoría |
+| `node tests/verificar_biblioteca_datos.mjs` | **38 OK · 0 fallos** (Chromium sin códecs **y** Chrome instalado) · 46 tras la auditoría |
+| `node tests/verificar_biblioteca_videos.mjs` | **48 OK · 0 fallos** (contrato de la interfaz, móvil incluido) · 51 tras la auditoría |
 | `test_youtube_doblaje` / `sincronia` / `test_x_doblaje` | 139 · 65 · 70 (línea base intacta) |
 | `verificar_youtube_doblaje` / `verificar_x_doblaje` | 110 · 24 (línea base intacta) |
 | `verificar_movil_pantalla` / `verificar_pdf_geometria` | 62 · sin fallos |
@@ -122,6 +122,35 @@ franja lateral en coincidencias, eyebrow, kebab en texto, radios 999px) y tras
 aplicarlos **ship** (los 8 resueltos). Ni el revisor ni el agente pudieron ver
 imágenes en esa sesión: la inspección visual previa (escritorio+móvil) fue del
 agente constructor y la verificación funcional la dan las 48 comprobaciones.
+
+## Auditoría 2026-09-28 (v156)
+
+Revisión del plan completo contra el código entregado. Lo que el plan pedía está
+(T0–T8 y el despliegue de T9) con una excepción de honestidad: **el Paso 3 de la
+T9 está marcado `[x]` pero no se hizo** (prueba manual en Chrome e iPhone con los
+videos del dueño); este documento ya lo decía como `[DATO PENDIENTE]`. Sigue
+pendiente y solo lo puede hacer el dueño con su equipo.
+
+### Encontrado y corregido
+
+| # | Qué pasaba | Arreglo |
+|---|---|---|
+| 1 | **Sincronía:** cada frase trae ~1 s de silencio (0,21 delante + 0,85 detrás, medido en producción). El doblaje en vivo lo esperaba y frenaba el video de más; las descargas aceleraban frases que sí cabían. | `hablaVoz.js` + recorte en el motor y en la mezcla. Ver `CAMBIOS_YOUTUBE.md` §v156. |
+| 2 | Las descargas ignoraban la 2.ª voz elegida (con «Ninguna», un diálogo salía con dos voces) y el tono de la voz. | La ficha guarda `vozSecundaria` (también al cambiarla con el video abierto); el archivo manda `tone`. |
+| 3 | Tocar una tarjeta forzaba el segundo guardado: decía «donde se dice lo que buscaste» y un video ya terminado abría en sus últimos segundos. | La tarjeta y «Continuar» usan el retomar de siempre; el segundo explícito es solo para «Abrir aquí». |
+| 4 | El diálogo de descargas se quedaba en «Preparando el archivo…» durante el ajuste y el armado (fases `ajuste` y `archivo` sin texto) y al final no contaba frases aceleradas o corridas. | Avance real por fase (%, frases) y resumen honesto al terminar. |
+| 5 | En el teléfono el archivo se entrega con un clic automático minutos después del toque: Safari puede no guardarlo y nadie se entera. | Botón «Guardar archivo» que lo vuelve a entregar con un toque nuevo. |
+| 6 | «Buscar en lo que se dice» leía todos los textos en cada tecla y una búsqueda lenta podía pintar resultados viejos encima de los nuevos. | Espera 250 ms y solo pinta la búsqueda más reciente. |
+| 7 | `leerVoz` reescribía el audio entero en la base por cada frase que sonaba (solo para anotar «usado»). | Se anota una vez al día. |
+| 8 | Una pista sin duración conocida aceleraba la última frase y la daba por corrida. | Sin duración, la última frase no tiene pared. |
+
+### Pruebas tras la auditoría
+
+`test_biblioteca_videos` **97** (+14) · `verificar_biblioteca_datos` **46** (+8,
+con voz real de producción en Chromium y Chrome) · `verificar_biblioteca_videos`
+**51** (+3) · `test_youtube_sincronia` **71** (+6) · YouTube 139 / 110 · X 70 / 24 ·
+PDF/TTS 1.192 · `verificar_movil_pantalla` 62 · `verificar_arranque_ligero` 9 OK +
+el fallo que ya existía («< 1 MB»: 1 040 KB).
 
 ## Si algo cambia
 

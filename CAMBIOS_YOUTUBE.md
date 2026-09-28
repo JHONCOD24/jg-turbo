@@ -1,5 +1,56 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Corrección 2026-09-28 (v156) · La voz ya no espera su propio silencio
+
+### Pedido del dueño
+
+Auditar la biblioteca de videos recién entregada y dejar la sincronización de la
+voz «lo más pulida posible». Las reglas de v4 no cambian: ninguna frase se corta
+ni se salta, la voz manda y el video se frena solo si hace falta.
+
+### Causa medida (contra producción, 2026-09-28)
+
+Cada frase de voz trae **~0,21 s de silencio delante y ~0,85 s detrás**, igual en
+edge-tts y en Azure: 5,54 s de archivo para 4,48 s de voz (≈19 %). Es silencio
+digital: `silencedetect` corta en el mismo punto a −45, −60 y −70 dB. El motor:
+
+- arrancaba cada frase 0,2 s después de su segundo (el silencio de delante);
+- esperaba el silencio de detrás antes de dejar entrar la siguiente;
+- y el plan de ritmo lo contaba como voz por decir → frenaba el video de más.
+
+### Solución
+
+- `js/youtube/hablaVoz.js` (puro + `medirHabla` en el navegador): dónde se habla
+  dentro del audio (−60 dB, margen 0,02 s antes y 0,08 s después).
+- `DubbingService` guarda `vozDesdeS`/`vozHastaS`; `duracionVoz` pasa a ser lo que
+  se habla. Sin Web Audio (o si no decodifica), todo sigue como antes.
+- `dubbingEngine.js` (`#tramo`): la frase arranca donde empieza la voz, se da por
+  dicha al llegar al final **medido** de la voz (no «casi al final»: ver
+  `TRAMPAS.md`), y el avance del subtítulo y el retraso se miden sobre la voz.
+- Descargas (`exportadorDoblaje.js`): la mezcla coloca solo el tramo hablado.
+
+### Medido
+
+| Simulador, 40 frases con los silencios reales | Antes | v156 |
+|---|---:|---:|
+| Video visto en 170 s reales | 145,2 s | **170,0 s** |
+| Velocidad mínima del video | 0,85× | **1×** (0 cambios) |
+| Frases cortadas / saltadas | 0 / 0 | 0 / 0 |
+| Retraso de la voz p95 | — | 108 ms |
+
+Con la voz real en Chromium y Chrome (`verificar_biblioteca_datos`): 4,5 s de voz
+caben en 5 s sin acelerar (antes pedía 1,15×) y la voz suena en su segundo
+(1,072 s; sin recorte 1,216 s). El `<audio>` y la decodificación miden igual
+(5,544 s), así que el recorte vale para el motor en vivo.
+
+### Pruebas
+
+`test_youtube_sincronia` **71 OK** (+6) · `test_youtube_doblaje` 139 ·
+`test_x_doblaje` 70 · `verificar_youtube_doblaje` 110 · `verificar_x_doblaje` 24 ·
+`test_biblioteca_videos` 97 · `verificar_biblioteca_datos` 46 ·
+`verificar_biblioteca_videos` 51. Detalle de la auditoría:
+`CAMBIOS_BIBLIOTECA_VIDEOS.md` §Auditoría.
+
 ## Corrección 2026-09-26 (v152) · Voz constante y tamaño del subtítulo
 
 ### Pedido del dueño

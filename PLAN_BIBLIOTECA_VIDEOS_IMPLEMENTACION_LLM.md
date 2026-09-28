@@ -2834,7 +2834,7 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
   base): las unitarias de `AGENTS.md` §Verificación + `test_biblioteca_videos`, y todas las de navegador
   de la tabla de `AGENTS.md` + `verificar_biblioteca_datos` + `verificar_biblioteca_videos`, y el servidor
   del Paso 4 de la T3.
-- [x] **Paso 3: vista previa real** (mismo procedimiento de la T4) y prueba **con el navegador del dueño**,
+- [ ] **Paso 3: vista previa real** *(auditoría 2026-09-28: estaba marcado `[x]` sin hacerse; pendiente del dueño, ver `CAMBIOS_BIBLIOTECA_VIDEOS.md` §Auditoría)* (mismo procedimiento de la T4) y prueba **con el navegador del dueño**,
   pestaña visible, en Chrome de escritorio:
   1. Abrir «Videos»: sus videos anteriores aparecen (migración real). Anotar cuántos.
   2. Doblar un video nuevo de YouTube y uno de X; cerrarlos; ver que aparecen con miniatura y «Listo al

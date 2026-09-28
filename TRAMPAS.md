@@ -1429,6 +1429,10 @@ constaban como completas aunque no había cortes a la vista. **Causa:** el motor
 daba la frase por dicha con `currentTime >= duration - 0.01` y la siguiente pausaba
 a la anterior: 10 ms antes de su final. **Regla:** el fin es `ended` (o la voz
 detenida en su último instante). Nunca «casi».
+**Actualizado 2026-09-28 (v156):** el fin también puede ser el final **medido** de
+la voz (`vozHastaS`, `hablaVoz.js`), que ya incluye 80 ms de margen tras la última
+muestra audible. Lo que se prohíbe es un margen a ojo, no el silencio medido: ver
+«La voz sintetizada trae su propio silencio».
 
 ## Un 429 disfrazado de 401 multiplica las llamadas (2026-09-26)
 
@@ -1509,3 +1513,21 @@ algún `await` (calcular opciones, traducir, pedir voces), el gesto ya caducó (
 **Regla:** `crearDestino` (`js/youtube/destinoArchivo.js`) es lo PRIMERO que se llama en el clic de
 «Descargar», antes de cualquier `await`. Cerrar el selector no es un error: devuelve `null` y la
 descarga se cancela limpio.
+
+## La voz sintetizada trae su propio silencio (2026-09-28)
+
+**Síntoma:** el doblaje frenaba el video en tramos donde el español sí cabía, y
+la voz arrancaba un poco después de los labios. Las pruebas daban verde.
+
+**Causa:** cada frase de edge-tts y Azure llega con ~0,21 s de silencio delante y
+~0,85 s detrás (medido contra producción; igual a −45, −60 y −70 dB). El motor
+tomaba la duración del ARCHIVO como duración de la voz: esperaba ese silencio
+antes de la frase siguiente y el plan de ritmo lo contaba como voz por decir
+(≈19 % de más). Los audios de las pruebas eran tonos sin silencio, así que no
+podían verlo.
+
+**Regla:** la duración que usa el ritmo es la de lo que se HABLA
+(`hablaVoz.js`), nunca la del archivo. Toda prueba de sincronía o de pista
+doblada debe incluir voz con silencio a los lados (`voz_real_es.mp3` en
+`tests/fixtures/biblioteca/`, o el caso «silencio delante y detrás» del
+simulador).
