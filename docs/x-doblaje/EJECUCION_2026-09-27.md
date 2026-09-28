@@ -33,3 +33,9 @@ La prueba en iPhone real sigue siendo obligatoria antes de producción.
 
 Prueba previa: error de colección al importar el módulo inexistente.
 Tras copiar literalmente el módulo: 31 passed, 0 fallos.
+
+## Tarea 2
+
+Prueba previa: 31 passed y los 4 fallos esperados de ruta/salud.
+Después: 35 passed. Regresión servidor: 74 passed, 0 fallos.
+Implementación extraída literalmente del plan; api/index.py conserva CRLF.

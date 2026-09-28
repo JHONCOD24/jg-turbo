@@ -180,3 +180,36 @@ def test_un_gif_no_se_busca_en_la_otra_fuente():
     with pytest.raises(xv.XVideoError) as exc:
         xv.consultar(URL, http=http)
     assert exc.value.codigo == "gif" and len(http.llamadas) == 1
+
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from api import index as api_module  # noqa: E402
+
+cliente = TestClient(api_module.app)
+
+
+def test_ruta_devuelve_la_info(monkeypatch):
+    monkeypatch.setattr(xv, "consultar", lambda url, http=None: {"id": "1", "fuente": "sindicacion", "mp4": [], "hls": "h"})
+    respuesta = cliente.get("/api/x-video", params={"url": URL})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["fuente"] == "sindicacion"
+
+
+def test_ruta_traduce_el_error(monkeypatch):
+    def falla(url, http=None):
+        raise xv.XVideoError("Ese post de X es un GIF: no tiene sonido que doblar.", "gif", 422)
+    monkeypatch.setattr(xv, "consultar", falla)
+    respuesta = cliente.get("/api/x-video", params={"url": URL})
+    assert respuesta.status_code == 422
+    assert respuesta.json() == {"detail": "Ese post de X es un GIF: no tiene sonido que doblar.", "code": "gif"}
+
+
+def test_ruta_rechaza_transmisiones_en_vivo_sin_consultar(monkeypatch):
+    monkeypatch.setattr(xv, "consultar", lambda *a, **k: pytest.fail("no debía consultar"))
+    respuesta = cliente.get("/api/x-video", params={"url": "https://x.com/i/broadcasts/1YqKDgvLLbXxV"})
+    assert respuesta.status_code == 422 and respuesta.json()["code"] == "en_vivo"
+
+
+def test_health_anuncia_x_video():
+    assert cliente.get("/api/health").json()["x_video"] is True

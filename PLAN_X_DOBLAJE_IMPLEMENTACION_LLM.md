@@ -729,7 +729,7 @@ Run: `python -m pytest backend/tests/test_x_video.py -q`
 Esperado: `31 passed` (15 casos de enlaces + 16 pruebas; la de «borrado o privado» cuenta 2). Si el
 número es otro, cuenta y explica por qué antes de seguir.
 
-- [ ] **Paso 6: commit**
+- [x] **Paso 6: commit**
 
 ```bash
 git add api/x_video.py backend/tests/test_x_video.py tests/fixtures/x/
@@ -751,7 +751,7 @@ git commit -m "feat(x): leer el video de un post de X (sindicación y FxTwitter 
   `{"detail": str, "code": str}` con el `http_status` del error · transmisión en vivo/Spaces → `422`
   `{"code": "en_vivo"}`. `GET /api/health` añade `"x_video": true`.
 
-- [ ] **Paso 1: escribir las pruebas de la ruta** (añadir al final de `backend/tests/test_x_video.py`)
+- [x] **Paso 1: escribir las pruebas de la ruta** (añadir al final de `backend/tests/test_x_video.py`)
 
 ```python
 from fastapi.testclient import TestClient  # noqa: E402
@@ -787,10 +787,10 @@ def test_health_anuncia_x_video():
     assert cliente.get("/api/health").json()["x_video"] is True
 ```
 
-- [ ] **Paso 2: ejecutar y ver que fallan** — `python -m pytest backend/tests/test_x_video.py -q`
+- [x] **Paso 2: ejecutar y ver que fallan** — `python -m pytest backend/tests/test_x_video.py -q`
   Esperado: 4 fallos (404 en la ruta y `KeyError: 'x_video'`).
 
-- [ ] **Paso 3: implementar en `api/index.py`**
+- [x] **Paso 3: implementar en `api/index.py`**
 
 Import (junto a los otros módulos propios, ≈ línea 45):
 
@@ -826,7 +826,7 @@ def x_video_info(url: str = ""):
         return JSONResponse(status_code=exc.http_status, content={"detail": str(exc), "code": exc.codigo})
 ```
 
-- [ ] **Paso 4: ejecutar** — `python -m pytest backend/tests/test_x_video.py -q`
+- [x] **Paso 4: ejecutar** — `python -m pytest backend/tests/test_x_video.py -q`
   Esperado: `35 passed`. Luego la línea base del servidor (los mismos archivos del paso 0): mismos números.
 
 - [ ] **Paso 5: commit**

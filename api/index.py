@@ -43,6 +43,7 @@ from api import deteccion_idioma
 from api import idioma_video
 from api import supadata
 from api import youtube_datos
+from api import x_video
 from api.supadata import SupadataError
 
 app = FastAPI(title="JG Turbo Vercel API", version="3.0")
@@ -2072,6 +2073,8 @@ def health():
         # Booleano, nunca la clave: permite verificar el despliegue sin exponerla.
         "youtube_auto": supadata.configurado(),
         "youtube_data_api": youtube_datos.configurado(),
+        # Marca de despliegue del doblaje de videos de X (no depende de claves).
+        "x_video": True,
         # Motores de voz disponibles (booleanos, nunca las claves). Sirve para
         # comprobar de un vistazo qué respaldo contestará si Fish se cae:
         # Fish (clones) → Azure oficial (gratis 500k chars/mes) → edge-tts.
@@ -2263,6 +2266,24 @@ def _supadata_transcribir(url: str, idioma, con_tiempos: bool, modo: str) -> dic
     if modo == "auto":
         return supadata.transcribir(url, idioma, con_tiempos)
     return supadata.transcribir(url, idioma, con_tiempos, modo=modo)
+
+
+@app.get("/api/x-video")
+def x_video_info(url: str = ""):
+    """Video de un post de X: URLs de video.twimg.com para reproducir y transcribir.
+
+    Solo metadatos (≤ 2 consultas de 8 s): el audio lo baja y lo trocea el
+    navegador, porque la función muere a los 60 s y el cuerpo no pasa de ~4,5 MB.
+    """
+    if re.search(r"/i/(?:broadcasts|spaces)/", url or "", re.IGNORECASE):
+        return JSONResponse(status_code=422, content={
+            "detail": "Las transmisiones en vivo y los Spaces de X no se pueden doblar.",
+            "code": "en_vivo",
+        })
+    try:
+        return x_video.consultar(url)
+    except x_video.XVideoError as exc:
+        return JSONResponse(status_code=exc.http_status, content={"detail": str(exc), "code": exc.codigo})
 
 
 @app.get("/api/youtube-job")
