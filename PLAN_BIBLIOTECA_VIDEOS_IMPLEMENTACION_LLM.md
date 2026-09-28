@@ -2347,11 +2347,11 @@ siente «muy limpia, muy atractiva, intuitiva y agradable» (sus palabras).
 - Modificar: `.vercelignore` (añadir `.impeccable/`)
 - Crear: `tests/verificar_biblioteca_videos.mjs`
 
-- [ ] **Paso 1: impeccable.** Sigue «Cómo se usa impeccable en este plan», puntos 1 y 2. Lee el brief
+- [x] **Paso 1: impeccable.** Sigue «Cómo se usa impeccable en este plan», puntos 1 y 2. Lee el brief
   (`.impeccable/surfaces/js-youtube-bibliotecavista-js.md`) y la especificación §5 (primera vista, tarjeta,
   estados, editor de temas, descargas, accesibilidad).
 
-- [ ] **Paso 2: escribir la prueba de aceptación** — crear `tests/verificar_biblioteca_videos.mjs`:
+- [x] **Paso 2: escribir la prueba de aceptación** — crear `tests/verificar_biblioteca_videos.mjs`:
 
 ```js
 /* JG Turbo · Biblioteca de videos de punta a punta, SIN red ni créditos.
@@ -2693,7 +2693,7 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
   `node tests/verificar_biblioteca_videos.mjs` → falla en «la biblioteca aparece y queda lista» (todavía
   no existe `#vidBiblioteca`).
 
-- [ ] **Paso 3: ubicación en `index.html`.** Dentro de `.yt-area`, el orden queda:
+- [x] **Paso 3: ubicación en `index.html`.** Dentro de `.yt-area`, el orden queda:
   formulario (sin cambios) → `.task-action` («Doblar al español») → `#ytProgArea` → `#ytSyncArea`
   (reproductor) → **`<section id="vidBiblioteca">` (nuevo)** → `<details class="yt-opciones-texto">` («Solo el
   texto») → `<details class="yt-manual" id="ytManual">` → `#ytResultArea`. Es decir: mueve los dos
@@ -2702,7 +2702,7 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
   YouTube** (los de otros paneles se quedan). Sin video abierto, la biblioteca queda inmediatamente
   debajo del botón; con un video abierto, debajo del reproductor y plegada.
 
-- [ ] **Paso 4: el contrato de la vista** (lo que la prueba y el controlador exigen; la forma, los
+- [x] **Paso 4: el contrato de la vista** (lo que la prueba y el controlador exigen; la forma, los
   estilos y la composición son tuyos, dentro del brief):
 
   **Módulo** `js/youtube/bibliotecaVista.js` exporta
@@ -2783,18 +2783,18 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
 
 - [x] **Paso 6: ejecutar** — `node tests/verificar_biblioteca_videos.mjs` → **`48 comprobaciones OK · 0 fallos`**.
   Si un selector no existe, la vista no cumple el contrato: arregla la vista, **no** la prueba.
-- [ ] **Paso 7: regresión completa** — los comandos del Paso 12 de la T5 + `node tests/verificar_movil_pantalla.mjs`
+- [x] **Paso 7: regresión completa** — los comandos del Paso 12 de la T5 + `node tests/verificar_movil_pantalla.mjs`
   + `node tests/verificar_pdf_geometria.mjs` (toques y desbordes de toda la app) → sin fallos nuevos.
-- [ ] **Paso 8: commit** — `git add js/youtube/bibliotecaVista.js index.html .vercelignore tests/verificar_biblioteca_videos.mjs && git commit -m "feat(videos): biblioteca de videos con buscador, temas y descargas"`
+- [x] **Paso 8: commit** — `git add js/youtube/bibliotecaVista.js index.html .vercelignore tests/verificar_biblioteca_videos.mjs && git commit -m "feat(videos): biblioteca de videos con buscador, temas y descargas"`
 
 ### Tarea 7: revisión final de impeccable y documentación del sistema
 
-- [ ] **Paso 1:** puntos 6 y 7 de «Cómo se usa impeccable» (revisor final y documentador). Pasa al revisor
+- [x] **Paso 1:** puntos 6 y 7 de «Cómo se usa impeccable» (revisor final y documentador). Pasa al revisor
   las capturas en estado poblado **y** vacío, escritorio y celular, y los datos extremos del Foco de
   revisión (título de 280 caracteres, 10 etiquetas, miniatura rota).
-- [ ] **Paso 2:** aplica el veredicto (máximo dos rondas) y vuelve a correr `verificar_biblioteca_videos`
+- [x] **Paso 2:** aplica el veredicto (máximo dos rondas) y vuelve a correr `verificar_biblioteca_videos`
   (48) después de cada ronda de arreglos.
-- [ ] **Paso 3: commit** — `git commit -am "style(videos): ajustes de la revisión final de impeccable"` (y,
+- [x] **Paso 3: commit** — `git commit -am "style(videos): ajustes de la revisión final de impeccable"` (y,
   si el documentador creó `DESIGN.md`, un commit aparte `docs(diseño): DESIGN.md del sistema visual`).
 
 ---
