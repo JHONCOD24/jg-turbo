@@ -155,5 +155,26 @@ que dice «No pudimos consultar X en este momento».
 
 ## Despliegues
 
-Producción pendiente. También están pendientes el doblaje real medido y el
-iPhone físico (Tarea 12).
+| `dpl_…` | Qué entró |
+|---|---|
+| `dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc` | **v153** (`jg-turbo-shell-v153`): doblaje de videos de X completo (API, audio, reproductor e integración en el panel de YouTube) |
+
+Desplegado desde copia exacta del commit (`git archive` de `e4362fa` en `main`),
+proyecto `jg-turbo`, alias https://jg-turbo.vercel.app. Fecha: 2026-09-27
+(21:45 Colombia). Código: 186 archivos, 45 KB subidos.
+
+### Verificación en producción (2026-09-27)
+
+| Comprobación | Resultado |
+|---|---|
+| `GET /api/health` | `x_video: true` |
+| HTML | `JG_JS_V = 'v153'` |
+| `/js/youtube/*X*` (5 módulos) | HTTP 200, código de X presente |
+| `/x-reproductor.html` | HTTP 200, meta `no-referrer` |
+| `GET /api/x-video?url=https://x.com/DAIEvolutionHub/status/2104109462999216173/video/1` | **200** sindicacion · id `2104109462999216173` · `@DAIEvolutionHub` · 1 595 s · 4 MP4 (480p–1080p) + HLS |
+
+Enlace de prueba del dueño (post de X con video de ~26 min) leído sin
+problemas por la API de producción. Queda pendiente la prueba de doblaje
+completa en el navegador del dueño (Chrome e iPhone físico): la API entrega
+el video y las suites de navegador pasan (24 OK), pero la experiencia real
+de transcribir 26 min y escuchar la voz se mide ahí.

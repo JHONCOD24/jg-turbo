@@ -129,4 +129,26 @@ https://jg-turbo-ohjoq6bvz-jhoncod24s-projects.vercel.app
 antes sin sesión era la página de login del SSO).
 BLOQUEO para la prueba real de doblaje en vista previa: las claves de
 entorno están solo en Production (`vercel env ls`); sin `GROQ_API_KEY`
-la vista previa no transcribe. Pendiente decisión del dueño.
+la vista previa no transcribe.
+
+## Cierre de la Tarea 12 (2026-09-27, agente siguiente)
+
+El dueño pidió llevarlo a producción porque el enlace de X no aparecía en
+la app (producción seguía en v152 sin el feature).
+
+1. `test_x_doblaje` 70 OK · `test_x_video.py` 35 passed · regresión YouTube
+   139/65 · `verificar_x_doblaje` 24 OK (0 fallos).
+2. `Agents.md` documentado (commit `e4362fa`).
+3. `main` actualizado con `git merge --ff-only feat/x-doblaje`.
+4. Despliegue a producción desde copia `git archive` del commit:
+   `dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc`, READY, alias https://jg-turbo.vercel.app.
+5. Verificado en el dominio real:
+   - `/api/health` → `x_video: true`
+   - HTML → `JG_JS_V = 'v153'`
+   - 5 módulos JS de X → HTTP 200 con el código esperado
+   - `/x-reproductor.html` → 200 con `no-referrer`
+   - Enlace del dueño `x.com/DAIEvolutionHub/status/2104109462999216173/video/1`
+     → **200** por sindicación, 1 595 s, 4 MP4 + HLS.
+
+Pendiente: prueba de doblaje real en el navegador del dueño (Chrome e
+iPhone físico). La API lee el post; las suites locales pasan.
