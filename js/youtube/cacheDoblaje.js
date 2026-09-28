@@ -173,7 +173,12 @@ export async function restaurarVideo(copia) {
 
 // ── Voces (se regeneran: lo único que se descarta solo) ──────────────────
 
-/** `{ blob, motor }` o null. El motor importa: la duración de Fish se mide a otro ritmo de bytes. */
+/**
+ * `{ blob, motor, habla }` o null. El motor importa: la duración de Fish se mide
+ * a otro ritmo de bytes. `habla` = el tramo hablado ya medido (hablaVoz.js): al
+ * volver a un video no hay que decodificar cada frase otra vez. Las voces
+ * guardadas antes de v157 no lo traen (null) y se miden al usarlas.
+ */
 export async function leerVoz(clave) {
   try {
     const registro = await operar(VOCES, 'readonly', (a) => a.get(clave));
@@ -183,16 +188,19 @@ export async function leerVoz(clave) {
     if (Date.now() - (registro.usado || 0) > DIA_MS) {
       operar(VOCES, 'readwrite', (a) => a.put({ ...registro, usado: Date.now() })).catch(() => {});
     }
-    return { blob: registro.blob, motor: registro.motor || '' };
+    return { blob: registro.blob, motor: registro.motor || '', habla: registro.habla || null };
   } catch (_) {
     return null;
   }
 }
 
-export async function guardarVoz(clave, video, blob, motor = '') {
+export async function guardarVoz(clave, video, blob, motor = '', habla = null) {
   if (!(blob?.size > 0)) return false;
+  const medida = habla && habla.hastaS > habla.desdeS
+    ? { duracionS: habla.duracionS, desdeS: habla.desdeS, hastaS: habla.hastaS }
+    : null;
   try {
-    await operar(VOCES, 'readwrite', (a) => a.put({ clave, video, blob, motor, bytes: blob.size, usado: Date.now() }));
+    await operar(VOCES, 'readwrite', (a) => a.put({ clave, video, blob, motor, habla: medida, bytes: blob.size, usado: Date.now() }));
     return true;
   } catch (_) {
     return false;

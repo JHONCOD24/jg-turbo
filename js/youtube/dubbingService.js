@@ -277,7 +277,10 @@ export class DubbingService {
         // Sin el silencio que la voz trae delante y detrás (~1 s por frase,
         // hablaVoz.js): el motor salta el de delante, no espera el de detrás y
         // el plan de ritmo cuenta solo lo que de verdad se dice.
-        const habla = await Promise.resolve(this.medirHabla?.(blob)).catch(() => null);
+        // Si la voz ya llega medida (guardada en la biblioteca), no se decodifica otra vez.
+        const habla = resultado?.habla?.hastaS > resultado?.habla?.desdeS
+          ? resultado.habla
+          : await Promise.resolve(this.medirHabla?.(blob)).catch(() => null);
         const conHabla = habla && habla.hastaS > habla.desdeS;
         unidad.vozDesdeS = conHabla ? habla.desdeS : 0;
         unidad.vozHastaS = conHabla ? habla.hastaS : 0;

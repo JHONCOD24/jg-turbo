@@ -229,6 +229,38 @@ const ds = await modulo('dubbingService.js');
   sinGuardado.fijarTexto(0, 'x');
   await sinGuardado.asegurar(0);
   comprobar(turnos === 2, 'sin buscarGuardada todo sigue igual que antes (una frase = un turno)');
+
+  // v157: la voz guardada trae su tramo hablado ya medido → no se decodifica otra vez.
+  let medidas = 0;
+  const habla = { duracionS: 5.54, desdeS: 0.19, hastaS: 4.77 };
+  const conMedida = new ds.DubbingService({
+    generarAudio: async () => ({ blob }), limitador, medirDuracion: async () => 5.54,
+    buscarGuardada: async (texto) => (texto === 'medida' ? { blob, engineHdr: 'azure', habla } : null),
+    medirHabla: async () => { medidas += 1; return { duracionS: 5.54, desdeS: 0.2, hastaS: 4.7 }; },
+  });
+  conMedida.definirUnidades([
+    { indice: 0, startTime: 0, endTime: 5, estado: 'sin_traducir' },
+    { indice: 1, startTime: 5, endTime: 10, estado: 'sin_traducir' },
+  ]);
+  conMedida.fijarTexto(0, 'medida');
+  conMedida.fijarTexto(1, 'nueva');
+  await conMedida.asegurar(0);
+  const u0 = conMedida.unidades[0];
+  comprobar(medidas === 0 && u0.vozDesdeS === 0.19 && u0.vozHastaS === 4.77 && Math.abs(u0.duracionVoz - 4.58) < 1e-9,
+    'la voz guardada con su medida se usa tal cual: 0 decodificaciones');
+  await conMedida.asegurar(1);
+  comprobar(medidas === 1 && conMedida.unidades[1].vozHastaS === 4.7, 'una voz sin medida (nueva o vieja) se mide una vez');
+  const medidaRota = new ds.DubbingService({
+    generarAudio: async () => ({ blob, habla: { desdeS: 3, hastaS: 1 } }), medirDuracion: async () => 2,
+    medirHabla: async () => { medidas += 1; return null; },
+  });
+  medidaRota.definirUnidades([{ indice: 0, startTime: 0, endTime: 2, estado: 'sin_traducir' }]);
+  medidaRota.fijarTexto(0, 'x');
+  await medidaRota.asegurar(0);
+  comprobar(medidas === 2 && medidaRota.unidades[0].vozHastaS === 0 && medidaRota.unidades[0].duracionVoz === 2,
+    'una medida guardada imposible se descarta y, si no se puede medir, se usa el audio entero');
+  conMedida.liberar();
+  medidaRota.liberar();
   servicio.liberar();
   sinGuardado.liberar();
 }

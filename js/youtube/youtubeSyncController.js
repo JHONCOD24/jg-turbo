@@ -26,6 +26,7 @@ import {
   listarVideos, listarDoblajes, videosConVoz, actualizarVideo, quitarVideo, restaurarVideo, espacioYPersistencia,
 } from './cacheDoblaje.js';
 import { claveDeVoz } from './bibliotecaVideos.js';
+import { medirHabla } from './hablaVoz.js';
 import { estimarBytesMp3, estimarBytesVideo, opcionesCalidadX, nombreArchivo, BITRATE_AUDIO_DOBLADO } from './descargaDestino.js';
 import { crearDestino } from './destinoArchivo.js';
 import {
@@ -628,20 +629,32 @@ export function inicializarYoutubeSincronizado({
       // Cada frase suena con su hablante: monólogo = 1 voz, diálogo = 2.
       // La voz ya generada se reutiliza (biblioteca: «Listo al instante») y no
       // gasta turno del limitador de Azure: DubbingService la consulta ANTES.
+      // Cada voz se guarda con su tramo hablado ya medido (hablaVoz.js): al
+      // volver al video no se decodifica ninguna frase. Las guardadas antes de
+      // v157 (o desde una descarga) se miden la primera vez y se completan.
       buscarGuardada: async (texto, unidad) => {
         const voz = vozParaUnidad(unidad, { vozPrincipal: actual.voz, vozSecundaria: actual.vozSecundaria });
-        const guardada = await leerVoz(claveDeVoz(actual.videoId, voz, texto));
-        return guardada ? { blob: guardada.blob, engineHdr: guardada.motor } : null;
+        const clave = claveDeVoz(actual.videoId, voz, texto);
+        const guardada = await leerVoz(clave);
+        if (!guardada) return null;
+        let { habla } = guardada;
+        if (!habla) {
+          habla = await medirHabla(guardada.blob);
+          if (habla) guardarVoz(clave, actual.videoId, guardada.blob, guardada.motor, habla);
+        }
+        return { blob: guardada.blob, engineHdr: guardada.motor, habla };
       },
       generarAudio: async (texto, unidad) => {
         const voz = vozParaUnidad(unidad, { vozPrincipal: actual.voz, vozSecundaria: actual.vozSecundaria });
         const resultado = await generarAudioEspanol(texto, { voz, signal });
         const blob = resultado instanceof Blob ? resultado : resultado?.blob;
+        if (!blob?.size) return resultado;
+        const habla = await medirHabla(blob);
         // Un respaldo (sonó otra voz) no se guarda: al volver al video sonaría con otro timbre.
-        if (blob?.size && !resultado?.respaldoHdr) {
-          guardarVoz(claveDeVoz(actual.videoId, voz, texto), actual.videoId, blob, resultado?.engineHdr || '').then(contarVozGuardada);
+        if (!resultado?.respaldoHdr) {
+          guardarVoz(claveDeVoz(actual.videoId, voz, texto), actual.videoId, blob, resultado?.engineHdr || '', habla).then(contarVozGuardada);
         }
-        return resultado;
+        return resultado instanceof Blob ? { blob, habla } : { ...resultado, habla };
       },
       limitador,
       onRespaldo: () => pasarANeural(actual),

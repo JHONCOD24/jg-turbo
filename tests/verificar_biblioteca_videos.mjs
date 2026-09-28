@@ -290,6 +290,16 @@ try {
     await pagina.click('#btnYtSyncClose');
     const tts1 = reg.tts.length;
     comprobar('la voz del video quedó guardada («Listo al instante»)', await hastaQue(() => pagina.$('#vidLista .vid-tarjeta[data-clave="dNWkwrqAkcM"] [data-listo]').then(Boolean)), `tts pedidas: ${tts1}`);
+    // v157: cada voz se guarda con su tramo hablado ya medido (no se decodifica al volver).
+    const medidas = await pagina.evaluate(() => new Promise((listo) => {
+      const pedido = indexedDB.open('jg_youtube');
+      pedido.onsuccess = () => {
+        const todas = pedido.result.transaction('voces').objectStore('voces').getAll();
+        todas.onsuccess = () => { const v = todas.result.filter((x) => x.video === 'dNWkwrqAkcM'); listo({ total: v.length, conHabla: v.filter((x) => x.habla?.hastaS > x.habla?.desdeS).length }); pedido.result.close(); };
+      };
+      pedido.onerror = () => listo({ total: -1, conHabla: -1 });
+    }));
+    comprobar('cada voz guardada lleva su tramo hablado medido', medidas.total > 0 && medidas.conHabla === medidas.total, JSON.stringify(medidas));
     await contexto.close();
   }
 

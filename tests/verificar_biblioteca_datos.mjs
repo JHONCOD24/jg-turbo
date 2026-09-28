@@ -106,7 +106,9 @@ async function pasada(etiqueta, opciones) {
       const carrera = await cd.leerVideo('x:1349794411333394432');
       salida.carrera = `${carrera.etiquetas.join()}|${carrera.posicionS}`;
       await cd.guardarVoz('dNWkwrqAkcM|v|a', 'dNWkwrqAkcM', new Blob([new Uint8Array(1000)], { type: 'audio/mpeg' }), 'azure-neural-regional');
-      const leida = await cd.leerVoz('dNWkwrqAkcM|v|a'); salida.vozGuardada = `${leida?.blob?.size}|${leida?.motor}`;
+      const leida = await cd.leerVoz('dNWkwrqAkcM|v|a'); salida.vozGuardada = `${leida?.blob?.size}|${leida?.motor}|${leida?.habla}`;
+      await cd.guardarVoz('dNWkwrqAkcM|v|b', 'dNWkwrqAkcM', new Blob([new Uint8Array(900)], { type: 'audio/mpeg' }), 'edge', { duracionS: 5.54, desdeS: 0.19, hastaS: 4.77, sobra: 1 });
+      const conHabla = await cd.leerVoz('dNWkwrqAkcM|v|b'); salida.hablaGuardada = JSON.stringify(conHabla?.habla);
       const copia = await cd.quitarVideo('dNWkwrqAkcM');
       salida.quitado = !(await cd.leerVideo('dNWkwrqAkcM')) && !(await cd.leerDoblaje('dNWkwrqAkcM')) && !(await cd.leerVoz('dNWkwrqAkcM|v|a'));
       salida.restaurado = await cd.restaurarVideo(copia) && (await cd.leerVideo('dNWkwrqAkcM'))?.etiquetas?.join() === 'Negocio' && Boolean((await cd.leerDoblaje('dNWkwrqAkcM'))?.segmentos?.length);
@@ -124,7 +126,8 @@ async function pasada(etiqueta, opciones) {
     comprobar(`[${etiqueta}] la migración no toca el doblaje guardado`, r.doblajeIntacto === 'Hola');
     comprobar(`[${etiqueta}] lo automático no pisa etiquetas ni favorito`, r.organizadoIntacto);
     comprobar(`[${etiqueta}] guardado automático y edición a la vez: no se pierde la etiqueta`, r.carrera === 'Deportes|105', r.carrera);
-    comprobar(`[${etiqueta}] la voz guardada se lee igual, con su motor`, r.vozGuardada === '1000|azure-neural-regional', r.vozGuardada);
+    comprobar(`[${etiqueta}] la voz guardada se lee igual, con su motor (sin medida: null)`, r.vozGuardada === '1000|azure-neural-regional|null', r.vozGuardada);
+    comprobar(`[${etiqueta}] la voz se guarda con su tramo hablado y vuelve igual`, r.hablaGuardada === '{"duracionS":5.54,"desdeS":0.19,"hastaS":4.77}', r.hablaGuardada);
     comprobar(`[${etiqueta}] quitar borra ficha, doblaje y voces`, r.quitado);
     comprobar(`[${etiqueta}] deshacer devuelve ficha (con etiquetas) y doblaje`, r.restaurado);
     comprobar(`[${etiqueta}] se sabe qué videos tienen voz guardada (sin leer los audios)`, r.conVoz === 'x:1349794411333394432', r.conVoz);
