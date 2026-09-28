@@ -1484,3 +1484,28 @@ Referer, o con `https://x.com/`, 206 (medido 2026-09-27). `curl` no manda Refere
 y el `<video>` dentro de `/x-reproductor.html` (meta `no-referrer`). No sacar el video de ese iframe «para
 simplificar». Probar desde el navegador, no con `curl`; `tests/verificar_x_doblaje.mjs` falla si alguna
 petición a X lleva Referer.
+
+## Una extensión de Mediabunny con su propia copia no registra nada
+
+**Síntoma:** al exportar el MP3 doblado, Mediabunny falla con «codec not supported» aunque la
+extensión MP3 esté cargada.
+
+**Causa:** la extensión importa `"mediabunny"` por nombre y el navegador resuelve otra copia del
+paquete; el registro de códecs de una copia no se ve desde la otra (medido 2026-09-28, M6 de la
+especificación de la biblioteca de videos).
+
+**Regla:** en `js/vendor/mediabunny/` las extensiones traen el import reescrito a
+`./mediabunny.min.mjs` para que usen ESTA copia. Al actualizar vendor, hay que repetir esa reescritura
+y correr `node tests/verificar_biblioteca_datos.mjs` en un navegador sin códecs.
+
+## El selector de archivos solo abre durante el gesto
+
+**Síntoma:** al pulsar «Descargar» no aparece el selector de archivos (o salta `SecurityError`)
+aunque la acción nazca de un botón.
+
+**Causa:** `showSaveFilePicker` exige *activación transitoria* del usuario: si antes de abrirlo hay
+algún `await` (calcular opciones, traducir, pedir voces), el gesto ya caducó (medido, M12).
+
+**Regla:** `crearDestino` (`js/youtube/destinoArchivo.js`) es lo PRIMERO que se llama en el clic de
+«Descargar», antes de cualquier `await`. Cerrar el selector no es un error: devuelve `null` y la
+descarga se cancela limpio.

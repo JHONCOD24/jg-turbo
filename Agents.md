@@ -155,11 +155,13 @@ node tests/test_pdf_continuidad.mjs      node tests/test_pdf_caratula.mjs
 node tests/test_tts_voz_estable.mjs      node tests/test_tts_voces_biblioteca.mjs
 node tests/test_tts_pausas.mjs           node tests/test_youtube_doblaje.mjs
 node tests/test_youtube_sincronia.mjs   node tests/test_x_doblaje.mjs
+node tests/test_biblioteca_videos.mjs
 ```
 
 Referencia al 2026-09-26 (v150): los 19 archivos de PDF/TTS suman **1.192 OK**;
 `test_youtube_doblaje` **139** y `test_youtube_sincronia` **65** (0 fallos).
 Referencia al 2026-09-27 (doblaje de X): `test_x_doblaje` **70 OK · 0 fallos**.
+Referencia al 2026-09-28 (biblioteca de videos): `test_biblioteca_videos` **83 OK · 0 fallos**.
 Referencia al 2026-09-05 (v2.41.0): **1.120 comprobaciones OK, 0 fallos** (24 archivos).
 Referencia anterior (v2.39.0): ~1.000 comprobaciones
 (20 archivos; `test_pdf_mejora_apartado` aporta 50). Si salen menos, la prueba
@@ -180,6 +182,8 @@ se cortó.
 | `node tests/verificar_movil_pantalla.mjs` | **Obligatoria al tocar alturas, scroll o zona segura**: quién desplaza, que se llegue al final del contenido y que no sobre hueco, en 5 pestañas × 4 teléfonos | 62 |
 | `node tests/verificar_youtube_doblaje.mjs` | **Obligatoria al tocar el doblaje de YouTube**: idioma antes del texto, ventana de preparación (voz sin traducirlo todo), cancelar que corta verdad, caché por video, voz/subtítulos/pantalla completa, permiso de IA, texto completo bajo demanda y (v4) **0 frases de voz cortadas o saltadas con el español más largo que el inglés**, ritmo automático y subtítulo = voz — todo con API y reproductor simulados | 110 |
 | `node tests/verificar_x_doblaje.mjs` | **Obligatoria al tocar el doblaje de X**: enlace de X en el mismo campo, audio en partes de ≤3,2 MB, **ninguna petición a video.twimg.com con Referer** (falla si lo lleva), iframe `/x-reproductor.html`, caché `x:<id>`, cancelar que corta verdad, errores que se leen y teléfono sin desborde | 24 |
+| `node tests/verificar_biblioteca_datos.mjs` | **Obligatoria al tocar `cacheDoblaje.js` o los archivos doblados**: migración v1→v2, «lo automático nunca pisa lo que organizó la persona», deshacer, tope de voces, MP3/MP4 con voces reales y cancelar — en Chromium sin códecs **y** Chrome instalado | 38 |
+| `node tests/verificar_biblioteca_videos.mjs` | **Obligatoria al tocar la biblioteca de videos** (`bibliotecaVista.js` o su marcado/CSS): migración al abrir, «Seguir viendo», búsqueda (también en lo que se dijo), filtros, temas, deshacer, teclado, «Listo al instante» sin gastar limitador y las tres descargas — con API, reproductor y red simulados | 48 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -270,6 +274,26 @@ arquitectura, validación y guía de activación).
   prod `dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc`. Desplegado desde `git archive`
   del commit. Pruebas: `test_x_doblaje` 70 · `verificar_x_doblaje` 24 ·
   `test_x_video.py` 35 passed.
+
+## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
+
+- Documento maestro: **`CAMBIOS_BIBLIOTECA_VIDEOS.md`** (especificación:
+  `docs/superpowers/specs/2026-09-28-biblioteca-videos-design.md`, plan:
+  `PLAN_BIBLIOTECA_VIDEOS_IMPLEMENTACION_LLM.md`).
+- **La base IndexedDB `jg_youtube` es v2 y solo sube** (TRAMPAS.md §7.2). Migración
+  aditiva: crea lo que falta y copia, nunca borra. Almacenes: `doblajes`, `videos`
+  y `voces`.
+- **Nada se poda salvo `voces`** (tope 300 MB, se regeneran). La poda de 20 videos
+  se eliminó: quitar es manual y con «Deshacer». Lo automático nunca toca
+  `etiquetas` ni `favorito`.
+- La voz guardada **no pasa por el limitador** de Azure: `buscarGuardada` en
+  `dubbingService.js` se consulta antes de gastar turno. «Listo al instante».
+- Descargas con **Mediabunny** en `js/vendor/mediabunny/` (import de las extensiones
+  reescrito a `./mediabunny.min.mjs`, M6/TRAMPAS.md). Carga diferida en
+  `medios.js`: no importarlo al arrancar. Ver `js/vendor/mediabunny/LEEME.md`.
+- `crearDestino` (`destinoArchivo.js`) es lo **primero** del clic en «Descargar»:
+  `showSaveFilePicker` exige el gesto (TRAMPAS.md).
+- **De YouTube solo se ofrece el audio doblado (MP3)**: nunca video de YouTube.
 
 ## PDF (leer antes de tocar `js/pdf/`)
 

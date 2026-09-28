@@ -130,20 +130,31 @@ Los libros viven en `jg-turbo-pdf` (versión de base **5**, sin subirla en v2.37
 No se renombran almacenes ni índices. Un deploy no borra la biblioteca. Un libro v5 con PDF se
 reextrae al abrirlo; uno sin PDF ni manifiesto se marca `needsSource` y no se finge corregido.
 
-## Caché del doblaje de YouTube (IndexedDB `jg_youtube`)
+## Caché del doblaje y biblioteca de videos (IndexedDB `jg_youtube`)
 
-Doblaje v3 (2026-09-26): base **`jg_youtube`**, versión **1**, almacén
-**`doblajes`** (ver `js/youtube/cacheDoblaje.js`). Por video se guardan los
-segmentos, las traducciones y la posición de reproducción — **nunca audios**
-(las voces son `blob:` y se regeneran). Máximo **20 videos**; al pasar de ahí se
-descartan los más antiguos. Reabrir un video ya doblado no gasta créditos de
-Supadata ni traducciones y retoma donde ibas. Un deploy no la borra; si se
-limpian los datos del sitio, la siguiente vez se vuelve a preparar sin más.
+Doblaje v3 (2026-09-26): base **`jg_youtube`**, almacén **`doblajes`** (ver
+`js/youtube/cacheDoblaje.js`). Por video se guardan los segmentos, las
+traducciones y la posición de reproducción. Reabrir un video ya doblado no gasta
+créditos de Supadata ni traducciones y retoma donde ibas.
 
 Doblaje de X (2026-09-27): los videos de X se guardan en el **mismo** almacén
-`doblajes` con clave **`x:<id>`** (o `x:<id>:<n>` si el post trae varios
-videos) y comparten el mismo tope de **20**. Sin claves nuevas de
-`localStorage`; la base no cambia de versión.
+`doblajes` con clave **`x:<id>`** (o `x:<id>:<n>` si el post trae varios videos).
+
+**Biblioteca de videos (2026-09-28): la base sube a la versión 2** (migración
+aditiva: crea lo que falta y copia, nunca borra). Tres almacenes:
+
+- `doblajes` (sin cambios): texto con tiempos y traducciones.
+- `videos` (nuevo; clave `clave`, índice `abierto`): la ficha liviana de la
+  biblioteca (título, autor, portada, duración, posición, etiquetas, favorito).
+  Lo automático nunca pisa `etiquetas` ni `favorito`.
+- `voces` (nuevo; clave `claveDeVoz(video, voz, texto, tasa)`, índices `video` y
+  `usado`): la voz en español ya generada, frase por frase. Tope **300 MB**;
+  salen las menos usadas (se regeneran). Es lo único que se descarta solo.
+
+**Ya no existe la poda de 20 videos**: v1 borraba en silencio el video 21;
+desde v2 no se elimina nada que la persona organizó (quitar es manual, con
+Deshacer). Sin claves nuevas de `localStorage`. Un deploy no la borra; en modo
+privado del navegador la lectura puede fallar y la app lo dice en pantalla.
 
 ## Qué NO es persistente (normal)
 
