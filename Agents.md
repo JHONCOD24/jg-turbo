@@ -274,6 +274,8 @@ arquitectura, validación y guía de activación).
   prod `dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc`. Desplegado desde `git archive`
   del commit. Pruebas: `test_x_doblaje` 70 · `verificar_x_doblaje` 24 ·
   `test_x_video.py` 35 passed.
+- **v154 (2026-09-28):** biblioteca de videos y descargas en producción.
+  `JG_JS_V='v154'`, prod `dpl_2aBp79FCqtjHvzdj866t77J2deTc`.
 
 ## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
 

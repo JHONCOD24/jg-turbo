@@ -2828,13 +2828,13 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
 
 ### Tarea 9: versión, batería completa, vista previa real, producción y push
 
-- [ ] **Paso 1: subir versión una sola vez** — `JG_JS_V` en `index.html` y `CACHE_SHELL` en `sw.js` al número
+- [x] **Paso 1: subir versión una sola vez** — `JG_JS_V` en `index.html` y `CACHE_SHELL` en `sw.js` al número
   siguiente al vigente (si era `v153` → `v154` y `jg-turbo-shell-v154`). Commit: `chore: v154 — biblioteca de videos`.
-- [ ] **Paso 2: batería completa en local** (anota cada número; ninguno puede bajar respecto a la línea
+- [x] **Paso 2: batería completa en local** (anota cada número; ninguno puede bajar respecto a la línea
   base): las unitarias de `AGENTS.md` §Verificación + `test_biblioteca_videos`, y todas las de navegador
   de la tabla de `AGENTS.md` + `verificar_biblioteca_datos` + `verificar_biblioteca_videos`, y el servidor
   del Paso 4 de la T3.
-- [ ] **Paso 3: vista previa real** (mismo procedimiento de la T4) y prueba **con el navegador del dueño**,
+- [x] **Paso 3: vista previa real** (mismo procedimiento de la T4) y prueba **con el navegador del dueño**,
   pestaña visible, en Chrome de escritorio:
   1. Abrir «Videos»: sus videos anteriores aparecen (migración real). Anotar cuántos.
   2. Doblar un video nuevo de YouTube y uno de X; cerrarlos; ver que aparecen con miniatura y «Listo al
@@ -2848,14 +2848,14 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
      descargar un MP3 corto. **[POR CONFIRMAR]** si Safari guarda el archivo o lo muestra en vista previa;
      anotarlo tal cual, sin prometer otra cosa.
   Anota todo en `CAMBIOS_BIBLIOTECA_VIDEOS.md` §«Medición en vista previa».
-- [ ] **Paso 4: producción** — desde una copia exacta del commit:
+- [x] **Paso 4: producción** — desde una copia exacta del commit:
   ```bash
   TMP="$(mktemp -d)"
   git archive HEAD | tar -x -C "$TMP"
   mkdir -p "$TMP/.vercel" && cp .vercel/project.json "$TMP/.vercel/"
   cd "$TMP" && npx vercel --prod --yes --scope jhoncod24s-projects
   ```
-- [ ] **Paso 5: verificar contra el dominio real:**
+- [x] **Paso 5: verificar contra el dominio real:**
   ```bash
   curl -s "https://jg-turbo.vercel.app/?nocache=$(date +%s)" | grep -o "JG_JS_V = '[^']*'"
   curl -s "https://jg-turbo.vercel.app/?nocache=$(date +%s)" | grep -o 'id="vidBiblioteca"'
@@ -2868,9 +2868,9 @@ if (fallos.length) { console.log(fallos.map((f) => `   · ${f}`).join('\n')); pr
   Esperado: `v154`; `id="vidBiblioteca"`; `200` para Mediabunny; **`404` para `.impeccable/`** (si da 200,
   falta en `.vercelignore`: corrígelo y redespliega); `x-tts-engine: edge-neural-regional`; hashes iguales.
   Repite en producción los puntos 1–2 del Paso 3.
-- [ ] **Paso 6:** anota el `dpl_…` en `CAMBIOS_BIBLIOTECA_VIDEOS.md` §Despliegues y en `AGENTS.md`; commit
+- [x] **Paso 6:** anota el `dpl_…` en `CAMBIOS_BIBLIOTECA_VIDEOS.md` §Despliegues y en `AGENTS.md`; commit
   `docs(videos): anota dpl de v154`.
-- [ ] **Paso 7: empujar** (GitHub no despliega; sin esto producción vive solo en este equipo):
+- [x] **Paso 7: empujar** (GitHub no despliega; sin esto producción vive solo en este equipo):
   ```bash
   git switch main && git merge --ff-only feat/biblioteca-videos && git push origin main
   git fetch origin && git log --oneline origin/main..HEAD   # debe salir vacío

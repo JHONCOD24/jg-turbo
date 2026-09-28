@@ -140,3 +140,11 @@ agente constructor y la verificación funcional la dan las 48 comprobaciones.
 | Fecha | Deploy | Notas |
 |---|---|---|
 | 2026-09-28 | `dpl_J3LJAZ3TzGPd8E9BBJSbLvCDJvfT` (vista previa) | Medición de `evitar_azure` desde Vercel, desde `git archive` de `be41e1c`. |
+| 2026-09-28 | `dpl_2aBp79FCqtjHvzdj866t77J2deTc` (producción, **v154**) | Biblioteca de videos y descargas en https://jg-turbo.vercel.app. Verificado: `JG_JS_V='v154'`, `id="vidBiblioteca"`, Mediabunny 200, `.impeccable/` 404, `x-tts-engine: edge-neural-regional`, hashes de `bibliotecaVista.js`, `cacheDoblaje.js`, `exportadorDoblaje.js`, `youtubeSyncController.js` y `dubbingService.js` iguales al commit. |
+
+## Medición en vista previa / producción
+
+**[DATO PENDIENTE — dueño]** El plan T9 pide la prueba manual en Chrome de escritorio e iPhone:
+videos migrados al abrir, doblar uno nuevo de YouTube y uno de X, «Listo al instante», etiquetas,
+búsqueda en lo que se dijo, y descargas de MP3/MP4 abiertas en el reproductor. Las 48 + 38
+comprobaciones automáticas cubren el contrato; la experiencia real queda por confirmar.
