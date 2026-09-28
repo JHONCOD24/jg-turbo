@@ -1,0 +1,162 @@
+/* Biblioteca de videos y descargas · funciones puras, sin navegador ni red.
+ * Ejecutar: node tests/test_biblioteca_videos.mjs
+ * Cada tarea del PLAN_BIBLIOTECA_VIDEOS_IMPLEMENTACION_LLM.md añade su sección
+ * antes del bloque «Resumen». Cuenta las comprobaciones: si bajan, algo se cortó.
+ */
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const modulo = (nombre) => import(pathToFileURL(path.join(raiz, 'js/youtube', nombre)).href);
+
+let ok = 0;
+let fallos = 0;
+function comprobar(condicion, mensaje) {
+  if (condicion) { ok += 1; console.log(`OK: ${mensaje}`); }
+  else { fallos += 1; console.error(`FALLO: ${mensaje}`); }
+}
+const DIA = 86400000;
+const AHORA = Date.UTC(2026, 8, 28, 15, 0, 0);
+
+// ── Datos de la biblioteca ───────────────────────────────────────────────
+const bv = await modulo('bibliotecaVideos.js');
+{
+  comprobar(bv.normalizarTexto('  Inteligencía  ARTIFICIAL ') === 'inteligencia artificial', 'normalizar quita tildes, mayúsculas y espacios de más');
+  comprobar(bv.limpiarEtiqueta('  #marketing, digital ') === 'Marketing digital', 'una etiqueta pierde # y comas y empieza en mayúscula');
+  comprobar(bv.limpiarEtiqueta('x'.repeat(50)).length === bv.MAX_LARGO_ETIQUETA, 'una etiqueta larguísima se corta a 30 caracteres');
+  comprobar(bv.agregarEtiqueta(['IA'], '   ').motivo === 'vacia', 'etiqueta vacía: se dice por qué no entra');
+  comprobar(bv.agregarEtiqueta(['Negocio'], 'négocio').motivo === 'repetida', 'etiqueta repetida aunque cambie una tilde');
+  const diez = Array.from({ length: 10 }, (_, i) => `Tema ${i}`);
+  comprobar(bv.agregarEtiqueta(diez, 'Once').motivo === 'tope', 'el tope de 10 etiquetas se respeta y se explica');
+  comprobar(bv.agregarEtiqueta(['IA'], 'ventas').etiquetas.join('|') === 'IA|Ventas', 'agregar conserva el orden');
+  comprobar(bv.quitarEtiqueta(['IA', 'Ventas'], 'ventas').join('|') === 'IA', 'quitar no distingue mayúsculas');
+
+  comprobar(bv.estadoDeAvance(5, 600) === 'nuevo', 'menos de 15 s vistos = nuevo');
+  comprobar(bv.estadoDeAvance(200, 600) === 'viendo', 'a mitad = en curso');
+  comprobar(bv.estadoDeAvance(580, 600) === 'visto', 'a menos de 30 s del final = visto');
+  comprobar(bv.estadoDeAvance(200, 0) === 'viendo', 'sin duración conocida no se da por visto');
+  comprobar(bv.fraccionVista(300, 600) === 0.5 && bv.fraccionVista(590, 600) === 1 && bv.fraccionVista(10, 0) === 0, 'fracción vista para la barra');
+
+  comprobar(JSON.stringify(bv.datosDeClave('x:123:1')) === JSON.stringify({ plataforma: 'x', id: '123', indice: 1 }), 'la clave x:<id>:<n> se lee');
+  comprobar(bv.datosDeClave('dNWkwrqAkcM').plataforma === 'youtube', 'una clave sin prefijo es de YouTube');
+  comprobar(bv.urlCanonica({ plataforma: 'x', id: '123', indice: 1 }) === 'https://x.com/i/status/123/video/2', 'URL canónica de X con 2.º video');
+  comprobar(bv.urlCanonica({ plataforma: 'youtube', id: 'abc' }) === 'https://www.youtube.com/watch?v=abc', 'URL canónica de YouTube');
+  comprobar(bv.portadaPorDefecto({ plataforma: 'youtube', id: 'abc' }) === 'https://i.ytimg.com/vi/abc/mqdefault.jpg', 'miniatura de YouTube derivada del id');
+  comprobar(bv.portadaPorDefecto({ plataforma: 'x', id: '1' }) === '', 'X no tiene miniatura derivable: viene de /api/x-video');
+
+  const primera = bv.fusionarEntrada(null, { clave: 'abc', titulo: 'Charla de IA', duracionS: 600, posicionS: 0 }, AHORA);
+  comprobar(primera.estado === 'nuevo' && primera.creado === AHORA && primera.etiquetas.length === 0 && primera.favorito === false, 'entrada nueva: sin etiquetas ni favorito');
+  const organizada = { ...primera, etiquetas: ['IA'], favorito: true };
+  const luego = bv.fusionarEntrada(organizada, { clave: 'abc', titulo: '', posicionS: 300 }, AHORA + DIA);
+  comprobar(luego.etiquetas.join() === 'IA' && luego.favorito === true, 'lo automático nunca borra etiquetas ni favorito');
+  comprobar(luego.titulo === 'Charla de IA' && luego.estado === 'viendo' && luego.creado === AHORA, 'un título vacío no pisa el bueno; el avance sí se actualiza');
+  comprobar(bv.fusionarEntrada(null, { clave: 'x:9' }, AHORA).titulo === 'Video de X', 'sin título: nombre genérico por plataforma');
+
+  const migrada = bv.entradaDesdeDoblaje({ videoId: 'x:5', titulo: 'Clip', duracionS: 120, idiomaOrigen: 'en', posicionS: 40, actualizado: AHORA - DIA, segmentos: [], traducciones: [] }, AHORA);
+  comprobar(migrada.plataforma === 'x' && migrada.creado === AHORA - DIA && migrada.abierto === AHORA - DIA && migrada.estado === 'viendo', 'migración v1: la fecha de la caché se conserva');
+
+  const videos = [
+    { ...bv.fusionarEntrada(null, { clave: 'a1', titulo: 'Agentes de IA en ventas', autor: 'Canal Uno', duracionS: 900, posicionS: 300, abierto: AHORA - 1000, creado: AHORA - 5 * DIA }, AHORA), etiquetas: ['Inteligencia artificial', 'Negocio'], favorito: true },
+    { ...bv.fusionarEntrada(null, { clave: 'x:22', titulo: 'Clip de marketing', autor: 'marca', duracionS: 60, posicionS: 58, abierto: AHORA - 5000, creado: AHORA - DIA }, AHORA), etiquetas: ['Negocio'] },
+    { ...bv.fusionarEntrada(null, { clave: 'b2', titulo: 'Curso de Python', autor: 'Profe', duracionS: 3600, posicionS: 0, abierto: AHORA - 9000, creado: AHORA - 2 * DIA }, AHORA), etiquetas: ['Aprender'] },
+  ];
+  comprobar(bv.filtrarVideos(videos).map((v) => v.clave).join() === 'a1,x:22,b2', 'orden por defecto: abiertos más recientes primero');
+  comprobar(bv.filtrarVideos(videos, { orden: 'antiguos' }).map((v) => v.clave).join() === 'a1,b2,x:22', 'orden: más antiguos primero (por fecha de llegada)');
+  comprobar(bv.filtrarVideos(videos, { orden: 'duracion' })[0].clave === 'b2', 'orden por duración');
+  comprobar(bv.filtrarVideos(videos, { orden: 'titulo' }).map((v) => v.clave).join() === 'a1,x:22,b2', 'orden alfabético en español');
+  comprobar(bv.filtrarVideos(videos, { plataforma: 'x' }).map((v) => v.clave).join() === 'x:22', 'filtro por plataforma');
+  comprobar(bv.filtrarVideos(videos, { vista: 'favoritos' }).map((v) => v.clave).join() === 'a1', 'filtro de favoritos');
+  comprobar(bv.filtrarVideos(videos, { vista: 'vistos' }).map((v) => v.clave).join() === 'x:22', 'filtro de vistos');
+  comprobar(bv.filtrarVideos(videos, { vista: 'viendo' }).map((v) => v.clave).join() === 'a1', 'filtro de en curso');
+  comprobar(bv.filtrarVideos(videos, { etiqueta: 'negocio' }).length === 2, 'filtro por etiqueta sin distinguir mayúsculas');
+  comprobar(bv.filtrarVideos(videos, { texto: 'ventas ia' }).map((v) => v.clave).join() === 'a1', 'buscar con varias palabras en cualquier orden');
+  comprobar(bv.filtrarVideos(videos, { texto: 'profe' }).map((v) => v.clave).join() === 'b2', 'buscar también por canal o autor');
+  comprobar(bv.filtrarVideos(videos, { texto: 'inteligencia' }).map((v) => v.clave).join() === 'a1', 'buscar también por etiqueta');
+  comprobar(bv.filtrarVideos(videos, { texto: 'zzz' }).length === 0, 'sin coincidencias → lista vacía (la vista muestra el estado «sin resultados»)');
+  comprobar(bv.filtrarVideos(videos, { texto: 'recursion', coincidenEnTexto: new Map([['b2', {}]]) }).map((v) => v.clave).join() === 'b2', 'una coincidencia en lo que se dice también cuenta');
+  comprobar(bv.filtrarVideos(videos, { texto: 'IA', plataforma: 'x' }).length === 0, 'los filtros se combinan');
+  comprobar(bv.filtrarVideos([], { texto: 'x' }).length === 0 && bv.filtrarVideos(undefined).length === 0, 'biblioteca vacía o sin datos no rompe');
+
+  const conteo = bv.etiquetasConConteo(videos);
+  comprobar(conteo[0].etiqueta === 'Negocio' && conteo[0].cantidad === 2, 'las etiquetas más usadas van primero');
+  const sug = bv.sugerenciasDeEtiquetas(videos, ['Negocio'], '');
+  comprobar(!sug.includes('Negocio') && sug.includes('Inteligencia artificial') && sug.includes('Aprender'), 'sugerencias: las usadas, sin las que ya tiene el video');
+  comprobar(bv.sugerenciasDeEtiquetas([], [], 'apre').join() === 'Aprender', 'sin videos, sugiere los temas de arranque que coinciden');
+  comprobar(bv.seguirViendo(videos)?.clave === 'a1' && bv.seguirViendo([]) === null, '«Seguir viendo» = el último en curso');
+
+  const registro = {
+    segmentos: [{ startTime: 0, text: 'Hello everyone' }, { startTime: 754.2, text: 'Recursion is simple' }],
+    traducciones: [[0, 'Hola a todos'], [1, 'La recursión es sencilla']],
+  };
+  const hallado = bv.buscarEnTranscripcion(registro, 'recursion sencilla');
+  comprobar(hallado?.segundo === 754.2 && hallado.fragmento.startsWith('La recursión'), 'buscar en lo que se dice devuelve el segundo exacto');
+  comprobar(bv.buscarEnTranscripcion(registro, 'recursion simple')?.indice === 1, 'también busca en el texto original');
+  comprobar(bv.buscarEnTranscripcion(registro, '') === null && bv.buscarEnTranscripcion(null, 'x') === null, 'consulta vacía o sin registro → null');
+
+  comprobar(bv.huellaTexto('Hola') === bv.huellaTexto('Hola') && bv.huellaTexto('Hola') !== bv.huellaTexto('Hola.'), 'la huella cambia si el texto cambia');
+  comprobar(bv.claveDeVoz('abc', 'neural:auto:female', 'Hola') !== bv.claveDeVoz('abc', 'neural:auto:female', 'Hola', 1.2), 'la voz a 1,2× se guarda aparte de la de 1×');
+  comprobar(bv.formatearDuracion(65) === '1:05' && bv.formatearDuracion(3725) === '1:02:05' && bv.formatearDuracion(0) === '0:00', 'duración 1:05 · 1:02:05');
+  comprobar(bv.fechaRelativa(AHORA, AHORA) === 'Hoy' && bv.fechaRelativa(AHORA - DIA, AHORA) === 'Ayer' && bv.fechaRelativa(AHORA - 3 * DIA, AHORA) === 'Hace 3 días', 'fecha relativa: hoy, ayer, hace N días');
+  comprobar(/sept?/.test(bv.fechaRelativa(Date.UTC(2026, 8, 12, 15), AHORA)), 'más de una semana: fecha corta en español');
+}
+
+// ── Pista doblada ────────────────────────────────────────────────────────
+const pd = await modulo('pistaDoblada.js');
+{
+  comprobar(pd.tasaNecesaria(4, 5) === 1, 'si cabe, va a 1×');
+  comprobar(pd.tasaNecesaria(5.4, 5) === 1.1, 'si no cabe, se acelera en pasos de 0,05 (5,4 s en 5 s → 1,1×)');
+  comprobar(pd.tasaNecesaria(9, 5) === 1.25, 'nunca más de 1,25×');
+  comprobar(pd.tasaNecesaria(0, 5) === 1 && pd.tasaNecesaria(3, 0) === 1.25, 'sin voz = 1×; sin espacio = tope');
+
+  const unidades = [
+    { indice: 0, startTime: 0, duracionVoz: 3 },
+    { indice: 1, startTime: 4, duracionVoz: 4.5 },   // espacio 4 s → 1,15×
+    { indice: 2, startTime: 8, duracionVoz: 2 },
+  ];
+  const { plan, corridas, maxRetrasoS } = pd.planearPista(unidades, { duracionVideoS: 20 });
+  comprobar(plan[0].inicioS === 0 && plan[0].tasa === 1, 'la 1.ª frase empieza en su segundo, a 1×');
+  comprobar(plan[1].tasa === 1.15 && plan[1].finS <= 8, 'la frase que no cabe se acelera lo justo y termina antes de la siguiente');
+  comprobar(plan[2].inicioS === 8 && corridas === 0 && maxRetrasoS === 0, 'nadie se corre si todo cabe');
+  const apretado = pd.planearPista([{ indice: 0, startTime: 0, duracionVoz: 10 }, { indice: 1, startTime: 4, duracionVoz: 2 }], { duracionVideoS: 30 });
+  comprobar(apretado.corridas === 1 && apretado.plan[1].inicioS > 4 && apretado.plan[1].inicioS >= apretado.plan[0].finS, 'si ni a 1,25× cabe, empuja a la siguiente y lo cuenta (sin solaparse)');
+  comprobar(apretado.duracionS === 30, 'la pista dura al menos lo que el video');
+  const segunda = pd.planearPista([{ indice: 0, startTime: 0, duracionVoz: 3.9, tasa: 1.15 }], { acelerar: false, duracionVideoS: 10 });
+  comprobar(segunda.plan[0].tasa === 1.15 && segunda.plan[0].duracionS === 3.9, 'segunda pasada: respeta la tasa ya aplicada y la duración real');
+  comprobar(pd.planearPista([]).plan.length === 0, 'sin frases no rompe');
+
+  const ventanas = pd.ventanasDeMezcla(75);
+  comprobar(ventanas.length === 3 && ventanas[2].desdeS === 60 && ventanas[2].hastaS === 75, 'ventanas de 30 s hasta el final exacto');
+  comprobar(pd.frasesEnVentana(plan, 2, 6).map((f) => f.indice).join() === '0,1', 'una frase que cruza el borde de la ventana entra');
+  comprobar(pd.frasesEnVentana(plan, 3, 3.5).length === 0, 'una frase que termina justo donde empieza la ventana no entra');
+  const costo = pd.resumenCosto(['Hola a todos.', '', 'x'.repeat(4987)]);
+  comprobar(costo.frases === 2 && costo.caracteres === 5000 && costo.porcentajeAzureMes === 1, 'costo: 5 000 caracteres = 1 % de la cuota mensual de Azure');
+}
+
+// ── Descargas ────────────────────────────────────────────────────────────
+const dd = await modulo('descargaDestino.js');
+{
+  const variantes = [
+    { url: 'a', bitrate: 288000, ancho: 480, alto: 270 },
+    { url: 'b', bitrate: 832000, ancho: 640, alto: 360 },
+    { url: 'c', bitrate: 2176000, ancho: 1280, alto: 720 },
+    { url: 'd', bitrate: 10368000, ancho: 1920, alto: 1080 },
+  ];
+  const opciones = dd.opcionesCalidadX(variantes, 1595);
+  comprobar(opciones.map((o) => o.etiqueta).join() === '360p,720p,1080p', 'calidades ofrecidas sin repetir (270p y 360p cuentan como 360p; gana la mejor)');
+  comprobar(opciones[0].url === 'b' && opciones[0].bytes === Math.round(832000 / 8 * 1595), 'el tamaño se estima con el bitrate × duración');
+  comprobar(dd.opcionesCalidadX([{ url: 'v', bitrate: 950000, ancho: 720, alto: 1280 }], 60)[0].etiqueta === '720p', 'un video vertical se nombra por su lado corto');
+  comprobar(dd.opcionesCalidadX([], 60).length === 0, 'sin variantes, sin opciones');
+  comprobar(dd.elegirDestino({ puedeGuardarEnDisco: true, esMovil: false, bytesEstimados: 5e9 }).tipo === 'disco', 'Chrome de escritorio: directo al disco, sin tope');
+  comprobar(dd.elegirDestino({ puedeGuardarEnDisco: false, esMovil: true, bytesEstimados: 100 * dd.MB }).tipo === 'memoria', 'celular: en memoria si cabe');
+  comprobar(dd.elegirDestino({ puedeGuardarEnDisco: true, esMovil: true, bytesEstimados: 400 * dd.MB }).tipo === 'grande', 'celular: más de 250 MB no cabe (aunque diga que puede guardar en disco)');
+  comprobar(dd.calidadQueCabe(opciones, 250 * dd.MB).etiqueta === '360p', 'la mejor calidad que cabe (26 min: 360p ≈ 158 MB)');
+  comprobar(dd.calidadQueCabe(opciones, 1).etiqueta === '360p' && dd.calidadQueCabe([], 1) === null, 'si nada cabe, la más baja; sin opciones, null');
+  comprobar(dd.estimarBytesMp3(3600) === 28800000, 'MP3 de 1 h a 64 kbps ≈ 27 MB');
+  comprobar(dd.formatearBytes(158 * dd.MB) === '158 MB' && dd.formatearBytes(1.5 * 1024 * dd.MB) === '1,5 GB' && dd.formatearBytes(10) === '1 KB', 'tamaños legibles');
+  comprobar(dd.nombreArchivo({ titulo: '¿Qué es la IA? — Parte 1', plataforma: 'x', tipo: 'doblado', extension: 'mp4' }) === 'jg-turbo-x-que-es-la-ia-parte-1-doblado-es.mp4', 'nombre de archivo limpio y en minúsculas');
+  comprobar(dd.nombreArchivo({ titulo: '', tipo: 'audio', extension: 'mp3' }) === 'jg-turbo-youtube-video-audio-es.mp3', 'sin título: «video»');
+}
+
+// ── Resumen ─────────────────────────────────────────────────────────────
+console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
+if (fallos) process.exit(1);
