@@ -154,11 +154,12 @@ node tests/test_pdf_mejora_apartado.mjs  node tests/test_pdf_cola_correccion.mjs
 node tests/test_pdf_continuidad.mjs      node tests/test_pdf_caratula.mjs
 node tests/test_tts_voz_estable.mjs      node tests/test_tts_voces_biblioteca.mjs
 node tests/test_tts_pausas.mjs           node tests/test_youtube_doblaje.mjs
-node tests/test_youtube_sincronia.mjs
+node tests/test_youtube_sincronia.mjs   node tests/test_x_doblaje.mjs
 ```
 
 Referencia al 2026-09-26 (v150): los 19 archivos de PDF/TTS suman **1.192 OK**;
 `test_youtube_doblaje` **139** y `test_youtube_sincronia` **65** (0 fallos).
+Referencia al 2026-09-27 (doblaje de X): `test_x_doblaje` **70 OK · 0 fallos**.
 Referencia al 2026-09-05 (v2.41.0): **1.120 comprobaciones OK, 0 fallos** (24 archivos).
 Referencia anterior (v2.39.0): ~1.000 comprobaciones
 (20 archivos; `test_pdf_mejora_apartado` aporta 50). Si salen menos, la prueba
@@ -178,6 +179,7 @@ se cortó.
 | `node tests/verificar_arranque_ligero.mjs` | **Obligatoria al tocar lo que se carga al arrancar**: que el lector de PDF no viaje con quien solo abre la app | 7 |
 | `node tests/verificar_movil_pantalla.mjs` | **Obligatoria al tocar alturas, scroll o zona segura**: quién desplaza, que se llegue al final del contenido y que no sobre hueco, en 5 pestañas × 4 teléfonos | 62 |
 | `node tests/verificar_youtube_doblaje.mjs` | **Obligatoria al tocar el doblaje de YouTube**: idioma antes del texto, ventana de preparación (voz sin traducirlo todo), cancelar que corta verdad, caché por video, voz/subtítulos/pantalla completa, permiso de IA, texto completo bajo demanda y (v4) **0 frases de voz cortadas o saltadas con el español más largo que el inglés**, ritmo automático y subtítulo = voz — todo con API y reproductor simulados | 110 |
+| `node tests/verificar_x_doblaje.mjs` | **Obligatoria al tocar el doblaje de X**: enlace de X en el mismo campo, audio en partes de ≤3,2 MB, **ninguna petición a video.twimg.com con Referer** (falla si lo lleva), iframe `/x-reproductor.html`, caché `x:<id>`, cancelar que corta verdad, errores que se leen y teléfono sin desborde | 24 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -248,6 +250,22 @@ subtítulo (`data-tamano`, solo `font-size`). `JG_JS_V='v152'`, prod `dpl_2a1EF9
 **Estado desde 2026-08-01: la extracción es automática otra vez.** Documento
 maestro: **`CAMBIOS_YOUTUBE.md`** (diagnóstico medido, alternativas con fuente,
 arquitectura, validación y guía de activación).
+
+## X / Twitter (leer antes de tocar `api/x_video.py` o `js/youtube/*X*`)
+
+- Documento maestro: **`CAMBIOS_X.md`** (arquitectura, contrato de la API,
+  medición desde Vercel, límites, despliegues).
+- **`video.twimg.com` rechaza el Referer de otro dominio** (403 medido): NO
+  quitar `/x-reproductor.html` ni el `referrerPolicy: 'no-referrer'`, y no
+  sacar el `<video>` de ese iframe «para simplificar». Ver `TRAMPAS.md`.
+- El audio se trocea **en el navegador** en partes de ≤ 3,2 MB (Vercel corta
+  a los 60 s y rechaza ~4,5 MB): no mover la descarga ni el troceo al servidor.
+- X **no** usa Supadata (gasta créditos): el texto sale de Whisper de Groq
+  (`/api/transcribe`), gratis. Ante «Límite de uso» se espera y reintenta.
+- La sindicación (`cdn.syndication.twimg.com/tweet-result`) exige un `token`
+  cualquiera de ~10 caracteres: sin token devuelve `{}`. FxTwitter es el respaldo.
+- La caché vive en IndexedDB `jg_youtube` (sin versión nueva) con clave
+  `x:<id>` (o `x:<id>:<n>` si el post trae varios videos).
 
 ## PDF (leer antes de tocar `js/pdf/`)
 
