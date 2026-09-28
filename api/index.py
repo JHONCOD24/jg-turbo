@@ -4147,6 +4147,14 @@ class TtsRequest(BaseModel):
             "una frase como «Claude, ChatGPT.» sonaba con OTRA voz (en-US)."
         ),
     )
+    evitar_azure: bool = Field(
+        False,
+        description=(
+            "True = saltar Azure F0 (20 síntesis/min) e ir directo a edge-tts, la misma "
+            "voz neural sin cuota. Lo usan las descargas largas de la biblioteca de "
+            "videos: ~600 frases a 18 por minuto tardarían ~33 min."
+        ),
+    )
 
 
 def _tts_gender(voice: str) -> str:
@@ -4780,6 +4788,7 @@ async def _tts_synthesize(
     prefer_fish: bool = False,
     fish_voice: str = "",
     fin: float | None = None,
+    evitar_azure: bool = False,
 ) -> tuple[bytes, str, str, str]:
     """Sintetiza un fragmento. Devuelve (audio, motor usado, estilo, modelo).
 
@@ -4821,7 +4830,7 @@ async def _tts_synthesize(
                 _tts_fish_registrar_fallo()
             except Exception:
                 _tts_fish_registrar_fallo()
-    if _tts_azure_activo():
+    if _tts_azure_activo() and not evitar_azure:
         margen = min(AZURE_TTS_TIMEOUT, queda(reserva=6.0))
         if margen > 2.0:
             try:
@@ -4900,6 +4909,7 @@ async def _tts_render(req: TtsRequest, cache_seconds: int = 0):
                 prefer_fish=bool(req.prefer_fish),
                 fish_voice=req.fish_voice or "",
                 fin=fin,
+                evitar_azure=bool(req.evitar_azure),
             )
             if not audio:
                 raise RuntimeError("El servicio no devolvió audio.")
@@ -4991,6 +5001,7 @@ async def tts_neural_get(
     prefer_fish: bool = False,
     fish_voice: str = "",
     idioma_fijo: bool = False,
+    evitar_azure: bool = False,
 ):
     """Misma síntesis por GET, cacheable en el navegador y en el CDN.
 
@@ -5010,6 +5021,7 @@ async def tts_neural_get(
             prefer_fish=prefer_fish,
             fish_voice=fish_voice,
             idioma_fijo=idioma_fijo,
+            evitar_azure=evitar_azure,
         ),
         cache_seconds=86400,
     )
