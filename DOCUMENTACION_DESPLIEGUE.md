@@ -14,6 +14,24 @@ lastUpdated: 2026-08-02
 Clones de JG Voice en el PDF: receta para agentes en
 [docs/INTEGRAR-VOZ-JG-VOICE.md](docs/INTEGRAR-VOZ-JG-VOICE.md).
 
+## Publicación X v153 (doblaje de videos de X), 2026-09-27 · desde una copia exacta del commit
+
+Enlaces de X (`x.com/…/status/…`) en el panel de YouTube, con voz en español,
+subtítulos y ritmo automático. Documento maestro:
+[CAMBIOS_X.md](CAMBIOS_X.md).
+
+```bash
+D="$TEMP/jg-turbo-deploy" && rm -rf "$D" && mkdir -p "$D/.vercel"
+git archive HEAD | tar -x -C "$D"
+cp .vercel/project.json "$D/.vercel/project.json"   # prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8
+cd "$D" && npx vercel --prod --yes --scope jhoncod24s-projects
+```
+
+`dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc` READY, alias `https://jg-turbo.vercel.app`.
+Marcador `JG_JS_V=v153`, shell-v153. Verificado: `/api/health` con
+`"x_video":true`; 5 módulos JS de X servidos; `/x-reproductor.html` con
+`Referrer-Policy: no-referrer`; enlace real de X → 200 con 4 MP4 + HLS.
+
 ## Publicación YouTube v151 (doblaje v4), 2026-09-26 · desde una copia exacta del commit
 
 El CLI sube el DISCO, no Git: `list_deployment_files` del despliegue anterior

@@ -266,6 +266,10 @@ arquitectura, validación y guía de activación).
   cualquiera de ~10 caracteres: sin token devuelve `{}`. FxTwitter es el respaldo.
 - La caché vive en IndexedDB `jg_youtube` (sin versión nueva) con clave
   `x:<id>` (o `x:<id>:<n>` si el post trae varios videos).
+- **v153 (2026-09-27):** doblaje de X en producción. `JG_JS_V='v153'`,
+  prod `dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc`. Desplegado desde `git archive`
+  del commit. Pruebas: `test_x_doblaje` 70 · `verificar_x_doblaje` 24 ·
+  `test_x_video.py` 35 passed.
 
 ## PDF (leer antes de tocar `js/pdf/`)
 
@@ -442,7 +446,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v152`** (doblaje de YouTube v4, 2026-09-26). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v153`** (doblaje de videos de X, 2026-09-27). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

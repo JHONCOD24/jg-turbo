@@ -1,8 +1,51 @@
 # Doblaje de videos de X
 
-Estado: implementado en `feat/x-doblaje`. Documento maestro del feature.
+Estado: **en producción** desde el 2026-09-27 (`v153`,
+`dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc`). Documento maestro del feature.
 Plan ejecutado: `PLAN_X_DOBLAJE_IMPLEMENTACION_LLM.md`; bitácora de la
 ejecución en `docs/x-doblaje/EJECUCION_2026-09-27.md`.
+
+## Qué cambió (inventario completo, 2026-09-27)
+
+### Archivos nuevos
+
+| Archivo | Qué hace |
+|---|---|
+| `api/x_video.py` | Lee el post de X (sindicación → FxTwitter), normaliza el video y solo entrega URLs de `video.twimg.com` / `pbs.twimg.com`. |
+| `js/youtube/fuenteVideo.js` | `detectarFuente(url)`: reconoce enlaces de YouTube y de X en el mismo campo y devuelve `{plataforma, id, indice, clave}`. |
+| `js/youtube/servicioX.js` | Consulta `/api/x-video`, filtra el HLS de solo audio y pide las partes a Whisper. Todo a `video.twimg.com` con `referrerPolicy: 'no-referrer'`. |
+| `js/youtube/audioX.js` | Descarga los trozos HLS de audio (64 kbps), arma partes de ≤ 3,2 MB y las une desplazando tiempos sin duplicados. |
+| `js/youtube/XVideoPlayer.js` | `<video>` HTML5 con el contrato de `YouTubePlayer` (mismo motor de doblaje). |
+| `x-reproductor.html` | iframe del mismo origen con meta `no-referrer`: único lugar donde vive el `<video>` de X. |
+| `backend/tests/test_x_video.py` | 35 pruebas del módulo y de la ruta `/api/x-video` (sin red). |
+| `tests/test_x_doblaje.mjs` | 70 pruebas unitarias del flujo de X (audio, transcripción, cancelación, errores). |
+| `tests/verificar_x_doblaje.mjs` | 24 pruebas de navegador de punta a punta (API y reproductor simulados). |
+| `tests/fixtures/x/…` | Enlaces, respuestas de sindicación/FxTwitter, listas HLS y video de prueba. |
+| `docs/x-doblaje/` | Bitácora de ejecución y capturas crudas de los hechos medidos (H1–H12). |
+| `PLAN_X_DOBLAJE_IMPLEMENTACION_LLM.md` | Plan completo (contratos, código, pruebas, criterios de aceptación). |
+| `CAMBIOS_X.md` | Este documento. |
+
+### Archivos modificados
+
+| Archivo | Qué cambió |
+|---|---|
+| `api/index.py` | Ruta `GET /api/x-video` + marca `x_video: true` en `/api/health`. |
+| `js/youtube/youtubeSyncController.js` | `abrirSesion`/`completarSesion` reutilizables; desvío a X al pulsar «Doblar»; nota del enlace de X; `crearReproductorX` / `iniciarSesionX`. |
+| `index.html` | `JG_JS_V = 'v153'`; textos del panel (el mismo campo acepta X). |
+| `sw.js` | `CACHE_SHELL = 'jg-turbo-shell-v153'`. |
+| `vercel.json` | Cabeceras de `/x-reproductor.html` (`Referrer-Policy: no-referrer`). |
+| `.gitignore` | Excepción para `tests/fixtures/x/video_prueba.webm`. |
+| `AGENTS.md` / `Agents.md` | Sección «X / Twitter», pruebas (`test_x_doblaje`, `verificar_x_doblaje`) y reglas. |
+| `TRAMPAS.md` | Entrada: `video.twimg.com` rechaza el Referer de otro dominio. |
+| `CONFIG_PERSISTENTE.md` | Caché de doblajes de X en IndexedDB `jg_youtube` con clave `x:<id>`. |
+| `DOCUMENTACION_DESPLIEGUE.md` | Publicación v153. |
+
+### Qué NO se tocó
+
+El camino de YouTube por dentro (mismas claves de caché, mismos números de
+prueba: 139 · 65 · 110). El motor de doblaje (`dubbingEngine`, `syncEngine`,
+`motorPreparacion`) es compartido y no cambió. Sin dependencias nuevas ni
+claves de `localStorage` nuevas.
 
 ## Qué hace
 

@@ -2556,7 +2556,7 @@ mkdir -p "$TMP/.vercel" && cp .vercel/project.json "$TMP/.vercel/"
 cd "$TMP" && npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
-- [ ] **Paso 5: verificar contra el dominio real** (no contra la URL que imprime el CLI):
+- [x] **Paso 5: verificar contra el dominio real** (no contra la URL que imprime el CLI):
 
 ```bash
 curl -s "https://jg-turbo.vercel.app/?nocache=$(date +%s)" | grep -o "JG_JS_V = '[^']*'"
@@ -2569,14 +2569,19 @@ for f in js/youtube/servicioX.js js/youtube/audioX.js js/youtube/XVideoPlayer.js
 ```
   Esperado: `v153`, `"x_video":true`, `200`, `referrer-policy: no-referrer`, JSON con `"hls"`, y los dos
   hashes iguales en cada archivo. Repetir en producción los puntos 1–2 del paso 3.
-- [ ] **Paso 6:** anotar el `dpl_…` en `CAMBIOS_X.md` §Despliegues y en la sección X de `AGENTS.md`;
+  **Hecho el 2026-09-27:** `v153`, `"x_video":true`, módulos 200, `no-referrer`,
+  enlace real `DAIEvolutionHub/status/2104109462999216173` → 200 sindicacion.
+- [x] **Paso 6:** anotar el `dpl_…` en `CAMBIOS_X.md` §Despliegues y en la sección X de `AGENTS.md`;
   commit `docs(x): anota dpl de v153`.
-- [ ] **Paso 7: empujar** (GitHub no despliega; sin esto producción vive solo en este equipo):
+  **Hecho:** `dpl_Er2mhf2iaRKaFabPwL9SVRQnxqyc` en `CAMBIOS_X.md`, `AGENTS.md`
+  y `DOCUMENTACION_DESPLIEGUE.md`.
+- [x] **Paso 7: empujar** (GitHub no despliega; sin esto producción vive solo en este equipo):
 
 ```bash
 git switch main && git merge --ff-only feat/x-doblaje && git push origin main
 git fetch origin && git log --oneline origin/main..HEAD   # debe salir vacío
 ```
+  **Hecho:** `main` en `a9dc761`, empujado a `origin/main`.
 
 ---
 
