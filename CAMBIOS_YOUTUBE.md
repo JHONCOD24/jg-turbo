@@ -30,6 +30,10 @@ Pruebas: `test_youtube_sincronia` **74** (+3) · `test_biblioteca_videos` **100*
 · `verificar_biblioteca_datos` **48** (+2) · `verificar_biblioteca_videos` **52** (+1)
 · YouTube 139/110 · X 70/24 · PDF/TTS sin cambios · móvil 62.
 
+Despliegue: `v157` / `jg-turbo-shell-v157` · **`dpl_EafotrCk2sVosZAvGLqRJPaFNFXa`**. En el
+dominio: módulos iguales al commit, `ANTICIPO_ARRANQUE_S = 0.08` servido, y una voz real
+recién generada se guardó con su medida (0,19–2,84 s de 3,6 s) y volvió idéntica.
+
 ## Corrección 2026-09-28 (v156) · La voz ya no espera su propio silencio
 
 ### Pedido del dueño

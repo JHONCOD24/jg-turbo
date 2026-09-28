@@ -292,7 +292,7 @@ arquitectura, validación y guía de activación).
   (`ANTICIPO_ARRANQUE_S`: el tic de 100 ms + la demora de `play()` la dejaban
   ~40 ms tarde) y la voz guardada trae su tramo hablado ya medido (al volver a un
   video no se decodifica nada). `CAMBIOS_YOUTUBE.md` §v157. `JG_JS_V='v157'`,
-  prod `[DATO PENDIENTE: dpl]`.
+  prod `dpl_EafotrCk2sVosZAvGLqRJPaFNFXa`.
 
 ## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
 
