@@ -152,6 +152,12 @@ con voz real de producción en Chromium y Chrome) · `verificar_biblioteca_video
 PDF/TTS 1.192 · `verificar_movil_pantalla` 62 · `verificar_arranque_ligero` 9 OK +
 el fallo que ya existía («< 1 MB»: 1 040 KB).
 
+### Mejoras posteriores (v157)
+
+- La voz guardada (`voces`) lleva su tramo hablado (`habla: { duracionS, desdeS, hastaS }`):
+  volver a un video no decodifica ninguna frase. Campo aditivo, sin migración: las
+  voces anteriores se completan al sonar. Ver `CAMBIOS_YOUTUBE.md` §v157.
+
 ## Si algo cambia
 
 - **edge-tts caído o lento:** cada frase reintenta 2 veces y a la tercera va por

@@ -1,5 +1,35 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Mejora 2026-09-28 (v157) · La voz entra centrada y lo guardado no se vuelve a medir
+
+Pedido del dueño: las mejoras 2 y 3 propuestas tras la auditoría v156.
+
+**1. Adelanto de arranque (`ANTICIPO_ARRANQUE_S = 0.08`, `dubbingEngine.js`).** El
+motor mira cada 100 ms y la frase entraba con 0,03 s de adelanto. Con inicios que
+caen entre dos tics (lo normal en un video) llegaba tarde, y a eso se suman los
+~30-50 ms que tarda el navegador en sonar tras `play()`. Medido en el simulador:
+
+| Adelanto | Arranque medio | p95 | Lo más temprano |
+|---|---:|---:|---:|
+| 0,03 s (v156) | +40 ms | +84 ms | −9 ms |
+| **0,08 s (v157)** | **−10 ms** | **+35 ms** | −57 ms |
+| 0,10 s | −30 ms | +17 ms | −79 ms |
+
+Con la demora real de `play()` encima, 0,08 s deja la voz sobre los labios. Nota
+para quien pruebe esto: el simulador tenía todos los inicios en múltiplos de
+100 ms, justo en el tic, así que no podía ver el atraso; la prueba nueva usa
+inicios cada 4,137 s.
+
+**2. Medida guardada con la voz (`cacheDoblaje.guardarVoz(…, habla)`).** Al volver a
+un video de la biblioteca, cada frase se decodificaba otra vez para medir su
+silencio. Ahora la voz se guarda con su `habla` y `DubbingService` la usa tal cual
+(0 decodificaciones). Las voces guardadas antes, o desde una descarga, se miden
+la primera vez que suenan y se completan solas. Una medida imposible se descarta.
+
+Pruebas: `test_youtube_sincronia` **74** (+3) · `test_biblioteca_videos` **100** (+3)
+· `verificar_biblioteca_datos` **48** (+2) · `verificar_biblioteca_videos` **52** (+1)
+· YouTube 139/110 · X 70/24 · PDF/TTS sin cambios · móvil 62.
+
 ## Corrección 2026-09-28 (v156) · La voz ya no espera su propio silencio
 
 ### Pedido del dueño

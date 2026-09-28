@@ -150,6 +150,9 @@ aditiva: crea lo que falta y copia, nunca borra). Tres almacenes:
 - `voces` (nuevo; clave `claveDeVoz(video, voz, texto, tasa)`, índices `video` y
   `usado`): la voz en español ya generada, frase por frase. Tope **300 MB**;
   salen las menos usadas (se regeneran). Es lo único que se descarta solo.
+  Desde v157 cada voz guarda también `habla` (`{ duracionS, desdeS, hastaS }`,
+  el tramo hablado sin su silencio); campo aditivo, las anteriores se completan
+  solas al sonar. `vozSecundaria` en `videos` (v156) es igual de aditivo.
 
 **Ya no existe la poda de 20 videos**: v1 borraba en silencio el video 21;
 desde v2 no se elimina nada que la persona organizó (quitar es manual, con
