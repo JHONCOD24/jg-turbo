@@ -111,7 +111,7 @@ export function montarBibliotecaVideos(raiz, deps) {
         </span>
       </button>
       ${video.favorito ? '<span class="vid-favorito" aria-label="Favorito">Favorito</span>' : ''}
-      <button class="vid-menu-btn" type="button" aria-label="Opciones de ${escapar(video.titulo)}" aria-haspopup="menu" aria-expanded="false">•••</button>
+      <button class="vid-menu-btn" type="button" aria-label="Opciones de ${escapar(video.titulo)}" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg></button>
       <div class="vid-menu" role="menu" hidden>
         <button type="button" role="menuitem" data-accion="temas">Editar temas</button>
         <button type="button" role="menuitem" data-accion="favorito">${video.favorito ? 'Quitar de favoritos' : 'Marcar como favorito'}</button>
@@ -135,7 +135,10 @@ export function montarBibliotecaVideos(raiz, deps) {
     ui.vidSeguir.hidden = !video;
     if (!video) return;
     ui.vidSeguir.dataset.clave = video.clave;
-    ui.vidSeguir.innerHTML = `${portadaHtml(video)}<div><span class="vid-ceja">Seguir viendo</span><strong>${escapar(video.titulo)}</strong>${progresoHtml(video)}<button type="button" data-accion="seguir">Continuar en ${formatearDuracion(video.posicionS)}</button></div>`;
+    const avance = video.duracionS
+      ? `Vas en ${formatearDuracion(video.posicionS)} de ${formatearDuracion(video.duracionS)}`
+      : `Vas en ${formatearDuracion(video.posicionS)}`;
+    ui.vidSeguir.innerHTML = `${portadaHtml(video)}<div><strong>${escapar(video.titulo)}</strong><span class="vid-avance">${avance}</span>${progresoHtml(video)}<button type="button" data-accion="seguir">Continuar</button></div>`;
   }
 
   function pintar() {
@@ -295,6 +298,23 @@ export function montarBibliotecaVideos(raiz, deps) {
     }
   }
 
+  // FORM del brief: al quitar, la tarjeta se contrae antes de desaparecer
+  // (sin animación si la persona pidió movimiento reducido).
+  function contraerTarjeta(clave) {
+    return new Promise((resolver) => {
+      const tarjeta = ui.vidLista.querySelector(`.vid-tarjeta[data-clave="${CSS.escape(clave)}"]`);
+      if (!tarjeta || matchMedia('(prefers-reduced-motion: reduce)').matches) return resolver();
+      tarjeta.style.height = `${tarjeta.offsetHeight}px`;
+      tarjeta.style.overflow = 'hidden';
+      tarjeta.getBoundingClientRect();
+      tarjeta.style.transition = 'height .22s ease,opacity .22s ease,border-width .22s ease';
+      tarjeta.style.height = '0';
+      tarjeta.style.opacity = '0';
+      tarjeta.style.borderWidth = '0';
+      setTimeout(resolver, 240);
+    });
+  }
+
   async function accionMenu(video, accion) {
     cerrarMenu();
     if (accion === 'temas') abrirTemas(video);
@@ -313,6 +333,7 @@ export function montarBibliotecaVideos(raiz, deps) {
       ui.vidDeshacer.hidden = false;
       avisar('Video quitado de la biblioteca.');
       temporizadorDeshacer = setTimeout(() => { ui.vidDeshacer.hidden = true; deshecho = null; }, 6000);
+      await contraerTarjeta(video.clave);
       await refrescar();
     }
   }
