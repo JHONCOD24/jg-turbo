@@ -141,6 +141,7 @@ agente constructor y la verificación funcional la dan las 48 comprobaciones.
 |---|---|---|
 | 2026-09-28 | `dpl_J3LJAZ3TzGPd8E9BBJSbLvCDJvfT` (vista previa) | Medición de `evitar_azure` desde Vercel, desde `git archive` de `be41e1c`. |
 | 2026-09-28 | `dpl_2aBp79FCqtjHvzdj866t77J2deTc` (producción, **v154**) | Biblioteca de videos y descargas en https://jg-turbo.vercel.app. Verificado: `JG_JS_V='v154'`, `id="vidBiblioteca"`, Mediabunny 200, `.impeccable/` 404, `x-tts-engine: edge-neural-regional`, hashes de `bibliotecaVista.js`, `cacheDoblaje.js`, `exportadorDoblaje.js`, `youtubeSyncController.js` y `dubbingService.js` iguales al commit. |
+| 2026-09-28 | `dpl_5HyrMbD3MD64do9tmF22XWUCPGij` (producción, **v155**) | El menú de opciones de la tarjeta ya no queda detrás de las tarjetas de abajo (el `transform` del hover creaba un contexto de apilamiento; la tarjeta con menú abierto se eleva con `vid-con-menu`). Verificado en producción: `JG_JS_V='v155'`, `CACHE_SHELL='jg-turbo-shell-v155'`, `id="vidBiblioteca"`, Mediabunny 200, `.impeccable/` 404, `x-tts-engine: edge-neural-regional`, hashes de los 5 JS y el CSS de la biblioteca iguales al commit, y menú con 6 videos: 0 de 6 opciones tapadas en escritorio (1440) y móvil (390), sin errores de JavaScript. |
 
 ## Medición en vista previa / producción
 
