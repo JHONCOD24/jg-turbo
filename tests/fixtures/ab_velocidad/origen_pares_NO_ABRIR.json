@@ -1,0 +1,27 @@
+[
+  {
+    "par": 1,
+    "a": "servidor",
+    "b": "navegador"
+  },
+  {
+    "par": 2,
+    "a": "servidor",
+    "b": "navegador"
+  },
+  {
+    "par": 3,
+    "a": "servidor",
+    "b": "navegador"
+  },
+  {
+    "par": 4,
+    "a": "servidor",
+    "b": "navegador"
+  },
+  {
+    "par": 5,
+    "a": "navegador",
+    "b": "servidor"
+  }
+]

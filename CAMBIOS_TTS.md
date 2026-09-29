@@ -118,6 +118,34 @@ lo tomó. Si Fish responde `respaldo=1` constante: ver fusible, §v2.88.0.
 
 ---
 
+## 2026-09-29 · P1.4 · prueba ciega A/B de velocidad a 1,5× (pendiente el oído del dueño)
+
+**Hipótesis:** la voz se genera siempre a 1× y el navegador la estira con
+`playbackRate` (`ttsAplicarVelocidad`, `ttsFetchNeuralChunk` con `rate: 1`
+fijo). El servidor ya sabe generar a velocidad sin cambios: Fish con
+`prosody.speed`, Azure con SSML `rate`, Edge con `rate` (`api/index.py`:
+`_tts_fish_cuerpo`, `_tts_prosody`, `_tts_edge_synthesize`).
+
+**Lo generado (con la API real de producción, 2026-09-29):**
+`node tests/ab_velocidad.mjs` → 5 pasajes (oración larga, título, lista,
+diálogo, número + sigla) en dos versiones cada uno, las dos con la MISMA voz
+(`es-CO-SalomeNeural`, `azure-neural-regional`, `idioma_fijo`): «servidor»
+(generada a 1,5×) y «navegador» (generada a 1× para estirarla al
+reproducir). 10 audios en `tests/fixtures/ab_velocidad/` (orden ciego a/b
+sorteado por par) + `tests/ab_velocidad.html` para votar sin saber cuál es
+cuál. Costo: 10 síntesis neurales cortas (cuota gratuita de Azure F0).
+
+**Procedimiento para el dueño:** abrir `tests/ab_velocidad.html`, oír A y B
+de cada par (las dos suenan a 1,5×) y votar cuál suena más natural. No abrir
+`origen_pares_NO_ABRIR.json` hasta votar los 5.
+
+**Si gana la del servidor (P1.5, pendiente del veredicto):** pedir la
+velocidad al servidor desde 1,1× para el PDF, conservar el estiramiento solo
+para cambios en vivo mientras se regenera lo que falta. Costo en caché:
+el audio a cada velocidad es otro archivo (la clave de caché de hoy no
+incluye la tasa y habría que sumársela), así que cambiar de velocidad
+regenera lo no escuchado. **P1.5 NO se implementa sin el veredicto.**
+
 ## 2026-09-29 · Fase 1 PDF · continuidad del motor entre capítulos (sin versión: un solo JG_JS_V al final de la tanda)
 
 **Cambio en el motor compartido (`index.html`), acotado a origen pdf con

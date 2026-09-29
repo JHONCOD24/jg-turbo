@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prueba ciega de velocidad · JG Turbo</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; line-height: 1.5; }
+  h1 { font-size: 20px; }
+  p.ayuda { background: #f0f4ff; border-radius: 10px; padding: 12px; }
+  @media (prefers-color-scheme: dark) { p.ayuda { background: #1c2742; } }
+  section.par { border: 1px solid #ccc; border-radius: 12px; padding: 12px; margin: 12px 0; }
+  section.par h2 { font-size: 17px; margin: 0 0 8px; }
+  .fila { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+  button { min-height: 44px; min-width: 44px; font-size: 15px; border-radius: 10px; border: 1px solid #888; padding: 8px 14px; }
+  button[aria-pressed="true"] { outline: 3px solid #06c; outline-offset: 1px; }
+  button:disabled { opacity: .55; }
+  textarea { width: 100%; min-height: 44px; font-size: 14px; border-radius: 8px; }
+  #resumen { border: 2px solid #06c; border-radius: 12px; padding: 12px; margin-top: 16px; font-size: 15px; }
+</style>
+</head>
+<body>
+<h1>¿Cuál suena más natural a 1,5×?</h1>
+<p class="ayuda">Cada par trae el mismo texto en dos versiones, las dos a 1,5×.
+Escucha <strong>A</strong> y <strong>B</strong> con audífonos si puedes, en ese
+orden, y vota cuál suena más natural (sin cortes ni sílabas partidas).
+No mires el código ni el archivo <code>origen_pares_NO_ABRIR.json</code>
+hasta votar los 5 pares.</p>
+<main id="pares"></main>
+<div id="resumen" hidden></div>
+<script src="fixtures/ab_velocidad/pares.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cont = document.getElementById('pares');
+  var resumen = document.getElementById('resumen');
+  var votos = {};
+  var notas = {};
+  function sonar(par, letra) {
+    var info = window.AB_PARES[par - 1];
+    var archivo = letra === 'A' ? info.a : info.b;
+    var tasa = letra === 'A' ? info.tasaA : info.tasaB;
+    try {
+      var el = new Audio('fixtures/ab_velocidad/' + archivo);
+      el.preservesPitch = true;
+      el.playbackRate = tasa;
+      el.play();
+    } catch (_) {}
+  }
+  function pintarResumen() {
+    var hechas = Object.keys(votos).length;
+    if (hechas < 5) { resumen.hidden = true; return; }
+    var lineas = ['<strong>Veredicto (' + hechas + '/5):</strong><br>'];
+    for (var n = 1; n <= 5; n += 1) {
+      lineas.push('Par ' + n + ': ' + votos[n] + (notas[n] ? ' — ' + notas[n] : ''));
+    }
+    lineas.push('<br>Copia este veredicto y mándalo para aplicar P1.5 o cerrar P1.4.');
+    resumen.innerHTML = lineas.join('<br>');
+    resumen.hidden = false;
+  }
+  window.AB_PARES.forEach(function (info) {
+    var sec = document.createElement('section');
+    sec.className = 'par';
+    sec.innerHTML = '<h2>Par ' + info.par + '</h2>' +
+      '<div class="fila"><button type="button" data-oir="A">Oír A</button>' +
+      '<button type="button" data-oir="B">Oír B</button></div>' +
+      '<div class="fila" role="group" aria-label="Voto del par ' + info.par + '">' +
+      '<button type="button" data-voto="Gana A">Gana A</button>' +
+      '<button type="button" data-voto="Gana B">Gana B</button>' +
+      '<button type="button" data-voto="Empate">Empate</button></div>' +
+      '<label>Nota (opcional): <textarea data-nota rows="2" maxlength="280"></textarea></label>';
+    sec.querySelectorAll('[data-oir]').forEach(function (b) {
+      b.addEventListener('click', function () { sonar(info.par, b.getAttribute('data-oir')); });
+    });
+    sec.querySelectorAll('[data-voto]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        votos[info.par] = b.getAttribute('data-voto');
+        sec.querySelectorAll('[data-voto]').forEach(function (x) {
+          x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+        });
+        pintarResumen();
+      });
+    });
+    sec.querySelector('[data-nota]').addEventListener('input', function (e) {
+      notas[info.par] = e.target.value;
+    });
+    cont.appendChild(sec);
+  });
+})();
+</script>
+</body>
+</html>
