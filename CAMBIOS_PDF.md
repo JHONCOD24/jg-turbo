@@ -47,6 +47,23 @@ documentado desde v2.81.0). `test_pdf_continuidad`, `test_tts_narracion`,
 en verde. La prueba real con pantalla apagada solo se puede hacer en el
 dominio: anotada para la verificación final.
 
+## 2026-09-29 · P2.2 · La guía sigue lo hablado, no el archivo (S-03)
+
+La marca avanzaba con la duración del archivo, que trae ~0,21 s delante y
+~0,85 s de silencio de relleno detrás (medido en v156): se quedaba quieta
+~1 s al final de cada bloque y luego saltaba.
+
+**Cambio:** al quedar listo un bloque neural del PDF, se mide su tramo
+hablado en segundo plano (`js/youtube/hablaVoz.js`, import diferido, solo
+con origen pdf) y se guarda en `bloque.habla`; `posicionDeVoz` convierte el
+dentro del archivo a dentro del habla (`dentroDeHabla` pura en
+`js/pdf/guiaAnclas.js`). Sin medida, todo sigue igual. El camino inverso
+(saltos) no se toca: el motor pide tiempo, no habla.
+
+**Pruebas:** `test_pdf_guia_anclas.mjs` (matemática del recorte + fallbacks)
+y `verificar_pdf_navegador` §8d con WAV de 0,5 s de tono + 1,2 s de
+silencio: habla medida de 0 a 0,59 s sobre 1,7 s de archivo.
+
 ## 2026-09-29 · P2.1 · Cambiar de voz no pierde la frase (S-02)
 
 Cambiar de voz tras «Desde aquí» saltaba a otro punto: se guardaba la

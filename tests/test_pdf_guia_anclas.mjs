@@ -7,6 +7,7 @@
  */
 import {
   compactarTexto, puntuarContinuacion, situarBloquesTexto, rellenarAnclas,
+  dentroDeHabla,
 } from '../js/pdf/guiaAnclas.js';
 
 let fallos = 0;
@@ -67,6 +68,36 @@ comprobar(
 comprobar(
   rellenarAnclas([null, null], 90).join(',') === '30,60',
   'sin anclas se reparte todo el texto',
+);
+
+/* Tramo hablado frente a duración del archivo (P2.2, S-03).
+ * Archivo de 5 s con habla de 0,2 s a 4,4 s: la mitad del habla (2,3 s)
+ * llega al 50 % del bloque, no al 46 % del archivo; y el silencio final
+ * (4,4–5 s) ya es el 100 %, sin parada de ~1 s al final. */
+const habla = { duracionS: 5, desdeS: 0.2, hastaS: 4.4 };
+comprobar(
+  Math.abs(dentroDeHabla(habla, 5, 2.3 / 5) - 0.5) < 0.01,
+  'la mitad del habla es la mitad del bloque',
+);
+comprobar(
+  dentroDeHabla(habla, 5, 4.6 / 5) === 1,
+  'en el silencio final ya terminó el bloque',
+);
+comprobar(
+  dentroDeHabla(habla, 5, 0.1 / 5) === 0,
+  'en el silencio inicial aún no empezó',
+);
+comprobar(
+  dentroDeHabla(null, 5, 0.9) === 0.9,
+  'sin habla medida todo sigue igual',
+);
+comprobar(
+  dentroDeHabla(habla, 0, 0.9) === 0.9,
+  'sin duración de archivo todo sigue igual',
+);
+comprobar(
+  dentroDeHabla({ desdeS: 0, hastaS: 0 }, 5, 0.9) === 0.9,
+  'con tramo vacío todo sigue igual',
 );
 
 console.log(fallos === 0 ? 'TODAS LAS COMPROBACIONES PASARON' : `FALLOS: ${fallos}`);

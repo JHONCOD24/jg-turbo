@@ -369,3 +369,23 @@ export function tiempoPorPosicion(acum, inicio, fin, posicion) {
   if (!(total > 0)) return (pos - ini) / (limite - ini);
   return costoEntre(acum, ini, pos) / total;
 }
+
+/**
+ * Fracción del BLOQUE HABLADO a partir de la fracción del ARCHIVO (P2.2).
+ *
+ * El MP3 que devuelve el servidor trae silencio de relleno (~0,21 s delante
+ * y ~0,85 s detrás, medido en v156): si la guía reparte con la duración del
+ * archivo, la marca se queda quieta ~1 s al final de cada bloque y luego
+ * salta. Con el tramo hablado ({desdeS, hastaS} de hablaVoz.js) el dentro se
+ * mide sobre lo que se oye. Sin habla medida o sin duración de archivo,
+ * devuelve el dentro tal cual (sin romper nada).
+ */
+export function dentroDeHabla(habla, durArchivo, dentroArchivo) {
+  const dentro = Math.max(0, Math.min(1, Number(dentroArchivo) || 0));
+  const dur = Number(durArchivo) || 0;
+  const desde = Number(habla && habla.desdeS);
+  const hasta = Number(habla && habla.hastaS);
+  if (!(dur > 0) || !(hasta > desde)) return dentro;
+  const t = dentro * dur;
+  return Math.max(0, Math.min(1, (t - desde) / (hasta - desde)));
+}

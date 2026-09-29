@@ -1143,6 +1143,103 @@ console.log('\n── Cambio de voz sin perder la frase ───────');
   await navegadorVoz.close();
 }
 
+/* ── 8d) La guía sigue lo hablado, no el archivo (P2.2, S-03) ─────────
+ *
+ * El MP3 del servidor trae silencio de relleno detrás: la marca avanzaba
+ * con la duración del archivo, se quedaba quieta ~1 s al final de cada
+ * bloque y luego saltaba. Aquí cada bloque suena 0,5 s de tono + 1,2 s de
+ * silencio; la guía tiene que medir el tramo hablado y recortar el silencio.
+ */
+console.log('\n── Guía con el tramo hablado ───────────────');
+function wavHabla(segTono, segSilencio) {
+  const sr = 8000;
+  const nTono = Math.round(segTono * sr);
+  const nSil = Math.round(segSilencio * sr);
+  const buf = Buffer.alloc(44 + (nTono + nSil) * 2);
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + (nTono + nSil) * 2, 4); buf.write('WAVE', 8);
+  buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22); buf.writeUInt32LE(sr, 24); buf.writeUInt32LE(sr * 2, 28);
+  buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36);
+  buf.writeUInt32LE((nTono + nSil) * 2, 40);
+  for (let i = 0; i < nTono; i += 1) {
+    buf.writeInt16LE(Math.round(16000 * Math.sin((2 * Math.PI * 440 * i) / sr)), 44 + i * 2);
+  }
+  return buf;
+}
+{
+  const navegadorHabla = await chromium.launch({
+    headless: !process.argv.includes('--headed'),
+    args: ['--autoplay-policy=no-user-gesture-required'],
+  });
+  const contexto = await navegadorHabla.newContext({ viewport: { width: 1280, height: 950 } });
+  await contexto.addInitScript(() => {
+    try {
+      localStorage.setItem('jg_pdf_lectura', JSON.stringify({ modoPagina: 'paginas' }));
+      localStorage.setItem('jg_tts_engine', 'neural');
+      localStorage.setItem('jg_tts_rate', '1');
+    } catch (_) {}
+    const cerrar = () => {
+      const hoja = document.getElementById('pdfAuditoriaHoja');
+      if (!hoja || hoja.hidden) return;
+      const no = document.getElementById('btnPdfAuditoriaRechazar');
+      if (no) no.click(); else hoja.hidden = true;
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      cerrar();
+      new MutationObserver(cerrar).observe(document.body, {
+        subtree: true, attributes: true, attributeFilter: ['hidden'], childList: true,
+      });
+    });
+  });
+  await contexto.route('**/tts*', (r) => {
+    const url = new URL(r.request().url());
+    if (url.pathname.endsWith('/tts-voices')) return r.fulfill({ status: 503, body: 'x' });
+    if (url.pathname.endsWith('/tts-warmup')) return r.fulfill({ status: 200, body: '{}' });
+    return r.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'audio/wav', 'X-TTS-Voice': 'stub', 'X-TTS-Engine': 'stub-neural' },
+      body: wavHabla(0.5, 1.2),
+    });
+  });
+  const pagina = await contexto.newPage();
+  const errores = [];
+  pagina.on('pageerror', (e) => errores.push(String(e)));
+  await abrirPestana(pagina);
+  await leer(pagina, TRES, 120000);
+  if (await pagina.evaluate(() => document.querySelector('#pdfDockNav')?.dataset.desplegado === 'no')) {
+    await pagina.locator('#btnPdfDockDesplegar').click();
+    await pagina.waitForTimeout(400);
+  }
+  await pagina.locator('[data-tts-console="pdf"] [data-tts-action="toggle"]').click();
+  await pagina.waitForFunction(() => {
+    try {
+      const q = window.ttsState.queue || [];
+      return q.some((b) => b && b.habla && b.habla.hastaS > 0 && b.dur > 0);
+    } catch (_) { return false; }
+  }, null, { timeout: 90000 }).catch(() => {});
+  const medida = await pagina.evaluate(() => {
+    try {
+      const q = (window.ttsState.queue || []).filter((b) => b && !b.silencio && b.habla && b.habla.hastaS > 0 && b.dur > 0);
+      const primero = q[0];
+      return {
+        medidos: q.length,
+        desdeS: primero ? primero.habla.desdeS : -1,
+        hastaS: primero ? primero.habla.hastaS : -1,
+        dur: primero ? primero.dur : -1,
+      };
+    } catch (_) { return { medidos: 0 }; }
+  });
+  comprobar((medida.medidos ?? 0) >= 1, `[Habla] el tramo hablado se mide en los bloques (${medida.medidos})`);
+  comprobar((medida.desdeS ?? 9) < 0.5, `[Habla] el habla empieza al principio (${medida.desdeS} s)`);
+  comprobar((medida.hastaS ?? 9) < (medida.dur ?? 0), `[Habla] el silencio trasero se recorta (${medida.hastaS} s de ${medida.dur} s)`);
+  await pagina.locator('[data-tts-console="pdf"] [data-tts-action="stop"]').click().catch(() => {});
+  await pagina.waitForTimeout(400);
+  comprobar(sinRuido(errores).length === 0, `[Habla] sin errores de JavaScript (${sinRuido(errores).length})`);
+  sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
+  await contexto.close();
+  await navegadorHabla.close();
+}
+
 /* ── 8) Retirada de la función Kindle ──────────────────────────────── */
 console.log('\n── Retirada del asistente Kindle ───────────────');
 {

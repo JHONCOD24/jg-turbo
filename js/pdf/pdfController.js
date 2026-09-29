@@ -25,7 +25,7 @@ import {
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
 import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync, estadoRevisionCortes } from './manifiesto.js';
-import { compactarTexto, situarBloquesTexto, situarBloquesDetallado, rellenarAnclas, construirCostos, acumularCostos, posicionPorTiempo, tiempoPorPosicion } from './guiaAnclas.js';
+import { compactarTexto, situarBloquesTexto, situarBloquesDetallado, rellenarAnclas, construirCostos, acumularCostos, posicionPorTiempo, tiempoPorPosicion, dentroDeHabla } from './guiaAnclas.js';
 import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndice, ANCHO_INDICE_DEF } from './panelIndice.js';
 import { componerAtomosFiel } from './fidelidad.js';
 import { sha256Hex } from './huella.js';
@@ -5280,7 +5280,16 @@ export function inicializarLectorPdf(deps = {}) {
     const i = Math.max(0, Math.min(anclas.length - 1, Number(datos.bloque) || 0));
     const inicio = anclas[i];
     const fin = i + 1 < anclas.length ? anclas[i + 1] : Math.min(guia.compacto.length, inicio + (guia.largosBloques?.[i] || 600));
-    const dentro = Math.max(0, Math.min(1, Number(datos.dentroBloque) || 0));
+    /* P2.2: el dentro llega como fracción del ARCHIVO; se convierte a
+     * fracción del tramo HABLADO con lo medido en el bloque que suena (la
+     * cola es la referencia viva: el habla aparece cuando se mide). Sin
+     * medida, dentroDeHabla devuelve el dentro tal cual. */
+    const bloque = guia.cola && guia.cola[Number(datos.bloque)];
+    const dentro = dentroDeHabla(
+      bloque && bloque.habla,
+      bloque && bloque.dur,
+      Number(datos.dentroBloque) || 0,
+    );
     const enCompacto = (guia.costosAcum && guia.costosAcum.length)
       ? posicionPorTiempo(guia.costosAcum, inicio, fin, dentro)
       : Math.round(inicio + (fin - inicio) * dentro);

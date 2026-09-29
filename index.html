@@ -16298,6 +16298,40 @@ function ttsVoiceDisplay(voice, language, locale){
   return 'Neural · ' + accent + (name ? ' · ' + name : '');
 }
 
+/* ── Tramo hablado de cada bloque (P2.2) ─────────────────────────────────
+ *
+ * El MP3 del servidor trae silencio de relleno delante y detrás (~0,21 s +
+ * ~0,85 s, medido en v156): la guía del PDF reparte con lo que se HABLA
+ * (`hablaVoz.js`), no con la duración del archivo. Se mide en segundo plano
+ * al quedar listo el bloque y se guarda en `bloque.habla`; si no se puede
+ * medir, la guía reparte como antes. Solo con origen pdf: las demás
+ * pestañas ni descargan el módulo ni decodifican nada.
+ */
+let ttsHablaVozModulo = null;
+function ttsMedirHablaBloque(bloque, blob, token){
+  if(ttsState.sourceId !== 'pdf') return;
+  if(!bloque || bloque.silencio || bloque.habla !== undefined) return;
+  if(!(blob && blob.size > 0)) return;
+  bloque.habla = null;
+  const medir = (mod) => {
+    if(token !== ttsState._speakToken) return;
+    if(!mod || typeof mod.medirHabla !== 'function') return;
+    try{
+      mod.medirHabla(blob).then((h) => {
+        if(token !== ttsState._speakToken) return;
+        if(h && h.hastaS > 0) bloque.habla = h;
+      }).catch(()=>{});
+    }catch(_){}
+  };
+  if(ttsHablaVozModulo){ medir(ttsHablaVozModulo); return; }
+  if(typeof window === 'undefined') return;
+  try{
+    import('/js/youtube/hablaVoz.js?v=' + (typeof JG_JS_V !== 'undefined' ? JG_JS_V : '0'))
+      .then((mod) => { ttsHablaVozModulo = mod; medir(mod); })
+      .catch(()=>{});
+  }catch(_){}
+}
+
 /* ── Generación de los bloques ────────────────────────────────────────────
  * Varios bloques se piden a la vez (TTS_DESCARGAS_PARALELAS). Mientras suena
  * el primero, los siguientes ya se están generando: el audio no se corta.
@@ -16315,6 +16349,7 @@ function ttsDescargarBloque(indice, token){
     bloque.url = enCache.url;
     bloque.desdeCache = true;
     bloque.estado = 'listo';
+    ttsMedirHablaBloque(bloque, enCache.blob, token);
     return Promise.resolve(bloque);
   }
 
@@ -16382,6 +16417,7 @@ function ttsDescargarBloque(indice, token){
           ttsGuardarEnCache(clave, url, res.blob);
         }
         if(indice === ttsState.idx) ttsMostrarVoz(bloque);
+        ttsMedirHablaBloque(bloque, res.blob, token);
         return bloque;
       }
     }catch(error){
