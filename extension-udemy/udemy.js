@@ -80,11 +80,49 @@ chrome.runtime.onConnect.addListener((puerto) => {
   puertoActual?.disconnect();
   puertoActual = puerto;
   let video = null, original = null, cache = null, controlador = null;
+  let hostSubtitulo = null, textoSubtitulo = null;
   let rutaClase = globalThis.location.pathname;
   let esperando = false;
   let eventos = [];
   const enviar = (dato) => { try { puerto.postMessage(dato); } catch { /* panel ya cerrado */ } };
+  const quitarSubtitulo = () => {
+    if (hostSubtitulo) hostSubtitulo.remove();
+    hostSubtitulo = null; textoSubtitulo = null;
+  };
+  const colocarSubtitulo = () => {
+    if (!hostSubtitulo || !video) return;
+    const contenedor = document.fullscreenElement || video.parentElement;
+    if (contenedor && hostSubtitulo.parentElement !== contenedor) contenedor.append(hostSubtitulo);
+    const caja = video.getBoundingClientRect();
+    Object.assign(hostSubtitulo.style, { position: 'fixed', left: `${caja.left}px`, top: `${caja.top}px`,
+      width: `${caja.width}px`, height: `${caja.height}px`, pointerEvents: 'none', zIndex: '2147483647' });
+    textoSubtitulo.className = document.fullscreenElement ? 'yt-caption completa' : 'yt-caption';
+  };
+  const pintarSubtitulo = (texto) => {
+    if (!texto || !video) { quitarSubtitulo(); return; }
+    if (!hostSubtitulo) {
+      hostSubtitulo = document.createElement('div');
+      hostSubtitulo.setAttribute('data-jg-subtitulo', '');
+      hostSubtitulo.setAttribute('aria-hidden', 'true');
+      const sombra = hostSubtitulo.attachShadow({ mode: 'closed' });
+      const estilo = document.createElement('style');
+      estilo.textContent = `:host{font-family:'Figtree',system-ui,-apple-system,sans-serif}p{box-sizing:border-box}
+        .yt-caption{
+          position:absolute;left:50%;transform:translateX(-50%);bottom:9%;width:min(92%,760px);
+          margin:0;padding:8px 14px;border-radius:10px;background:rgba(4,6,10,.78);
+          color:#fff;font-size:clamp(14px,2.1vw,19px);line-height:1.35;font-weight:600;
+          text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none;
+        }
+        .yt-caption.completa{font-size:clamp(18px,3vw,30px);bottom:12%}`;
+      textoSubtitulo = document.createElement('p');
+      sombra.append(estilo, textoSubtitulo);
+    }
+    textoSubtitulo.textContent = String(texto).slice(0, 1200);
+    colocarSubtitulo();
+  };
+  document.addEventListener('fullscreenchange', colocarSubtitulo);
   const restaurar = () => {
+    quitarSubtitulo();
     if (video && original) {
       video.volume = original.volume;
       video.muted = original.muted;
@@ -145,6 +183,7 @@ chrome.runtime.onConnect.addListener((puerto) => {
       catch (error) { enviar({ tipo: 'subtitulos', solicitud: mensaje.solicitud, error: error.name === 'AbortError' ? 'cancelado' : error.message }); }
       return;
     }
+    if (mensaje.tipo === 'subtitulo') { pintarSubtitulo(mensaje.texto); return; }
     if (mensaje.tipo !== 'orden' || !video) return;
     const numero = Number(mensaje.valor);
     if (mensaje.accion === 'velocidad' && Number.isFinite(numero)) video.playbackRate = Math.max(.5, Math.min(2, numero));
@@ -160,9 +199,11 @@ chrome.runtime.onConnect.addListener((puerto) => {
     const nuevaRuta = globalThis.location.pathname;
     if (actual !== video || nuevaRuta !== rutaClase) { rutaClase = nuevaRuta; vincular(actual); }
     else if (!video?.paused) informar();
+    colocarSubtitulo();
   }, 250);
   puerto.onDisconnect.addListener(() => {
     clearInterval(intervalo); controlador?.abort(); restaurar();
+    document.removeEventListener('fullscreenchange', colocarSubtitulo);
     eventos.forEach((quitar) => quitar()); cache = null;
     chrome.runtime.sendMessage({ tipo: 'olvidarVtt' }).catch(() => {});
     if (puertoActual === puerto) puertoActual = null;

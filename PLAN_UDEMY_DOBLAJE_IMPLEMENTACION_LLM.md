@@ -302,11 +302,14 @@ Panel: `node tests/test_udemy_panel.mjs` 12 OK; `node tests/verificar_udemy_dobl
 5 OK, 0 fallos. Velocidad revertida y siguiente clase quedan por medir en Tarea 9.
 
 ### Tarea 8 — Subtítulo sobre el video
-- [ ] En `udemy.js`, un host con `attachShadow({ mode: 'closed' })` dentro del contenedor del reproductor,
+- [x] En `udemy.js`, un host con `attachShadow({ mode: 'closed' })` dentro del contenedor del reproductor,
   para que también se vea en pantalla completa (si `document.fullscreenElement` cambia, se mueve dentro).
-- [ ] Estilo copiado de `.yt-caption` de `index.html` (`~1435` y la regla de pantalla completa `~3971`) (no inventar otro, restricción 4), con
+- [x] Estilo copiado de `.yt-caption` de `index.html` (`~1435` y la regla de pantalla completa `~3971`) (no inventar otro, restricción 4), con
   `pointer-events: none` para no robar clics a los controles de Udemy.
-- [ ] Si el dueño apaga «Subtítulo sobre el video», el host se quita del DOM.
+- [x] Si el dueño apaga «Subtítulo sobre el video», el host se quita del DOM.
+
+`node tests/test_udemy_subtitulo.mjs`: 4 OK; navegador `--panel`: 9 OK, 0 fallos,
+incluida pantalla completa del contenedor falso.
 
 ### Tarea 9 — Pruebas de navegador (`tests/verificar_udemy_doblaje.mjs`)
 - [ ] Playwright con `chromium.launchPersistentContext` y `--disable-extensions-except` /

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const codigo = readFileSync(new URL('../extension-udemy/udemy.js', import.meta.url), 'utf8');
+assert.ok(codigo.includes("attachShadow({ mode: 'closed' })"), 'Shadow DOM cerrado');
+console.log('OK: Shadow DOM cerrado');
+const original = readFileSync(new URL('../index.html', import.meta.url), 'utf8').match(/\.yt-caption\{([\s\S]*?)\}/)[1].replace(/\s/g, '');
+assert.ok(codigo.replace(/\s/g, '').includes(original), 'estilo original copiado');
+console.log('OK: estilo original copiado');
+assert.ok(codigo.includes('fullscreenchange') && codigo.includes('document.fullscreenElement'), 'pantalla completa');
+console.log('OK: pantalla completa');
+assert.ok(codigo.includes('hostSubtitulo.remove()'), 'retira subtitulo');
+console.log('OK: retira subtitulo');
+console.log('4 comprobaciones OK · 0 fallos');

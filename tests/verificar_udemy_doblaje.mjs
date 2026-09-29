@@ -48,7 +48,7 @@ try {
   await contexto.route('https://www.udemy.com/**', async (ruta) => {
     udemyPeticiones++;
     if (ruta.request().url().endsWith('video.webm')) return ruta.fulfill({ contentType: 'video/webm', body: webm });
-    await ruta.fulfill({ contentType: 'text/html', body: `<!doctype html><h1 data-purpose="lecture-title">Clase de prueba</h1><div style="position:relative;width:640px"><video controls width="640" src="/video.webm"></video></div><script>const v=document.querySelector('video');v.volume=.73;fetch('https://p.udemycdn.com/ingles/en_US/clase.vtt?firma=secreto');</script>` });
+    await ruta.fulfill({ contentType: 'text/html', body: `<!doctype html><style>div:fullscreen video{width:100%;height:100%}</style><h1 data-purpose="lecture-title">Clase de prueba</h1><button onclick="document.querySelector('video').parentElement.requestFullscreen()">Pantalla completa</button><div style="position:relative;width:640px"><video controls width="640" src="/video.webm"></video></div><script>const v=document.querySelector('video');v.volume=.73;fetch('https://p.udemycdn.com/ingles/en_US/clase.vtt?firma=secreto');</script>` });
   });
   await contexto.route('https://*.udemycdn.com/**', async (ruta) => {
     vttPeticiones++;
@@ -69,9 +69,22 @@ try {
     comprobar(true, 'linea actual muestra el español');
     comprobar(cuerpos.some((c) => c.voice === 'female' && c.idioma_fijo === true), 'voz neural del contrato');
     comprobar(cuerpos.every((c) => !/udemy|lecture|123/.test(JSON.stringify(c))), 'API recibe texto sin URL ni id de clase');
+    await pagina.locator('video').evaluate((v) => v.pause());
+    await pagina.locator('[data-jg-subtitulo]').waitFor();
+    comprobar(await pagina.locator('[data-jg-subtitulo]').evaluate((h) => h.shadowRoot === null && getComputedStyle(h).pointerEvents === 'none'), 'subtitulo aislado y no roba clics');
+    await panel.locator('#subtitulo').uncheck();
+    await pagina.waitForFunction(() => !document.querySelector('[data-jg-subtitulo]'));
+    comprobar(true, 'apagar subtitulo retira host');
+    await panel.locator('#subtitulo').check();
+    await pagina.bringToFront();
+    await pagina.getByRole('button', { name: 'Pantalla completa', exact: true }).click();
+    await pagina.waitForFunction(() => document.fullscreenElement?.contains(document.querySelector('[data-jg-subtitulo]')));
+    comprobar(true, 'subtitulo dentro de pantalla completa');
+    await pagina.evaluate(() => document.exitFullscreen());
     await panel.getByRole('button', { name: 'Detener', exact: true }).click();
     await pagina.waitForFunction(() => document.querySelector('video').volume === .73);
     comprobar(await pagina.locator('video').evaluate((v) => !v.muted && v.playbackRate === 1), 'detener panel restaura volumen silencio y velocidad');
+    comprobar(await pagina.locator('[data-jg-subtitulo]').count() === 0, 'detener retira subtitulo');
   } else {
   await panel.evaluate((tab) => {
     globalThis.mensajes = [];
