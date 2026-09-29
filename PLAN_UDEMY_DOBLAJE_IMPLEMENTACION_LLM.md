@@ -211,13 +211,14 @@ Si el video está en un `iframe`, ajusta `all_frames`/`matches` y anótalo en `C
 - [x] Comprueba que ningún archivo de `motor/` importa algo fuera de `motor/`. Prueba: 26 OK, 0 fallos.
 
 ### Tarea 3 — Lector de WebVTT (`lib/vtt.js`)
-- [ ] Pruebas primero, con casos reales: cabecera `WEBVTT`, bloques `NOTE`, identificadores de cue,
+- [x] Pruebas primero, con casos reales: cabecera `WEBVTT`, bloques `NOTE`, identificadores de cue,
   tiempos con y sin horas (`00:01.000` y `00:00:01.000`), ajustes de cue (`align:start position:10%`),
   etiquetas (`<c>`, `<i>`, `<00:00:01.500>`), entidades (`&amp;`, `&gt;`), cues vacíos, fin de línea `\r\n`,
   BOM y un cue partido en dos líneas.
-- [ ] Devuelve segmentos que luego pasan por `normalizarSegmentos` de `motor/transcriptionService.js` (no
+- [x] Devuelve segmentos que luego pasan por `normalizarSegmentos` de `motor/transcriptionService.js` (no
   duplicar esa limpieza).
-- [ ] `segmentosDesdeTextTrack(pista)`: convierte `TextTrackCue` → `{ startTime, endTime, text }`.
+- [x] `segmentosDesdeTextTrack(pista)`: convierte `TextTrackCue` → `{ startTime, endTime, text }`.
+  `node tests/test_udemy_vtt.mjs`: 12 OK, 0 fallos.
 
 ### Tarea 4 — `ReproductorRemoto` (`lib/reproductorRemoto.js`)
 - [ ] Pruebas con un `Port` falso y un reloj inyectable (`ahora`):
