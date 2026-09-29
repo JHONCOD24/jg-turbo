@@ -309,6 +309,41 @@ for (const [nombre, opciones] of [
   await contexto.close();
 }
 
+/* P8.1 (plan 2026-09-29, fallo C-01): el Contenido en el teléfono no puede
+ * parecer un botón gris del navegador. En 375 px, ninguna fila de Contenido
+ * (.pdf-cap-cuerpo) puede tener el fondo gris por defecto (rgb 107,107,107)
+ * ni fuente Arial: sus estilos viven solo dentro de @media (min-width:768px)
+ * y el teléfono queda con el aspecto del navegador. Falla hoy; P3.1 la pone
+ * en verde. */
+console.log('\n── Contenido móvil 375 (P8.1) ───────────────────');
+{
+  const contexto = await navegador.newContext({ viewport: { width: 375, height: 812 } });
+  const pagina = await contexto.newPage();
+  const errores = [];
+  pagina.on('pageerror', (e) => errores.push(String(e)));
+  await abrirPdf(pagina);
+  await leer(pagina, LIBRO);
+  /* leer() ya deja el lector abierto: no hay que volver a la biblioteca. */
+  await pagina.waitForTimeout(900);
+  if (await pagina.locator('#btnPdfIndice').isVisible()) {
+    await pagina.locator('#btnPdfIndice').click();
+    await pagina.waitForTimeout(400);
+  }
+  const estilos = await pagina.evaluate(() => {
+    const filas = [...document.querySelectorAll('#pdfIndice .pdf-cap-cuerpo')];
+    return filas.map((b) => {
+      const e = getComputedStyle(b);
+      return { fondo: e.backgroundColor, fuente: e.fontFamily };
+    });
+  });
+  comprobar(estilos.length > 0, `[375·Contenido] hay filas de Contenido para mirar (${estilos.length})`);
+  const grises = estilos.filter((s) => s.fondo === 'rgb(107, 107, 107)').length;
+  comprobar(grises === 0, `[375·Contenido] ninguna fila con fondo gris del navegador (${grises}/${estilos.length})`);
+  const arial = estilos.filter((s) => /arial/i.test(s.fuente || '')).length;
+  comprobar(arial === 0, `[375·Contenido] ninguna fila en Arial (${arial}/${estilos.length})`);
+  await contexto.close();
+}
+
 await navegador.close();
 servidor.close();
 await rm(temporal, { recursive: true, force: true });
