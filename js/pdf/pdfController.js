@@ -2028,8 +2028,10 @@ export function inicializarLectorPdf(deps = {}) {
     const normalizarTitulo = (valor) => String(valor || '').trim().toLocaleLowerCase('es').replace(/\s+/g, ' ');
     const posicionSeccion = varias ? `${estado.parteActual + 1} de ${estado.partes.length}` : '';
     const repiteLibro = normalizarTitulo(etiqueta) === normalizarTitulo(estado.titulo);
+    /* P4.3: un solo vocabulario de posición — «Capítulo N de M» — y una sola
+     * vez por pantalla. Antes se llamaba «Sección» aquí y «Cap.» en otro sitio. */
     const etiquetaCabecera = repiteLibro
-      ? (varias ? `Sección ${posicionSeccion}` : 'Documento completo')
+      ? (varias ? `Capítulo ${posicionSeccion}` : 'Documento completo')
       : (varias && !/^(sección|capítulo)\s+\d+\s+de\s+\d+$/i.test(etiqueta)
         ? `${etiqueta} · ${posicionSeccion}` : etiqueta);
     if (el.donde) {
@@ -2065,7 +2067,11 @@ export function inicializarLectorPdf(deps = {}) {
       }
     }
     if (varias) {
-      el.navPos.textContent = `Sección ${estado.parteActual + 1} de ${estado.partes.length}`;
+      /* P4.3/P-02: la cabecera ya dice «Capítulo N de M». El hueco del medio
+       * del paginador de capítulos queda sin texto: repetir la posición aquí
+       * era uno de los seis números que la persona veía a la vez. */
+      el.navPos.textContent = '';
+      el.navPos.hidden = true;
       el.prev.disabled = estado.parteActual === 0;
       el.next.disabled = estado.parteActual >= estado.partes.length - 1;
     }
@@ -2928,8 +2934,10 @@ export function inicializarLectorPdf(deps = {}) {
   if (typeof window !== 'undefined') window.jgMostrarPulidoEstado = mostrarPulidoEstado;
   if (typeof window !== 'undefined') {
     window.jgPdfContexto = () => {
-      if (!hayDocumento() || estado.partes.length <= 1) return '';
-      return `Cap. ${estado.parteActual + 1}/${estado.partes.length}`;
+      /* P4.3: la posición del capítulo vive solo en la cabecera («Capítulo
+       * N de M»). El reproductor muestra tiempo, no otro número de capítulo
+       * con otro vocabulario (antes «Cap. 2/9 · 0:00 / 0:44»). */
+      return '';
     };
   }
 

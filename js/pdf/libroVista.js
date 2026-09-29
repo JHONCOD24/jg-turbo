@@ -363,9 +363,11 @@ export function initLibroVista({ el, estado, api }) {
   function hayPaginado() { return cfg.modoPagina !== 'scroll'; }
 
   function pintarPaginacion() {
-    /* El alcance va en la etiqueta (PDF-03): esta cuenta es de la SECCIÓN
-     * abierta, no del libro ni del PDF físico. */
-    if (el.pagPos) el.pagPos.textContent = `Página ${pag.actual + 1} de ${pag.total} de la sección`;
+    /* El alcance va en la etiqueta (PDF-03): esta cuenta es del CAPÍTULO
+     * abierto, no del libro ni del PDF físico. P4.3/P-02: se dice una sola
+     * vez y con un solo vocabulario — «Página X de Y» — porque el «Capítulo
+     * N de M» ya vive en la cabecera. */
+    if (el.pagPos) el.pagPos.textContent = `Página ${pag.actual + 1} de ${pag.total}`;
     if (el.pagPrev) el.pagPrev.disabled = pag.actual <= 0;
     if (el.pagNext) el.pagNext.disabled = pag.actual >= pag.total - 1;
   }
@@ -402,6 +404,9 @@ export function initLibroVista({ el, estado, api }) {
     if (deUsuario && cambioPag && api.onCambioPaginaUsuario) {
       try { api.onCambioPaginaUsuario(caracterVisible()); } catch (_) {}
     }
+    /* Pasar página (botón, gesto o teclado) aparta el cromo: el trato del
+     * lector de libros. Antes solo lo hacían los botones ‹ ›. */
+    if (deUsuario && cambioPag) apartarCromo();
   }
 
   /** En qué página cae un elemento del texto. */
@@ -478,9 +483,14 @@ export function initLibroVista({ el, estado, api }) {
         const barra = altoDe('#pdfBarraMovil');
         /* Solo el cromo FIJO va en la reserva. El pie (.pdf-pie-lectura) vive
          * en el flujo y ya lo descuenta el cálculo de abajo (`visibles`): si
-         * se sumara aquí se contaría dos veces y el artículo perdería 26 px. */
-        col.style.setProperty('--pdf-reserva-arriba', `${cab}px`);
-        col.style.setProperty('--pdf-reserva-abajo', `${pagin + barra}px`);
+         * se sumara aquí se contaría dos veces y el artículo perdería 26 px.
+         * P-01: con el cromo apartado (inmersivo) la reserva cae a cero y la
+         * página crece hasta llenar la pantalla. El sitio se conserva por el
+         * carácter de `pag.ancla`, no por el número de página (que cambia al
+         * caber más renglones). El cromo sigue en su sitio: solo se apaga. */
+        const inmersivo = document.body.classList.contains('jg-inmersivo');
+        col.style.setProperty('--pdf-reserva-arriba', inmersivo ? '0px' : `${cab}px`);
+        col.style.setProperty('--pdf-reserva-abajo', inmersivo ? '0px' : `${pagin + barra}px`);
       } catch (_) {}
     } else if (col) {
       try { col.style.removeProperty('--pdf-reserva-arriba'); col.style.removeProperty('--pdf-reserva-abajo'); } catch (_) {}
@@ -522,11 +532,38 @@ export function initLibroVista({ el, estado, api }) {
     pag.activo = true;
     pag.total = Math.max(1, Math.round((art.scrollWidth + hueco) / pag.paso));
 
-    /* Se vuelve a la página donde estaba el texto que se estaba leyendo, no a
-     * un número de página: cambiar el tamaño de letra mueve los números. */
+    /* Se vuelve al sitio que se estaba leyendo, no a un número de página:
+     * cambiar el tamaño de letra —o el alto con P-01— mueve los números. Si el
+     * carácter ya no cae al principio de una página, se pega a la izquierda de
+     * la vista en vez de saltar al inicio de la página que lo contiene. */
     const destino = anclaIni > 0 ? rangoDeCaracter(anclaIni) : null;
-    pag.actual = destino ? paginaDe(destino) : 0;
-    irAPagina(pag.actual, { suave: false, guardar: false });
+    if (destino) {
+      /* P-01: se mide con el scroll a cero para no mezclar el desplazamiento
+       * del reparto ANTERIOR con los rectángulos del NUEVO (al crecer la
+       * página cambian el total y el paso: el scroll viejo apunta a otro
+       * carácter y la conversión salía a 0, mandando la lectura al inicio). */
+      clearTimeout(tempoSalto);
+      pag.saltando = false;
+      art.scrollLeft = 0;
+      const r = destino.getClientRects()[0];
+      const base = art.getBoundingClientRect();
+      if (r) {
+        const desplazamiento = Math.max(0, Math.round(r.left - base.left - 2));
+        /* Un salto en curso terminaría por pegar el scroll al borde de página
+         * y pisaría este sitio. Se cancela: aquí manda el carácter. */
+        art.scrollLeft = desplazamiento;
+        pag.actual = Math.max(0, Math.min(pag.total - 1, Math.floor((desplazamiento + 2) / pag.paso)));
+      } else {
+        pag.actual = Math.max(0, Math.min(pag.total - 1, paginaDe(destino)));
+        art.scrollLeft = pag.actual * pag.paso;
+      }
+    } else {
+      pag.actual = 0;
+      art.scrollLeft = 0;
+    }
+    pintarPaginacion();
+    pintarPieLectura();
+    pintarIrAbajo();
   }
 
   function rangoDeCaracter(caracter) {
@@ -603,6 +640,20 @@ export function initLibroVista({ el, estado, api }) {
     for (const nodo of el.textoCol.children) {
       if (nodo !== el.lectura && !['fixed', 'absolute'].includes(getComputedStyle(nodo).position)) observar.observe(nodo);
     }
+  }
+  /* P-01: el cromo es `fixed` (flota), así que mostrarlo u ocultarlo no cambia
+   * el tamaño de `.pdf-texto-col` y el ResizeObserver no se entera. Sin una
+   * remedición, la reserva (`--pdf-reserva-*`) queda con el valor del otro
+   * estado: el texto crece bajo el cromo visible y tapa la paginación (los
+   * botones ‹ › dejan de ser pulsables). Se observa la clase y se reparte con
+   * el ancla de carácter, que es lo que conserva el sitio al cambiar el alto. */
+  if (typeof MutationObserver !== 'undefined') {
+    let cromoAntes = document.body.classList.contains('jg-inmersivo');
+    const vigilarCromo = new MutationObserver(() => {
+      const ahora = document.body.classList.contains('jg-inmersivo');
+      if (ahora !== cromoAntes) { cromoAntes = ahora; programarMedicion(60); }
+    });
+    vigilarCromo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
   }
   document.fonts?.ready.then(() => medirPaginas());
 
@@ -685,6 +736,12 @@ export function initLibroVista({ el, estado, api }) {
     btn.hidden = queda < 120;
   }
   api.pintarIrAbajo = pintarIrAbajo;
+  /* P-01: el sitio se conserva por carácter (`pag.ancla`), no por número de
+   * página (que cambia al crecer la página). Se expone para las pruebas: así
+   * comprueban el ancla real en vez del primer bloque visible, que sí cambia
+   * de página con el refluido aunque el sitio esté intacto. */
+  api.obtenerAnclaPagina = () => pag.ancla;
+  if (typeof window !== 'undefined') window.__jgPaginas = () => ({ ...pag, visible: caracterVisible() });
 
   if (el.irAbajo) {
     el.irAbajo.addEventListener('click', () => {
@@ -1439,14 +1496,13 @@ export function initLibroVista({ el, estado, api }) {
    * vuelve, que es lo que hace que la página se lea como una página. */
   function inmersivo(activo) {
     if (!enTelefono()) { document.body.classList.remove('jg-inmersivo'); return; }
-    /* PDF-FIX-02: mostrar u ocultar el cromo NO toca el ancla ni reparte. La
-     * reserva es idéntica en ambos modos (se mide siempre con el cromo
-     * visible), así que no hay nada que recalcular: repartir aquí solo
-     * arriesga el sitio. Medido: recalcular el ancla con `caracterVisible()`
-     * en este punto devolvía 520 cuando lo visible era 583, y el resize
-     * siguiente caía en otra página. La página y el ancla se conservan porque
-     * no se mueven (filosofía v2.41). */
+    /* P-01: al apartar el cromo la página crece (reserva 0) y al traerlo
+     * vuelve a su alto. El sitio se conserva por el carácter de `pag.ancla`
+     * que ya tiene `medirPaginas` — NO con `caracterVisible()`, que en este
+     * punto devolvía 520 cuando lo visible era 583 (PDF-FIX-02). El cromo no
+     * sale del flujo: solo se apaga (`opacity:0`). */
     document.body.classList.toggle('jg-inmersivo', !!activo);
+    programarMedicion(60);
   }
   /* Pasar de página es volver a leer: el cromo se aparta.
    *

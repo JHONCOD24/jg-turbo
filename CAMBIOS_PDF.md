@@ -3,6 +3,37 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-29 · Fase 4 (parte 1) · Un solo vocabulario de posición y página llena en Páginas (P4.3, P-01, P-02)
+
+**P4.3 — la posición se dice una vez («Capítulo N de M» en la cabecera).**
+Antes convivían «Sección 2 de 9» (cabecera y dock), «Cap. 2/9 · 0:00 / 0:44»
+(mini reproductor) y «Página 1 de 3 de la sección». Cambios:
+`pdfController.js` rotula «Capítulo» en la cabecera, vacía y oculta el hueco
+del medio del paginador de capítulos (`#pdfNavPos`, que repetía la posición)
+y `jgPdfContexto` ya no añade «Cap. x/y» al reproductor (solo tiempo).
+
+**P-02 — ‹ › pasan página y Anterior/Siguiente pasan capítulo, dicho una vez.**
+`libroVista.js` rotula «Página X de Y» (sin «de la sección»: el capítulo ya
+vive en la cabecera) y los botones llevan `title`/`aria-label` de capítulo o
+página según lo que mueven.
+
+**P-01 — con el cromo apartado la página llena la pantalla (antes ~25 %
+vacía).** En el teléfono el cromo flota (`fixed` + `opacity:0`), así que se
+puede soltar la reserva (`--pdf-reserva-*` a 0) y repartir más alto sin que el
+cromo salga del flujo (revierte la trampa v2.41 para este caso; ver
+`TRAMPAS.md`). El sitio se conserva por el carácter de `pag.ancla`, no por
+número de página. Tres correcciones para que funcione de verdad:
+1) el rect del ancla se mide con el scroll a 0 (con el scroll del reparto
+anterior la conversión salía 0 y volvía al inicio);
+2) un MutationObserver de `jg-inmersivo` remide en cada transición (el cromo
+`fixed` no dispara el ResizeObserver y el texto tapaba la paginación);
+3) `window.__jgPaginas()` expone ancla + visible para las pruebas.
+
+**Pruebas:** `verificar_pdf_paginas` (sitio por ancla en vez de por etiqueta),
+`verificar_pdf_movil` 60 comprobaciones (gestos y saltos por ancla),
+`verificar_pdf_navegador` en verde (usa `#pdfDocDonde` en vez de `#pdfNavPos`),
+`verificar_pdf_geometria` con P8.1 en verde. Unitarias PDF/TTS en verde.
+
 ## 2026-09-29 · Fase 3 · Contenido móvil y hoja de voz compacta (P3.1, P6.1)
 
 El teléfono era la prioridad del dueño: «no lo veo muy responsive». Dos

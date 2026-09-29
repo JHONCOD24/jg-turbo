@@ -5732,6 +5732,9 @@ body.jg-leyendo > .wrap{max-width:1440px;padding-block:0;height:var(--jg-viewpor
 body.jg-leyendo .pdf-area.has-results{max-width:none}
 body.jg-leyendo .pdf-doc-top{position:static}
 body.jg-leyendo .pdf-texto-col{gap:10px;max-width:var(--pdf-col-ancho,76ch)}
+/* P-02: un solo vocabulario de navegación. ‹ › pasan PÁGINA («Página X de Y»)
+   y Anterior/Siguiente pasan CAPÍTULO (con título accesible). La posición
+   «Capítulo N de M» vive solo en la cabecera. Sin números repetidos. */
 body.jg-leyendo .pdf-dock-nav{padding:8px 12px;gap:4px}
 body.jg-leyendo .pdf-dock-nav .tts-console{padding:0;border:0;gap:6px}
 body.jg-leyendo .pdf-dock-nav .tts-console-head{display:none}
@@ -5960,13 +5963,19 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
      ya no ocupa sitio en el flujo, así que sin esta reserva el texto nacía en
      y=54 mientras el encabezado terminaba en y=68, y llegaba hasta y=800 con
      la paginación en y=728: primera y última línea cubiertas. Las variables
-     las pone medirPaginas() con el alto real (no constantes sueltas): con
-     cromo visible reservan encabezado+pie+paginación+zona segura; en inmersivo
-     solo el pie fijo de 26 px. La caja paginada NO cambia entre modos: solo la
-     reserva, así que ocultar el cromo no remaqueta ni mueve el ancla. */
+     las pone medirPaginas() con el alto real del cromo. P-01: con el cromo
+     apartado la reserva cae a cero y la página crece hasta llenar la pantalla
+     (antes dejaba ~25 % vacío). El sitio se conserva por carácter, no por
+     número de página. */
   body.jg-leyendo .pdf-texto-col{
     padding-top:var(--pdf-reserva-arriba,0px);
     padding-bottom:var(--pdf-reserva-abajo,0px);
+  }
+  /* P-01: el cromo apartado no deja hueco. `!important` pisa las variables
+     que `medirPaginas` fija en línea, también si solo se cambia la clase. */
+  body.jg-leyendo.jg-inmersivo .pdf-texto-col{
+    --pdf-reserva-arriba:0px !important;
+    --pdf-reserva-abajo:0px !important;
   }
   /* Vista limpia y completa: el cromo flota por encima y se aparta al leer */
   body.jg-leyendo #pdfResultArea{padding-top:0;padding-bottom:0}
@@ -7634,11 +7643,11 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <!-- Paso de páginas: como un libro, sin scroll. Se oculta entero
                    cuando se elige leer con desplazamiento. -->
               <div class="pdf-paginacion" id="pdfPaginacion" hidden>
-                <button type="button" class="pdf-pag-btn" id="btnPdfPagPrev" aria-label="Página anterior">
+                <button type="button" class="pdf-pag-btn" id="btnPdfPagPrev" title="Página anterior de este capítulo" aria-label="Página anterior de este capítulo">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
                 <span class="pdf-pag-pos" id="pdfPagPos" role="status" aria-live="polite">1 de 1</span>
-                <button type="button" class="pdf-pag-btn" id="btnPdfPagNext" aria-label="Página siguiente">
+                <button type="button" class="pdf-pag-btn" id="btnPdfPagNext" title="Página siguiente de este capítulo" aria-label="Página siguiente de este capítulo">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
               </div>
