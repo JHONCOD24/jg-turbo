@@ -251,20 +251,22 @@ Si el video está en un `iframe`, ajusta `all_frames`/`matches` y anótalo en `C
   `node tests/verificar_udemy_doblaje.mjs --puente`: 7 OK, 0 fallos. El subtítulo se agrega en Tarea 8.
 
 ### Tarea 6 — Adaptadores de la API (`lib/api.js`)
-- [ ] Base fija `https://jg-turbo.vercel.app/api`, sobreescribible solo desde `chrome.storage.local`
+- [x] Base fija `https://jg-turbo.vercel.app/api`, sobreescribible solo desde `chrome.storage.local`
   `jg_api_base` (para las pruebas con un servidor falso).
-- [ ] `traducirTexto(texto, { origen, tituloVideo, contexto, signal })` → `POST /translate` con el mismo
+- [x] `traducirTexto(texto, { origen, tituloVideo, contexto, signal })` → `POST /translate` con el mismo
   cuerpo que manda la app para el doblaje (`cuerpoBase` en `traducirTranscripcionDetallada`, `index.html:~10538`, y la llamada de `inicializarYoutubeSincronizado`, `index.html:~19026`):
   `{ text, direction: 'en-es', provider, api_key: '', literal: true, revisar: false, titulo_video, contexto_previo, contexto_siguiente }`.
   `provider` = `ai_provider_server` de `GET /api/health` (así lo decide la app en `jgCredencialesIA`,
   `index.html:8886-8890`); si no responde, `'gemini'`. Un reintento ante 502/504 o corte de red, como
   `jgPedirTraduccion` (`index.html:10479`). Devuelve el JSON tal cual (el motor mira `ia_used`).
-- [ ] `generarAudio(texto, { voz, acento, signal })` → `POST /tts` con
+- [x] `generarAudio(texto, { voz, acento, signal })` → `POST /tts` con
   `{ text, voice, language: 'es', locale: acento, rate: 1, tone: 'neutral', idioma_fijo: true, source: 'yt' }`,
   tiempo máximo 45 s. Devuelve `{ blob, engineHdr: X-TTS-Engine, respaldoHdr: X-TTS-Fallback }`. Error
   legible si no es `ok` (usa `detail` del JSON como en `index.html:~19069`).
-- [ ] `calentar()` → `GET /tts-warmup` al pulsar «Doblar», sin esperar la respuesta (como
+- [x] `calentar()` → `GET /tts-warmup` al pulsar «Doblar», sin esperar la respuesta (como
   `youtubeSyncController.js:763`).
+
+`node tests/test_udemy_api.mjs`: 10 OK, 0 fallos.
 
 ### Tarea 7 — Panel y cableado (`panel.js`)
 Sigue `prepararDoblaje` (`youtubeSyncController.js:621-744`) **quitando** lo que el dueño no quiere: caché,
