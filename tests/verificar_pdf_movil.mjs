@@ -441,6 +441,37 @@ try {
     const chicos = await medirHoja();
     comprobar(`en la hoja ${nombre} todo se toca con el dedo`, chicos.length === 0,
       chicos.map((b) => `${b.id} ${b.w}×${b.h}`).join(', '));
+    if (nombre === 'Voz') {
+      /* P6.1: la hoja compacta (sin «Más ajustes») no se puede llevar más del
+         30 % de la pantalla, o al abrirla no queda texto que leer. */
+      const hoja = await tel.evaluate(() => {
+        const dock = document.querySelector('#pdfDockNav');
+        const mas = document.querySelector('#pdfTtsMas');
+        if (mas) mas.open = false;
+        const r = dock.getBoundingClientRect();
+        const cab = dock.querySelector('.pdf-voz-cab, .tts-console-head');
+        const cabVisible = cab && cab.offsetParent !== null
+          && getComputedStyle(cab).display !== 'none'
+          && getComputedStyle(cab).visibility !== 'hidden';
+        const etiquetas = [...dock.querySelectorAll('.tts-console-head, .pdf-voz-cab')]
+          .filter((e) => e.offsetParent !== null && getComputedStyle(e).display !== 'none')
+          .map((e) => e.textContent.trim()).filter(Boolean);
+        return {
+          alto: Math.round(r.height),
+          pantalla: window.innerHeight,
+          parte: r.height / window.innerHeight,
+          cabVisible,
+          etiquetas,
+          vozEnHoja: [...dock.querySelectorAll('button, summary, .tts-console-title, .pdf-voz-cab-titulo')]
+            .some((e) => e.offsetParent !== null && /^Voz$/i.test((e.textContent || '').trim())),
+        };
+      });
+      console.log('  hoja Voz compacta:', { alto: hoja.alto, pantalla: hoja.pantalla, parte: `${Math.round(hoja.parte * 100)} %` });
+      comprobar('la hoja compacta de Voz ocupa a lo sumo el 30 % de la pantalla',
+        hoja.parte <= 0.30 + 0.001, `mide ${hoja.alto} de ${hoja.pantalla} px (${Math.round(hoja.parte * 100)} %)`);
+      comprobar('la hoja de Voz no repite un botón «Voz» dentro', !hoja.vozEnHoja,
+        `etiquetas: ${hoja.etiquetas.join(' | ')}`);
+    }
     await tel.keyboard.press('Escape');
     await tel.waitForTimeout(300);
   }

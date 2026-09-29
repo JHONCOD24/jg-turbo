@@ -3,6 +3,46 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-29 · Fase 3 · Contenido móvil y hoja de voz compacta (P3.1, P6.1)
+
+El teléfono era la prioridad del dueño: «no lo veo muy responsive». Dos
+defectos medidos en la auditoría:
+
+**P3.1 — Contenido sin estilo en el teléfono.** Las filas de Contenido
+(`.pdf-indice .pdf-cap*`) vivían solo dentro de `@media (min-width:768px)`.
+En 375 px cada capítulo salía como un botón gris del navegador, en Arial,
+con título y página pegados («CAPÍTULO UNOpág. 13 del PDF»).
+
+**Cambio:** el reset de botón, la cuadrícula marca/cuerpo (44 px + título a
+dos líneas + página en segunda fila), los colores del tema y el foco visible
+pasan a la base, sin media query. En ≥768 px el media conserva solo el cromo
+de columna (barra, scroll, colapso). Contraste AA en los tres temas: el
+acento puro sobre su realce se quedaba en 3,79:1 en Papel; se mezcla un 64 %
+hacia el color del texto y sube por encima de 4,5:1.
+
+**P6.1 — Hoja de voz que se comía media pantalla.** La hoja del teléfono
+llevaba ~48 % de la pantalla y el botón principal era solo un altavoz, con
+«Voz» repetido dentro de la hoja.
+
+**Cambio (`index.html` + `libroVista.js`):** en ≤640 px la hoja abre
+compacta (Reproducir con texto, frase ±, barra y velocidad) en el 30 % o
+menos de la pantalla; «Más ajustes» la expande (voz, Desde aquí, estado,
+música, temporizador). Se ocultan la cabecera y las etiquetas internas. Se
+cierra con la misma pestaña «Voz», con Escape o tocando fuera
+(`pointerdown` pasivo, sin robar el gesto de lectura).
+
+**Medido:**
+
+| Pantalla | Hoja compacta | % de la pantalla |
+|---|---|---|
+| 390×844 | 166 px | 20 % |
+| 375×812 | 118 px | 15 % |
+| 360×640 | 118 px | 18 % |
+
+**Pruebas:** `verificar_pdf_movil` 59 comprobaciones (antes 57; añade
+altura de la hoja y «sin botón Voz interno») y `verificar_pdf_geometria`
+con la sección P8.1 en verde (Contenido 375 sin fondo gris ni Arial).
+
 ## 2026-09-29 · Fase 1 · La voz no se detiene entre capítulos (S-04/P4.1)
 
 Lo pedido: «toca darle play en cada página para que siga». En Desplazamiento

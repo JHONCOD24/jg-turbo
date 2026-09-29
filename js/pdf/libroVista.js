@@ -1297,6 +1297,20 @@ export function initLibroVista({ el, estado, api }) {
     dock.dataset.desplegado = cfg.vozDesplegado === false ? 'no' : 'si';
     pintarDesplegado();
   }
+  /* La hoja de voz del teléfono también se cierra tocando fuera (P6.1): la
+   * misma pestaña «Voz» la abre y la cierra. Solo se observa, sin frenar ni
+   * desviar el toque: la lectura por gestos sigue intacta. */
+  document.addEventListener('pointerdown', (ev) => {
+    try {
+      if (!enTelefono() || !dock || dock.dataset.abierto !== 'si') return;
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (!t) return;
+      if (dock.contains(t)) return;
+      const barra = document.getElementById('pdfBarraMovil');
+      if (barra && barra.contains(t)) return;
+      abrirDock(false);
+    } catch (_) {}
+  }, { capture: true, passive: true });
 
   /* ── Estados explícitos de la voz (PDF-07) ───────────────────────────
    *

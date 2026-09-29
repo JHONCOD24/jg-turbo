@@ -1998,6 +1998,50 @@
     .pdf-dock-nav .tts-console .btn-tts{padding-inline:16px}
     .pdf-dock-nav .tts-console [data-tts-download-label]{font-size:11.5px}
   }
+  /* Hoja de voz compacta en el teléfono (P6.1): abre con Reproducir (con
+     texto), frase ±, barra y velocidad en el 30 % o menos de la pantalla;
+     «Más ajustes» la expande (voz, Desde aquí, estado + música,
+     temporizador y MP3). Sin cabecera ni etiquetas «Voz» repetidas dentro:
+     la hoja se abre desde la pestaña «Voz» de la barra y se cierra con ella,
+     con Escape o tocando fuera. En móvil manda :has(open), no el dataset
+     desplegado de tablet/escritorio. */
+  @media (max-width:640px){
+    body.jg-leyendo #pdfDockNav .pdf-voz-cab,
+    body.jg-leyendo #pdfDockNav .tts-console-head,
+    body.jg-leyendo #pdfDockNav .tts-console .tts-field-label{display:none}
+    body.jg-leyendo #pdfDockNav .tts-console,
+    body.jg-leyendo #pdfDockNav .tts-console.tts-con-barra{
+      grid-template-columns:minmax(0,1fr) auto;
+      grid-template-areas:
+        "play   parar"
+        "barra  barra"
+        "vel    mas";
+    }
+    /* Reproducir con texto también en el teléfono. */
+    body.jg-leyendo #pdfDockNav .tts-console .btn-tts .tts-label{font-size:13px}
+    /* Compacta: reproduce, mueve, mide velocidad y abre ajustes. */
+    body.jg-leyendo #pdfDockNav .tts-console #btnPdfDesdeAqui,
+    body.jg-leyendo #pdfDockNav .tts-console .tts-voice-select,
+    body.jg-leyendo #pdfDockNav .tts-console .tts-console-status{display:none}
+    body.jg-leyendo #pdfDockNav .tts-console .tts-rate-control{min-width:0}
+    body.jg-leyendo #pdfDockNav .tts-console .tts-rate-range{width:100%;min-width:0}
+    body.jg-leyendo #pdfDockNav .tts-console #pdfTtsMas{grid-column:auto;grid-area:mas;min-width:0}
+    /* Expandida = «Más ajustes» abierto: voz, Desde aquí y estado. */
+    body.jg-leyendo #pdfDockNav .tts-console:has(#pdfTtsMas[open]){
+      grid-template-areas:
+        "play   parar"
+        "barra  barra"
+        "vel    vel"
+        "voz    voz"
+        "aqui   aqui"
+        "estado estado"
+        "mas    mas";
+    }
+    body.jg-leyendo #pdfDockNav .tts-console:has(#pdfTtsMas[open]) #pdfTtsMas{grid-column:1 / -1}
+    body.jg-leyendo #pdfDockNav .tts-console:has(#pdfTtsMas[open]) #btnPdfDesdeAqui,
+    body.jg-leyendo #pdfDockNav .tts-console:has(#pdfTtsMas[open]) .tts-voice-select,
+    body.jg-leyendo #pdfDockNav .tts-console:has(#pdfTtsMas[open]) .tts-console-status{display:revert}
+  }
   /* En escritorio el reproductor también se ordena en filas: reproducción,
      voz y velocidad, estado y «Más ajustes». Sin música ni MP3 en la fila
      de controles, tres columnas bastan y el dock no crece a lo ancho. */
@@ -3505,6 +3549,89 @@
   .pdf-indice-divisor{display:none}
   .pdf-indice-rail{display:none}
   .pdf-indice-barra{display:none}
+  /* Filas de Contenido en TODAS las pantallas (P3.1): antes vivían solo
+     dentro de @media (min-width:768px) y en el teléfono cada capítulo salía
+     como un botón gris del navegador, en Arial, con título y página pegados.
+     El reset de botón, la cuadrícula marca/cuerpo, el título en dos líneas,
+     la página en segunda fila y los colores del tema no dependen del ancho:
+     van en base. En ≥768 px el media añade solo el cromo de columna. */
+  .pdf-indice .pdf-cap{
+    display:grid;grid-template-columns:44px minmax(0,1fr);
+    grid-template-areas:'marca cuerpo';
+    align-items:stretch;column-gap:8px;row-gap:0;padding:5px 8px 6px;
+  }
+  .pdf-indice .pdf-cap-marca,
+  .pdf-indice .pdf-cap-cuerpo{
+    background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;
+  }
+  .pdf-indice .pdf-cap-marca{
+    grid-area:marca;align-self:stretch;min-width:44px;min-height:44px;
+    display:flex;align-items:center;justify-content:center;border-radius:10px;
+  }
+  .pdf-indice .pdf-cap-marca:hover{background:var(--lec-superficie-2, var(--surface))}
+  .pdf-indice .pdf-cap-marca-icono{display:inline-block;padding:0 3px;border-radius:6px;line-height:1.5}
+  /* Anillo: «esto lo marqué yo a mano», distinto del ✓ automático. Cuelga de
+     la fila (data-manual) y no de aria-pressed, que ahora dice otra cosa:
+     «este capítulo está marcado como leído». */
+  .pdf-indice .pdf-cap[data-manual="si"] .pdf-cap-marca-icono{box-shadow:0 0 0 1.5px currentColor}
+  .pdf-indice .pdf-cap-cuerpo{
+    grid-area:cuerpo;display:block;min-width:0;min-height:44px;text-align:left;border-radius:10px;
+  }
+  .pdf-indice .pdf-cap-titulo{
+    grid-area:titulo;white-space:normal;line-height:1.35;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .pdf-indice .pdf-cap-datos{
+    grid-area:datos;font-size:11px;line-height:1.3;font-variant-numeric:tabular-nums;
+    /* `--lec-suave` es el gris del cuerpo del texto y a 11 px se quedaba en
+       4.26:1 sobre la arena del tema Sepia. Rebajar el propio color del
+       texto un 20 % da el mismo escalón de jerarquía y no baja de 5.8:1 en
+       ninguno de los tres temas. */
+    color:color-mix(in srgb, var(--lec-texto, var(--text)) 80%, transparent);
+  }
+  .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-datos{color:var(--lec-texto, var(--text))}
+  /* La columna se viste con el tema de lectura, igual que la hoja de
+     Apariencia y el dock. Si el FONDO pasa a ser del tema (crema en Papel,
+     arena en Sepia) el texto tiene que pasar también: con los colores de la
+     app oscura, el título quedaba blanco sobre crema —1.04:1, ilegible— y
+     el capítulo en curso en cian sobre crema. El acento del tema (verde
+     hondo en Papel, ámbar en Sepia) es el que sí se lee. */
+  .pdf-indice,
+  .pdf-indice .pdf-cap,
+  .pdf-indice-barra-titulo{color:var(--lec-texto, var(--text))}
+  .pdf-indice-colapsar{color:var(--lec-suave, var(--muted))}
+  /* El número del capítulo son 10 px: el gris suave del cuerpo del texto se
+     quedaba en 4.26:1 sobre la arena del tema Sepia. */
+  .pdf-indice .pdf-cap-marca{
+    border-color:var(--lec-linea, var(--line));
+    color:color-mix(in srgb, var(--lec-texto, var(--text)) 78%, transparent);
+  }
+  .pdf-indice .pdf-cap:hover{background:var(--lec-superficie-2, var(--surface))}
+  .pdf-indice .pdf-cap-cuerpo:active{background:var(--lec-superficie-2, var(--surface-2))}
+  .pdf-indice .pdf-cap-marca:focus-visible,
+  .pdf-indice .pdf-cap-cuerpo:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:-2px}
+  /* El acento PURO sobre su propio realce no llega a AA en los temas claros:
+     el realce acerca el fondo al texto y «CAPITULO I» se quedaba en 3.79:1.
+     Tirando el acento un 28 % hacia el color del texto se conserva el matiz
+     (verde hondo en Papel, ámbar en Sepia, cian en Noche) y sube por encima
+     de 4.5:1 en los tres. */
+  .pdf-indice{--indice-acento:color-mix(in srgb, var(--lec-acento, var(--cyan)) 64%, var(--lec-texto, var(--text)))}
+  .pdf-indice .pdf-cap[aria-current="true"]{
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 11%, transparent);
+  }
+  .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-titulo{color:var(--indice-acento)}
+  .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-avance{background:var(--lec-linea, var(--line))}
+  .pdf-indice .pdf-cap-avance-relleno{background:var(--lec-acento, var(--cyan))}
+  .pdf-indice .pdf-cap[data-estado="leido"] .pdf-cap-marca{
+    border-color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 50%, transparent);
+    color:var(--indice-acento);
+  }
+  .pdf-indice .pdf-cap[data-estado="leyendo"] .pdf-cap-marca{
+    border-color:var(--lec-acento, var(--cyan));color:var(--indice-acento);
+    /* El relleno de la píldora oscurecía el fondo bajo un número de 10 px y
+       lo dejaba en 4.15:1 en Sepia: el borde ya distingue «leyendo». */
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 8%, transparent);
+  }
   @media (min-width:768px){
     /* Barra propia de la columna: título + colapso a tamaño de dedo. */
     .pdf-indice-barra{
@@ -3548,89 +3675,8 @@
     .pdf-indice-lista::-webkit-scrollbar-thumb:active{
       background:var(--lec-acento, var(--cyan));background-clip:padding-box;border-width:2px;
     }
-    /* En una columna de 200 px el título y la página no caben en la misma
-       línea: el título se comía en «CAPIT…» y un índice cuyos títulos no se
-       leen no es un índice. El número manda la sangría, el título ocupa dos
-       líneas y la página baja a una segunda fila, más pequeña y apagada.
-       La fila es un marco con dos botones hermanos: la marca (44 px, tamaño
-       de dedo) chulea/deschulea sin navegar; el cuerpo navega al capítulo. */
-    .pdf-indice .pdf-cap{
-      display:grid;grid-template-columns:44px minmax(0,1fr);
-      grid-template-areas:'marca cuerpo';
-      align-items:stretch;column-gap:8px;row-gap:0;padding:5px 8px 6px;
-    }
-    .pdf-indice .pdf-cap-marca,
-    .pdf-indice .pdf-cap-cuerpo{
-      background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;
-    }
-    .pdf-indice .pdf-cap-marca{
-      grid-area:marca;align-self:stretch;min-width:44px;min-height:44px;
-      display:flex;align-items:center;justify-content:center;border-radius:10px;
-    }
-    .pdf-indice .pdf-cap-marca:hover{background:var(--lec-superficie-2, var(--surface))}
-    .pdf-indice .pdf-cap-marca-icono{display:inline-block;padding:0 3px;border-radius:6px;line-height:1.5}
-    /* Anillo: «esto lo marqué yo a mano», distinto del ✓ automático. Cuelga de
-       la fila (data-manual) y no de aria-pressed, que ahora dice otra cosa:
-       «este capítulo está marcado como leído». */
-    .pdf-indice .pdf-cap[data-manual="si"] .pdf-cap-marca-icono{box-shadow:0 0 0 1.5px currentColor}
-    .pdf-indice .pdf-cap-cuerpo{
-      grid-area:cuerpo;display:block;min-width:0;min-height:44px;text-align:left;border-radius:10px;
-    }
-    .pdf-indice .pdf-cap-titulo{
-      grid-area:titulo;white-space:normal;line-height:1.35;
-      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
-    }
-    .pdf-indice .pdf-cap-datos{
-      grid-area:datos;font-size:11px;line-height:1.3;font-variant-numeric:tabular-nums;
-      /* `--lec-suave` es el gris del cuerpo del texto y a 11 px se quedaba en
-         4.26:1 sobre la arena del tema Sepia. Rebajar el propio color del
-         texto un 20 % da el mismo escalón de jerarquía y no baja de 5.8:1 en
-         ninguno de los tres temas. */
-      color:color-mix(in srgb, var(--lec-texto, var(--text)) 80%, transparent);
-    }
-    .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-datos{color:var(--lec-texto, var(--text))}
-    /* La columna se viste con el tema de lectura, igual que la hoja de
-       Apariencia y el dock. Si el FONDO pasa a ser del tema (crema en Papel,
-       arena en Sepia) el texto tiene que pasar también: con los colores de la
-       app oscura, el título quedaba blanco sobre crema —1.04:1, ilegible— y
-       el capítulo en curso en cian sobre crema. El acento del tema (verde
-       hondo en Papel, ámbar en Sepia) es el que sí se lee. */
-    .pdf-indice,
-    .pdf-indice .pdf-cap,
-    .pdf-indice-barra-titulo{color:var(--lec-texto, var(--text))}
-    .pdf-indice-colapsar{color:var(--lec-suave, var(--muted))}
-    /* El número del capítulo son 10 px: el gris suave del cuerpo del texto se
-       quedaba en 4.26:1 sobre la arena del tema Sepia. */
-    .pdf-indice .pdf-cap-marca{
-      border-color:var(--lec-linea, var(--line));
-      color:color-mix(in srgb, var(--lec-texto, var(--text)) 78%, transparent);
-    }
-    .pdf-indice .pdf-cap:hover{background:var(--lec-superficie-2, var(--surface))}
-    .pdf-indice .pdf-cap-cuerpo:active{background:var(--lec-superficie-2, var(--surface-2))}
-    .pdf-indice .pdf-cap-marca:focus-visible,
-    .pdf-indice .pdf-cap-cuerpo:focus-visible{outline:2px solid var(--lec-acento, var(--cyan));outline-offset:-2px}
-    /* El acento PURO sobre su propio realce no llega a AA en los temas claros:
-       el realce acerca el fondo al texto y «CAPITULO I» se quedaba en 3.79:1.
-       Tirando el acento un 28 % hacia el color del texto se conserva el matiz
-       (verde hondo en Papel, ámbar en Sepia, cian en Noche) y sube por encima
-       de 4.5:1 en los tres. */
-    .pdf-indice{--indice-acento:color-mix(in srgb, var(--lec-acento, var(--cyan)) 64%, var(--lec-texto, var(--text)))}
-    .pdf-indice .pdf-cap[aria-current="true"]{
-      background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 11%, transparent);
-    }
-    .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-titulo{color:var(--indice-acento)}
-    .pdf-indice .pdf-cap[aria-current="true"] .pdf-cap-avance{background:var(--lec-linea, var(--line))}
-    .pdf-indice .pdf-cap-avance-relleno{background:var(--lec-acento, var(--cyan))}
-    .pdf-indice .pdf-cap[data-estado="leido"] .pdf-cap-marca{
-      border-color:color-mix(in srgb, var(--lec-acento, var(--cyan)) 50%, transparent);
-      color:var(--indice-acento);
-    }
-    .pdf-indice .pdf-cap[data-estado="leyendo"] .pdf-cap-marca{
-      border-color:var(--lec-acento, var(--cyan));color:var(--indice-acento);
-      /* El relleno de la píldora oscurecía el fondo bajo un número de 10 px y
-         lo dejaba en 4.15:1 en Sepia: el borde ya distingue «leyendo». */
-      background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 8%, transparent);
-    }
+    /* En la columna las filas ya vienen vestidas de base (P3.1): aquí solo
+       queda el cromo propio de ≥768 px. */
     .pdf-indice-barra-titulo{
       font-family:'Bricolage Grotesque',sans-serif;font-size:14.5px;font-weight:800;
       color:var(--lec-texto, var(--text));letter-spacing:-.01em;
