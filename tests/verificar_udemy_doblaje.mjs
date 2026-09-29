@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:http';
 const raiz = resolve(import.meta.dirname, '..');
 let chromium;
 for (const ruta of ['node_modules', '../node_modules', '../JG Turbo_OLD/node_modules', '../../node_modules', '../../../node_modules', '../../../JG Turbo_OLD/node_modules']) {
@@ -11,13 +12,37 @@ for (const ruta of ['node_modules', '../node_modules', '../JG Turbo_OLD/node_mod
 if (!chromium) throw new Error('Playwright no encontrado');
 const extension = resolve(raiz, 'extension-udemy');
 const perfil = mkdtempSync(resolve(tmpdir(), 'jg-udemy-prueba-'));
-const contexto = await chromium.launchPersistentContext(perfil, { headless: true, channel: 'chromium', args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
+const cacheNavegadores = resolve(process.env.LOCALAPPDATA, 'ms-playwright');
+const ejecutable = existsSync(chromium.executablePath()) ? chromium.executablePath()
+  : readdirSync(cacheNavegadores).filter((n) => /^chromium-\d+$/.test(n)).sort().reverse()
+    .map((n) => resolve(cacheNavegadores, n, 'chrome-win64/chrome.exe')).find(existsSync);
+if (!ejecutable) throw new Error('No hay Chromium instalado para esta prueba.');
+const contexto = await chromium.launchPersistentContext(perfil, { headless: true, executablePath: ejecutable, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
 contexto.setDefaultTimeout(10000);
 let ok = 0;
 const comprobar = (c, m) => { if (!c) throw new Error(`FALLO: ${m}`); ok++; console.log(`OK: ${m}`); };
+const cuerpos = [];
+let vozReal;
+const servidor = createServer(async (q, r) => {
+  r.setHeader('Access-Control-Allow-Origin', '*');
+  r.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (q.method === 'OPTIONS') { r.writeHead(204).end(); return; }
+  let texto = ''; for await (const pieza of q) texto += pieza;
+  if (texto) cuerpos.push(JSON.parse(texto));
+  if (q.url === '/api/health') { r.setHeader('Content-Type', 'application/json'); r.end(JSON.stringify({ ai_provider_server: 'gemini' })); }
+  else if (q.url === '/api/translate') {
+    r.setHeader('Content-Type', 'application/json');
+    const datos = JSON.parse(texto);
+    r.end(JSON.stringify({ text: datos.text.replace('Hello this is our first lesson today.', 'Hola esta es nuestra primera clase de hoy.').replace('We are learning to build a useful project.', 'Estamos aprendiendo a crear un proyecto útil.'), ia_used: true }));
+  } else if (q.url === '/api/tts') { r.setHeader('Content-Type', 'audio/mpeg'); r.setHeader('X-TTS-Engine', 'azure'); r.end(vozReal); }
+  else r.end('{}');
+});
+await new Promise((r) => servidor.listen(0, '127.0.0.1', r));
 try {
   const worker = contexto.serviceWorkers()[0] || await contexto.waitForEvent('serviceworker');
   const webm = await readFile(resolve(raiz, 'tests/fixtures/x/video_prueba.webm'));
+  vozReal = await readFile(resolve(raiz, 'tests/fixtures/biblioteca/voz_real_es.mp3'));
+  await worker.evaluate((base) => chrome.storage.local.set({ jg_api_base: base }), `http://127.0.0.1:${servidor.address().port}/api`);
   let vttPeticiones = 0, udemyPeticiones = 0;
   const vtt = 'WEBVTT\n\n00:00:00.000 --> 00:00:04.000\nHello this is our first lesson today.\n\n00:00:04.000 --> 00:00:08.000\nWe are learning to build a useful project.\n';
   await contexto.route('https://www.udemy.com/**', async (ruta) => {
@@ -34,7 +59,20 @@ try {
   const id = new URL(worker.url()).host;
   const tabId = await worker.evaluate(async () => (await chrome.tabs.query({ url: 'https://www.udemy.com/course/*' }))[0].id);
   const panel = await contexto.newPage();
-  await panel.goto(`chrome-extension://${id}/panel.html?tab=${tabId}`);
+  await panel.goto(`chrome-extension://${id}/panel.html?tab=${tabId}${process.argv.includes('--puente') ? '&soloDiagnostico=1' : ''}`);
+  if (!process.argv.includes('--puente')) {
+    await pagina.locator('video').evaluate((v) => v.play());
+    await panel.getByRole('button', { name: 'Doblar al español' }).click();
+    await panel.waitForFunction(() => document.getElementById('estado').textContent.includes('Listo'), null, { timeout: 20000 });
+    comprobar(true, 'panel prepara voz con el motor copiado');
+    await panel.waitForFunction(() => document.getElementById('actual').textContent.startsWith('Hola'), null, { timeout: 10000 });
+    comprobar(true, 'linea actual muestra el español');
+    comprobar(cuerpos.some((c) => c.voice === 'female' && c.idioma_fijo === true), 'voz neural del contrato');
+    comprobar(cuerpos.every((c) => !/udemy|lecture|123/.test(JSON.stringify(c))), 'API recibe texto sin URL ni id de clase');
+    await panel.getByRole('button', { name: 'Detener', exact: true }).click();
+    await pagina.waitForFunction(() => document.querySelector('video').volume === .73);
+    comprobar(await pagina.locator('video').evaluate((v) => !v.muted && v.playbackRate === 1), 'detener panel restaura volumen silencio y velocidad');
+  } else {
   await panel.evaluate((tab) => {
     globalThis.mensajes = [];
     globalThis.puertoPrueba = chrome.tabs.connect(tab, { name: 'jgUdemy' });
@@ -67,5 +105,6 @@ try {
   await pagina.waitForFunction(() => document.querySelector('video').volume === .73);
   comprobar(JSON.stringify(await pagina.locator('video').evaluate((v) => [v.volume, v.muted, v.playbackRate])) === JSON.stringify(original), 'cerrar panel restaura valores exactos');
   comprobar(udemyPeticiones === solicitudesUdemy, 'cero peticiones propias a Udemy');
-} finally { await contexto.close(); if (resolve(perfil).startsWith(resolve(tmpdir()))) rmSync(perfil, { recursive: true, force: true }); }
+  }
+} finally { await contexto.close(); await new Promise((r) => servidor.close(r)); if (resolve(perfil).startsWith(resolve(tmpdir()))) rmSync(perfil, { recursive: true, force: true }); }
 console.log(`${ok} comprobaciones OK · 0 fallos`);

@@ -272,22 +272,22 @@ Si el video está en un `iframe`, ajusta `all_frames`/`matches` y anótalo en `C
 Sigue `prepararDoblaje` (`youtubeSyncController.js:621-744`) **quitando** lo que el dueño no quiere: caché,
 biblioteca, `buscarGuardada`, `guardarVoz`, descargas, segunda voz y Fish.
 
-- [ ] Al pulsar **«Doblar al español»** (este clic es el gesto que desbloquea el audio): crea los dos `<audio>`
+- [x] Al pulsar **«Doblar al español»** (este clic es el gesto que desbloquea el audio): crea los dos `<audio>`
   y los desbloquea como `desbloquearAudio` en la app; `calentar()`; pide `leerSubtitulos`;
   `normalizarSegmentos`; si el idioma no es inglés → «Esta clase no está en inglés.» y no hace nada más.
-- [ ] Crea `TranslationService({ traducirTexto, intervaloMinMs: 1100 })`, `crearLimitador()`,
+- [x] Crea `TranslationService({ traducirTexto, intervaloMinMs: 1100 })`, `crearLimitador()`,
   `DubbingService` (sin `buscarGuardada`, con `medirHabla` en `generarAudio`), `definirUnidades(agruparPorTiempo(...))`,
   `MotorPreparacion`, `esperarArranque({ vozInicialS: VOZ_INICIAL_S })`, `DubbingEngine` con el
   `ReproductorRemoto`, `SyncEngine` con `indiceExterno` = `motorVoz.indiceSegmentoVoz()`. Mismos valores que
   YouTube: volumen de la voz 100 % y del original 12 %, ritmo automático encendido.
-- [ ] El subtítulo: en cada cambio de línea, `{ tipo: 'subtitulo', texto }` al puente. En el panel, las tres
+- [x] El subtítulo: en cada cambio de línea, `{ tipo: 'subtitulo', texto }` al puente. En el panel, las tres
   líneas (anterior, actual, siguiente) con `TranscriptionDisplay` (cópialo a `motor/` si lo usas, sumándolo a
   la lista y a las huellas).
-- [ ] **Controles del panel:** Doblar / Detener; voz Mujer / Hombre; acento (es-CO por defecto; es-MX,
+- [x] **Controles del panel:** Doblar / Detener; voz Mujer / Hombre; acento (es-CO por defecto; es-MX,
   es-AR, es-CL, es-PE, es-US); volumen de la voz; volumen del original; «Ritmo automático»; «Subtítulo sobre
   el video»; «Seguir doblando la siguiente clase» (encendido). Todo con `label`, foco visible, navegable con
   teclado y botones de ≥ 44 px.
-- [ ] **Estados que siempre se ven** (`TRAMPAS.md` §8): «Abre una clase de Udemy», «Activa una vez los
+- [x] **Estados que siempre se ven** (`TRAMPAS.md` §8): «Abre una clase de Udemy», «Activa una vez los
   subtítulos en inglés (botón CC de Udemy) y vuelve a pulsar Doblar» (si no hubo `.vtt` ni cues),
   progreso con barra, «Listo», «La voz se está preparando…», errores de red o de voz en palabras simples, y
   «Si cierras este panel, el doblaje se apaga».
@@ -296,7 +296,10 @@ biblioteca, `buscarGuardada`, `guardarVoz`, descargas, segunda voz y Fish.
   velocidad; la voz irá un poco más rápida». Nunca un bucle de órdenes.
 - [ ] **Siguiente clase:** con «Seguir doblando» encendido, al llegar el aviso `clase` se cierra la sesión
   actual y se abre otra con los subtítulos de la nueva clase **cuando la persona le dé play** (no antes).
-- [ ] **Detener** (o cerrar el panel): aborta todo, `restaurar` y quita el subtítulo.
+- [x] **Detener** (o cerrar el panel): aborta todo, `restaurar` y envía retirar el subtítulo.
+
+Panel: `node tests/test_udemy_panel.mjs` 12 OK; `node tests/verificar_udemy_doblaje.mjs --panel`
+5 OK, 0 fallos. Velocidad revertida y siguiente clase quedan por medir en Tarea 9.
 
 ### Tarea 8 — Subtítulo sobre el video
 - [ ] En `udemy.js`, un host con `attachShadow({ mode: 'closed' })` dentro del contenedor del reproductor,

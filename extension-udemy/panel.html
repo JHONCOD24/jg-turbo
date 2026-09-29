@@ -5,15 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Diagnóstico Udemy | JG Turbo</title>
   <link rel="stylesheet" href="panel.css">
-  <script src="panel.js" defer></script>
+  <script src="panel.js" type="module"></script>
 </head>
 <body>
   <main>
     <h1>JG Turbo</h1>
-    <p id="estado" role="status" aria-live="polite">Abre una clase de Udemy y activa sus subtítulos en inglés.</p>
+    <p id="clase"></p>
+    <p id="estado" role="status" aria-live="polite">Abre una clase de Udemy.</p>
+    <progress id="progreso" max="1" value="0" aria-label="Preparación del doblaje" hidden></progress>
+    <div class="acciones">
+      <button id="doblar" type="button" disabled>Doblar al español</button>
+      <button id="detener" type="button" disabled>Detener</button>
+    </div>
+    <div class="ajustes">
+      <label for="voz">Voz</label><select id="voz"><option value="female">Mujer</option><option value="male">Hombre</option></select>
+      <label for="acento">Acento</label><select id="acento"><option value="es-CO">Colombia</option><option value="es-MX">México</option><option value="es-AR">Argentina</option><option value="es-CL">Chile</option><option value="es-PE">Perú</option><option value="es-US">Latino</option></select>
+      <label for="volVoz">Volumen de la voz <output id="valorVoz">100 %</output></label><input id="volVoz" type="range" min="0" max="100" value="100">
+      <label for="volOriginal">Volumen del original <output id="valorOriginal">12 %</output></label><input id="volOriginal" type="range" min="0" max="100" value="12">
+    </div>
+    <label class="interruptor"><input id="ritmoAuto" type="checkbox" checked>Ritmo automático</label>
+    <label class="interruptor"><input id="subtitulo" type="checkbox" checked>Subtítulo sobre el video</label>
+    <label class="interruptor"><input id="autoSiguiente" type="checkbox" checked>Seguir doblando la siguiente clase</label>
+    <p class="nota">Si cierras este panel, el doblaje se apaga.</p>
+    <div class="lineas" aria-live="off"><p id="anterior"></p><p id="actual"></p><p id="siguiente"></p></div>
+    <details><summary>Diagnóstico</summary>
     <button id="diagnosticar" type="button">Diagnóstico de esta clase</button>
     <button id="copiar" type="button" disabled>Copiar diagnóstico</button>
     <pre id="resultado" aria-label="Resultado del diagnóstico"></pre>
+    </details>
   </main>
 </body>
 </html>

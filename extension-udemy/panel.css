@@ -7,3 +7,19 @@ button { min-height: 44px; margin: 0 8px 8px 0; padding: 8px 14px; border: 1px s
 button:disabled { opacity: .5; cursor: default; }
 button:focus-visible { outline: 3px solid #bb641a; outline-offset: 2px; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
+.acciones { display: flex; flex-wrap: wrap; }
+.ajustes { display: grid; gap: 8px; margin: 18px 0; }
+select { min-height: 44px; border: 1px solid #738481; border-radius: 4px; font: inherit; padding: 8px; }
+input[type=range] { width: 100%; min-height: 44px; accent-color: #16675d; }
+.interruptor { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; }
+.interruptor input { width: 20px; height: 20px; accent-color: #16675d; }
+.nota { color: #53635f; font-size: 13px; }
+output { float: right; font-size: 13px; }
+.lineas { border-block: 1px solid #d4ddda; padding: 8px 0; margin: 16px 0; min-height: 100px; }
+.lineas p { font-size: 14px; min-height: 20px; color: #697873; }
+#actual { color: #172327; font-weight: 600; }
+progress { display: block; width: 100%; height: 10px; margin: 12px 0; accent-color: #16675d; }
+[hidden] { display: none !important; }
+summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+button, select, input, summary { max-width: 100%; }
+:focus-visible { outline: 3px solid #bb641a; outline-offset: 2px; }
