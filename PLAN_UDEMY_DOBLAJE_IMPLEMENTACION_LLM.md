@@ -221,7 +221,7 @@ Si el video está en un `iframe`, ajusta `all_frames`/`matches` y anótalo en `C
   `node tests/test_udemy_vtt.mjs`: 12 OK, 0 fallos.
 
 ### Tarea 4 — `ReproductorRemoto` (`lib/reproductorRemoto.js`)
-- [ ] Pruebas con un `Port` falso y un reloj inyectable (`ahora`):
+- [x] Pruebas con un `Port` falso y un reloj inyectable (`ahora`):
   - `getCurrentTime` extrapola: informado 10 s a 1× reproduciendo → 300 ms después devuelve 10,3; en pausa,
     10; a 0,9× → 10,27.
   - `getPlayerState` devuelve los códigos de `CODIGO_ESTADO` de `XVideoPlayer.js` (−1, 0, 1, 2, 3).
@@ -229,12 +229,14 @@ Si el video está en un `iframe`, ajusta `all_frames`/`matches` y anótalo en `C
     **actualizan el estado local al instante** (el motor lee justo después).
   - `suscribirEstado` y `suscribirVelocidad` avisan con los mismos valores que `XVideoPlayer`.
   - Si el puerto se desconecta, el estado pasa a pausado y avisa (el motor se detiene, no se cuelga).
-- [ ] Mensajes del puente (texto plano, sin nada de Udemy más allá del tiempo):
+- [x] Mensajes del puente (texto plano, sin nada de Udemy más allá del tiempo):
   - página → panel: `{ tipo: 'estado', t, tasa, pausado, terminado, esperando, volumen, silenciado, duracion, enviadoEn }`
     en cada evento del video (`play`, `pause`, `seeked`, `ratechange`, `waiting`, `playing`, `ended`,
     `volumechange`) y cada 250 ms mientras reproduce; `{ tipo: 'clase', titulo }` al cambiar de clase.
   - panel → página: `{ tipo: 'orden', accion: 'velocidad'|'volumen'|'silencio'|'play'|'pausa', valor }`,
     `{ tipo: 'subtitulo', texto }`, `{ tipo: 'leerSubtitulos' }`, `{ tipo: 'restaurar' }`.
+
+`node tests/test_udemy_reproductor.mjs`: 16 OK, 0 fallos.
 
 ### Tarea 5 — Puente en la página (`udemy.js`)
 - [ ] Al conectar, guarda el estado original del video (`volume`, `muted`, `playbackRate`) para `restaurar`.
