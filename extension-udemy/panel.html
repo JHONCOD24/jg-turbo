@@ -18,7 +18,7 @@
       <button id="detener" type="button" disabled>Detener</button>
     </div>
     <div class="ajustes">
-      <label for="voz">Voz</label><select id="voz"><option value="female">Mujer</option><option value="male">Hombre</option></select>
+      <label for="voz">Voz</label><select id="voz"><option value="female">Mujer regional</option><option value="male">Hombre regional</option><option value="female-multi">Ava · Multilingüe</option><option value="male-multi">Andrew · Multilingüe</option></select>
       <label for="acento">Acento</label><select id="acento"><option value="es-CO">Colombia</option><option value="es-MX">México</option><option value="es-AR">Argentina</option><option value="es-CL">Chile</option><option value="es-PE">Perú</option><option value="es-US">Latino</option></select>
       <label for="volVoz">Volumen de la voz <output id="valorVoz">100 %</output></label><input id="volVoz" type="range" min="0" max="100" value="100">
       <label for="volOriginal">Volumen del original <output id="valorOriginal">12 %</output></label><input id="volOriginal" type="range" min="0" max="100" value="12">
@@ -26,6 +26,7 @@
     <label class="interruptor"><input id="ritmoAuto" type="checkbox" checked>Ritmo automático</label>
     <label class="interruptor"><input id="subtitulo" type="checkbox" checked>Subtítulo sobre el video</label>
     <label class="interruptor"><input id="autoSiguiente" type="checkbox" checked>Seguir doblando la siguiente clase</label>
+    <label class="interruptor"><input id="terminosWeb" type="checkbox" checked>Conservar términos de desarrollo web</label>
     <p class="nota">Si cierras este panel, el doblaje se apaga.</p>
     <div class="lineas" aria-live="off"><p id="anterior"></p><p id="actual"></p><p id="siguiente"></p></div>
     <details><summary>Diagnóstico</summary>

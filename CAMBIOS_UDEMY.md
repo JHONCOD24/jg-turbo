@@ -55,3 +55,31 @@ creciente y límite de intentos, sin navegar ni pedir recursos de Udemy.
 La prueba completa pasó con 27 comprobaciones; las unitarias siguen en 100.
 Regresiones: YouTube sincronía 74, doblaje 139 y X 70, cero fallos.
 La validación real continúa pendiente del dueño.
+
+## Voces y tecnicismos, versión 0.3.0
+
+El dueño reportó que el doblaje suena bien y pidió ampliar las voces y mejorar
+el inglés técnico del bootcamp. Ese reporte no verifica todavía toda la lista
+de Tarea 10 ni el estado de la cuenta durante varios días.
+
+Se agregó el modo multilingüe de la aplicación mediante `unified: true`:
+Mujer (Ava) y Hombre (Andrew). Las 12 opciones regionales existentes ahora
+muestran el nombre. No se importan Fish, voces clonadas ni proveedores nuevos.
+Se conserva la voz guardada; el dueño elige la opción nueva. El acento se
+deshabilita al elegir multilingüe porque ese modo no lo utiliza.
+
+`lib/terminosWeb.js` protege una lista de términos antes de traducir y restaura
+su escritura original antes de mostrarla o sintetizarla. Comprueba que cada
+término regrese una vez y dentro de su segmento: una respuesta incompleta
+da error, no entrega tokens a la voz. Solo vive en memoria. El interruptor
+«Conservar términos de desarrollo web» se puede apagar para otros cursos.
+No cubre todas las expresiones posibles ni acredita por sí solo la calidad auditiva.
+
+Pruebas primero: faltaba el módulo de términos y fallaba la bandera multilingüe.
+Después: `test_udemy_doblaje` 116, `verificar_udemy_doblaje` 31, cero fallos.
+YouTube sincronía 74, doblaje 139, X 70, cero fallos.
+`node tests/verificar_udemy_voz_real.mjs --api-real`: 3 OK, usando solo JG Turbo
+con frases inventadas, sin Udemy ni audio guardado. La traducción conservó seis
+tecnicismos. La API anunció `en-US-AvaMultilingualNeural` y
+`en-US-AndrewMultilingualNeural`, ambas con audio no vacío. No se hizo escucha
+humana de esas muestras. La comprobación del sonido en la clase queda con el dueño.

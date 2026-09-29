@@ -1,3 +1,4 @@
+import { protegerTerminos } from './terminosWeb.js';
 const BASE = 'https://jg-turbo.vercel.app/api';
 
 export function crearApi({ fetchImpl = globalThis.fetch.bind(globalThis), storage = chrome.storage.local } = {}) {
@@ -27,24 +28,28 @@ export function crearApi({ fetchImpl = globalThis.fetch.bind(globalThis), storag
     throw new Error(typeof datos.detail === 'string' ? datos.detail : `${servicio} no respondió (HTTP ${resp.status}).`);
   }
   return {
-    async traducirTexto(texto, { tituloVideo = '', contexto = {}, signal } = {}) {
+    async traducirTexto(texto, { tituloVideo = '', contexto = {}, signal, terminosWeb = false } = {}) {
+      const protegido = terminosWeb ? protegerTerminos(texto) : null;
       if (!proveedor) {
         try { const resp = await pedir('/health', { signal }); proveedor = resp.ok ? (await resp.json()).ai_provider_server || 'gemini' : 'gemini'; }
         catch (error) { if (signal?.aborted) throw error; proveedor = 'gemini'; }
       }
-      const body = JSON.stringify({ text: texto, direction: 'en-es', provider: proveedor, api_key: '', literal: true, revisar: false,
+      const body = JSON.stringify({ text: protegido?.texto || texto, direction: 'en-es', provider: proveedor, api_key: '', literal: true, revisar: false,
         titulo_video: tituloVideo.slice(0, 300), contexto_previo: String(contexto.anterior || '').slice(-600), contexto_siguiente: String(contexto.siguiente || '').slice(0, 300) });
       for (let intento = 0; intento < 2; intento++) {
         let resp;
         try { resp = await pedir('/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal }, 90000); }
         catch (error) { if (signal?.aborted || intento) throw error; continue; }
         if (!resp.ok) { if ([502, 504].includes(resp.status) && !intento) continue; await fallo(resp, 'El traductor'); }
-        return resp.json();
+        const datos = await resp.json();
+        return protegido ? { ...datos, text: protegido.restaurar(datos.text) } : datos;
       }
     },
     async generarAudio(texto, { voz = 'female', acento = 'es-CO', signal } = {}) {
+      const multilingue = ['female-multi', 'male-multi'].includes(voz);
       const resp = await pedir('/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
-        body: JSON.stringify({ text: texto, voice: voz === 'male' ? 'male' : 'female', language: 'es', locale: acento,
+        body: JSON.stringify({ text: texto, voice: ['male', 'male-multi'].includes(voz) ? 'male' : 'female', language: 'es', locale: acento,
+          ...(multilingue ? { unified: true } : {}),
           rate: 1, tone: 'neutral', idioma_fijo: true, source: 'yt' }) });
       if (!resp.ok) await fallo(resp, 'La voz');
       return { blob: await resp.blob(), engineHdr: resp.headers.get('X-TTS-Engine') || '', respaldoHdr: resp.headers.get('X-TTS-Fallback') || '' };

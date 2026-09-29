@@ -34,3 +34,18 @@ Texto y voz viven en memoria; solo se guardan los ajustes. Al reabrir el panel
 puede hacer falta recargar la clase y activar CC en inglés. Sin subtítulos en inglés
 esta versión no dobla. Comparte la cuota de voz de la app; su respaldo puede tardar más.
 No hay garantía de que Udemy no cambie o bloquee la extensión.
+
+## Voces y desarrollo web (0.3.0)
+
+En «Voz» puedes elegir Ava o Andrew multilingües, el modo «misma voz» de la
+aplicación. El acento regional no aplica en ese modo y se desactiva el selector.
+Las dos opciones regionales conservan los seis acentos actuales y muestran sus
+nombres: Salomé/Gonzalo, Dalia/Jorge, Elena/Tomás, Catalina/Lorenzo,
+Camila/Alex y Paloma/Alonso. No se incluyen Fish ni voces clonadas.
+
+«Conservar términos de desarrollo web» mantiene una lista de tecnicismos en
+inglés, tanto en la voz como en el subtítulo, sin escribir guías fonéticas.
+Puedes apagarlo en otros cursos. Cambiarlo durante el doblaje detiene la sesión:
+pulsa Doblar otra vez para preparar las frases con el ajuste nuevo.
+Los términos fuera de la lista y su calidad de pronunciación necesitan revisión
+escuchando. Comparte la frase exacta si algún término sigue sonando mal.

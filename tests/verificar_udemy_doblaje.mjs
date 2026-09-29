@@ -35,7 +35,7 @@ const servidor = createServer(async (q, r) => {
   else if (q.url === '/api/translate') {
     r.setHeader('Content-Type', 'application/json');
     const datos = JSON.parse(texto);
-    const contestar = () => r.end(JSON.stringify({ text: datos.text.replaceAll('Hello this is our first lesson today.', 'Hola esta es nuestra primera clase de hoy.').replaceAll('We are learning to build a useful project.', 'Estamos aprendiendo a crear un proyecto útil.'), ia_used: true }));
+    const contestar = () => r.end(JSON.stringify({ text: datos.text.replaceAll('Hello this is our first lesson today.', 'Hola esta es nuestra primera clase de hoy.').replaceAll('We are learning to build a useful project.', 'Estamos aprendiendo a crear un proyecto útil.').replaceAll('Use ', 'Usa ').replaceAll(' and ', ' y ').replaceAll(' in the ', ' en el '), ia_used: true }));
     if (demorar) { const reloj = setTimeout(contestar, 20000); r.on('close', () => { clearTimeout(reloj); if (!r.writableEnded) canceladas++; }); }
     else contestar();
   } else if (q.url === '/api/tts') {
@@ -63,7 +63,8 @@ try {
   await contexto.route('https://*.udemycdn.com/**', async (ruta) => {
     vttPeticiones++;
     origenesVtt.push(ruta.request().headers().origin);
-    await ruta.fulfill({ contentType: 'text/vtt', headers: { 'access-control-allow-origin': '*' }, body: vtt });
+    const tecnico = ruta.request().url().includes('tecnico');
+    await ruta.fulfill({ contentType: 'text/vtt', headers: { 'access-control-allow-origin': '*' }, body: tecnico ? vtt.replaceAll('Hello this is our first lesson today.', 'Use JavaScript and Node.js in the backend.') : vtt });
   });
   const pagina = await contexto.newPage();
   await pagina.goto('https://www.udemy.com/course/prueba/learn/lecture/123', { waitUntil: 'domcontentloaded' });
@@ -183,6 +184,18 @@ try {
     comprobar(true, 'error de voz visible en lenguaje simple');
     await falloVoz.consola.getByRole('button', { name: 'Detener', exact: true }).click();
     await falloVoz.consola.close(); await falloVoz.clase.close(); vozFalla = false;
+    const tecnico = await abrirCaso('tecnico=1');
+    await tecnico.clase.evaluate(() => fetch('https://vtt-cdn77.udemycdn.com/prueba/en_US/tecnico.vtt'));
+    await tecnico.consola.locator('#voz').selectOption('male-multi');
+    comprobar(await tecnico.consola.locator('#acento').isDisabled(), 'voz multilingue no ofrece un acento regional que no aplica');
+    const inicioTecnico = cuerpos.length;
+    await tecnico.clase.locator('video').evaluate((v) => v.play());
+    await tecnico.consola.getByRole('button', { name: 'Doblar al español' }).click();
+    await tecnico.consola.waitForFunction(() => document.getElementById('actual').textContent.includes('Usa JavaScript y Node.js en el backend'), null, { timeout: 20000 });
+    comprobar(true, 'subtitulo español conserva los tecnicismos originales');
+    comprobar(cuerpos.slice(inicioTecnico).some((c) => c.unified === true && c.voice === 'male' && c.text.includes('Node.js') && !c.text.includes('JGWEB')), 'voz bilingue recibe texto restaurado sin tokens');
+    comprobar(await worker.evaluate(async () => (await chrome.storage.local.get('voz')).voz === 'male-multi'), 'seleccion multilingue guardada');
+    await tecnico.consola.close(); await tecnico.clase.close();
     comprobar(cuerpos.every((c) => !/udemy|lecture|789|456/.test(JSON.stringify(c))), 'ningun caso envia datos de Udemy al servidor');
   } else {
   await panel.evaluate((tab) => {

@@ -56,7 +56,7 @@ comprobar(!/console\.(?:log|info|debug)\s*\(/.test(fondo), 'URL firmada nunca se
 
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exitCode = 1;
-for (const archivo of ['test_udemy_motor.mjs', 'test_udemy_vtt.mjs', 'test_udemy_reproductor.mjs', 'test_udemy_api.mjs', 'test_udemy_panel.mjs', 'test_udemy_subtitulo.mjs']) {
+for (const archivo of ['test_udemy_motor.mjs', 'test_udemy_vtt.mjs', 'test_udemy_reproductor.mjs', 'test_udemy_api.mjs', 'test_udemy_panel.mjs', 'test_udemy_subtitulo.mjs', 'test_udemy_terminos.mjs']) {
   const resultado = spawnSync(process.execPath, [fileURLToPath(new URL(archivo, import.meta.url))], { encoding: 'utf8' });
   const conteo = resultado.stdout.match(/(\d+) comprobaciones OK · 0 fallos/);
   if (resultado.status !== 0 || !conteo) { fallos++; console.error(resultado.stdout + resultado.stderr); }

@@ -63,7 +63,7 @@ import { VOZ_INICIAL_S } from './motor/planificador.js';
 import { medirHabla } from './motor/hablaVoz.js';
 
 
-const ui = Object.fromEntries(['doblar', 'detener', 'voz', 'acento', 'volVoz', 'volOriginal', 'ritmoAuto', 'subtitulo', 'autoSiguiente', 'progreso', 'clase', 'anterior', 'actual', 'siguiente', 'valorVoz', 'valorOriginal'].map((id) => [id, document.getElementById(id)]));
+const ui = Object.fromEntries(['doblar', 'detener', 'voz', 'acento', 'volVoz', 'volOriginal', 'ritmoAuto', 'subtitulo', 'autoSiguiente', 'terminosWeb', 'progreso', 'clase', 'anterior', 'actual', 'siguiente', 'valorVoz', 'valorOriginal'].map((id) => [id, document.getElementById(id)]));
 const api = crearApi();
 let preferencias;
 let puerto, player, sesion = null, titulo = '', esperandoClase = false, solicitud = 0;
@@ -71,7 +71,11 @@ let velocidadPedida = null;
 
 function pintarPreferencias() {
   for (const clave of ['voz', 'acento', 'volVoz', 'volOriginal']) ui[clave].value = preferencias[clave];
-  for (const clave of ['ritmoAuto', 'subtitulo', 'autoSiguiente']) ui[clave].checked = preferencias[clave];
+  for (const clave of ['ritmoAuto', 'subtitulo', 'autoSiguiente', 'terminosWeb']) ui[clave].checked = preferencias[clave];
+  const nombres = { 'es-CO': ['Salomé', 'Gonzalo'], 'es-MX': ['Dalia', 'Jorge'], 'es-AR': ['Elena', 'Tomás'], 'es-CL': ['Catalina', 'Lorenzo'], 'es-PE': ['Camila', 'Alex'], 'es-US': ['Paloma', 'Alonso'] }[preferencias.acento];
+  ui.voz.options[0].textContent = `${nombres[0]} · Mujer regional`;
+  ui.voz.options[1].textContent = `${nombres[1]} · Hombre regional`;
+  ui.acento.disabled = preferencias.voz.endsWith('-multi');
   ui.valorVoz.value = `${preferencias.volVoz} %`;
   ui.valorOriginal.value = `${preferencias.volOriginal} %`;
 }
@@ -158,7 +162,7 @@ async function iniciar() {
     if (!actual.segmentos.length) throw new Error('La pista está vacía. Activa CC en inglés y recarga la clase.');
     api.calentar();
     const limitador = crearLimitador();
-    const traductor = new TranslationService({ traducirTexto: api.traducirTexto, intervaloMinMs: 1100 });
+    const traductor = new TranslationService({ traducirTexto: (texto, opciones) => api.traducirTexto(texto, { ...opciones, terminosWeb: preferencias.terminosWeb }), intervaloMinMs: 1100 });
     actual.servicio = new DubbingService({ limitador, generarAudio: async (texto) => {
       try {
         const voz = await api.generarAudio(texto, { voz: preferencias.voz, acento: preferencias.acento, signal });
@@ -199,7 +203,7 @@ async function iniciar() {
 
 ui.doblar.addEventListener('click', iniciar);
 ui.detener.addEventListener('click', () => detener());
-for (const clave of ['voz', 'acento', 'volVoz', 'volOriginal', 'ritmoAuto', 'subtitulo', 'autoSiguiente']) {
+for (const clave of ['voz', 'acento', 'volVoz', 'volOriginal', 'ritmoAuto', 'subtitulo', 'autoSiguiente', 'terminosWeb']) {
   ui[clave].addEventListener(['volVoz', 'volOriginal'].includes(clave) ? 'input' : 'change', async () => {
     preferencias[clave] = ui[clave].type === 'checkbox' ? ui[clave].checked : ui[clave].type === 'range' ? Number(ui[clave].value) : ui[clave].value;
     pintarPreferencias();
@@ -207,6 +211,7 @@ for (const clave of ['voz', 'acento', 'volVoz', 'volOriginal', 'ritmoAuto', 'sub
     if (clave === 'volOriginal') sesion?.voz?.definirVolumenFondo(preferencias.volOriginal);
     if (clave === 'ritmoAuto') sesion?.voz?.definirRitmoAutomatico(preferencias.ritmoAuto);
     if (['voz', 'acento'].includes(clave)) sesion?.servicio?.invalidarDesde(player.getCurrentTime() + 1);
+    if (clave === 'terminosWeb' && sesion) detener('Ajuste actualizado. Pulsa Doblar al español para aplicarlo.');
     if (clave === 'subtitulo' && sesion) pintarLineas(sesion, sesion.indice);
     if (clave === 'autoSiguiente' && !preferencias.autoSiguiente) esperandoClase = false;
     try { await guardarPreferencias(preferencias); } catch { estado.textContent = 'No se pudieron guardar los ajustes. Siguen activos en este panel.'; }
