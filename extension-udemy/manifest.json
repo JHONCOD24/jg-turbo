@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "JG Turbo | Diagnóstico Udemy",
+  "version": "0.1.0",
+  "description": "Diagnostica subtítulos de una clase abierta por su dueño.",
+  "permissions": ["sidePanel", "storage", "webRequest"],
+  "host_permissions": [
+    "https://www.udemy.com/*",
+    "https://*.udemycdn.com/*",
+    "https://jg-turbo.vercel.app/*"
+  ],
+  "background": { "service_worker": "fondo.js" },
+  "content_scripts": [{
+    "matches": ["https://www.udemy.com/course/*/learn/*"],
+    "js": ["udemy.js"],
+    "run_at": "document_idle",
+    "world": "ISOLATED"
+  }],
+  "action": { "default_title": "Diagnóstico de clase | JG Turbo" },
+  "side_panel": { "default_path": "panel.html" }
+}

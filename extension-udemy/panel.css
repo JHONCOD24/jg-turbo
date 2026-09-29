@@ -1,0 +1,9 @@
+:root { color-scheme: light; font-family: Arial, sans-serif; }
+body { margin: 0; background: #f6f7f7; color: #172327; }
+main { padding: 20px; max-width: 560px; }
+h1 { margin: 0 0 12px; font-size: 20px; }
+p { line-height: 1.5; }
+button { min-height: 44px; margin: 0 8px 8px 0; padding: 8px 14px; border: 1px solid #165951; background: #16675d; color: white; border-radius: 4px; font: inherit; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible { outline: 3px solid #bb641a; outline-offset: 2px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }

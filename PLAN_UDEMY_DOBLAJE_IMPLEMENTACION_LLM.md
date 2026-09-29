@@ -170,9 +170,9 @@ el reproductor de Udemy **revierte** la velocidad por su cuenta, no se pelea con
 Nadie en este proyecto ha visto por dentro el reproductor actual de Udemy con la sesión del dueño. Antes de
 escribir el lector de subtítulos hay que **medirlo**, no suponerlo.
 
-- [ ] Crea `manifest.json`, `fondo.js`, un `udemy.js` mínimo y un `panel.html` con un solo botón:
+- [x] Crea `manifest.json`, `fondo.js`, un `udemy.js` mínimo y un `panel.html` con un solo botón:
   **«Diagnóstico de esta clase»**.
-- [ ] El diagnóstico devuelve un JSON **sin datos sensibles** (sin cookies, sin query strings, sin ids de
+- [x] El diagnóstico devuelve un JSON **sin datos sensibles** (sin cookies, sin query strings, sin ids de
   curso) con:
   - cuántos `<video>` hay y si están en el documento principal o en un `iframe`;
   - `duration`, `readyState`, `playbackRate`, `muted`, `volume` del video;
@@ -182,12 +182,15 @@ escribir el lector de subtítulos hay que **medirlo**, no suponerlo.
   - si existe el panel de transcripción de Udemy en el DOM (buscar por `data-purpose` que contenga
     `transcript`) y cuántas líneas tiene;
   - el texto de la cabecera de la clase (para el título).
-- [ ] Botón **«Copiar diagnóstico»**.
-- [ ] Escribe en `extension-udemy/LEEME.md` los pasos de instalación (Chrome → `chrome://extensions` →
+- [x] Botón **«Copiar diagnóstico»**.
+- [x] Escribe en `extension-udemy/LEEME.md` los pasos de instalación (Chrome → `chrome://extensions` →
   «Modo de desarrollador» → «Cargar descomprimida» → carpeta `extension-udemy`).
 - [ ] **PARA.** Pide al dueño que abra una clase en inglés, active una vez los subtítulos en inglés (botón
   CC de Udemy), le dé play unos segundos y te pegue el diagnóstico. Si es posible, dos clases de cursos
   distintos.
+
+Verificación local de la Tarea 1 (2026-09-29): `node tests/test_udemy_doblaje.mjs` 18 OK;
+`node tests/verificar_udemy_diagnostico.mjs` 10 OK, ambas con 0 fallos y sin visitar Udemy real.
 
 **Con el diagnóstico, decide la fuente de subtítulos:**
 
