@@ -15888,6 +15888,7 @@ function ttsDetener(){
   ttsState.status = 'idle';
   ttsState.sourceId = null;
   ttsState.posicion = 0;
+  ttsState.desdeCaracter = -1;
   /* Parar es parar: se olvida la continuidad del PDF que hubiera en marcha. */
   ttsState.pdfCaps = null;
   ttsState.pdfFin = false;
@@ -16009,8 +16010,10 @@ function ttsCambiarVozEnVivo(valor){
   const enPausa = ttsState.status === 'paused';
   const sourceId = ttsState.sourceId;
   const langHint = ttsState.langHint;
-  const total = sonando ? ttsDuracionTotal() : 0;
-  const fraccion = total > 0 ? Math.min(1, Math.max(0, ttsTiempoActual() / total)) : 0;
+  /* P2.1: el punto se guarda como carácter del texto de origen (inicio del
+   * bloque que suena + desplazamiento dentro de él), no como fracción de la
+   * cola: con otra voz los bloques ni siquiera son los mismos. */
+  const posCaracteres = sonando ? ttsPosicionActualCaracteres() : 0;
 
   ttsGuardarVoz(valor);
   if(typeof ttsSincronizarConfigVoz === 'function') ttsSincronizarConfigVoz();
@@ -16026,10 +16029,10 @@ function ttsCambiarVozEnVivo(valor){
 
   if(!ttsHablar(texto, { sourceId, langHint })) return;
   /* La cola se acaba de crear: se deja un respiro para que existan las
-   * duraciones estimadas antes de saltar al mismo punto. */
+   * duraciones estimadas antes de saltar al mismo carácter. */
   setTimeout(()=>{
     if(ttsState.sourceId !== sourceId) return;
-    if(fraccion > 0.002) ttsBuscar(ttsDuracionTotal() * fraccion);
+    if(posCaracteres > 20) ttsBuscar(ttsSegundosDePosicion(ttsState.queue, posCaracteres));
     if(enPausa) ttsPausar();
   }, 80);
 }
@@ -16463,6 +16466,55 @@ function ttsEstimarDuracionAudio(texto){
   const n = String(texto || '').trim().length;
   if(!n) return 0;
   return Math.max(0.6, n * TTS_SEG_POR_CARACTER);
+}
+
+/* ── Posición por caracteres (P2.1) ───────────────────────────────────
+ *
+ * Cambiar de voz regenera el audio (cada voz dura lo suyo), así que la
+ * fracción de tiempo no sirve: con Fish (290) y neural (900) las colas ni
+ * siquiera tienen los mismos bloques. Se guarda el carácter que suena
+ * (inicio del bloque en curso + desplazamiento dentro de él, más el
+ * desplazamiento del «Desde aquí» que originó la cola) y se busca ese mismo
+ * carácter en la cola nueva. Puro texto: vale para todas las pestañas. */
+
+/** Bloque de `cola` que contiene el carácter `pos`, con su dentro (0–1). */
+function ttsCaracteresABloque(cola, posCaracteres){
+  const lista = cola || [];
+  let acum = 0;
+  for(let i = 0; i < lista.length; i++){
+    const len = ttsQueueText(lista[i]).length;
+    if(posCaracteres < acum + len + 1 || i === lista.length - 1){
+      return { bloque: i, dentro: len > 0 ? Math.max(0, Math.min(1, (posCaracteres - acum) / len)) : 0 };
+    }
+    acum += len + 1;
+  }
+  return { bloque: 0, dentro: 0 };
+}
+
+/** Segundos (audio 1×) donde cae el carácter `pos` dentro de `cola`. */
+function ttsSegundosDePosicion(cola, posCaracteres){
+  const dest = ttsCaracteresABloque(cola, Math.max(0, posCaracteres || 0));
+  let seg = 0;
+  for(let k = 0; k < dest.bloque; k++) seg += ttsDuracionBloque(cola[k]);
+  return seg + ttsDuracionBloque(cola[dest.bloque]) * dest.dentro;
+}
+
+/** Carácter del texto de origen que está sonando ahora mismo. */
+function ttsPosicionActualCaracteres(){
+  let pos = (typeof ttsState.desdeCaracter === 'number' && ttsState.desdeCaracter > 0)
+    ? Math.floor(ttsState.desdeCaracter) : 0;
+  for(let i = 0; i < ttsState.idx && i < ttsState.queue.length; i++){
+    pos += ttsQueueText(ttsState.queue[i]).length + 1;
+  }
+  const b = ttsState.queue[ttsState.idx];
+  if(b && !b.silencio){
+    const textoBloque = ttsQueueText(b);
+    const el = (typeof ttsElActivo === 'function') ? ttsElActivo() : null;
+    const dur = (el && Number.isFinite(el.duration) && el.duration > 0) ? el.duration : ttsDuracionBloque(b);
+    const cur = (el && Number.isFinite(el.currentTime)) ? el.currentTime : 0;
+    pos += Math.max(0, Math.min(textoBloque.length, Math.round(textoBloque.length * (dur > 0 ? cur / dur : 0))));
+  }
+  return pos;
 }
 
 function ttsDuracionBloque(bloque){
@@ -17191,6 +17243,8 @@ function ttsHablar(texto, opts){
   }
   ttsState.modo = modo;
   ttsState.rate = prefs.rate;
+  ttsState.desdeCaracter = (opts.sourceId === 'pdf' && Number.isFinite(opts.desdeCaracter) && opts.desdeCaracter > 0)
+    ? Math.floor(opts.desdeCaracter) : -1;
   ttsState.engineUsed = prefs.engine === 'browser' ? 'browser' : 'neural';
   ttsState.queue = ttsCrearCola(text, ttsState.langHint, maxChunk, modo);
   ttsState.idx = 0;

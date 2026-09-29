@@ -47,6 +47,28 @@ documentado desde v2.81.0). `test_pdf_continuidad`, `test_tts_narracion`,
 en verde. La prueba real con pantalla apagada solo se puede hacer en el
 dominio: anotada para la verificación final.
 
+## 2026-09-29 · P2.1 · Cambiar de voz no pierde la frase (S-02)
+
+Cambiar de voz tras «Desde aquí» saltaba a otro punto: se guardaba la
+fracción de tiempo de la cola anterior (texto recortado desde mitad del
+capítulo) y se releía el capítulo entero con bloques de otro tamaño
+(Fish 290 frente a neural 900).
+
+**Cambio (`index.html`, vale para todas las pestañas):**
+`ttsCambiarVozEnVivo` guarda el carácter que suena (inicio del bloque en
+curso + desplazamiento dentro de él, más el `desdeCaracter` que el «Desde
+aquí» del PDF anota al crear la cola) y lo busca en la cola nueva
+(`ttsCaracteresABloque`/`ttsSegundosDePosicion`, puros y con pruebas). El
+audio se regenera con la otra voz; el sitio no.
+
+**Pruebas:** `test_tts_narracion` (290 frente a 900 cae en la misma frase) y
+`verificar_pdf_navegador` §8c con API simulada en los dos motores: Fish
+(Roberto, unified, bloques de 290) → «Desde aquí» a mitad (carácter 1267)
+→ neural (modo nativo) → misma frase ±1 sin saltar de capítulo. De paso
+cayó una trampa de pruebas: en Playwright la última route gana, así que el
+stub genérico `**/tts*` tapaba `/api/tts-voices`; un solo handler que
+discrimina por ruta.
+
 ## 2026-09-29 · P1.6 · Sin Fish, el PDF suena con la voz nativa elegida (V-04)
 
 Medido contra producción: con `unified:true` y sin Fish, `/api/tts`

@@ -991,6 +991,158 @@ for (const modo of ['paginas', 'scroll']) {
   await navegadorContinuo.close();
 }
 
+/* ── 8c) Cambio de voz sin perder la frase (P2.1, S-02) ───────────────
+ *
+ * Con Fish (bloques de 290) se lee «Desde aquí» a mitad del capítulo 1 y se
+ * cambia a voz neural (bloques de 900): las colas ni siquiera tienen los
+ * mismos bloques, así que la posición se guarda como carácter del texto de
+ * origen, no como fracción de la cola. La lectura sigue en la misma frase
+ * (±1 bloque). Voz simulada en los dos motores.
+ */
+console.log('\n── Cambio de voz sin perder la frase ───────');
+{
+  const navegadorVoz = await chromium.launch({
+    headless: !process.argv.includes('--headed'),
+    args: ['--autoplay-policy=no-user-gesture-required'],
+  });
+  const contexto = await navegadorVoz.newContext({ viewport: { width: 1280, height: 950 } });
+  await contexto.addInitScript(() => {
+    try {
+      localStorage.setItem('jg_pdf_lectura', JSON.stringify({ modoPagina: 'paginas' }));
+      localStorage.setItem('jg_tts_engine', 'neural');
+      localStorage.setItem('jg_tts_rate', '1');
+      localStorage.setItem('jg_tts_voice', 'fish:roberto');
+    } catch (_) {}
+    const cerrar = () => {
+      const hoja = document.getElementById('pdfAuditoriaHoja');
+      if (!hoja || hoja.hidden) return;
+      const no = document.getElementById('btnPdfAuditoriaRechazar');
+      if (no) no.click(); else hoja.hidden = true;
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      cerrar();
+      new MutationObserver(cerrar).observe(document.body, {
+        subtree: true, attributes: true, attributeFilter: ['hidden'], childList: true,
+      });
+    });
+  });
+  /* Un solo handler (las routes se pisan por orden): catálogo con Fish
+   * activo, warmup vacío y audio según lo pedido. */
+  await contexto.route('**/tts*', (r) => {
+    const url = new URL(r.request().url());
+    if (url.pathname.endsWith('/tts-voices')) {
+      return r.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ engines: { fish: {
+          active: true,
+          voices: { female: { name: 'Roberto' }, male: { name: 'Roberto' } },
+          list: [{ id: 'roberto', gender: 'male', name: 'Roberto', lang: 'es' }],
+        } } }),
+      });
+    }
+    if (url.pathname.endsWith('/tts-warmup')) return r.fulfill({ status: 200, body: '{}' });
+    let esFish = /prefer_fish=true/.test(url.search);
+    if (r.request().method() === 'POST') {
+      try { esFish = /"prefer_fish"\s*:\s*true/.test(r.request().postData() || ''); } catch (_) {}
+    }
+    return r.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'audio/wav',
+        'X-TTS-Voice': esFish ? 'fish:Roberto' : 'es-CO-SalomeNeural',
+        'X-TTS-Engine': esFish ? 'fish' : 'stub-neural',
+      },
+      body: wavContinuo(0.4),
+    });
+  });
+  const pagina = await contexto.newPage();
+  const errores = [];
+  pagina.on('pageerror', (e) => errores.push(String(e)));
+  await abrirPestana(pagina);
+  await leer(pagina, TRES, 120000);
+  if (await pagina.evaluate(() => document.querySelector('#pdfDockNav')?.dataset.desplegado === 'no')) {
+    await pagina.locator('#btnPdfDockDesplegar').click();
+    await pagina.waitForTimeout(400);
+  }
+  await pagina.locator('[data-tts-console="pdf"] [data-tts-action="toggle"]').click();
+  await pagina.waitForFunction(() => {
+    try { return window.ttsState && window.ttsState.status === 'playing'; } catch (_) { return false; }
+  }, null, { timeout: 60000 }).catch(() => {});
+  const fish = await pagina.evaluate(() => {
+    try {
+      const q = (window.ttsState.queue || []).filter((b) => b && !b.silencio && String(b.text || '').trim());
+      return {
+        modo: window.ttsState.modo,
+        fish: q.length > 0 && q[0].voz ? String(q[0].voz) : '',
+        cortos: q.every((b) => b.text.length <= 290),
+      };
+    } catch (_) { return {}; }
+  });
+  comprobar(fish.modo === 'unified', '[Voz] con Fish el PDF va en unified');
+  comprobar(/fish:/i.test(fish.fish || ''), `[Voz] suena Roberto (${fish.fish})`);
+  comprobar(fish.cortos === true, '[Voz] los bloques son de 290 (Fish)');
+  /* «Desde aquí» a mitad del capítulo 0: se detiene (así reconstruye la
+   * cola en vez de saltar dentro de ella), se vuelve al primer capítulo y se
+   * avanzan dos páginas de verdad con el paginador. */
+  await pagina.locator('[data-tts-console="pdf"] [data-tts-action="stop"]').click();
+  await pagina.waitForTimeout(400);
+  await pagina.locator('#btnPdfPrev').click().catch(() => {});
+  await pagina.waitForTimeout(400);
+  await pagina.locator('#btnPdfPrev').click().catch(() => {});
+  await pagina.waitForTimeout(400);
+  await pagina.locator('#btnPdfPagNext').click();
+  await pagina.waitForTimeout(300);
+  await pagina.locator('#btnPdfPagNext').click();
+  await pagina.waitForTimeout(300);
+  await pagina.locator('#btnPdfDesdeAqui').click();
+  await pagina.waitForTimeout(1200);
+  const desde = await pagina.evaluate(() => {
+    try { return window.ttsState ? window.ttsState.desdeCaracter : -2; } catch (_) { return -2; }
+  });
+  comprobar(desde > 50, `[Voz] «Desde aquí» anota el carácter del capítulo (${desde})`);
+  const antes = await pagina.evaluate(() => {
+    try {
+      const q = window.ttsState.queue;
+      const t = String((q[window.ttsState.idx] && q[window.ttsState.idx].text) || '').toLowerCase();
+      return t.split(/\s+/).filter((w) => w.length > 6).slice(0, 5);
+    } catch (_) { return []; }
+  });
+  comprobar(antes.length > 0, '[Voz] hay frase sonando antes del cambio');
+  await pagina.evaluate(() => { try { window.ttsCambiarVozEnVivo('neural:es-CO:female'); } catch (_) {} });
+  await pagina.waitForFunction(() => {
+    try {
+      const q = window.ttsState.queue;
+      const b = q[window.ttsState.idx];
+      return window.ttsState.status === 'playing' && b && !b.silencio
+        && String(b.voz || '').includes('Salome');
+    } catch (_) { return false; }
+  }, null, { timeout: 90000 }).catch(() => {});
+  const despues = await pagina.evaluate(() => {
+    try {
+      const q = window.ttsState.queue;
+      const i = window.ttsState.idx;
+      const vecinos = [q[i - 1], q[i], q[i + 1]].map((b) => String((b && b.text) || '').toLowerCase()).join(' ');
+      return { vecinos, modo: window.ttsState.modo, cap: window.ttsState.pdfCapMostrado };
+    } catch (_) { return { vecinos: '' }; }
+  });
+  comprobar(despues.modo === 'off', '[Voz] tras el cambio a neural va en modo nativo');
+  comprobar(
+    antes.some((w) => despues.vecinos.includes(w)),
+    '[Voz] tras «Desde aquí» y cambio de voz sigue en la misma frase (±1)'
+  );
+  comprobar(
+    (despues.cap ?? -1) === 0 || (despues.cap ?? -1) === 1,
+    `[Voz] el cambio avanza contiguo como mucho (cap ${despues.cap})`
+  );
+  await pagina.locator('[data-tts-console="pdf"] [data-tts-action="stop"]').click().catch(() => {});
+  await pagina.waitForTimeout(400);
+  comprobar(sinRuido(errores).length === 0, `[Voz] sin errores de JavaScript (${sinRuido(errores).length})`);
+  sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
+  await contexto.close();
+  await navegadorVoz.close();
+}
+
 /* ── 8) Retirada de la función Kindle ──────────────────────────────── */
 console.log('\n── Retirada del asistente Kindle ───────────────');
 {

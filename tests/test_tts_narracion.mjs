@@ -58,6 +58,9 @@ const piezas = [
   ['ttsUnirConectoresIngles', 'function'],
   ['ttsBuscarCorte', 'function'], ['ttsEscalonarCola', 'function'],
   ['ttsCrearColaTexto', 'function'], ['ttsCrearCola', 'function'],
+  ['TTS_SEG_POR_CARACTER', 'const'],
+  ['ttsQueueText', 'function'], ['ttsDuracionBloque', 'function'],
+  ['ttsCaracteresABloque', 'function'], ['ttsSegundosDePosicion', 'function'],
 ];
 
 const fuente = [];
@@ -78,13 +81,15 @@ if (typeof globalThis.jgCfgGet !== 'function') globalThis.jgCfgGet = () => '';
 try {
   // eslint-disable-next-line no-new-func
   const construir = new Function(`${fuente.join('\n')}
-    return { ttsNormalizarTextoNarracion, ttsPareceTokenIngles, TTS_ES_ACRONYMS, ttsPartirTexto, ttsCrearCola };`);
+    return { ttsNormalizarTextoNarracion, ttsPareceTokenIngles, TTS_ES_ACRONYMS, ttsPartirTexto, ttsCrearCola, ttsCaracteresABloque, ttsSegundosDePosicion };`);
   const api = construir();
   narrar = api.ttsNormalizarTextoNarracion;
   pareceIngles = api.ttsPareceTokenIngles;
   acronimos = api.TTS_ES_ACRONYMS;
   var partir = api.ttsPartirTexto;
   var encolar = api.ttsCrearCola;
+  var aBloque = api.ttsCaracteresABloque;
+  var aSegundos = api.ttsSegundosDePosicion;
 } catch (error) {
   console.error(`FALLO: no se pudieron evaluar las funciones — ${error.message}`);
   process.exit(1);
@@ -264,6 +269,30 @@ try {
   comprobar(otra.some((b) => !b.silencio && b.text === 'Índice.'),
     'fuera de unified todo sigue igual («Índice.» viaja solo)');
   comprobar(voces[0].text.includes('plaza'), 'al unir no se pierde texto');
+}
+
+/* ── Posición por caracteres al cambiar de voz (P2.1) ────────────────
+ * Con otra voz los bloques no son los mismos (Fish 290 frente a neural
+ * 900): el punto se guarda como carácter y se busca en la cola nueva, en la
+ * misma frase (±1 bloque). */
+{
+  const base = 'En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor. ';
+  const texto = base.repeat(8);
+  const cola290 = encolar(texto, 'es', 290, 'off').filter((b) => !b.silencio);
+  const cola900 = encolar(texto, 'es', 900, 'off').filter((b) => !b.silencio);
+  comprobar(cola290.length > cola900.length && cola900.length >= 2, 'las dos voces parten distinto (290 frente a 900)');
+  /* Mitad del tercer bloque Fish: tiene que caer en el mismo tramo en neural. */
+  let acum = 0;
+  for (let i = 0; i < 2 && i < cola290.length; i += 1) acum += cola290[i].text.length + 1;
+  const pos = acum + Math.floor(cola290[2].text.length / 2);
+  const dest = aBloque(cola900, pos);
+  const suena290 = `${cola290[2].text} ${cola290[3] ? cola290[3].text : ''}`.toLowerCase();
+  const suena900 = cola900[dest.bloque].text.toLowerCase();
+  const palabras = suena290.split(/\s+/).filter((w) => w.length > 5).slice(0, 4);
+  comprobar(palabras.some((w) => suena900.includes(w)), 'el carácter cae en la misma frase con la otra voz');
+  comprobar(aSegundos(cola900, pos) > 0 && aSegundos(cola900, pos) <= 3600, 'el carácter se convierte a segundos válidos');
+  const fin = aBloque(cola900, 10 ** 9);
+  comprobar(fin.bloque === cola900.length - 1, 'más allá del final se queda en el último bloque');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

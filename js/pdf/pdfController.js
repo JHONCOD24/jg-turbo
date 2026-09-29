@@ -6950,7 +6950,10 @@ export function inicializarLectorPdf(deps = {}) {
 
     if (typeof window.ttsHablar === 'function') {
       const trozo = texto.slice(desde);
-      window.ttsHablar(trozo, { sourceId: 'pdf', langHint: 'es' });
+      /* P2.1: se anota desde dónde del capítulo sale el trozo, para que un
+       * cambio de voz posterior vuelva al mismo carácter y no a una fracción
+       * de una cola que ya no existe. */
+      window.ttsHablar(trozo, { sourceId: 'pdf', langHint: 'es', desdeCaracter: desde });
       avisar('Leyendo desde aquí.', 'info', { efimero: true });
       return;
     }
