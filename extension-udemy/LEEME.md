@@ -10,6 +10,11 @@ Se probó con una clase falsa, no con Udemy real. La prueba real la hace el due�
 4. Recarga una clase en inglés, activa CC en inglés y dale play unos segundos.
 5. Abre el icono de JG Turbo y pulsa «Doblar al español»; deja el panel abierto.
 
+Se abre la extensión desde el botón de extensiones de Chrome (la pieza de
+rompecabezas), no la aplicación web JG Turbo. Para actualizar esta versión:
+cierra el panel, abre `chrome://extensions`, busca «JG Turbo | Udemy» y pulsa
+su flecha circular de recarga. Después recarga la clase y abre otra vez la extensión.
+
 ## Lista de la prueba real
 
 - [ ] Una clase de cinco minutos o más suena en español completa, sin frases cortadas.

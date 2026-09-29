@@ -1589,3 +1589,9 @@ y comparar su pathname con el observado. Probar dos clases, no solo la primera.
 redefinir una propiedad JavaScript del video en MAIN no modifica el wrapper del
 script aislado. **Regla:** simular la reversión sobre la propiedad DOM nativa en
 `ratechange` y contar las órdenes posteriores para detectar insistencia.
+
+**Síntoma:** el dueño recargó la clase y «Doblar» quedó desactivado con el panel
+abierto. **Causa:** la recarga destruye el Port del documento y el panel solo
+reintentaba el primer arranque fallido. **Regla:** probar recarga con panel abierto
+y recuperar la conexión con intentos limitados; habilitar Doblar solo al recibir
+estado del video, no solo por crear un Port.

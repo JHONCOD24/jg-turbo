@@ -72,6 +72,10 @@ try {
   const panel = await contexto.newPage();
   await panel.goto(`chrome-extension://${id}/panel.html?tab=${tabId}${process.argv.includes('--puente') ? '&soloDiagnostico=1' : ''}`);
   if (!process.argv.includes('--puente')) {
+    await panel.waitForFunction(() => !document.getElementById('doblar').disabled);
+    await pagina.reload({ waitUntil: 'load' });
+    await panel.waitForFunction(() => !document.getElementById('doblar').disabled, null, { timeout: 10000 });
+    comprobar(true, 'recargar la clase con panel abierto recupera conexion y habilita Doblar');
     await panel.evaluate(() => {
       globalThis.audiosProbados = new Set();
       const play = HTMLMediaElement.prototype.play;
@@ -110,7 +114,7 @@ try {
     comprobar(await pagina.locator('video').evaluate((v) => !v.muted && v.playbackRate === 1), 'detener panel restaura volumen silencio y velocidad');
     comprobar(await pagina.locator('[data-jg-subtitulo]').count() === 0, 'detener retira subtitulo');
     comprobar(udemyPeticiones === udemyInicial, 'cero peticiones propias del doblaje a Udemy');
-    comprobar(vttPeticiones === 2, 'solo una peticion extra VTT en la clase');
+    comprobar(vttPeticiones === 3, 'dos cargas de pagina y solo una peticion extra VTT en la clase');
     comprobar(origenesVtt.every((origen) => origen === 'https://www.udemy.com'), 'VTT se pide desde el origen de la pagina');
 
     await panel.getByRole('button', { name: 'Doblar al español' }).click();
@@ -134,7 +138,7 @@ try {
     await pagina.waitForFunction(() => document.querySelector('video').volume === .61 && document.querySelector('video').muted && document.querySelector('video').playbackRate === 1.25);
     comprobar(true, 'cerrar panel restaura tambien silencio y velocidad originales de la nueva clase');
     comprobar(await pagina.locator('[data-jg-subtitulo]').count() === 0, 'cerrar retira subtitulo');
-    comprobar(vttPeticiones === 4, 'segunda clase tambien tiene una sola peticion extra VTT');
+    comprobar(vttPeticiones === 5, 'segunda clase tambien tiene una sola peticion extra VTT');
 
     async function abrirCaso(parametro) {
       const clase = await contexto.newPage();

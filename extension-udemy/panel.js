@@ -213,7 +213,7 @@ for (const clave of ['voz', 'acento', 'volVoz', 'volOriginal', 'ritmoAuto', 'sub
   });
 }
 
-async function conectar(intentos = 3) {
+async function conectar(intentos = 5) {
   try {
     preferencias = await leerPreferencias(); pintarPreferencias();
     const tab = await pestanaClase();
@@ -243,12 +243,12 @@ async function conectar(intentos = 3) {
       if (esperandoClase && !mensaje.pausado && !mensaje.terminado) { esperandoClase = false; iniciar(); }
     });
     puerto.onDisconnect.addListener(() => {
-      const errorConexion = chrome.runtime.lastError;
-      detener('Se perdió la conexión con la clase. Recarga la extensión y vuelve a abrir el panel.');
+      void chrome.runtime.lastError;
+      detener('No se pudo conectar con la clase. Cierra este panel y vuelve a abrir la extensión desde la pestaña de Udemy.');
       ui.doblar.disabled = true;
-      if (!recibioEstado && errorConexion && intentos > 0) {
+      if (recibioEstado || intentos > 0) {
         estado.textContent = 'Esperando a que termine de cargar la clase…';
-        setTimeout(() => conectar(intentos - 1), 300);
+        setTimeout(() => conectar(recibioEstado ? 4 : intentos - 1), recibioEstado ? 500 : (6 - intentos) * 500);
       }
     });
     estado.textContent = 'Activa los subtítulos en inglés y pulsa Doblar al español.';

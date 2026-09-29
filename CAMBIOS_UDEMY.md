@@ -45,3 +45,13 @@ recargar la clase y activar CC en inglés.
 
 El trabajo continúa en `tmp/udemy-trabajo`, en la rama `feat/udemy-doblaje`,
 porque el checkout principal está siendo utilizado por otro trabajo del lector PDF.
+
+## Corrección durante la prueba del dueño
+
+La captura mostró el panel desconectado y Doblar desactivado tras recargar la clase.
+Se reprodujo con la página falsa: la prueba nueva falló por tiempo agotado antes
+del arreglo. Ahora el panel reintenta conectarse después de la recarga, con espera
+creciente y límite de intentos, sin navegar ni pedir recursos de Udemy.
+La prueba completa pasó con 27 comprobaciones; las unitarias siguen en 100.
+Regresiones: YouTube sincronía 74, doblaje 139 y X 70, cero fallos.
+La validación real continúa pendiente del dueño.
