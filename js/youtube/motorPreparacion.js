@@ -12,7 +12,7 @@ import {
   siguienteLoteTraduccion, unidadesAGenerar, segundosCubiertos, segundosTraducidos,
   HORIZONTE_TRADUCCION_S, HORIZONTE_VOZ_S, VOZ_INICIAL_S, LOTE_ARRANQUE,
 } from './planificador.js';
-import { textoDeUnidad } from './dubbingService.js';
+import { prepararTextoDeUnidad } from './dubbingService.js';
 import { esLimiteDeUso } from './translationService.js';
 import { fraccionesDeUnidad } from './ritmoDoblaje.js';
 import { crearReloj } from './reloj.js';
@@ -150,7 +150,7 @@ export class MotorPreparacion {
   #rellenarUnidades() {
     for (const unidad of this.servicioVoz.unidades) {
       if (unidad.estado !== 'sin_traducir') continue;
-      const texto = textoDeUnidad(unidad, this.traducciones);
+      const texto = prepararTextoDeUnidad(this.servicioVoz.unidades, unidad.indice, this.traducciones);
       if (texto === null) continue;
       // Fracciones de cada segmento dentro de la frase: el subtítulo sigue a la voz.
       this.servicioVoz.fijarTexto(unidad.indice, texto, fraccionesDeUnidad(unidad, (i) => this.traducciones.get(i)));

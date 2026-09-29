@@ -101,6 +101,39 @@ export function textoDeUnidad(unidad, traducciones) {
   return partes.join(' ').replace(/\s+/g, ' ').trim();
 }
 
+/** Une continuaciones traducidas ANTES de generar voz, sin mover indices vivos. */
+export function prepararTextoDeUnidad(unidades, indice, traducciones) {
+  const unidad = unidades[indice];
+  if (!unidad || unidad.estado !== 'sin_traducir') return null;
+  let texto = textoDeUnidad(unidad, traducciones);
+  if (!texto) return texto;
+  const absorbidas = [];
+  let ultima = unidad;
+  for (let i = indice + 1; i < unidades.length && !/[.!?…,:;]["'»)\]]?$/.test(texto); i++) {
+    const siguiente = unidades[i];
+    if (siguiente.estado !== 'sin_traducir' || siguiente.hablante !== unidad.hablante
+      || siguiente.startTime - ultima.finHabla > MAXIMO_SALTO
+      || siguiente.finHabla - unidad.startTime > 18) break;
+    const continuacion = textoDeUnidad(siguiente, traducciones);
+    if (continuacion === null) return null;
+    if (!continuacion || texto.length + continuacion.length + 1 > 600) break;
+    texto += ' ' + continuacion;
+    absorbidas.push(siguiente); ultima = siguiente;
+  }
+  if (absorbidas.length) {
+    unidad.hasta = ultima.hasta;
+    unidad.finHabla = ultima.finHabla;
+    unidad.endTime = ultima.endTime;
+    unidad.duration = unidad.endTime - unidad.startTime;
+    unidad.textoOriginal += ' ' + absorbidas.map((u) => u.textoOriginal).join(' ');
+    for (const parte of absorbidas) {
+      parte.estado = 'sin_voz'; parte.text = '';
+      parte.startTime = unidad.endTime; parte.endTime = unidad.endTime; parte.duration = 0;
+    }
+  }
+  return texto;
+}
+
 /**
  * Duración de un audio por su tamaño, sin decodificarlo. La voz neural llega en
  * MP3 de 48 kbps fijos (`audio-24khz-48kbitrate-mono-mp3`, Azure y Edge) y la de
