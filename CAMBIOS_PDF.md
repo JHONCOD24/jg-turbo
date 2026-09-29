@@ -47,6 +47,20 @@ documentado desde v2.81.0). `test_pdf_continuidad`, `test_tts_narracion`,
 en verde. La prueba real con pantalla apagada solo se puede hacer en el
 dominio: anotada para la verificación final.
 
+## 2026-09-29 · P2.3 · El precalentado acierta a la primera (V-08)
+
+El prefetch calentaba un slice de 500 caracteres con maxLen 500, mientras
+la cola real usa 290/340/900: otra dirección de caché, una síntesis
+gastada sin beneficio. Y peor: pedía `window.ttsFetchNeuralChunk`, que no
+está expuesta — el precalentado no corría nunca.
+
+**Cambio:** `window.ttsCalentarPdf(textoYaPreparado, idioma)` construye el
+primer bloque REAL con el maxChunk y el modo de la lectura (unified/off
+según Fish) y lo pide fire-and-forget; los dos prefetch del PDF lo llaman.
+Si el capítulo abre con título, calienta el primer bloque con voz (el
+silencio nunca se pide). Verificado en navegador: el calentado es byte a
+byte el primer bloque del capítulo siguiente en la cola.
+
 ## 2026-09-29 · P2.2 · La guía sigue lo hablado, no el archivo (S-03)
 
 La marca avanzaba con la duración del archivo, que trae ~0,21 s delante y

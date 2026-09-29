@@ -4598,27 +4598,17 @@ export function inicializarLectorPdf(deps = {}) {
 
     // Prefetch del siguiente capítulo en segundo plano para encadenado sin huecos
     const siguienteIndice = estado.parteActual + 1;
-    if (estado.partes[siguienteIndice] && typeof window.ttsFetchNeuralChunk === 'function') {
+    if (estado.partes[siguienteIndice] && typeof window.ttsCalentarPdf === 'function') {
       try {
         const proximoBrutoPrefetch = textoDeParte(siguienteIndice) || estado.partes[siguienteIndice]?.texto || '';
         if (proximoBrutoPrefetch.trim()) {
           const langPrefetch = estado.vista === 'es' ? 'es' : idiomaActual();
           const textoPrefetch = prepararParaVoz(proximoBrutoPrefetch, langPrefetch);
-          // Calentar el primer bloque (~500 caracteres) en caché GET del servidor/CDN
-          const primerChunk = textoPrefetch.slice(0, 500);
-          if (primerChunk.length > 40) {
-            setTimeout(() => {
-              try {
-                const prefs = typeof ttsPrefs === 'function' ? ttsPrefs() : { preferFish: false };
-                /* El PDF lee en modo 'unified' (una sola voz): el precalentado
-                 * usa el mismo modo para que la caché sirva a la cola real. */
-                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, 'unified') : [];
-                if (probe && probe[0] && typeof window.ttsFetchNeuralChunk === 'function') {
-                  window.ttsFetchNeuralChunk(probe[0], prefs, 1, 'pdf').catch(()=>{});
-                }
-              } catch (_) {}
-            }, 1200);
-          }
+          /* P2.3: el motor calienta el primer bloque REAL (mismo maxChunk y
+           * modo que la cola); el probe viejo de 500 caracteres con maxLen 500 nunca acertaba la dirección de caché. */
+          setTimeout(() => {
+            try { window.ttsCalentarPdf(textoPrefetch, langPrefetch); } catch (_) {}
+          }, 1200);
         }
       } catch (_) {}
     }
@@ -6990,26 +6980,17 @@ export function inicializarLectorPdf(deps = {}) {
     if (cfg.modoPagina !== 'scroll') return;
 
     const siguienteIndice = estado.parteActual + 1;
-    if (estado.partes && estado.partes[siguienteIndice] && typeof window.ttsFetchNeuralChunk === 'function') {
+    if (estado.partes && estado.partes[siguienteIndice] && typeof window.ttsCalentarPdf === 'function') {
       try {
         const proximoBruto = textoDeParte(siguienteIndice) || estado.partes[siguienteIndice]?.texto || '';
         if (proximoBruto.trim()) {
           const langPrefetch = estado.vista === 'es' ? 'es' : idiomaActual();
           const textoPrefetch = prepararParaVoz(proximoBruto, langPrefetch);
-          const primerChunk = textoPrefetch.slice(0, 500);
-          if (primerChunk.length > 40) {
-            setTimeout(() => {
-              try {
-                const prefs = typeof ttsPrefs === 'function' ? ttsPrefs() : { preferFish: false };
-                /* El PDF lee en modo 'unified' (una sola voz): el precalentado
-                 * usa el mismo modo para que la caché sirva a la cola real. */
-                const probe = typeof ttsCrearCola === 'function' ? ttsCrearCola(primerChunk, langPrefetch, 500, 'unified') : [];
-                if (probe && probe[0] && typeof window.ttsFetchNeuralChunk === 'function') {
-                  window.ttsFetchNeuralChunk(probe[0], prefs, 1, 'pdf').catch(()=>{});
-                }
-              } catch (_) {}
-            }, 1500);
-          }
+          /* P2.3: el motor calienta el primer bloque REAL (mismo maxChunk y
+           * modo que la cola); el probe viejo de quinientos caracteres con maxLen 500 nunca acertaba la dirección de caché. */
+          setTimeout(() => {
+            try { window.ttsCalentarPdf(textoPrefetch, langPrefetch); } catch (_) {}
+          }, 1500);
         }
       } catch (_) {}
     }

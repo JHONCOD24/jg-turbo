@@ -963,8 +963,17 @@ for (const modo of ['paginas', 'scroll']) {
   comprobar(analisis.maxHueco < 3000, `[${etiqueta}] todo ended tiene play inmediato (hueco máx. ${analisis.maxHueco} ms)`);
   comprobar(analisis.finalizadaAMitad === false, `[${etiqueta}] sin «Lectura finalizada» a mitad del libro`);
   /* P1.3: el audiolibro prepara el texto ANTES de hablar, así que el motor
-   * no lo vuelve a preparar (una sola pasada por camino). */
+   * no lo vuelve a preparar (una sola pasada por camino). P2.3: al arrancar
+   * calienta el primer bloque REAL del capítulo siguiente. Se detiene y se
+   * vuelve al capítulo 0 (sin voz la vista no sigue sola) para que haya
+   * siguiente que calentar. */
   if (modo === 'paginas') {
+    await pagina.locator('[data-tts-console="pdf"] [data-tts-action="stop"]').click().catch(() => {});
+    await pagina.waitForTimeout(400);
+    await pagina.locator('#btnPdfPrev').click().catch(() => {});
+    await pagina.waitForTimeout(500);
+    await pagina.locator('#btnPdfPrev').click().catch(() => {});
+    await pagina.waitForTimeout(500);
     await pagina.evaluate(() => {
       const m = document.getElementById('pdfMasMenu');
       if (m) m.open = true;
@@ -977,6 +986,27 @@ for (const modo of ['paginas', 'scroll']) {
     comprobar(
       await pagina.evaluate(() => { try { return window.ttsState && window.ttsState.capaVoz; } catch (_) { return '?'; } }) === 'omitida',
       '[Páginas] el audiolibro no repite la capa de voz (una sola pasada)'
+    );
+    await pagina.waitForFunction(() => {
+      try { return window.ttsState && window.ttsState.calentado && window.ttsState.calentado.texto; } catch (_) { return false; }
+    }, null, { timeout: 20000 }).catch(() => {});
+    /* La continuidad encola el capítulo siguiente al acercarse (colchón). */
+    await pagina.waitForFunction(() => {
+      try { return window.ttsState && window.ttsState.pdfCaps && window.ttsState.pdfCaps.length >= 2; } catch (_) { return false; }
+    }, null, { timeout: 90000 }).catch(() => {});
+    comprobar(
+      await pagina.evaluate(() => {
+        try {
+          const calentado = window.ttsState.calentado && window.ttsState.calentado.texto;
+          if (!calentado) return false;
+          const q = window.ttsState.queue || [];
+          const actual = window.ttsState.pdfCaps && window.ttsState.pdfCaps.length
+            ? window.ttsState.pdfCaps[0].indice : -1;
+          const primero = q.find((b) => b && !b.silencio && b.pdfCap === actual + 1 && String(b.text || '').trim());
+          return !!primero && primero.text === calentado;
+        } catch (_) { return false; }
+      }),
+      '[Páginas] el calentado es el primer bloque real del capítulo siguiente'
     );
     await pagina.locator('#btnPdfAudiolibro').click();
     await pagina.waitForTimeout(400);

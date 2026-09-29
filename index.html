@@ -16860,6 +16860,32 @@ function ttsCaerANavegador(indice, token, error){
   ttsHablarBrowserDesde(indice, token);
 }
 
+/* Precalentado del capítulo siguiente del PDF (P2.3): calienta el PRIMER
+ * bloque REAL (mismo texto y tamaño que la cola: maxChunk y modo de la
+ * lectura) para que su primera petición salga de caché. El probe viejo de
+ * 500 caracteres con maxLen 500 nunca acertaba la dirección y además pedía
+ * una función que no está expuesta, así que no calentaba nada. Visible en
+ * ttsState.calentado para que las pruebas lo comprueben sin oler la red. */
+function ttsCalentarPdf(textoPreparado, langHint){
+  try{
+    const prefs = (typeof ttsPrefs === 'function') ? ttsPrefs() : null;
+    if(!prefs) return false;
+    const limpio = String(textoPreparado || '').trim();
+    if(limpio.length <= 40) return false;
+    const codigo = String(langHint || 'es').slice(0, 2);
+    const modo = (codigo !== 'es' && codigo !== 'en') ? 'off' : (prefs.preferFish ? 'unified' : 'off');
+    const probe = ttsCrearCola(limpio, langHint || 'es', ttsMaxBloque(prefs), modo);
+    /* El primer bloque con voz (si el capítulo abre con título, el [0] es su
+     * silencio de 700 ms y ese nunca se pide al servidor). */
+    const primero = (probe || []).find((b) => b && !b.silencio && String(b.text || '').trim());
+    if(!primero) return false;
+    ttsState.calentado = { texto: String(primero.text), momento: Date.now() };
+    ttsFetchNeuralChunk(primero, prefs, 1, 'pdf').catch(()=>{});
+    return true;
+  }catch(_){ return false; }
+}
+if (typeof window !== 'undefined') window.ttsCalentarPdf = ttsCalentarPdf;
+
 /* Audiolibro: leer un documento largo parte por parte sin que la persona
  * tenga que tocar nada entre capítulos. El lector de PDF registra aquí cómo
  * pedir la parte siguiente; el motor de voz no necesita saber nada más. */

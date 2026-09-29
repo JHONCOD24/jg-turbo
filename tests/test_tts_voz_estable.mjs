@@ -42,11 +42,23 @@ comprobar(!html.includes('voz de respaldo · revisa tu conexión'),
 comprobar(html.includes('}, 900000);'),
   'el aviso de respaldo solo se rearma a los 15 minutos');
 
-/* El prefetch calienta lo mismo que se va a oír. */
+/* El prefetch calienta lo mismo que se va a oír (P2.3): el probe viejo de
+ * 500 caracteres con maxLen 500 nunca acertaba la dirección de caché (y pedía
+ * una función que ni siquiera está expuesta). Ahora el motor ofrece
+ * window.ttsCalentarPdf, que construye el primer bloque REAL con el maxChunk
+ * y el modo de la lectura. */
 comprobar(!controlador.includes("prefs.bilingualMode || 'regional'"),
   'el prefetch ya no calienta en modo regional');
-comprobar((controlador.match(/ttsCrearCola\(primerChunk, langPrefetch, 500, 'unified'\)/g) || []).length === 2,
-  'los dos prefetch del PDF calientan en unified, como la lectura');
+comprobar(!controlador.includes('ttsCrearCola(primerChunk, langPrefetch, 500'),
+  'fuera el probe de 500 caracteres que nunca acertaba');
+comprobar(/function ttsCalentarPdf\(textoPreparado, langHint\)/.test(html),
+  'el motor expone ttsCalentarPdf(texto ya preparado, idioma)');
+comprobar(/ttsCrearCola\(limpio, langHint \|\| 'es', ttsMaxBloque\(prefs\), modo\)/.test(html),
+  'el calentado construye el primer bloque real con maxChunk y modo');
+comprobar(/prefs\.preferFish \? 'unified' : 'off'/.test(html),
+  'el calentado usa el mismo modo que la lectura (unified/off)');
+comprobar((controlador.match(/window\.ttsCalentarPdf\(/g) || []).length === 2,
+  'los dos prefetch del PDF llaman al calentado del motor');
 
 /* Sin regresiones de la corrección anterior. */
 comprobar(html.includes('el.preservesPitch = true'),
