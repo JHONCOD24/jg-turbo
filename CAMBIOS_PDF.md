@@ -83,6 +83,25 @@ sus listas de nombres, que solo se resuelven con los marcadores del PDF
 (C-02/P3.2). Pruebas: `test_tts_narracion` (coma, conector, espacio último
 recurso, URL entera) y `test_pdf_voz` (pausas de drill) en verde.
 
+## 2026-09-29 · P1.7 · Títulos diminutos unidos y mayúsculas a caja de oración
+
+**Diminutos (`index.html` `ttsCrearCola`, solo unified):** un bloque de voz
+de menos de 25 letras se une al siguiente; su pausa queda delante como
+silencio previo. Medido: bloques <25 en los 5 libros = **0** (antes 81 / 21
+/ 16 / 31 / 59), incluido el fin de libro. Prueba en `test_tts_pausas.mjs`
+(silencio previo + unión) y en `test_tts_narracion.mjs` (fuera de unified
+todo igual).
+
+**Mayúsculas (`js/pdf/vozTexto.js`, solo la copia hablada):** rachas en
+mayúsculas a caja de oración («CAPÍTULO CUATRO» → «Capítulo cuatro»,
+«CENTROS ENERGÉTICOS DEL CUERPO» → «Centros energéticos del cuerpo»).
+Intactos: siglas conocidas («ONU», «UNESCO»), cifras («H2O», «MP3»),
+romanos puros («XXIII») y palabras sueltas cortas. El compacto de la guía
+va en minúsculas: el ancla no se mueve. Pruebas en `test_pdf_voz.mjs`.
+Dos expectativas viejas se actualizaron con motivo en el commit (TRAMPAS
+§2): el rótulo («Capitulo dos»: el romano se convierte igual) y la palabra
+con tracking («Peticion» junta: lo que importa es que no se deletrea).
+
 ## 2026-09-29 · P1.3 · La capa de voz corre una sola vez por camino (y es idempotente)
 
 Medido en los 5 libros: `prepararParaVoz(prepararParaVoz(x))` daba distinto

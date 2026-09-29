@@ -52,6 +52,12 @@ const piezas = [
   ['TTS_CONECTORES_CORTE', 'const'],
   ['ttsCorteClausula', 'function'], ['ttsPartirOraciones', 'function'],
   ['ttsPartirTexto', 'function'],
+  ['TTS_ESCALON', 'const'], ['TTS_IDIOMAS_VOZ', 'const'],
+  ['ttsEscapeRegex', 'function'], ['ttsTerminosIngles', 'function'],
+  ['ttsDetectarIdiomaFrase', 'function'], ['ttsSegmentarTerminosIngles', 'function'],
+  ['ttsUnirConectoresIngles', 'function'],
+  ['ttsBuscarCorte', 'function'], ['ttsEscalonarCola', 'function'],
+  ['ttsCrearColaTexto', 'function'], ['ttsCrearCola', 'function'],
 ];
 
 const fuente = [];
@@ -67,15 +73,18 @@ for (const [nombre, tipo] of piezas) {
 if (fallos) { console.error('\nNo se pudo preparar la prueba.'); process.exit(1); }
 
 let narrar; let pareceIngles; let acronimos;
+/* ttsTerminosIngles lee el glosario del usuario: en la prueba no hay. */
+if (typeof globalThis.jgCfgGet !== 'function') globalThis.jgCfgGet = () => '';
 try {
   // eslint-disable-next-line no-new-func
   const construir = new Function(`${fuente.join('\n')}
-    return { ttsNormalizarTextoNarracion, ttsPareceTokenIngles, TTS_ES_ACRONYMS, ttsPartirTexto };`);
+    return { ttsNormalizarTextoNarracion, ttsPareceTokenIngles, TTS_ES_ACRONYMS, ttsPartirTexto, ttsCrearCola };`);
   const api = construir();
   narrar = api.ttsNormalizarTextoNarracion;
   pareceIngles = api.ttsPareceTokenIngles;
   acronimos = api.TTS_ES_ACRONYMS;
   var partir = api.ttsPartirTexto;
+  var encolar = api.ttsCrearCola;
 } catch (error) {
   console.error(`FALLO: no se pudieron evaluar las funciones — ${error.message}`);
   process.exit(1);
@@ -235,6 +244,26 @@ try {
   const reconstruido = b3.join(' ').replace(/\s+/g, ' ').trim();
   comprobar(reconstruido.includes('Inicio') && reconstruido.includes('fin de la frase'),
     'al juntar los bloques no se pierde texto');
+}
+
+/* ── Títulos diminutos con el bloque siguiente (P1.7) ────────────────
+ * Menos de 25 letras no se sintetiza solo en unified (así lee el PDF); la
+ * pausa de título queda delante como silencio y en los demás modos todo
+ * sigue igual. */
+{
+  const frase = 'Los niños salieron a la plaza con sus juguetes nuevos y las madres conversaban en las esquinas.';
+  const cola = encolar(`Índice. §P0700§ ${frase}`, 'es', 40, 'unified');
+  const voces = cola.filter((b) => !b.silencio);
+  comprobar(voces.length >= 1 && voces[0].text.startsWith('Índice.') && voces[0].text.length > 8,
+    'en unified el diminuto se une al bloque siguiente');
+  comprobar(cola.some((b) => b.silencio && b.pausaMs === 700),
+    'y la pausa de título se conserva como silencio previo');
+  comprobar(voces.filter((b) => b.text.length < 25).length <= 1,
+    'en unified no quedan diminutos sueltos (salvo fin de texto)');
+  const otra = encolar(`Índice. §P0700§ ${frase}`, 'es', 40, 'regional');
+  comprobar(otra.some((b) => !b.silencio && b.text === 'Índice.'),
+    'fuera de unified todo sigue igual («Índice.» viaja solo)');
+  comprobar(voces[0].text.includes('plaza'), 'al unir no se pierde texto');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

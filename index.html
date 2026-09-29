@@ -15587,6 +15587,26 @@ function ttsCrearCola(texto, langHint, maxLen, mode){
       cola.push({ text:'', lang: String(langHint || 'es').slice(0,2), estado:'listo', dur: ms/1000, url:null, promesa:null, pausaMs: ms, silencio:true });
     }
   }
+  /* P1.7: los títulos diminutos (menos de 25 letras) no se sintetizan solos:
+   * los motores tipo LLM son menos estables con entradas tan cortas. Se unen
+   * al bloque de voz siguiente y la pausa de título queda delante como
+   * silencio previo. Solo en unified, que es como lee el PDF; las demás
+   * pestañas quedan igual. */
+  if(mode === 'unified'){
+    for(let i = 0; i < cola.length;){
+      const cur = cola[i];
+      if(!cur || cur.silencio || cur.text.length >= 25){ i += 1; continue; }
+      /* Se salta la pausa (queda delante como silencio previo) y los huecos,
+       * hasta el siguiente bloque con voz; sin él (fin del libro), se queda. */
+      let j = i + 1;
+      while(j < cola.length && cola[j] && (cola[j].silencio || !String(cola[j].text || '').trim())) j += 1;
+      const sig = cola[j];
+      if(sig && !sig.silencio && sig.text && cur.lang === sig.lang){
+        sig.text = (cur.text + ' ' + sig.text).replace(/\s+/g, ' ').trim();
+        cola.splice(i, 1);
+      }else{ i += 1; }
+    }
+  }
   return cola;
 }
 

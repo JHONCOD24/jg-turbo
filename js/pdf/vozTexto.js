@@ -633,6 +633,35 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     return palabra.charAt(0).toUpperCase() + palabra.slice(1);
   });
 
+  /* Mayúsculas a caja de oración, solo en la copia que se habla (P1.7):
+   * «CAPÍTULO CUATRO», «CENTROS ENERGÉTICOS». Algunos motores deletrean o
+   * acentúan raro el texto en mayúsculas sostenidas. Una palabra suelta de
+   * 5 o más se capitaliza («PRHGE» → «Prhge»); en una racha de mayúsculas
+   * («CENTROS ENERGÉTICOS DEL CUERPO») la primera manda y el resto baja,
+   * salvo sigla conocida («ONU») o cifra («H2O», «MP3»). Los romanos puros
+   * («XXIII») no se tocan: ya sonaban deletreados y no hay por qué
+   * cambiarles el sonido en esta pasada. Va después de los romanos de
+   * capítulo («XVII» ya es «Diecisiete»), y el compacto de la guía va en
+   * minúsculas, así que el ancla no se mueve. */
+  const SIGLAS_MAYUSCULAS = new Set([
+    'ONU', 'EEUU', 'USA', 'UE', 'OTAN', 'OMS', 'OIT', 'OEA', 'FMI', 'BCE',
+    'BID', 'UNESCO', 'UNICEF', 'ACNUR', 'FAO', 'ONG', 'PIB', 'IVA', 'NIT',
+    'DNI', 'RAE', 'DANE', 'FIFA', 'COI', 'MERCOSUR', 'OCDE', 'OPEP',
+  ]);
+  salida = salida.replace(/\b[A-ZÁÉÍÓÚÑÜ]{2,}\b(?:\s+\b[A-ZÁÉÍÓÚÑÜ]{2,}\b)*/gu, (racha) => {
+    const palabras = racha.split(/\s+/);
+    const suelta = palabras.length === 1;
+    return palabras.map((w, i) => {
+      /* Sigla, cifra o romano puro: intactos siempre. */
+      if (SIGLAS_MAYUSCULAS.has(w) || /\d/.test(w)
+        || (/^[IVXLCDM]+$/.test(w) && romanoANumero(w) > 0)) return w;
+      /* Suelta y corta («DEL», «LOS»): sin contexto no se sabe si es sigla. */
+      if (suelta && w.length <= 4) return w;
+      const base = w.toLowerCase();
+      return i === 0 ? base.charAt(0).toUpperCase() + base.slice(1) : base;
+    }).join(' ');
+  });
+
   if (comasProsodicas) {
     /* Coma antes del conector solo si no había ya un signo delante. */
     salida = salida.replace(CONECTORES_PAUSA, (coincidencia, conector, desplazamiento, completo) => {

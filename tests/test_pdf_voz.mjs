@@ -74,9 +74,10 @@ const conPausaTitulo = (sale, titulo) =>
   comprobar(JSON.stringify(palabras(entra)) === JSON.stringify(palabras(sale)),
     'el CUERPO del texto no cambia ninguna palabra: solo signos');
 
-  /* Y el rótulo, la única excepción, cambia solo el número. */
+  /* Y el rótulo, la única excepción, cambia solo el número (la caja la pone
+   * P1.7: «CAPITULO» en mayúsculas sostenidas suena mejor como «Capitulo»). */
   const conRotulo = prepararParaVoz('CAPITULO II\n\nQuiso llegar temprano pero el tren se retraso.', 'es');
-  comprobar(/CAPITULO dos/.test(conRotulo), 'el romano del rotulo se dice como numero');
+  comprobar(/Capitulo dos/.test(conRotulo), 'el romano del rotulo se dice como numero');
   comprobar(/Quiso llegar temprano, pero el tren se retraso\./.test(conRotulo),
     'y el parrafo que le sigue llega intacto');
 }
@@ -412,8 +413,8 @@ const conPausaTitulo = (sale, titulo) =>
   comprobar(sanearTextoParaVoz('U S A grande.') === 'U S A grande.',
     'con 3 letras o menos se conserva el espaciado (sigla: deletrear es correcto)');
   const vozEspaciada = prepararParaVoz('La P E T I C I O N fue clara y justa.', 'es');
-  comprobar(!/P E T I C I O N/.test(vozEspaciada) && vozEspaciada.includes('PETICION'),
-    'prepararParaVoz entrega la palabra junta al motor');
+  comprobar(!/P E T I C I O N/.test(vozEspaciada) && /peticion/i.test(vozEspaciada),
+    'prepararParaVoz entrega la palabra junta al motor (la caja la pone P1.7)');
   comprobar(sanearTextoParaVoz('') === '' && sanearTextoParaVoz(null) === '',
     'el saneado no rompe con vacío ni null');
 }
@@ -429,6 +430,22 @@ const conPausaTitulo = (sale, titulo) =>
   comprobar(paso.includes('§P0700§'), 'el paso numerado recibe su pausa');
   const prosa = prepararParaVoz('Hacemos el ejercicio: respirar hondo cada mañana sin falta.', 'es');
   comprobar(!prosa.includes('§P0700§'), 'en mitad de la frase no se parte («el ejercicio: …»)');
+}
+
+/* ── Mayúsculas largas a caja de oración, solo al hablar (P1.7) ────── */
+{
+  comprobar(prepararParaVoz('CAPÍTULO CUATRO\n\nTexto del capítulo.', 'es').includes('Capítulo cuatro'),
+    '«CAPÍTULO CUATRO» suena en caja de oración');
+  comprobar(prepararParaVoz('CENTROS ENERGÉTICOS DEL CUERPO', 'es').includes('Centros energéticos'),
+    'el título en mayúsculas se normaliza sin perder palabras');
+  comprobar(prepararParaVoz('La ONU y el DANE publican el informe.', 'es').includes('ONU')
+    && prepararParaVoz('La ONU y el DANE publican el informe.', 'es').includes('DANE'),
+    'las siglas de 4 o menos quedan intactas');
+  comprobar(prepararParaVoz('El compuesto H2O y el archivo MP3.', 'es').includes('H2O')
+    && prepararParaVoz('El compuesto H2O y el archivo MP3.', 'es').includes('MP3'),
+    'lo que lleva cifras no se toca');
+  comprobar(prepararParaVoz('Ver el capítulo XVII del libro.', 'es').includes('diecisiete'),
+    'el romano de capítulo se convierte antes y no se rompe');
 }
 
 /* ── Idempotencia de la capa de voz (P1.3) ───────────────────────────

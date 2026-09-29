@@ -55,12 +55,22 @@ const cuerpo = piezas.map((p, i) => `${p}\n;__salida.${nombres[i]} = ${nombres[i
 const fabrica = new Function('__salida', ...Object.keys(sandbox), cuerpo);
 const fns = fabrica({}, ...Object.values(sandbox));
 
-const cola = fns.ttsCrearCola('Título del capítulo\n§P0700§\nEl cuerpo sigue aquí con calma.', 'es', 900, 'unified');
+const cola = fns.ttsCrearCola('Título largo del capítulo primero\n§P0700§\nEl cuerpo sigue aquí con calma.', 'es', 900, 'unified');
 const silencios = cola.filter((b) => b.silencio);
 comprobar(silencios.length === 1 && silencios[0].pausaMs === 700, 'una marca §P0700§ produce un silencio de 700 ms');
 comprobar(cola.length >= 3 && cola[0].text.includes('Título') && cola.at(-1).text.includes('cuerpo'), 'la cola conserva ambos segmentos de voz');
 const orden = cola.map((b) => (b.silencio ? 'S' : 'V')).join('');
 comprobar(/^V+S+V+$/.test(orden), 'orden voz → silencio → voz (' + orden + ')');
+
+/* P1.7: un título diminuto (<25) no viaja solo en unified: se une al bloque
+ * siguiente y la pausa queda delante como silencio previo. */
+const colaMenuda = fns.ttsCrearCola('Índice.\n§P0700§\nEl cuerpo sigue aquí con calma y más texto de relleno.', 'es', 900, 'unified');
+const vocesMenudas = colaMenuda.filter((b) => !b.silencio);
+comprobar(colaMenuda.some((b) => b.silencio), 'el diminuto conserva su silencio previo');
+comprobar(vocesMenudas.length >= 1 && vocesMenudas[0].text.startsWith('Índice.'),
+  'el diminuto se une al bloque siguiente en vez de sintetizarse solo');
+comprobar(!vocesMenudas.some((b) => b.text.length < 25 && b !== vocesMenudas.at(-1)),
+  'no quedan diminutos sueltos salvo fin de texto');
 
 const cola2 = fns.ttsCrearCola('Capítulo dos.\n§P1000§\nEl cuerpo del capítulo dos.', 'es', 900, 'unified');
 const s2 = cola2.filter((b) => b.silencio);
