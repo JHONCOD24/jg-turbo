@@ -139,6 +139,7 @@ async function iniciar() {
   if (!player?.conectado || sesion) return;
   const actual = { controlador: new AbortController(), audios: [new Audio(), new Audio()], indice: -1, metricas: null };
   sesion = actual;
+  ui.ritmoAuto.checked = preferencias.ritmoAuto;
   ui.doblar.disabled = true; ui.detener.disabled = false; ui.progreso.hidden = false; ui.progreso.value = 0;
   estado.textContent = 'Revisando los subtítulos en inglés…';
   const { signal } = actual.controlador;
@@ -212,12 +213,13 @@ for (const clave of ['voz', 'acento', 'volVoz', 'volOriginal', 'ritmoAuto', 'sub
   });
 }
 
-async function conectar() {
+async function conectar(intentos = 3) {
   try {
     preferencias = await leerPreferencias(); pintarPreferencias();
     const tab = await pestanaClase();
     puerto = chrome.tabs.connect(tab.id, { name: 'jgUdemy' });
     player = new ReproductorRemoto(puerto);
+    let recibioEstado = false;
     const setTasa = player.setPlaybackRate.bind(player);
     player.setPlaybackRate = (tasa) => { velocidadPedida = { tasa, cuando: Date.now(), rechazos: 0 }; setTasa(tasa); };
     puerto.onMessage.addListener((mensaje) => {
@@ -229,6 +231,7 @@ async function conectar() {
       }
       if (mensaje.tipo === 'error') estado.textContent = mensaje.mensaje;
       if (mensaje.tipo !== 'estado') return;
+      recibioEstado = true;
       if (!sesion) ui.doblar.disabled = false;
       if (velocidadPedida && sesion && Date.now() - velocidadPedida.cuando < 10000 && Math.abs(mensaje.tasa - velocidadPedida.tasa) > .01) {
         if (++velocidadPedida.rechazos >= 3) {
@@ -239,7 +242,15 @@ async function conectar() {
       }
       if (esperandoClase && !mensaje.pausado && !mensaje.terminado) { esperandoClase = false; iniciar(); }
     });
-    puerto.onDisconnect.addListener(() => { detener('Se perdió la conexión con la clase. Recarga la extensión y vuelve a abrir el panel.'); ui.doblar.disabled = true; });
+    puerto.onDisconnect.addListener(() => {
+      const errorConexion = chrome.runtime.lastError;
+      detener('Se perdió la conexión con la clase. Recarga la extensión y vuelve a abrir el panel.');
+      ui.doblar.disabled = true;
+      if (!recibioEstado && errorConexion && intentos > 0) {
+        estado.textContent = 'Esperando a que termine de cargar la clase…';
+        setTimeout(() => conectar(intentos - 1), 300);
+      }
+    });
     estado.textContent = 'Activa los subtítulos en inglés y pulsa Doblar al español.';
   } catch (error) { estado.textContent = error.message; }
 }

@@ -1577,3 +1577,15 @@ pasar página de verdad: ninguna remedición la toca), expuesta para pruebas
 como window.__jgPaginas(). **Regla:** en paginado con cromo flotante, los
 gestos y transiciones se afirman por ancla (avanza / no se mueve / su bloque
 sigue en pantalla), nunca por igualdad de etiquetas.
+
+## Extensión Udemy: dirección de clase y mundo aislado (2026-09-29)
+
+**Síntoma:** la segunda clase no encontraba el VTT observado. **Causa:**
+`sender.url` conservaba la dirección inicial del script tras una navegación SPA.
+**Regla:** al buscar la pista de la clase actual, consultar `chrome.tabs.get`
+y comparar su pathname con el observado. Probar dos clases, no solo la primera.
+
+**Síntoma:** una prueba de velocidad revertida no daba señal. **Causa:**
+redefinir una propiedad JavaScript del video en MAIN no modifica el wrapper del
+script aislado. **Regla:** simular la reversión sobre la propiedad DOM nativa en
+`ratechange` y contar las órdenes posteriores para detectar insistencia.

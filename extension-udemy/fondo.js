@@ -35,10 +35,11 @@ chrome.runtime.onMessage.addListener((mensaje, remitente, responder) => {
   if (mensaje.tipo === 'olvidarVtt') { chrome.storage.session.remove(CLAVE_VTT(tabId)); return; }
   if (!['vttObservado', 'vttParaLeer'].includes(mensaje.tipo)) return;
   chrome.storage.session.get(CLAVE_VTT(tabId))
-    .then((dato) => {
+    .then(async (dato) => {
       const registro = dato[CLAVE_VTT(tabId)];
       if (mensaje.tipo === 'vttObservado') return responder(rutaPublica(registro?.urls?.at(-1)));
-      const mismaClase = registro?.clase === new URL(remitente.url).pathname;
+      const actual = await chrome.tabs.get(tabId);
+      const mismaClase = registro?.clase === new URL(actual.url).pathname;
       const url = mismaClase ? registro.urls.findLast((u) => /\/en(?:[_-][a-z]{2})?\//i.test(new URL(u).pathname)) : null;
       responder(url || null);
     })

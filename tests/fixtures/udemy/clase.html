@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Clase falsa</title>
+<style>div:fullscreen video{width:100%;height:100%}</style>
+<h1 data-purpose="lecture-title">Clase de prueba</h1>
+<button onclick="document.querySelector('video').parentElement.requestFullscreen()">Pantalla completa</button>
+<div style="position:relative;width:640px"><video controls width="640" src="/video.webm"></video></div>
+<script>
+  const v = document.querySelector('video'); v.volume = .73;
+  const opciones = new URLSearchParams(location.search);
+  if (!opciones.has('sin_ingles')) fetch('https://p.udemycdn.com/ingles/en_US/clase.vtt?firma=secreto');
+  else { const pista = v.addTextTrack('subtitles', 'Español', 'es'); pista.addCue(new VTTCue(0, 30, 'Hola')); }
+  window.pedidosTasa = [];
+  if (opciones.has('rechaza_tasa')) {
+    v.addEventListener('ratechange', () => {
+      if (v.playbackRate !== 1) { pedidosTasa.push(v.playbackRate); v.playbackRate = 1; }
+    });
+  }
+</script></html>

@@ -291,15 +291,15 @@ biblioteca, `buscarGuardada`, `guardarVoz`, descargas, segunda voz y Fish.
   subtítulos en inglés (botón CC de Udemy) y vuelve a pulsar Doblar» (si no hubo `.vtt` ni cues),
   progreso con barra, «Listo», «La voz se está preparando…», errores de red o de voz en palabras simples, y
   «Si cierras este panel, el doblaje se apaga».
-- [ ] **Velocidad que Udemy revierte:** si tras una orden de velocidad la página informa otra tasa 3 veces
+- [x] **Velocidad que Udemy revierte:** si tras una orden de velocidad la página informa otra tasa 3 veces
   seguidas en 10 s, se apaga el ritmo automático en esta clase y se avisa: «Udemy no deja cambiar la
   velocidad; la voz irá un poco más rápida». Nunca un bucle de órdenes.
-- [ ] **Siguiente clase:** con «Seguir doblando» encendido, al llegar el aviso `clase` se cierra la sesión
+- [x] **Siguiente clase:** con «Seguir doblando» encendido, al llegar el aviso `clase` se cierra la sesión
   actual y se abre otra con los subtítulos de la nueva clase **cuando la persona le dé play** (no antes).
 - [x] **Detener** (o cerrar el panel): aborta todo, `restaurar` y envía retirar el subtítulo.
 
 Panel: `node tests/test_udemy_panel.mjs` 12 OK; `node tests/verificar_udemy_doblaje.mjs --panel`
-5 OK, 0 fallos. Velocidad revertida y siguiente clase quedan por medir en Tarea 9.
+5 OK, 0 fallos. Velocidad revertida y siguiente clase medidas en Tarea 9: 26 OK.
 
 ### Tarea 8 — Subtítulo sobre el video
 - [x] En `udemy.js`, un host con `attachShadow({ mode: 'closed' })` dentro del contenedor del reproductor,
@@ -312,12 +312,12 @@ Panel: `node tests/test_udemy_panel.mjs` 12 OK; `node tests/verificar_udemy_dobl
 incluida pantalla completa del contenedor falso.
 
 ### Tarea 9 — Pruebas de navegador (`tests/verificar_udemy_doblaje.mjs`)
-- [ ] Playwright con `chromium.launchPersistentContext` y `--disable-extensions-except` /
+- [x] Playwright con `chromium.launchPersistentContext` y `--disable-extensions-except` /
   `--load-extension=extension-udemy`. **Nunca contra udemy.com real**: `context.route('https://www.udemy.com/**')`
   sirve una página falsa (`tests/fixtures/udemy/clase.html`) con un `<video>` local y una pista `.vtt`, y
   `https://*.udemycdn.com/**` sirve el `.vtt`. La API apunta a un servidor falso local vía `jg_api_base`.
-- [ ] El panel se abre como pestaña (`chrome-extension://<id>/panel.html?tab=<id>`): la lógica es la misma.
-- [ ] Comprobaciones mínimas:
+- [x] El panel se abre como pestaña (`chrome-extension://<id>/panel.html?tab=<id>`): la lógica es la misma.
+- [x] Comprobaciones mínimas:
   1. La voz arranca y el subtítulo muestra la línea que se oye.
   2. **A1:** 0 peticiones de la extensión a `www.udemy.com` (cuenta en `context.on('request')` las que no
      sean de la página falsa).
@@ -328,8 +328,11 @@ incluida pantalla completa del contenedor falso.
   7. Cambio de clase (la página falsa cambia la URL con `history.pushState` y reemplaza el `<video>`) →
      nueva sesión solo tras play.
   8. Velocidad revertida por la página → el ritmo automático se apaga con aviso, sin bucle.
-- [ ] En `test_udemy_doblaje.mjs`, las pruebas estáticas de A3, A4, A5, A6, A8, A9 y A12 (grep sobre
+- [x] En `test_udemy_doblaje.mjs`, las pruebas estáticas de A3, A4, A5, A6, A8, A9 y A12 (grep sobre
   `extension-udemy/` sin contar `motor/`, y el conjunto exacto de permisos del manifiesto).
+
+Comandos ejecutados: `node tests/test_udemy_doblaje.mjs`, 100 OK;
+`node tests/verificar_udemy_doblaje.mjs`, 26 OK. Cero fallos.
 
 ### Tarea 10 — Prueba real del dueño (⛔ PARADA)
 - [ ] Entrégale un paso a paso de 5 líneas y esta lista para marcar:
