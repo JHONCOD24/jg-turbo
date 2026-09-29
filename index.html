@@ -17063,7 +17063,12 @@ function ttsCalentarMotor(){
   try{ fetchApi('/tts-warmup', { method: 'GET' }, 20000).catch(()=>{}); }catch(_){}
 }
 
-function ttsAplicarCapaVozPdf(texto, sourceId, langHint){
+/* El texto del PDF se prepara para la voz una sola vez por camino (P1.3):
+ * quien ya lo preparó (el audiolibro, el proveedor de continuidad) lo dice
+ * con `capaVozAplicada: true` y aquí no se vuelve a tocar. Escuchar, Desde
+ * aquí y el MP3 mandan el texto crudo y sí pasan por la capa. */
+function ttsAplicarCapaVozPdf(texto, sourceId, langHint, yaAplicada){
+  if(yaAplicada) return String(texto || '');
   if(sourceId !== 'pdf' || typeof window.jgPrepararParaVoz !== 'function') return String(texto || '');
   try{
     return String(window.jgPrepararParaVoz(texto, langHint || 'es') || texto);
@@ -17074,7 +17079,9 @@ function ttsAplicarCapaVozPdf(texto, sourceId, langHint){
 
 function ttsHablar(texto, opts){
   opts = opts || {};
-  const text = ttsAplicarCapaVozPdf(String(texto || '').trim(), opts.sourceId, opts.langHint).trim();
+  const omitida = opts.sourceId === 'pdf' && opts.capaVozAplicada === true;
+  const text = ttsAplicarCapaVozPdf(String(texto || '').trim(), opts.sourceId, opts.langHint, omitida).trim();
+  ttsState.capaVoz = opts.sourceId === 'pdf' ? (omitida ? 'omitida' : 'aplicada') : 'ninguna';
   if(!text){
     if(typeof _mostrarToastMejora === 'function') _mostrarToastMejora('No hay texto para leer', false);
     return false;
@@ -18883,12 +18890,12 @@ function asegurarLectorPdf(){
     /* Modo audiolibro: el lector dice cuál es la parte siguiente y el motor de
      * voz las encadena solo, sin que la persona toque nada entre capítulos. */
     audiolibro: {
-      iniciar({ sourceId, texto, lang, siguiente, alTerminar }){
+      iniciar({ sourceId, texto, lang, siguiente, alTerminar, capaVozAplicada }){
         jgAudiolibro.activo = true;
         jgAudiolibro.sourceId = sourceId;
         jgAudiolibro.siguiente = siguiente;
         jgAudiolibro.alTerminar = alTerminar;
-        return ttsHablar(texto, { sourceId, langHint: lang });
+        return ttsHablar(texto, { sourceId, langHint: lang, capaVozAplicada });
       },
       detener(){ ttsDetener(); },
       estaActivo(){ return jgAudiolibro.activo === true; },

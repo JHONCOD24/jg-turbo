@@ -4625,6 +4625,8 @@ export function inicializarLectorPdf(deps = {}) {
 
     deps.audiolibro.iniciar({
       sourceId: 'pdf',
+      /* `texto` ya pasó por prepararParaVoz arriba: el motor no lo repite. */
+      capaVozAplicada: true,
       texto,
       lang: langVoz,
       siguiente: () => {

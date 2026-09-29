@@ -418,5 +418,31 @@ const conPausaTitulo = (sale, titulo) =>
     'el saneado no rompe con vacío ni null');
 }
 
+/* ── Idempotencia de la capa de voz (P1.3) ───────────────────────────
+ * El texto pasa UNA vez por prepararParaVoz en cada camino (Escuchar,
+ * audiolibro, continuación, Desde aquí). Si por error pasara dos, la segunda
+ * no puede añadir comas ni reescribir tramos: estos casos salían distintos
+ * en la 2.ª pasada en los 5 libros reales (2026-09-29). */
+{
+  const unaVez = (t) => prepararParaVoz(t, 'es');
+  const dosVeces = (t) => prepararParaVoz(prepararParaVoz(t, 'es'), 'es');
+  comprobar(dosVeces('El estímulo crea  por  tanto una experiencia.') === unaVez('El estímulo crea  por  tanto una experiencia.'),
+    'doble espacio ante conector: la coma cae en la 1.ª pasada y la 2.ª no añade nada');
+  comprobar(dosVeces('No escucharás eso... Aquí empieza lo bueno.') === unaVez('No escucharás eso... Aquí empieza lo bueno.'),
+    'puntos suspensivos: se vuelven … una sola vez');
+  comprobar(dosVeces('Fotos de Splash News/Newscom; Francis Dean/Deanpictures/Newscom.') === unaVez('Fotos de Splash News/Newscom; Francis Dean/Deanpictures/Newscom.'),
+    'barras en cadena: todas llevan «o» desde la 1.ª pasada');
+  comprobar(unaVez('Fotos de Dean/Deanpictures/Newscom.').includes('Dean o Deanpictures o Newscom'),
+    'la cadena entera se dice con «o»');
+  /* Iniciales con el apellido en minúscula («D. C. con»): se juntan en la
+   * 1.ª pasada y la 2.ª ya no mueve nada. La bandera capaVozAplicada evita
+   * la 2.ª en los caminos. */
+  const d1 = unaVez('Se reunieron en Washington, D. C. con motivo del encuentro.');
+  const d2 = dosVeces('Se reunieron en Washington, D. C. con motivo del encuentro.');
+  const d3 = prepararParaVoz(d2, 'es');
+  comprobar(d2 === d3, '«D. C.» converge: la 3.ª pasada no mueve nada');
+  comprobar(!/después de Cristo/i.test(d1), '«D. C.» de lugar no se expande a fecha');
+}
+
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');
 process.exit(fallos ? 1 : 0);

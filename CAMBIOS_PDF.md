@@ -47,6 +47,26 @@ documentado desde v2.81.0). `test_pdf_continuidad`, `test_tts_narracion`,
 en verde. La prueba real con pantalla apagada solo se puede hacer en el
 dominio: anotada para la verificación final.
 
+## 2026-09-29 · P1.3 · La capa de voz corre una sola vez por camino (y es idempotente)
+
+Medido en los 5 libros: `prepararParaVoz(prepararParaVoz(x))` daba distinto
+en los 5 (dobles espacios ante conector, `...`, barras en cadena,
+iniciales). Causas en `js/pdf/vozTexto.js`: el colapso de espacios corría al
+final (la coma de «por  tanto» ya había pasado de largo), `...` colapsaba a
+`..`, la barra global perdía la segunda de la cadena
+(`Dean/Deanpictures/Newscom`) y las iniciales exigían apellido en mayúscula.
+Arreglos: colapso temprano de `[ \t]{2,}`, `...`/`. . .` → `…` (sin tocar
+«U. S. A.» ni «1. 2. 3.»), `..` parásito fuera, cadena de barras entera e
+iniciales con apellido en minúscula. Resultado: **los 5 libros salen byte a
+byte iguales en la 2.ª pasada**. Prueba de idempotencia en
+`tests/test_pdf_voz.mjs`.
+
+Además `ttsHablar` acepta `capaVozAplicada: true` (`index.html`,
+`ttsAplicarCapaVozPdf`): el audiolibro —que ya prepara— la manda y el motor
+no repite (`ttsState.capaVoz` lo deja ver: «omitida» frente a «aplicada»).
+Escuchar, Desde aquí y el MP3 mandan crudo y sí pasan por la capa. Verificado
+en navegador con voz simulada (una sola pasada por el audiolibro).
+
 ## 2026-09-29 · P1.1 · Línea base de bloques de voz (plan de auditoría del lector)
 
 Medición con el motor real antes de tocar la segmentación: extracción en el

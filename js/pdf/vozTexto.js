@@ -293,8 +293,12 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     .replace(/no hay texto para traducir[.,]?/gi, '')
     .replace(/¿qué necesitas que traduzca\?[^.!?\n]*[.!?]?/gi, '')
     .replace(/¡?dime qué necesitas que traduzca[^.!?\n]*[.!?]?/gi, '')
-    .replace(/aquí tienes la traducción[^.!?\n]*[:.]?/gi, '')
-    .replace(/hola a todos,?\s+bienvenidos a este video[^.!?\n]*[.!?]?/gi, '');
+     .replace(/aquí tienes la traducción[^.!?\n]*[:.]?/gi, '')
+     .replace(/hola a todos,?\s+bienvenidos a este video[^.!?\n]*[.!?]?/gi, '');
+  /* El extractor deja dobles espacios (`crea  por  tanto`): si se colapsan al
+   * final, las reglas de comas y barras ya pasaron de largo y la segunda
+   * pasada sí las ve (no idempotente). Se colapsan aquí, antes de todo. */
+  salida = salida.replace(/[ \t]{2,}/g, ' ');
 
   // Si no es español, aplicar solo limpieza básica
   if (idioma !== 'es') {
@@ -437,8 +441,12 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
    *
    * Tres puntos seguidos son, para el partidor de oraciones, tres frases: la
    * voz hace tres caídas tonales y una pausa larga antes del apellido. Al
-   * juntarlas queda un solo bloque y el nombre suena de corrido. */
-  salida = salida.replace(/\b((?:[A-ZÁÉÍÓÚÑ]\.\s*){2,})(?=[A-ZÁÉÍÓÚÑ][a-záéíóúüñ])/g,
+   * juntarlas queda un solo bloque y el nombre suena de corrido. El apellido
+   * puede venir en minúscula en el origen («D. C. con» por «D. C. Con»):
+   * también se junta, que es lo que deja la pasada idempotente en vez de
+   * converger en dos. Las abreviaturas en minúscula («p. ej.», «s. f.») ya
+   * se expandieron arriba, así que aquí casi no quedan. */
+  salida = salida.replace(/\b((?:[A-ZÁÉÍÓÚÑ]\.\s*){2,})(?=[A-Za-zÁÉÍÓÚÑáéíóúüñ])/g,
     /* El espacio ANTES del apellido se conserva: juntarlo también daría
      * «J.R.R.Malthus», que el motor lee como una palabra inventada. */
     (m) => `${m.trim().replace(/\.\s+/g, '.')} `);
@@ -457,8 +465,10 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
     .replace(/(\d\s*)m\s*\/\s*s\b/g, '$1metros por segundo')
     .replace(/\by\s*\/\s*o\b/gi, 'y o')      /* «y/o»: no es «y o o» */
     /* Dos palabras de verdad («autor/lector»), no siglas ni unidades: con una
-     * sola letra a un lado, «km/h» sonaba «km o h». */
-    .replace(/(\p{L}{2,})\/(\p{L}{2,})/gu, '$1 o $2')
+     * sola letra a un lado, «km/h» sonaba «km o h». En cadena
+     * («Dean/Deanpictures/Newscom») el reemplazo global deja la segunda barra
+     * sin letras delante y la pierde; por eso se toma la cadena entera. */
+    .replace(/(\p{L}{2,}(?:\/\p{L}{2,})+)/gu, (m) => m.split('/').join(' o '))
     .replace(/[~|_]+/g, ' ')
     .replace(/[†‡]/g, '');
 
@@ -556,6 +566,17 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
   }
   // En modo neural, evitar ".." y colapsar saltos
   if (neural) {
+    /* Los puntos suspensivos del autor (`...`, `. . .` del extractor,
+     * `palabra... Otra`) no son dos finales de frase, y un `..` parásito tras
+     * el punto (`comentarios. ..`) tampoco: sin estas reglas el colapso de
+     * abajo los deja en `..` y la segunda pasada los vuelve a tocar (no
+     * idempotente). Los suspensivos se vuelven `…`; el parásito se quita
+     * dejando el cierre. Las versiones espaciadas exigen que antes no haya
+     * letra ni cifra, para no tocar iniciales («U. S. A.») ni listas
+     * («1. 2. 3.»). */
+    salida = salida.replace(/\.{3,}/g, '…');
+    salida = salida.replace(/(^|[^.\p{L}\p{N}])\.(\s+\.){2,}/gu, '$1…');
+    salida = salida.replace(/(\.\s*)\.(\s*\.)*/g, '$1');
     salida = salida.replace(/\.\s*\.\s*/g, '. ');
     salida = salida.replace(/\n{3,}/g, '\n\n');
   } else {

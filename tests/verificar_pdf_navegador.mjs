@@ -948,6 +948,25 @@ for (const modo of ['paginas', 'scroll']) {
   comprobar(analisis.pausas === 0, `[${etiqueta}] ningún pause a mitad entre capítulos (${analisis.pausas})`);
   comprobar(analisis.maxHueco < 3000, `[${etiqueta}] todo ended tiene play inmediato (hueco máx. ${analisis.maxHueco} ms)`);
   comprobar(analisis.finalizadaAMitad === false, `[${etiqueta}] sin «Lectura finalizada» a mitad del libro`);
+  /* P1.3: el audiolibro prepara el texto ANTES de hablar, así que el motor
+   * no lo vuelve a preparar (una sola pasada por camino). */
+  if (modo === 'paginas') {
+    await pagina.evaluate(() => {
+      const m = document.getElementById('pdfMasMenu');
+      if (m) m.open = true;
+    });
+    await pagina.waitForTimeout(400);
+    await pagina.locator('#btnPdfAudiolibro').click();
+    await pagina.waitForFunction(() => {
+      try { return window.ttsState && window.ttsState.status === 'playing'; } catch (_) { return false; }
+    }, null, { timeout: 60000 }).catch(() => {});
+    comprobar(
+      await pagina.evaluate(() => { try { return window.ttsState && window.ttsState.capaVoz; } catch (_) { return '?'; } }) === 'omitida',
+      '[Páginas] el audiolibro no repite la capa de voz (una sola pasada)'
+    );
+    await pagina.locator('#btnPdfAudiolibro').click();
+    await pagina.waitForTimeout(400);
+  }
   /* Se detiene la lectura para cerrar limpio el contexto. */
   await pagina.evaluate(() => { try { clearInterval(window.__poll); } catch (_) {} });
   await pagina.locator('[data-tts-console="pdf"] [data-tts-action="stop"]').click().catch(() => {});
