@@ -590,6 +590,25 @@ export function prepararParaVoz(texto, idioma = 'es', opts = {}) {
    * puede añadir puntuación aquí sin romper la promesa de original inmutable.
    */
   if (pausarTitulos) {
+    /* Encabezados de ejercicios, pasos y etiquetas de drill (P1.2): en los
+     * libros prácticos vienen pegados al texto anterior sin punto final
+     * («…herramientas? Ejercicio: La bola de cristal Visual: …») y la voz
+     * los lee de corrido con lo anterior. Se les da su pausa de título
+     * directamente (el marcado de abajo no duplica: el bloque empieza por
+     * la marca y pareceTituloSuelto lo descarta). Los pasos numerados
+     * («2. Analizar…») valen tras cualquier espacio, pero exigen mayúscula
+     * para no tocar «2. tabletas» ni cifras («2.500», «3.1.7»). Sin pausa
+     * estructural (voces del navegador) se abre párrafo y el título respira
+     * con los dos puntos, como los demás títulos. */
+    const marcaDrill = pausasEstructurales ? `\n${MARCA_PAUSA_TITULO}\n` : '\n\n';
+    salida = salida.replace(
+      /(^|[.!?…:\n]\s*)(Ejercicio|Paso(?:\s*\d{0,3})?|Fase(?:\s*\d{0,3})?|Etapa(?:\s*\d{0,3})?|Lección(?:\s*\d{0,3})?|Capítulo(?:\s*\d{0,3})?|Clave|Secreto|Principio|Truco|Técnica|Punto\s+\d{1,2}|Visual|Auditivo|Cinestésico|Kinestésico|Olfativo|Gustativo|Táctil)\s*:(?=[^.!?…\n]{1,70}(?:$|[.!?…\n]))/gim,
+      `$1${marcaDrill}$2:`,
+    );
+    salida = salida.replace(
+      /(^|[\s(])(\d{1,2}\.\s+)(?=[A-ZÁÉÍÓÚÑ][^.!?…\n]{1,60}(?:$|[.!?…\n]))/gm,
+      `$1${marcaDrill}$2`,
+    );
     salida = salida.split(/\n\n+/).map((bloque) => {
       const t = bloque.trim();
       if (!t) return '';

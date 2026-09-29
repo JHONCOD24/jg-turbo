@@ -49,6 +49,9 @@ const piezas = [
   ['TTS_ES_ACRONYMS', 'const'], ['TTS_ENGLISH_TERMS', 'const'],
   ['ttsLimpiarToken', 'function'], ['ttsPareceTokenIngles', 'function'],
   ['ttsNormalizarTextoNarracion', 'function'],
+  ['TTS_CONECTORES_CORTE', 'const'],
+  ['ttsCorteClausula', 'function'], ['ttsPartirOraciones', 'function'],
+  ['ttsPartirTexto', 'function'],
 ];
 
 const fuente = [];
@@ -67,11 +70,12 @@ let narrar; let pareceIngles; let acronimos;
 try {
   // eslint-disable-next-line no-new-func
   const construir = new Function(`${fuente.join('\n')}
-    return { ttsNormalizarTextoNarracion, ttsPareceTokenIngles, TTS_ES_ACRONYMS };`);
+    return { ttsNormalizarTextoNarracion, ttsPareceTokenIngles, TTS_ES_ACRONYMS, ttsPartirTexto };`);
   const api = construir();
   narrar = api.ttsNormalizarTextoNarracion;
   pareceIngles = api.ttsPareceTokenIngles;
   acronimos = api.TTS_ES_ACRONYMS;
+  var partir = api.ttsPartirTexto;
 } catch (error) {
   console.error(`FALLO: no se pudieron evaluar las funciones — ${error.message}`);
   process.exit(1);
@@ -208,6 +212,29 @@ try {
     'ttsNormalizarTextoNarracion quita el chatter de traducción');
   comprobar(sale.includes('Hola mundo') && sale.includes('Siguiente'),
     'y conserva el texto real de alrededor');
+}
+
+/* ── Corte en frontera de cláusula (P1.2) ───────────────────────────
+ * Una oración más larga que el límite no se parte por el último espacio:
+ * primero coma, raya o conector dentro del 60–100 %; el espacio es el último
+ * recurso y nunca se corta dentro de una palabra. */
+{
+  const larga = 'Quiso llegar temprano por la mañana, pero el tren se retrasó una hora entera en la estación.';
+  const bloques = partir(larga, 50);
+  comprobar(bloques.length >= 2, 'una oración larga se parte en varios bloques');
+  comprobar(bloques.every((b) => b.length <= 50 + 60), 'ningún bloque supera el límite más la cortesía del token');
+  comprobar(bloques[0].endsWith(','), `el primer corte cae en la coma («…${bloques[0].slice(-20)}»)`);
+  const sinComas = 'El viento arrastraba las hojas secas por el camino polvoriento mientras los niños corrían detrás de la pelota roja sin prestar atención al cielo que se oscurecía por el oriente lejano.';
+  const b2 = partir(sinComas, 90);
+  comprobar(/mientras|corrian|corrían|detrás|atención/.test(b2[1] || ''), 'sin comas, el corte cae junto a un conector');
+  comprobar(b2.every((b) => !/\S{91,}/.test(b) || /https?:/.test(b)), 'sin frontera, el espacio parte sin dejar tokens eternos');
+  const url = `Inicio https://www.ejemplo.com/${'a'.repeat(120)} fin de la frase para rellenar más letras todavía siempre.`;
+  const b3 = partir(url, 60);
+  comprobar(b3.some((b) => b.includes('aaaa')), 'la URL larga sobrevive al corte');
+  comprobar(!b3.some((b) => /a\/fin|fin\/de/.test(b)), 'y no se parte dentro del token');
+  const reconstruido = b3.join(' ').replace(/\s+/g, ' ').trim();
+  comprobar(reconstruido.includes('Inicio') && reconstruido.includes('fin de la frase'),
+    'al juntar los bloques no se pierde texto');
 }
 
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nTodo en verde');

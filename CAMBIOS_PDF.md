@@ -47,6 +47,42 @@ documentado desde v2.81.0). `test_pdf_continuidad`, `test_tts_narracion`,
 en verde. La prueba real con pantalla apagada solo se puede hacer en el
 dominio: anotada para la verificación final.
 
+## 2026-09-29 · P1.2 · Corte en frontera de cláusula y pausas de drill (V-01)
+
+Medido antes: entre el 11 % y el 22 % de los bloques Fish terminaban sin
+signo. La autopsia (5 libros, cola real) mostró tres familias: oraciones
+largas partidas por el último espacio, encabezados de ejercicios pegados al
+texto («…herramientas? Ejercicio: La bola de cristal Visual: …») e índices
+impresos dentro del cuerpo (C-02). El partidor solo sabía del espacio.
+
+**Cambios (`index.html` `ttsPartirTexto` + `js/pdf/vozTexto.js`):**
+- `ttsCorteClausula`: primero `;` `:` `,` `—` o conector (y, pero, que,
+  porque, aunque…) dentro del 60–100 % del límite; el espacio es el último
+  recurso y nunca se corta dentro de una palabra (una URL larga se conserva
+  entera). Vale para todas las pestañas: mismo texto y misma voz, solo
+  mejores cortes (batería 41/41 en verde).
+- La capa de voz abre párrafo y pausa de título ante encabezados de drill
+  (`Ejercicio:`, `Paso 2:`, `Visual:`, pasos `2. …` con mayúscula) pegados
+  sin punto final; en mitad de frase no se parte («el ejercicio: …»).
+- La métrica que manda es M2 (bloque sin cierre prosódico —la coma también
+  cierra— al que sigue voz: la entonación se reinicia a mitad de frase).
+  `tests/medir_bloques_voz.mjs` la imprime como «Voz tras corte».
+
+| Libro | M1 antes → después | M2 antes → después |
+|---|---|---|
+| Aprendiz | 22,3 → 17,8 | 2,9 → 0,9 |
+| Placebo | 11,9 → 6,5 | 7,1 → 1,9 |
+| Marketing | 13,6 → 12,8 | 1,0 → 0,1 |
+| Presuasión | 14,6 → 8,8 | 9,6 → 3,6 |
+| Sobrenatural | 10,9 → 7,1 | 5,0 → 1,4 |
+
+(M1 con coma; el «antes» puro sale de `git show HEAD` de los dos archivos.
+La M1 estricta de P1.1 se conserva en el medidor como referencia histórica.)
+Meta ≤ 3 %: 4 de 5 en M2; Presuasión queda en 3,6 % por su índice impreso y
+sus listas de nombres, que solo se resuelven con los marcadores del PDF
+(C-02/P3.2). Pruebas: `test_tts_narracion` (coma, conector, espacio último
+recurso, URL entera) y `test_pdf_voz` (pausas de drill) en verde.
+
 ## 2026-09-29 · P1.3 · La capa de voz corre una sola vez por camino (y es idempotente)
 
 Medido en los 5 libros: `prepararParaVoz(prepararParaVoz(x))` daba distinto

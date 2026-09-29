@@ -68,6 +68,8 @@ const piezas = [
   ['ttsDetectarIdiomaFrase', 'function'],
   ['ttsSegmentarTerminosIngles', 'function'],
   ['ttsUnirConectoresIngles', 'function'],
+  ['TTS_CONECTORES_CORTE', 'const'],
+  ['ttsCorteClausula', 'function'],
   ['ttsPartirOraciones', 'function'],
   ['ttsPartirTexto', 'function'],
   ['ttsNormalizarTextoNarracion', 'function'],
@@ -115,6 +117,11 @@ process.on('unhandledRejection', (e) => { console.error('FALLO: ' + (e?.message 
  * («Capítulo 2: La sintonía (rapport)», «el patrón «cruzar el umbral»»):
  * no es una frase partida a mitad, así que cuenta como cierre. */
 const CIERRE = /[.!?…:;)»"'\]’”]$/u;
+/* Cierre prosódico (meta P1.2): la coma también cierra — un corte forzado EN
+ * coma es el objetivo, no el defecto. M2 cuenta los bloques sin cierre
+ * prosódico a los que sigue voz (la entonación se reinicia a mitad de
+ * frase): el defecto V-01 de verdad. */
+const CIERRE_VOZ = /[.!?…:,;)»"'\]’”]$/u;
 const MINUSCULA = /^[a-záéíóúüñ]/u;
 
 async function medirLibro(archivo) {
@@ -134,15 +141,24 @@ async function medirLibro(archivo) {
   await tarea.destroy();
   const r = reconstruirDocumento([], { atomos });
   const textoVoz = prepararParaVoz(r.texto || '', 'es', { neural: true });
-  /* Camino real de Escuchar: la capa PDF ya preparó el texto y ttsCrearCola
-   * lo normaliza de nuevo (doble pasada vigente, V-03). La medición usa ese
-   * mismo camino para que la línea base describa lo que hoy suena. */
+  /* Camino real de Escuchar: la capa PDF prepara el texto una sola vez
+   * (P1.3) y ttsCrearCola lo normaliza para el motor. */
   const cola = ttsCrearCola(textoVoz, 'es', 290, 'unified') || [];
   const hablados = cola.filter((b) => b && !b.silencio && String(b.text || '').trim());
   const textos = hablados.map((b) => String(b.text || '').trim());
   const sinCierre = textos.filter((t) => !CIERRE.test(t)).length;
   const minuscula = textos.filter((t) => MINUSCULA.test(t)).length;
   const cortos = textos.filter((t) => t.length < 25).length;
+  let vozTras = 0;
+  for (let i = 0; i < cola.length; i += 1) {
+    const b = cola[i];
+    if (!b || b.silencio || !String(b.text || '').trim()) continue;
+    if (CIERRE_VOZ.test(String(b.text).trim())) continue;
+    let j = i + 1;
+    while (j < cola.length && !cola[j]) j += 1;
+    const sig = cola[j];
+    if (sig && !sig.silencio && String(sig.text || '').trim()) vozTras += 1;
+  }
   return {
     paginas: doc.numPages,
     atomos: atomos.length,
@@ -151,15 +167,17 @@ async function medirLibro(archivo) {
     pctSinCierre: textos.length ? (sinCierre / textos.length) * 100 : 0,
     minuscula,
     cortos,
+    vozTras,
+    pctVozTras: textos.length ? (vozTras / textos.length) * 100 : 0,
   };
 }
 
-console.log('Libro | Páginas | Bloques Fish 290 | Sin cierre % (n) | Minúscula inicial (n) | <25 caracteres (n)');
+console.log('Libro | Páginas | Bloques Fish 290 | Sin cierre % (n) | Minúscula inicial (n) | <25 caracteres (n) | Voz tras corte % (n)');
 const filas = [];
 for (const libro of LIBROS) {
   const m = await medirLibro(libro.archivo);
   filas.push({ libro: libro.clave, ...m });
   console.log(
-    `${libro.clave} | ${m.paginas} | ${m.bloques} | ${m.pctSinCierre.toFixed(1)} % (${m.sinCierre}) | ${m.minuscula} | ${m.cortos}`,
+    `${libro.clave} | ${m.paginas} | ${m.bloques} | ${m.pctSinCierre.toFixed(1)} % (${m.sinCierre}) | ${m.minuscula} | ${m.cortos} | ${m.pctVozTras.toFixed(1)} % (${m.vozTras})`,
   );
 }

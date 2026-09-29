@@ -418,6 +418,19 @@ const conPausaTitulo = (sale, titulo) =>
     'el saneado no rompe con vacío ni null');
 }
 
+/* ── Encabezados de drill con su pausa (P1.2) ───────────────────────
+ * En los libros prácticos vienen pegados («…herramientas? Ejercicio: La
+ * bola de cristal») y la voz los leía de corrido con lo anterior. */
+{
+  const drill = prepararParaVoz('¿Para cuál precisa herramientas? Ejercicio: La bola de cristal Visual: total.', 'es');
+  comprobar(drill.includes('§P0700§'), '«Ejercicio: …» pegado recibe su pausa de título');
+  comprobar(drill.indexOf('§P0700§') < drill.indexOf('Ejercicio:'), 'y la pausa cae antes del encabezado');
+  const paso = prepararParaVoz('Duerme bien. 2. Analizar el día con calma.', 'es');
+  comprobar(paso.includes('§P0700§'), 'el paso numerado recibe su pausa');
+  const prosa = prepararParaVoz('Hacemos el ejercicio: respirar hondo cada mañana sin falta.', 'es');
+  comprobar(!prosa.includes('§P0700§'), 'en mitad de la frase no se parte («el ejercicio: …»)');
+}
+
 /* ── Idempotencia de la capa de voz (P1.3) ───────────────────────────
  * El texto pasa UNA vez por prepararParaVoz en cada camino (Escuchar,
  * audiolibro, continuación, Desde aquí). Si por error pasara dos, la segunda

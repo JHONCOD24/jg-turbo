@@ -15164,6 +15164,55 @@ function ttsPartirOraciones(texto){
   return raw.length ? raw : [t.replace(/\uE000/g, '.')];
 }
 
+/* Conectores donde una oración larga puede respirar si no hay un signo
+ * mejor en la ventana. El corte cae ANTES del conector: el bloque siguiente
+ * lo abre y la entonación no se parte a mitad de idea.
+ *
+ * Dónde cortar una oración que supera el límite (P1.2): primero en una
+ * frontera de cláusula o en un conector, dentro de la ventana 60–100 % del
+ * límite. El espacio es el último recurso y nunca se corta dentro de una
+ * palabra (un token más largo que el límite, p. ej. una URL, se conserva
+ * entero aunque el bloque crezca). Los comentarios quedan ANTES del const a
+ * propósito: las pruebas extraen cada declaración hasta su último cierre y
+ * un punto y coma dentro de un comentario de atrás la rompería. */
+const TTS_CONECTORES_CORTE = /\b(y|e|o|u|pero|mas|sino|porque|pues|aunque|mientras|cuando|donde|como|si|que|entonces|además|ademas|sin embargo|no obstante|es decir|por tanto|por lo tanto)\b/gi;
+
+/* Corte en frontera de cláusula: devuelve el índice o -1. */
+function ttsCorteClausula(s, desde, limite){
+  const tope = Math.min(desde + limite, s.length);
+  if(tope >= s.length) return s.length;
+  const piso = desde + Math.floor(limite * 0.6);
+  let mejor = -1;
+  let mejorFuerza = -1;
+  const mirar = (pos, fuerza) => {
+    if(pos <= desde || pos < piso || pos > tope) return;
+    if(fuerza > mejorFuerza || (fuerza === mejorFuerza && pos > mejor)){
+      mejor = pos;
+      mejorFuerza = fuerza;
+    }
+  };
+  const ventana = s.slice(desde, tope);
+  let m;
+  const signos = /[;:,—–]\s*/g;
+  while((m = signos.exec(ventana)) !== null){
+    mirar(desde + m.index + m[0].length, m[0][0] === ',' ? 2 : 3);
+  }
+  TTS_CONECTORES_CORTE.lastIndex = 0;
+  while((m = TTS_CONECTORES_CORTE.exec(ventana)) !== null){
+    mirar(desde + m.index, 1);
+  }
+  if(mejor > desde) return mejor;
+  /* Último recurso: el espacio, aunque quede por debajo del 60 %. */
+  const sp = s.lastIndexOf(' ', tope);
+  if(sp > desde) return sp;
+  /* Ni siquiera hay un espacio: token larguísimo (una URL). Se conserva
+   * entero hasta el espacio siguiente (tope +60 de cortesía) antes que
+   * partirlo por la mitad; solo un caso patológico se corta en duro. */
+  const sig = s.indexOf(' ', tope);
+  if(sig > desde && sig <= desde + limite + 60) return sig;
+  return tope;
+}
+
 function ttsPartirTexto(texto, maxLen){
   const limit = maxLen || 260;
   const t = (texto || '').replace(/\s+/g, ' ').trim();
@@ -15182,14 +15231,10 @@ function ttsPartirTexto(texto, maxLen){
       else{
         let i = 0;
         while(i < s.length){
-          let end = Math.min(i + limit, s.length);
-          if(end < s.length){
-            const sp = s.lastIndexOf(' ', end);
-            if(sp > i + 40) end = sp;
-          }
+          const end = ttsCorteClausula(s, i, limit);
           const chunk = s.slice(i, end).trim();
           if(chunk) parts.push(chunk);
-          i = end;
+          i = end <= i ? i + limit : end;
         }
         buf = '';
       }
