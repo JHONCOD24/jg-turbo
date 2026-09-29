@@ -34,6 +34,12 @@ anterior la conversión salía 0 y volvía al inicio);
 `verificar_pdf_navegador` en verde (usa `#pdfDocDonde` en vez de `#pdfNavPos`),
 `verificar_pdf_geometria` con P8.1 en verde. Unitarias PDF/TTS en verde.
 
+**Despliegue:** `dpl_ARxZxzq427BUPPr6piep7fsnH8Xh` READY, alias
+`https://jg-turbo.vercel.app` (`JG_JS_V=v158`, shell-v158, desde copia limpia
+del commit: el árbol sucio tumba el build Python por tamaño). Verificado contra
+el dominio: HTML con v158, `/api/health` ok y `verificar_pdf_movil` 60/60 con
+`JG_BASE=https://jg-turbo.vercel.app`.
+
 ## 2026-09-29 · Fase 3 · Contenido móvil y hoja de voz compacta (P3.1, P6.1)
 
 El teléfono era la prioridad del dueño: «no lo veo muy responsive». Dos
