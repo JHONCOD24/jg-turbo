@@ -1,0 +1,15 @@
+{
+  "reloj.js": "0519dde36ecb6ef04f7d6011518b09397a9e9966d7f9329a128a6513d7fd7df9",
+  "ritmoDoblaje.js": "079fb6c4c63e8cdc4ea1c3e90f761df90824b150e9073d51b383bd453a81c6f7",
+  "planificador.js": "eaf730c74471dd135ec3a86dca7b48e9ae6c57c0a1f461768223b2f3860b9860",
+  "translationService.js": "6382ccd8c00245bb4f50cea43dcd948252f2db3d344e0ed5a9ccb355151de2f7",
+  "motorPreparacion.js": "da4795821e50cd8ace2ad4258788f4b4b99e74c14f44caabb7274327a6c8c553",
+  "dubbingService.js": "0fd2c686615b3c7ccfca1fb0a727e1358ab79238b03f8bccffdf44c6503dd2ed",
+  "hablaVoz.js": "ec27ea10b604f6c5db30655da374e2152f2a96face82b1931b05c517a6f2cbf6",
+  "syncEngine.js": "958d98c4917349c5afaf5556fe9c0ad09410cfe24ce16f340f2544fe1cc2c07a",
+  "limitador.js": "b24d91775dc7e135f4b53248f16bd35cc70b95c88ff1fa0274a3886af14e3a25",
+  "vocesDoblaje.js": "f32adefd47c9b61087b79d364e8c5825082424d8749834c52d90b3ec2fc9faa3",
+  "idiomaOrigen.js": "d61ef638d3cfb9032bec0164ab9fb02685fa5e92d9e9abfce1eb1aea08835b23",
+  "transcriptionService.js": "64bd23bb7abe8361e6d3290b30b4d8a0babfa87c213b083a4814eb5f4a15e31b",
+  "dubbingEngine.js": "f3abe016711dd6b7310e513c33db8c275aa20ab6501bb0083e0b9af92cb2f8eb"
+}

@@ -185,7 +185,7 @@ escribir el lector de subtítulos hay que **medirlo**, no suponerlo.
 - [x] Botón **«Copiar diagnóstico»**.
 - [x] Escribe en `extension-udemy/LEEME.md` los pasos de instalación (Chrome → `chrome://extensions` →
   «Modo de desarrollador» → «Cargar descomprimida» → carpeta `extension-udemy`).
-- [ ] **PARA.** Pide al dueño que abra una clase en inglés, active una vez los subtítulos en inglés (botón
+- [x] **PARA.** Pide al dueño que abra una clase en inglés, active una vez los subtítulos en inglés (botón
   CC de Udemy), le dé play unos segundos y te pegue el diagnóstico. Si es posible, dos clases de cursos
   distintos.
 
@@ -204,11 +204,11 @@ Verificación local de la Tarea 1 (2026-09-29): `node tests/test_udemy_doblaje.m
 Si el video está en un `iframe`, ajusta `all_frames`/`matches` y anótalo en `CAMBIOS_UDEMY.md`.
 
 ### Tarea 2 — Copia del motor
-- [ ] Escribe `copiar_motor.mjs` y ejecútalo.
-- [ ] En `tests/test_udemy_doblaje.mjs`: la huella SHA-256 de cada archivo de `motor/` es igual a la de su
+- [x] Escribe `copiar_motor.mjs` y ejecútalo.
+- [x] En `tests/test_udemy_motor.mjs`: la huella SHA-256 de cada archivo de `motor/` es igual a la de su
   original en `js/youtube/` (normalizando fin de línea: el repo está en CRLF). **Si alguien cambia el motor
   de YouTube y olvida copiar, esta prueba falla.**
-- [ ] Comprueba que ningún archivo de `motor/` importa algo fuera de `motor/`.
+- [x] Comprueba que ningún archivo de `motor/` importa algo fuera de `motor/`. Prueba: 26 OK, 0 fallos.
 
 ### Tarea 3 — Lector de WebVTT (`lib/vtt.js`)
 - [ ] Pruebas primero, con casos reales: cabecera `WEBVTT`, bloques `NOTE`, identificadores de cue,
