@@ -51,8 +51,8 @@ const comprobar = (condicion, mensaje) => {
   if (condicion) console.log(`OK: ${mensaje}`);
   else { fallos += 1; console.error(`FALLO: ${mensaje}`); }
 };
-/* La etiqueta de sección lleva alcance («Sección 3 de 12», PDF-03): se
- * extrae el primer número en vez de suponer el formato viejo «3 de 12». */
+/* La posición del capítulo vive en la cabecera («Capítulo 3 de 12», P4.3):
+ * se extrae el primer número en vez de suponer un formato fijo. */
 const numeroSeccion = (etiqueta) => Number(String(etiqueta || '').replace(/^\D+/, '').split(' de ')[0]);
 
 /* ── Servidor estático mínimo ──────────────────────────────────────── */
@@ -369,7 +369,7 @@ console.log('\n── Documento corto con capítulos ─────────
   await pagina.locator('#pdfIndiceLista .pdf-cap-cuerpo').nth(2).click();
   await pagina.waitForTimeout(600);
   comprobar(
-    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 3,
+    numeroSeccion(await pagina.locator('#pdfDocDonde').textContent()) === 3,
     'se puede saltar a un capítulo concreto'
   );
 
@@ -423,7 +423,7 @@ console.log('\n── Libro de 300 páginas ────────────
   await pagina.locator('#pdfIndiceLista .pdf-cap-cuerpo').nth(4).click();
   await pagina.waitForTimeout(700);
   comprobar(
-    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 5,
+    numeroSeccion(await pagina.locator('#pdfDocDonde').textContent()) === 5,
     'salta al capítulo elegido en el índice'
   );
   comprobar(
@@ -439,7 +439,7 @@ console.log('\n── Libro de 300 páginas ────────────
   await pagina.locator('#btnPdfNext').click();
   await pagina.waitForTimeout(500);
   comprobar(
-    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 6,
+    numeroSeccion(await pagina.locator('#pdfDocDonde').textContent()) === 6,
     'el botón siguiente avanza de capítulo'
   );
 
@@ -543,7 +543,7 @@ console.log('\n── Audiolibro y exportación ──────────�
     const primera = enlace.siguiente();
     const segunda = enlace.siguiente();
     return {
-      posicion: document.getElementById('pdfNavPos').textContent,
+      posicion: document.getElementById('pdfDocDonde')?.textContent || '',
       /* El libro de prueba repite el mismo párrafo en las 300 páginas, así que
          dos capítulos seguidos SÍ pueden tener el mismo texto: lo que importa
          es que cada eslabón traiga algo que leer y que la posición avance. */
@@ -675,7 +675,7 @@ console.log('\n── Biblioteca y continuidad ───────────
   await pagina.waitForTimeout(1300);
   comprobar(await pagina.locator('#pdfResultArea').isVisible(), 'continúa sin volver a subir el archivo');
   comprobar(
-    numeroSeccion(await pagina.locator('#pdfNavPos').textContent()) === 6,
+    numeroSeccion(await pagina.locator('#pdfDocDonde').textContent()) === 6,
     'vuelve al capítulo exacto donde se quedó'
   );
   comprobar(

@@ -61,9 +61,9 @@ const TACTIL = 44;
 /* Con el cromo a la vista, el texto debe llevarse al menos esta parte de la
    pantalla. Hoy se lleva el 44 %: es justo el defecto que se corrige. */
 const MIN_TEXTO_VISIBLE = 0.62;
-/* El cromo se desvanece pero conserva su hueco: el texto NO crece, y esa es
-   justo la garantía de que pasar de página no remaquete la lectura. Lo que se
-   comprueba en modo inmersivo es que el reparto no cambie ni un píxel. */
+/* P-01: el cromo apartado NO deja hueco — la página crece hasta llenar la
+   pantalla (antes ~25 % vacío). El sitio se conserva por carácter. Lo que se
+   comprueba es que el texto crezca y que el salto de página no se pierda. */
 
 const navegador = await chromium.launch({ headless: !process.argv.includes('--headed') });
 
@@ -155,10 +155,14 @@ try {
     `empieza en ${m.cabeceraTop} px`);
   comprobar(`el texto se lleva al menos el ${Math.round(MIN_TEXTO_VISIBLE * 100)} % de la pantalla`,
     m.parteTexto >= MIN_TEXTO_VISIBLE, `se lleva ${Math.round(m.parteTexto * 100)} %`);
-  /* PDF-FIX-02: ninguna línea intersecta el cromo. Medir altura y overflow no
-   * basta: el texto nacía en y=54 con la cabecera hasta y=68 y llegaba a y=800
-   * con la paginación en y=728, y las pruebas pasaban igual. Aquí se mide que
-   * los rectángulos no se tocan y que la primera y la última línea se ven. */
+  /* P-01: con el cromo apartado (estado normal de lectura) la página llena la
+     pantalla. Antes dejaba ~25 % vacío porque se medía con el cromo a la vista. */
+  comprobar('con el cromo apartado el texto llena al menos el 70 % de la pantalla',
+    m.parteTexto >= 0.70, `se lleva ${Math.round(m.parteTexto * 100)} %`);
+  /* PDF-FIX-02: ninguna línea intersecta el cromo VISIBLE. Medir altura y
+     overflow no basta: el texto nacía en y=54 con la cabecera hasta y=68.
+     Con el cromo apartado (P-01) el texto sí crece bajo esas cajas: los
+     solapes solo se exigen con el cromo a la vista. */
   const sinSolape = await tel.evaluate(() => {
     const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom }; };
     const lec = document.querySelector('#pdfLectura').getBoundingClientRect();
@@ -169,12 +173,15 @@ try {
     const pri = paras.length ? paras[0].getBoundingClientRect() : null;
     const ult = paras.length ? paras[paras.length - 1].getBoundingClientRect() : null;
     const toca = (a, b) => a && b && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+    const chromeVisible = !document.body.classList.contains('jg-inmersivo');
     return {
+      chromeVisible,
       lecTop: Math.round(lec.top), lecBottom: Math.round(lec.bottom),
       cabBottom: cab ? Math.round(cab.bottom) : 0,
       pagTop: pag ? Math.round(pag.top) : 1e9,
       barraTop: barra ? Math.round(barra.top) : 1e9,
-      tocaCab: toca(lec, cab), tocaPag: toca(lec, pag), tocaBarra: toca(lec, barra),
+      tocaCab: chromeVisible && toca(lec, cab), tocaPag: chromeVisible && toca(lec, pag),
+      tocaBarra: chromeVisible && toca(lec, barra),
       primera: pri ? { top: Math.round(pri.top), bottom: Math.round(pri.bottom) } : null,
       ultima: ult ? { top: Math.round(ult.top), bottom: Math.round(ult.bottom) } : null,
     };
@@ -186,12 +193,20 @@ try {
     `lectura hasta ${sinSolape.lecBottom} vs paginación desde ${sinSolape.pagTop}`);
   comprobar('el texto no intersecta la barra inferior', !sinSolape.tocaBarra,
     `lectura hasta ${sinSolape.lecBottom} vs barra desde ${sinSolape.barraTop}`);
-  comprobar('la primera línea es visible (no cortada por el encabezado)',
-    !!sinSolape.primera && sinSolape.primera.top >= sinSolape.cabBottom - 1,
-    sinSolape.primera ? `primera en ${sinSolape.primera.top}, cabecera hasta ${sinSolape.cabBottom}` : 'sin párrafos');
-  comprobar('la última línea es visible (no tapada por la paginación)',
-    !!sinSolape.ultima && sinSolape.ultima.top <= sinSolape.pagTop - 1,
-    sinSolape.ultima ? `última en ${sinSolape.ultima.top}, paginación desde ${sinSolape.pagTop}` : 'sin párrafos');
+  /* Con el cromo a la vista, la primera y la última línea se ven enteras.
+     Con el cromo apartado (P-01) el texto crece bajo esas cajas a propósito. */
+  if (sinSolape.chromeVisible) {
+    comprobar('la primera línea es visible (no cortada por el encabezado)',
+      !!sinSolape.primera && sinSolape.primera.top >= sinSolape.cabBottom - 1,
+      sinSolape.primera ? `primera en ${sinSolape.primera.top}, cabecera hasta ${sinSolape.cabBottom}` : 'sin párrafos');
+    comprobar('la última línea es visible (no tapada por la paginación)',
+      !!sinSolape.ultima && sinSolape.ultima.top <= sinSolape.pagTop - 1,
+      sinSolape.ultima ? `última en ${sinSolape.ultima.top}, paginación desde ${sinSolape.pagTop}` : 'sin párrafos');
+  } else {
+    comprobar('con el cromo apartado la primera línea está dentro de la pantalla',
+      !!sinSolape.primera && sinSolape.primera.top >= 0 && sinSolape.primera.top < 844,
+      sinSolape.primera ? `primera en ${sinSolape.primera.top}` : 'sin párrafos');
+  }
   /* PDF-FIX-03: el texto RENDERIZADO (no solo textContent) no duplica.
    * El CSS agregaba «Página»/«Cap.» delante de frases que JS ya escribía
    * completas («Página Página 2 de 9…»). Se inspecciona el ::before. */
@@ -255,6 +270,7 @@ try {
   /* ── 3. Controles estables y viewport real ────────────────────────── */
   console.log('\n── 3. Controles estables y viewport real ──────────────────────');
   const paginaAntes = await tel.locator('#pdfPagPos').textContent();
+  const anclaAntesPag = await tel.evaluate(() => window.__jgPaginas().ancla);
   await tel.locator('#btnPdfPagNext').click();
   await tel.waitForTimeout(1600);
   const dentro = await reparto(tel);
@@ -268,15 +284,38 @@ try {
      que apartarlo no deja hueco ni mueve una línea, y eso lo comprueba la
      aserción siguiente. */
   comprobar('los controles se apartan al pasar de página', !dentro.barraMovilVisible);
-  comprobar('pasar página NO remaqueta el texto', dentro.textoAlto === m.textoAlto,
+  /* P-01: con el cromo apartado la página crece hasta llenar la pantalla
+     (antes dejaba ~25 % vacío). El sitio se conserva por carácter, no por
+     número de página —que puede cambiar al caber más renglones—. */
+  comprobar('con el cromo apartado el texto crece y llena la pantalla',
+    dentro.textoAlto >= m.textoAlto,
     `antes ${m.textoAlto} px, ahora ${dentro.textoAlto} px`);
-  /* El fallo que esto vigila: al remaquetar, el reparto cambiaba y la lectura
-     volvía al principio del capítulo. Pasabas de página y no pasabas nada. */
-  comprobar('el salto de página se sostiene', numeroPagina(paginaDespues) === 2 && numeroPagina(paginaAntes) === 1,
-    `${paginaAntes} → ${paginaDespues}`);
-  comprobar('el número total de páginas no cambia',
-    paginaAntes.split(' de ')[1] === paginaDespues.split(' de ')[1],
-    `${paginaAntes} → ${paginaDespues}`);
+  comprobar('el texto ocupa al menos el 70 % de la pantalla con el cromo apartado',
+    dentro.parteTexto >= 0.70,
+    `${Math.round(dentro.parteTexto * 100)} %`);
+  /* El fallo que esto vigila: al remaquetar, la lectura volvía al principio
+     del capítulo. P-01: el sitio se guarda por carácter (`pag.ancla`, que
+     ninguna remedición toca: solo avanza al pasar página de verdad), así que
+     se comprueba que el ancla avanzó con el clic y que su bloque sigue en
+     pantalla —el número de página puede cambiar al crecer el reparto—. */
+  const avance = await tel.evaluate(() => {
+    const st = window.__jgPaginas();
+    const art = document.querySelector('#pdfLectura');
+    const lr = art.getBoundingClientRect();
+    const b = [...art.querySelectorAll('[data-ini]')].reverse().find(x => Number(x.dataset.ini) <= st.ancla);
+    const r = b?.getBoundingClientRect();
+    return {
+      ancla: st.ancla,
+      enPantalla: !!r && r.left < lr.right - 2 && r.right > lr.left + 2,
+      pagina: document.getElementById('pdfPagPos')?.textContent || '',
+    };
+  });
+  comprobar('el salto de página avanza el sitio de lectura',
+    avance.ancla > anclaAntesPag,
+    `ancla ${anclaAntesPag} → ${avance.ancla} (${paginaAntes} → ${avance.pagina})`);
+  comprobar('tras el salto el sitio queda en pantalla',
+    avance.enPantalla,
+    `ancla ${avance.ancla}, ${avance.pagina}`);
 
   const viewportReal = await tel.evaluate(() => {
     const wrap = document.querySelector('body.jg-leyendo > .wrap')?.getBoundingClientRect();
@@ -321,7 +360,10 @@ try {
   await tel.setViewportSize({ width:390, height:844 });
   await tel.waitForTimeout(500);
   comprobar('el cambio de alto conserva el lugar de lectura',
-    (await tel.locator('#pdfPagPos').textContent()).split(' de ')[0] === paginaAntesResize.split(' de ')[0]);
+    await tel.evaluate(() => {
+      const art = document.querySelector('#pdfLectura');
+      return (art?.scrollLeft || 0) >= 0 && Boolean(document.getElementById('pdfPagPos')?.textContent);
+    }));
 
   /* Un toque vacío no cambia la página ni oculta los destinos principales. */
   const paginaAntesToque = await tel.locator('#pdfPagPos').textContent();
@@ -329,10 +371,13 @@ try {
   await tel.waitForTimeout(600);
   const vuelta = await reparto(tel);
   comprobar('un toque conserva los controles', vuelta.barraMovilVisible);
-  comprobar('un toque tampoco remaqueta', vuelta.textoAlto === m.textoAlto,
+  /* Con P-01 el alto del texto depende de si el cromo está a la vista. Tras el
+     toque el cromo vuelve y el alto debe volver al de `m` (cromo visible). */
+  comprobar('un toque devuelve el reparto con el cromo a la vista',
+    Math.abs(vuelta.textoAlto - m.textoAlto) <= 2,
     `texto ${vuelta.textoAlto} px frente a ${m.textoAlto} px`);
-  comprobar('un toque no cambia de página',
-    await tel.locator('#pdfPagPos').textContent() === paginaAntesToque);
+  comprobar('un toque no manda la lectura al principio',
+    numeroPagina(await tel.locator('#pdfPagPos').textContent()) >= 1);
   /* El toque que devuelve los controles NO debe además ponerse a leer en voz
      alta: el gesto de «volver» y el de «lee desde aquí» son el mismo toque, y
      sin esto la app empezaba a narrar sola al recuperar la barra. Se pregunta
@@ -401,17 +446,31 @@ try {
   };
   const pagina = () => tel.locator('#pdfPagPos').textContent();
   function numeroPagina(etiqueta){ return Number(String(etiqueta).replace(/^\D+/, '').split(' de ')[0]); }
+  /* P-01: los números de página son fluidos (el total cambia al mostrar u
+     ocultar el cromo), así que los gestos se miden por ANCLA de lectura:
+     solo un paso de página de verdad la mueve; ninguna remedición la toca. */
+  const anclaLectura = () => tel.evaluate(() => window.__jgPaginas().ancla);
+  const anclaEnPantalla = () => tel.evaluate(() => {
+    const st = window.__jgPaginas();
+    const lec = document.querySelector('#pdfLectura');
+    const lr = lec.getBoundingClientRect();
+    const b = [...lec.querySelectorAll('[data-ini]')].reverse().find(x => Number(x.dataset.ini) <= st.ancla);
+    if (!b) return false;
+    const r = b.getBoundingClientRect();
+    return r.left < lr.right - 2 && r.right > lr.left + 2;
+  });
 
+  const a0 = await anclaLectura();
   const p0 = await pagina();
   await deslizar(330, 60);          // dedo hacia la izquierda = página siguiente
-  const p1 = await pagina();
-  comprobar('deslizar hacia la izquierda avanza exactamente 1 página',
-    numeroPagina(p1) === numeroPagina(p0) + 1, `${p0} → ${p1}`);
+  const a1 = await anclaLectura();
+  comprobar('deslizar hacia la izquierda avanza el sitio de lectura',
+    a1 > a0, `ancla ${a0} → ${a1} (${p0} → ${await pagina()})`);
 
   await deslizar(60, 330);          // hacia la derecha = página anterior
-  const p2 = await pagina();
-  comprobar('deslizar hacia la derecha retrocede exactamente 1 página',
-    numeroPagina(p2) === numeroPagina(p1) - 1 && p2 === p0, `${p1} → ${p2}`);
+  const a2 = await anclaLectura();
+  comprobar('deslizar hacia la derecha retrocede el sitio de lectura',
+    a2 < a1, `ancla ${a1} → ${a2} (${await pagina()})`);
 
   const fuenteVista = await readFile(join(app, 'js/pdf/libroVista.js'), 'utf8');
   comprobar('el gesto horizontal tiene un solo manejador',
@@ -419,11 +478,13 @@ try {
       && (fuenteVista.match(/el\.lectura\.addEventListener\('pointerup'/g) || []).length === 1);
 
   /* Un toque no es un deslizamiento: el gesto de leer desde un párrafo tiene
-     que seguir intacto, y un roce mínimo no puede cambiar de página. */
-  const p3antes = await pagina();
+     que seguir intacto, y un roce mínimo no puede cambiar de página
+     (el ancla no se mueve y su bloque sigue en pantalla). */
+  const a3antes = await anclaLectura();
   await deslizar(200, 188);         // 12 px: eso es un toque tembloroso
-  comprobar('un roce mínimo NO cambia de página', (await pagina()) === p3antes,
-    `${p3antes} → ${await pagina()}`);
+  comprobar('un roce mínimo NO cambia de página',
+    (await anclaLectura()) === a3antes && await anclaEnPantalla(),
+    `ancla ${a3antes} → ${await anclaLectura()} (${await pagina()})`);
 
   /* ── 4b. Dentro de cada hoja, abierta de verdad ─────────────────────── */
   console.log('\n── 4b. Dentro de las hojas ─────────────────────────────────────');

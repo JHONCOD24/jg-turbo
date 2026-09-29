@@ -1531,3 +1531,49 @@ podían verlo.
 doblada debe incluir voz con silencio a los lados (`voz_real_es.mp3` en
 `tests/fixtures/biblioteca/`, o el caso «silencio delante y detrás» del
 simulador).
+
+
+## P-01 revierte «apartar el cromo no remaqueta»: ahora sí agranda y el sitio se guarda por carácter (2026-09-29)
+
+**Síntoma:** en modo Páginas del teléfono la página dejaba ~25 % vacío con el
+cromo apartado. **Causa:** la trampa v2.41 («Con páginas, apartar el cromo
+remaqueta y deshace el salto») obligaba a reservar el hueco siempre; con el
+cromo flotante (ixed) eso dejaba margen muerto. **Regla nueva (P-01):** con
+el cromo apartado la reserva cae a 0 y la página crece; el sitio se conserva
+por el carácter de pag.ancla, nunca por número de página (el total cambia al
+caber más renglones). La trampa v2.41 queda sustituida para este caso; sigue
+valiendo que el cromo no sale del flujo (solo opacity:0).
+
+## Medir el rect del ancla con el scroll del reparto anterior manda al inicio (2026-09-29)
+
+**Síntoma:** tras pasar página en el teléfono con P-01, la lectura volvía a la
+página 1 (scroll 0) aunque el rango del ancla existía y tenía rect. **Causa:**
+medirPaginas medía angoDeCaracter con el scrollLeft del reparto
+ANTERIOR aplicado al layout NUEVO (otro total y otro paso): la conversión
+.left - base.left + scrollViejo apuntaba a otro carácter y el
+desplazamiento salía 0. **Regla:** antes de medir el rect, llevar el scroll a
+0 y convertir solo con el layout nuevo (.left - base.left - 2). Medido:
+el mismo caso pasó de scroll 0 a conservar el sitio en erificar_pdf_paginas.
+
+## El cromo ixed no dispara el ResizeObserver: hay que observar la clase (2026-09-29)
+
+**Síntoma:** al mostrar el cromo con un toque, el texto seguía crecido debajo
+y tapaba la paginación (los botones ‹ › dejaban de ser pulsables). **Causa:**
+mostrar/ocultar el cromo no cambia el tamaño de .pdf-texto-col (el cromo es
+ixed), así que el ResizeObserver no se enteraba y la reserva quedaba con el
+valor del otro estado. **Regla:** un MutationObserver sobre la clase
+jg-inmersivo de document.body llama a programarMedicion(60) en cada
+transición, venga de inmersivo() o de un toque directo a la clase (las
+pruebas también la tocan).
+
+## Con páginas fluidas (P-01), las pruebas miden el ancla, no la etiqueta (2026-09-29)
+
+**Síntoma:** erificar_pdf_paginas y erificar_pdf_movil fallaban con el
+sitio intacto («ancla 839 → 0», «1 de 7 → 2 de 9»): comparaban primer bloque
+visible o etiqueta «Página X de Y», que cambian al refluir aunque el carácter
+siga en pantalla. **Causa:** con P-01 el total y los números se mueven en cada
+transición del cromo; la referencia estable es pag.ancla (solo avanza al
+pasar página de verdad: ninguna remedición la toca), expuesta para pruebas
+como window.__jgPaginas(). **Regla:** en paginado con cromo flotante, los
+gestos y transiciones se afirman por ancla (avanza / no se mueve / su bloque
+sigue en pantalla), nunca por igualdad de etiquetas.

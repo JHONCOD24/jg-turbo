@@ -98,36 +98,37 @@ try {
   await p.locator('#btnPdfPagNext').click(); await p.waitForTimeout(400);
   medida=await medir(); assert(medida.desplazamiento>100,'siguiente mueve el texto');
   assert(numeroPagina(medida.paginas)===2); assert.equal(await p.locator('#pdfOutput').inputValue(),texto);
-  /* PDF-FIX-02: ocultar y recuperar el cromo conserva página y ancla, y mueve
-   * exactamente una página al avanzar. La caja paginada es idéntica en ambos
-   * modos (la reserva no cambia), así que el total no se mueve. */
+  /* P-01: ocultar el cromo HACE crecer la página (antes dejaba ~25 % vacío).
+     El total de páginas puede bajar al caber más renglones; lo que se exige
+     es que el sitio guardado (`pag.ancla`) siga EN PANTALLA tras cada
+     transición. Se comprueba con el bloque que contiene el ancla (su rect
+     se solapa con la lectura), no con el primer bloque visible ni con la
+     distancia exacta: al crecer la página, el mismo carácter cae más adentro
+     de su página y el primer visible retrocede aunque nada se haya perdido. */
   if (nombre === 'movil' || nombre === 'estrecho') {
-    const totalAntes = medida.paginas.split(' de ')[1];
-    const anclaAntes = await p.evaluate(() => {
+    await p.waitForTimeout(800);
+    const base = await p.evaluate(() => window.__jgPaginas());
+    const anclaVisible = () => p.evaluate(() => {
+      const st = window.__jgPaginas();
       const lec = document.querySelector('#pdfLectura');
-      const bloques = [...lec.querySelectorAll('[data-ini]')];
       const lr = lec.getBoundingClientRect();
-      for (const b of bloques) { if (b.getBoundingClientRect().left >= lr.left - 2) return Number(b.dataset.ini); }
-      return -1;
+      const b = [...lec.querySelectorAll('[data-ini]')].reverse().find(x => Number(x.dataset.ini) <= st.ancla);
+      if (!b) return { ok: false, motivo: 'sin bloque para el ancla', ancla: st.ancla };
+      const r = b.getBoundingClientRect();
+      const solapa = r.left < lr.right - 2 && r.right > lr.left + 2;
+      return { ok: solapa, ancla: st.ancla, bloque: Number(b.dataset.ini), left: Math.round(r.left), right: Math.round(r.right) };
     });
-    await p.evaluate(() => document.body.classList.add('jg-inmersivo'));
-    await p.waitForTimeout(500);
-    const oculto = await p.evaluate(() => document.querySelector('#pdfPagPos').textContent);
     await p.evaluate(() => document.body.classList.remove('jg-inmersivo'));
-    await p.waitForTimeout(500);
+    await p.waitForTimeout(600);
     const vuelto = await p.evaluate(() => document.querySelector('#pdfPagPos').textContent);
-    assert.equal(oculto.split(' de ')[1], totalAntes, 'ocultar el cromo no cambia el total de páginas');
-    assert.equal(vuelto.split(' de ')[1], totalAntes, 'recuperar el cromo no cambia el total de páginas');
-    assert.equal(vuelto.split(' de ')[0], oculto.split(' de ')[0], 'ocultar/recuperar conserva la página');
-    const anclaDespues = await p.evaluate(() => {
-      const lec = document.querySelector('#pdfLectura');
-      const bloques = [...lec.querySelectorAll('[data-ini]')];
-      const lr = lec.getBoundingClientRect();
-      for (const b of bloques) { if (b.getBoundingClientRect().left >= lr.left - 2) return Number(b.dataset.ini); }
-      return -1;
-    });
-    assert.equal(anclaDespues, anclaAntes, `el ancla se conserva (${anclaAntes})`);
-    console.log('OK:', nombre, 'cromo estable: página y ancla intactos');
+    const vis1 = await anclaVisible();
+    assert(vis1.ok, `al mostrar el cromo el ancla sigue en pantalla (${JSON.stringify(vis1)}, ${vuelto})`);
+    await p.evaluate(() => document.body.classList.add('jg-inmersivo'));
+    await p.waitForTimeout(600);
+    const oculto = await p.evaluate(() => document.querySelector('#pdfPagPos').textContent);
+    const vis2 = await anclaVisible();
+    assert(vis2.ok, `al ocultar el cromo el ancla sigue en pantalla (${JSON.stringify(vis2)}, ${oculto})`);
+    console.log('OK:', nombre, `P-01: el sitio se conserva con el cromo oculto y de vuelta (ancla ${base.ancla})`);
   }
   /* En el teléfono, Apariencia / Contenido / Opciones se accionan desde la
      barra del pulgar; en tablet y escritorio siguen en la cabecera. */
@@ -158,31 +159,44 @@ try {
   if (nombre==='movil') {
     /* Gestos con eventos táctiles sintéticos (el ratón no cuenta: el lector
      * solo atiende dedo/lápiz). Reproduce lo que el usuario reportó: gestos
-     * que no responden, diagonales muertas y bloqueo tras seleccionar. */
+     * que no responden, diagonales muertas y bloqueo tras seleccionar.
+     * P-01: los números de página son fluidos (el total cambia al mostrar u
+     * ocultar el cromo), así que los gestos se miden por ANCLA de lectura
+     * (`pag.ancla`, que solo avanza al pasar página de verdad: ninguna
+     * remedición la toca), no por la etiqueta «Página X de Y». */
     const deslizar = (x1,y1,x2,y2) => p.evaluate(([a,b,c,d]) => {
       const el = document.querySelector('#pdfLectura');
       const base = { bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 7, isPrimary: true };
       el.dispatchEvent(new PointerEvent('pointerdown', { ...base, clientX: a, clientY: b }));
       el.dispatchEvent(new PointerEvent('pointerup', { ...base, clientX: c, clientY: d }));
     }, [x1,y1,x2,y2]);
-    const pagina = () => p.locator('#pdfPagPos').textContent();
-    let antes = await pagina();
+    const ancla = () => p.evaluate(() => window.__jgPaginas().ancla);
+    const anclaEnPantalla = () => p.evaluate(() => {
+      const st = window.__jgPaginas();
+      const lec = document.querySelector('#pdfLectura');
+      const lr = lec.getBoundingClientRect();
+      const b = [...lec.querySelectorAll('[data-ini]')].reverse().find(x => Number(x.dataset.ini) <= st.ancla);
+      if (!b) return false;
+      const r = b.getBoundingClientRect();
+      return r.left < lr.right - 2 && r.right > lr.left + 2;
+    });
+    let anclaAntes = await ancla();
     await deslizar(300, 400, 180, 405); await p.waitForTimeout(700);
-    assert.notEqual(await pagina(), antes, 'deslizar a la izquierda pasa página');
-    antes = await pagina();
+    assert((await ancla()) > anclaAntes, 'deslizar a la izquierda pasa página');
+    anclaAntes = await ancla();
     await deslizar(200, 400, 185, 402); await p.waitForTimeout(700);
-    assert.equal(await pagina(), antes, 'un roce corto no pasa página');
+    assert((await ancla()) === anclaAntes && await anclaEnPantalla(), 'un roce corto no pasa página');
     await deslizar(200, 520, 195, 380); await p.waitForTimeout(700);
-    assert.notEqual(await pagina(), antes, 'deslizar hacia arriba también avanza');
+    assert((await ancla()) > anclaAntes, 'deslizar hacia arriba también avanza');
     /* Una selección vieja no puede bloquear los gestos para siempre. */
     await p.evaluate(() => {
       const par = document.querySelector('#pdfLectura p');
       if (par) document.getSelection().selectAllChildren(par);
     });
     await p.waitForTimeout(950);
-    antes = await pagina();
+    anclaAntes = await ancla();
     await deslizar(300, 400, 180, 405); await p.waitForTimeout(700);
-    assert.notEqual(await pagina(), antes, 'con selección vieja el gesto sigue pasando página');
+    assert((await ancla()) > anclaAntes, 'con selección vieja el gesto sigue pasando página');
     await p.evaluate(() => document.getSelection().removeAllRanges());
   }
   await abrirHerramientas(p);
