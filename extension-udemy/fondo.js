@@ -18,16 +18,30 @@ chrome.webRequest.onCompleted.addListener(async ({ tabId, url }) => {
   try {
     const parsed = new URL(url);
     if (!/\.vtt$/i.test(parsed.pathname)) return;
-    await chrome.storage.session.set({ [CLAVE_VTT(tabId)]: rutaPublica(url) });
+    const tab = await chrome.tabs.get(tabId);
+    const clase = new URL(tab.url).pathname;
+    const datos = await chrome.storage.session.get(CLAVE_VTT(tabId));
+    const anterior = datos[CLAVE_VTT(tabId)];
+    const urls = anterior?.clase === clase ? anterior.urls || [] : [];
+    await chrome.storage.session.set({ [CLAVE_VTT(tabId)]: { clase, urls: [...new Set([...urls, url])].slice(-8) } });
   } catch {
     // Un recurso ajeno mal formado no debe interrumpir el diagnóstico.
   }
 }, { urls: ['https://*.udemycdn.com/*'] });
 
 chrome.runtime.onMessage.addListener((mensaje, remitente, responder) => {
-  if (mensaje?.tipo !== 'vttObservado' || !Number.isInteger(mensaje.tabId)) return;
-  chrome.storage.session.get(CLAVE_VTT(mensaje.tabId))
-    .then((dato) => responder(dato[CLAVE_VTT(mensaje.tabId)] || null))
+  const tabId = mensaje?.tipo === 'vttObservado' ? mensaje.tabId : remitente.tab?.id;
+  if (!Number.isInteger(tabId)) return;
+  if (mensaje.tipo === 'olvidarVtt') { chrome.storage.session.remove(CLAVE_VTT(tabId)); return; }
+  if (!['vttObservado', 'vttParaLeer'].includes(mensaje.tipo)) return;
+  chrome.storage.session.get(CLAVE_VTT(tabId))
+    .then((dato) => {
+      const registro = dato[CLAVE_VTT(tabId)];
+      if (mensaje.tipo === 'vttObservado') return responder(rutaPublica(registro?.urls?.at(-1)));
+      const mismaClase = registro?.clase === new URL(remitente.url).pathname;
+      const url = mismaClase ? registro.urls.findLast((u) => /\/en(?:[_-][a-z]{2})?\//i.test(new URL(u).pathname)) : null;
+      responder(url || null);
+    })
     .catch(() => responder(null));
   return true;
 });

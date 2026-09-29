@@ -239,15 +239,16 @@ Si el video está en un `iframe`, ajusta `all_frames`/`matches` y anótalo en `C
 `node tests/test_udemy_reproductor.mjs`: 16 OK, 0 fallos.
 
 ### Tarea 5 — Puente en la página (`udemy.js`)
-- [ ] Al conectar, guarda el estado original del video (`volume`, `muted`, `playbackRate`) para `restaurar`.
-- [ ] Obedece las órdenes solo sobre el `<video>`; `play` y `pausa` llaman a `video.play()`/`pause()`, nunca a
+- [x] Al conectar, guarda el estado original del video (`volume`, `muted`, `playbackRate`) para `restaurar`.
+- [x] Obedece las órdenes solo sobre el `<video>`; `play` y `pausa` llaman a `video.play()`/`pause()`, nunca a
   botones de Udemy (A6).
-- [ ] `leerSubtitulos`: aplica la fuente decidida en la Tarea 1 y devuelve `{ idioma, etiqueta, segmentos }`.
+- [x] `leerSubtitulos`: aplica la fuente decidida en la Tarea 1 y devuelve `{ idioma, etiqueta, segmentos }`.
   Solo pistas en inglés (`language` que empiece por `en` o etiqueta «English», con o sin «[Auto]»). Si la
   clase no las tiene, responde `{ error: 'sin_ingles' }`.
-- [ ] **Cambio de clase:** Udemy es una SPA; detecta el cambio por URL (`/learn/lecture/<n>`) o porque el
+- [x] **Cambio de clase:** Udemy es una SPA; detecta el cambio por URL (`/learn/lecture/<n>`) o porque el
   `<video>` se reemplaza o emite `emptied`. Avisa al panel. **No navega nunca.**
-- [ ] Al desconectarse el `Port` (se cerró el panel): `restaurar` automáticamente y quitar el subtítulo (A7).
+- [x] Al desconectarse el `Port` (se cerró el panel): `restaurar` automáticamente (A7).
+  `node tests/verificar_udemy_doblaje.mjs --puente`: 7 OK, 0 fallos. El subtítulo se agrega en Tarea 8.
 
 ### Tarea 6 — Adaptadores de la API (`lib/api.js`)
 - [ ] Base fija `https://jg-turbo.vercel.app/api`, sobreescribible solo desde `chrome.storage.local`
