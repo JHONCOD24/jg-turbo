@@ -15,7 +15,7 @@ import { TranslationService } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
 import { SyncEngine, normalizarTasa } from './syncEngine.js';
 import { TranscriptionDisplay } from './TranscriptionDisplay.js';
-import { DubbingService, agruparPorTiempo, textoDeUnidad } from './dubbingService.js';
+import { DubbingService, agruparPorTiempo, prepararTextoDeUnidad } from './dubbingService.js';
 import { DubbingEngine } from './dubbingEngine.js';
 import { MotorPreparacion } from './motorPreparacion.js';
 import { crearLimitador } from './limitador.js';
@@ -1041,10 +1041,11 @@ export function inicializarYoutubeSincronizado({
     });
     registro.traducciones = [...mapa];
     guardarDoblaje(registro);
-    return agruparPorTiempo(registro.segmentos).map((unidad) => ({
+    const unidades = agruparPorTiempo(registro.segmentos);
+    return unidades.map((unidad) => ({
       indice: unidad.indice, startTime: unidad.startTime, hablante: unidad.hablante,
-      texto: textoDeUnidad(unidad, mapa) || '',
-    }));
+      texto: prepararTextoDeUnidad(unidades, unidad.indice, mapa) || '',
+    })).filter((unidad) => unidad.texto);
   }
 
   /** Lo que el diálogo de descargas necesita ANTES del clic (tamaños, calidades). */
