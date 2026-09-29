@@ -1313,7 +1313,7 @@ export function initLibroVista({ el, estado, api }) {
   let vozEsperaInicio = false;
   const VOZ_PROPIOS = new Set([
     'Voz inactiva', 'Preparando la voz…', 'Reproduciendo',
-    'Voz en pausa', 'Lectura finalizada', 'No se pudo iniciar la voz',
+    'Voz en pausa', 'Terminaste el libro', 'No se pudo iniciar la voz',
   ]);
   function pintarEstadoVoz(nombre, texto) {
     if (!dock) return;
@@ -1343,7 +1343,7 @@ export function initLibroVista({ el, estado, api }) {
         vozEsperaInicio = false;
         pintarEstadoVoz('error', 'No se pudo iniciar la voz');
       } else if (vozFinPdf) {
-        pintarEstadoVoz('finalizado', 'Lectura finalizada');
+        pintarEstadoVoz('finalizado', 'Terminaste el libro');
       } else {
         pintarEstadoVoz('inactivo', 'Voz inactiva');
       }
@@ -1358,7 +1358,7 @@ export function initLibroVista({ el, estado, api }) {
     if (e?.detail?.sourceId !== 'pdf') return;
     vozFinPdf = true;
     vozEsperaInicio = false;
-    pintarEstadoVoz('finalizado', 'Lectura finalizada');
+    pintarEstadoVoz('finalizado', 'Terminaste el libro');
   });
   document.addEventListener('jg-tts-detener', () => {
     vozFinPdf = false;

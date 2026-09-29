@@ -118,6 +118,18 @@ lo tomó. Si Fish responde `respaldo=1` constante: ver fusible, §v2.88.0.
 
 ---
 
+## 2026-09-29 · Fase 1 PDF · continuidad del motor entre capítulos (sin versión: un solo JG_JS_V al final de la tanda)
+
+**Cambio en el motor compartido (`index.html`), acotado a origen pdf con
+proveedor `window.jgPdfVoz`:** `ttsHablar` marca la cola con su capítulo;
+`ttsPdfEncolarSiguiente` añade el siguiente a la misma cola cuando queda
+menos que `TTS_COLCHON_SEG`; `ttsPdfSeguirVista` mueve la vista al empezar
+su primer bloque; `ttsFinLectura` solo termina al final del libro. Las demás
+pestañas (Micrófono, Archivo, Traducir, Videos) no tocan este camino: sin
+proveedor todo sigue igual. Detalle y cifras: `CAMBIOS_PDF.md` §Fase 1.
+
+---
+
 ---
 
 ## Nuevo en v2.88.2 · el aviso nombra el respaldo real: Azure o Edge (2026-09-18)

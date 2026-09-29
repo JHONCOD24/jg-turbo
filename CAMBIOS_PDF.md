@@ -3,6 +3,50 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-29 · Fase 1 · La voz no se detiene entre capítulos (S-04/P4.1)
+
+Lo pedido: «toca darle play en cada página para que siga». En Desplazamiento
+la continuidad paraba el audio, esperaba a pintar el capítulo y creaba una
+cola nueva; con la pantalla apagada o la app en segundo plano el navegador
+congela esos temporizadores y la lectura no volvía sola. En Páginas
+(predeterminado) ni siquiera encadenaba: «Lectura finalizada» a mitad del
+libro.
+
+**Corrección (misma ruta para Escuchar, ▶ de cabecera, «Desde aquí», mini
+reproductor y audiolibro: todos pasan por `ttsHablar` con origen pdf):**
+- `js/pdf/pdfController.js` expone `window.jgPdfVoz` (`capituloActual`,
+  `siguienteTras` sin mover la vista, `mostrar` sin tocar el audio).
+  `siguienteTras` devuelve el capítulo siguiente ya preparado para la voz,
+  con su silencio de 1000 ms (o sin pausa si es continuación del mismo
+  párrafo). `mostrar` mueve la vista con la parte original (sin reiniciar la
+  voz) y renueva la sesión de la guía con el capítulo nuevo.
+- `index.html`: cuando a la cola le quedan menos segundos que el colchón
+  (`TTS_COLCHON_SEG`), los bloques del capítulo siguiente se añaden a la
+  MISMA cola (camino `continuation` generalizado). La vista pasa al capítulo
+  nuevo cuando empieza a sonar su primer bloque (también durante su silencio
+  de capítulo); el audio no espera a la vista. Solo origen pdf con
+  proveedor: las demás pestañas quedan igual. El motor del navegador
+  (`speechSynthesis`) encadena en ambos modos con relevo (ahí sí hay corte,
+  es el respaldo).
+- Fin del libro: «Terminaste el libro» (antes «Lectura finalizada» /
+  «Terminó la lectura del documento»). A mitad nunca sale.
+- Sesión multimedia: no se toca; como el audio ya no se detiene entre
+  capítulos, la sesión sigue activa con pausa y siguiente/anterior (los
+  manejadores ya existían).
+- «Escuchar el documento completo» NO se retira en esta fase: queda para
+  P4.2 (Fase 4), porque `verificar_pdf_navegador` y el flujo de Opciones aún
+  lo usan y ahora hace lo mismo que Escuchar.
+
+**Pruebas:** `verificar_pdf_navegador` §8b con voz simulada (WAV 0,4 s por
+bloque): tres capítulos seguidos en Páginas y en Desplazamiento con un solo
+clic — misma cola (3 encolados), vista que sigue, 0 pauses a mitad, todo
+ended con play en ~1 s (el silencio de capítulo), sin «Lectura finalizada»
+a mitad. Total: 138 comprobaciones (137 OK + 1 FALLO preexistente del OCR,
+documentado desde v2.81.0). `test_pdf_continuidad`, `test_tts_narracion`,
+`test_pdf_voz`, `test_tts_voz_estable` y `test_pdf_movil_y_scroll_continuo`
+en verde. La prueba real con pantalla apagada solo se puede hacer en el
+dominio: anotada para la verificación final.
+
 ## 2026-09-29 · P1.1 · Línea base de bloques de voz (plan de auditoría del lector)
 
 Medición con el motor real antes de tocar la segmentación: extracción en el

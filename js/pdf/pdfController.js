@@ -4659,7 +4659,7 @@ export function inicializarLectorPdf(deps = {}) {
       },
       alTerminar: () => {
         detenerAudiolibro();
-        avisar('Terminó la lectura del documento.', 'ok');
+        avisar('Terminaste el libro.', 'ok');
       },
     });
 
@@ -7064,7 +7064,7 @@ export function inicializarLectorPdf(deps = {}) {
     let idx = estado.parteActual + 1;
     while (idx < estado.partes.length && !capaDe(idx)) idx += 1;
     if (idx >= estado.partes.length) {
-      avisar('Terminó la lectura del documento.', 'ok');
+      avisar('Terminaste el libro.', 'ok');
       return false;
     }
 
@@ -7074,6 +7074,67 @@ export function inicializarLectorPdf(deps = {}) {
       }, 60);
     });
     return true;
+  };
+
+  /* ── Proveedor de continuidad para el motor de voz (S-04/P4.1) ──────────
+   * La voz del PDF nunca se detiene entre capítulos, en Páginas y en
+   * Desplazamiento: el motor añade el capítulo siguiente a la MISMA cola
+   * antes de que se acabe la actual y mueve la vista cuando empieza a sonar
+   * su primer bloque. `siguienteTras` NO mueve la vista (solo da el texto ya
+   * preparado para la voz, con su silencio de capítulo de 1000 ms); `mostrar`
+   * mueve la vista SIN tocar el audio (por eso llama a la parte original, no
+   * al envoltorio que reinicia la voz al saltar). Al mover la vista se renueva
+   * la sesión de la guía con el capítulo nuevo, para que la marca no ancle el
+   * capítulo que suena contra el texto del anterior.
+   */
+  window.jgPdfVoz = {
+    capituloActual() {
+      return hayDocumento() ? estado.parteActual : -1;
+    },
+    siguienteTras(indice) {
+      if (!hayDocumento()) return null;
+      const desde = Number.isFinite(indice) && indice >= 0 ? Math.floor(indice) : estado.parteActual;
+      const lang = estado.vista === 'es' ? 'es' : idiomaActual();
+      const capaDe = (i) => (
+        estado.textoAprobadoPorBloque.get(`cap_${i}`)
+        || estado.textoSeguroPorBloque.get(`cap_${i}`)
+        || textoDeParte(i) || ''
+      ).trim();
+      /* Un capítulo que quedó vacío al limpiar el PDF no tiene nada que leer:
+       * se salta, igual que ya hacía el audiolibro. */
+      let idx = desde + 1;
+      while (idx < estado.partes.length && !capaDe(idx)) idx += 1;
+      if (idx >= estado.partes.length) return null;
+      const hablado = prepararParaVoz(capaDe(idx), lang, { neural: true });
+      if (!hablado.trim()) return null;
+      const esContinuacion = Boolean(estado.partes[idx]?.continuation);
+      return {
+        indice: idx,
+        texto: esContinuacion ? hablado : conPausaDeCapitulo(hablado),
+        lang,
+        continuation: esContinuacion,
+      };
+    },
+    mostrar(indice) {
+      if (!hayDocumento() || !enModoLectura()) return false;
+      const nuevo = Math.max(0, Math.min(indice, estado.partes.length - 1));
+      if (nuevo === estado.parteActual) return true;
+      /* La guía sigue el capítulo que suena, no el que se veía: se fija su
+       * texto y se fuerza a situar de nuevo en el siguiente avance. */
+      try {
+        guia.textoFijado = textoDeParte(nuevo);
+        guia.desdeCaracter = -1;
+        guia.saltar = true;
+        guia.cola = null;
+        guia.anclas = [];
+        guia.bloques = 0;
+        guia.ultimoMarcadoVista = -1;
+      } catch (_) { /* la vista se mueve igual */ }
+      mostrarParteOriginal(nuevo).then(() => {
+        try { if (libroVista && typeof libroVista.renderLectura === 'function') libroVista.renderLectura(); } catch (_) {}
+      }).catch(() => {});
+      return true;
+    },
   };
 
   refrescarInicio();

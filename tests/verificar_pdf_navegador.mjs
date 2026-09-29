@@ -770,6 +770,194 @@ console.log('\n── Documento en inglés ────────────�
   await contexto.close();
 }
 
+/* ── 8b) Continuidad sin cortes entre capítulos (S-04/P4.1) ──────────
+ *
+ * Con la voz simulada (WAV corto por bloque), se pulsa Escuchar UNA vez y,
+ * sin ningún clic más, la lectura tiene que atravesar tres capítulos seguidos
+ * en Páginas y en Desplazamiento: entre el último bloque de un capítulo y el
+ * primero del siguiente no puede haber un pause/ended sin play inmediato, la
+ * vista sigue a la voz y a mitad nunca sale «Lectura finalizada».
+ * La prueba real con la pantalla apagada solo se puede hacer en el dominio y
+ * queda anotada para la verificación final.
+ */
+console.log('\n── Continuidad sin cortes ────────────────────');
+function wavContinuo(segundos) {
+  const sr = 8000;
+  const n = Math.max(1, Math.round(segundos * sr));
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVE', 8);
+  buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22); buf.writeUInt32LE(sr, 24); buf.writeUInt32LE(sr * 2, 28);
+  buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36);
+  buf.writeUInt32LE(n * 2, 40);
+  return buf;
+}
+const TRES = join(temporal, 'libro_tres_capitulos.pdf');
+crearLibro(TRES, 31);
+for (const modo of ['paginas', 'scroll']) {
+  const etiqueta = modo === 'paginas' ? 'Páginas' : 'Desplazamiento';
+  const navegadorContinuo = await chromium.launch({
+    headless: !process.argv.includes('--headed'),
+    args: ['--autoplay-policy=no-user-gesture-required'],
+  });
+  const contexto = await navegadorContinuo.newContext({ viewport: { width: 1280, height: 950 } });
+  await contexto.addInitScript((m) => {
+    try {
+      localStorage.setItem('jg_pdf_lectura', JSON.stringify({ modoPagina: m }));
+      localStorage.setItem('jg_tts_engine', 'neural');
+      localStorage.setItem('jg_tts_rate', '1');
+    } catch (_) {}
+    const cerrar = () => {
+      const hoja = document.getElementById('pdfAuditoriaHoja');
+      if (!hoja || hoja.hidden) return;
+      const no = document.getElementById('btnPdfAuditoriaRechazar');
+      if (no) no.click(); else hoja.hidden = true;
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      cerrar();
+      new MutationObserver(cerrar).observe(document.body, {
+        subtree: true, attributes: true, attributeFilter: ['hidden'], childList: true,
+      });
+    });
+  }, modo);
+  /* Voz simulada: cada bloque suena 0,4 s. Fish apagado para ir por neural. */
+  await contexto.route('**/tts-voices', (r) => r.fulfill({ status: 503, body: 'x' }));
+  await contexto.route('**/tts-warmup*', (r) => r.fulfill({ status: 200, body: '{}' }));
+  await contexto.route('**/tts*', (r) => r.fulfill({
+    status: 200,
+    headers: { 'Content-Type': 'audio/wav', 'X-TTS-Voice': 'stub', 'X-TTS-Engine': 'stub-neural' },
+    body: wavContinuo(0.4),
+  }));
+  const pagina = await contexto.newPage();
+  const errores = [];
+  pagina.on('pageerror', (e) => errores.push(String(e)));
+  await abrirPestana(pagina);
+  await leer(pagina, TRES, 120000);
+  const modoReal = await pagina.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('jg_pdf_lectura') || '{}').modoPagina || ''; }
+    catch (_) { return ''; }
+  });
+  comprobar(modoReal === modo, `[${etiqueta}] el lector abre en modo ${modo}`);
+  /* Grabadora de eventos de audio + muestreo de capítulo y estado. */
+  await pagina.evaluate(() => {
+    window.__ev = [];
+    try {
+      const pool = window.ttsPool ? window.ttsPool() : null;
+      const els = pool ? [pool.a, pool.b] : [...document.querySelectorAll('audio')];
+      els.forEach((el) => {
+        ['play', 'ended'].forEach((ev) => el.addEventListener(ev, () => {
+          try { window.__ev.push({ ev, t: Math.round(performance.now()) }); } catch (_) {}
+        }));
+        /* Los dos audios se turnan y el elemento activo se re-prepara para el
+         * bloque siguiente: eso emite pause de bookkeeping con el bloque ya
+         * sonado entero. Solo es un corte si pausa a mitad (le faltaba más de
+         * medio segundo). Se guarda la posición para distinguirlos. */
+        el.addEventListener('pause', () => {
+          try {
+            const pos = Number.isFinite(el.currentTime) ? el.currentTime : 0;
+            const dur = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+            window.__ev.push({
+              ev: 'pause', t: Math.round(performance.now()),
+              cortado: dur > 0 && (dur - pos) > 0.5 ? 1 : 0,
+            });
+          } catch (_) {}
+        });
+      });
+    } catch (_) {}
+    window.__caps = [];
+    window.__estados = [];
+    window.__poll = setInterval(() => {
+      try {
+        const q = window.ttsState ? window.ttsState.queue : [];
+        const i = window.ttsState ? window.ttsState.idx : -1;
+        const b = q[i];
+        window.__caps.push({ t: Math.round(performance.now()), cap: b ? (b.pdfCap ?? -1) : -1 });
+        const linea = document.querySelector('[data-tts-console="pdf"] [data-tts-status]');
+        if (linea) window.__estados.push(linea.textContent);
+      } catch (_) {}
+    }, 100);
+  });
+  /* Un solo clic: Escuchar. Desde aquí, ni un toque más. La consola nace
+   * plegada (acordeón): hay que desplegar el dock para ver el botón, igual
+   * que haría una persona. */
+  if (await pagina.evaluate(() => document.querySelector('#pdfDockNav')?.dataset.desplegado === 'no')) {
+    await pagina.locator('#btnPdfDockDesplegar').click();
+    await pagina.waitForTimeout(400);
+  }
+  await pagina.locator('[data-tts-console="pdf"] [data-tts-action="toggle"]').click();
+  await pagina.waitForFunction(() => {
+    try { return window.ttsState && window.ttsState.status === 'playing'; } catch (_) { return false; }
+  }, null, { timeout: 60000 }).catch(() => {});
+  comprobar(
+    await pagina.evaluate(() => { try { return window.ttsState && window.ttsState.status === 'playing'; } catch (_) { return false; } }),
+    `[${etiqueta}] la voz arranca con un solo clic`
+  );
+  /* Tres capítulos seguidos sin tocar nada (el tercero es el índice 2). */
+  await pagina.waitForFunction(() => {
+    try { return window.ttsState && window.ttsState.pdfCapMostrado >= 2; } catch (_) { return false; }
+  }, null, { timeout: 180000 }).catch(() => {});
+  const llegada = await pagina.evaluate(() => {
+    try {
+      return {
+        mostrado: window.ttsState ? window.ttsState.pdfCapMostrado : -1,
+        encolados: window.ttsState && window.ttsState.pdfCaps ? window.ttsState.pdfCaps.length : 0,
+        mismaCola: window.ttsState ? window.ttsState.queue.length : 0,
+        vista: window.jgPdfVoz ? window.jgPdfVoz.capituloActual() : -1,
+      };
+    } catch (_) { return { mostrado: -9 }; }
+  });
+  comprobar((llegada.mostrado ?? -1) >= 2, `[${etiqueta}] la voz llega al tercer capítulo sin clics`);
+  comprobar((llegada.encolados ?? 0) >= 3 && (llegada.mismaCola ?? 0) > 0,
+    `[${etiqueta}] los tres capítulos viven en la misma cola (${llegada.encolados} encolados)`);
+  comprobar((llegada.vista ?? -1) >= 2, `[${etiqueta}] la vista sigue a la voz hasta el tercer capítulo`);
+  await pagina.waitForTimeout(1500);
+  const analisis = await pagina.evaluate(() => {
+    const evs = (window.__ev || []).slice();
+    const caps = window.__caps || [];
+    /* Instantes en que la voz entra a otro capítulo (muestreo cada 100 ms). */
+    const cortes = [];
+    for (let i = 1; i < caps.length; i += 1) {
+      if (caps[i].cap >= 0 && caps[i - 1].cap >= 0 && caps[i].cap !== caps[i - 1].cap) {
+        cortes.push(caps[i].t);
+      }
+    }
+    /* Un pause de bookkeeping (bloque ya sonado) no es un corte: solo valen
+     * los que pausaron a mitad. Y un ended sin play posterior solo vale si no
+     * es el último evento registrado (su play cae fuera de la muestra). */
+    const pausas = evs.filter((e) => e.ev === 'pause' && e.cortado === 1).length;
+    let maxHueco = 0;
+    for (let i = 0; i < evs.length; i += 1) {
+      const e = evs[i];
+      if (e.ev !== 'ended') continue;
+      if (i === evs.length - 1) continue;
+      const sig = evs.slice(i + 1).find((x) => x.ev === 'play');
+      if (!sig) { maxHueco = 99999; break; }
+      maxHueco = Math.max(maxHueco, sig.t - e.t);
+    }
+    const estados = window.__estados || [];
+    return {
+      cortes: cortes.length,
+      pausas,
+      maxHueco,
+      finalizadaAMitad: estados.some((t) => /finalizada/i.test(String(t || ''))),
+      eventos: evs.length,
+    };
+  });
+  comprobar(analisis.eventos > 0, `[${etiqueta}] hubo audio que analizar (${analisis.eventos} eventos)`);
+  comprobar(analisis.cortes >= 2, `[${etiqueta}] se vieron los dos cambios de capítulo (${analisis.cortes})`);
+  comprobar(analisis.pausas === 0, `[${etiqueta}] ningún pause a mitad entre capítulos (${analisis.pausas})`);
+  comprobar(analisis.maxHueco < 3000, `[${etiqueta}] todo ended tiene play inmediato (hueco máx. ${analisis.maxHueco} ms)`);
+  comprobar(analisis.finalizadaAMitad === false, `[${etiqueta}] sin «Lectura finalizada» a mitad del libro`);
+  /* Se detiene la lectura para cerrar limpio el contexto. */
+  await pagina.evaluate(() => { try { clearInterval(window.__poll); } catch (_) {} });
+  await pagina.locator('[data-tts-console="pdf"] [data-tts-action="stop"]').click().catch(() => {});
+  await pagina.waitForTimeout(400);
+  comprobar(sinRuido(errores).length === 0, `[${etiqueta}] sin errores de JavaScript (${sinRuido(errores).length})`);
+  sinRuido(errores).slice(0, 3).forEach((e) => console.error('   →', e.slice(0, 180)));
+  await contexto.close();
+  await navegadorContinuo.close();
+}
+
 /* ── 8) Retirada de la función Kindle ──────────────────────────────── */
 console.log('\n── Retirada del asistente Kindle ───────────────');
 {

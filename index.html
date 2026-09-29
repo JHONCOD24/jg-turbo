@@ -15823,6 +15823,10 @@ function ttsDetener(){
   ttsState.status = 'idle';
   ttsState.sourceId = null;
   ttsState.posicion = 0;
+  /* Parar es parar: se olvida la continuidad del PDF que hubiera en marcha. */
+  ttsState.pdfCaps = null;
+  ttsState.pdfFin = false;
+  ttsState.pdfCapMostrado = -1;
   if(ttsSupportedBrowser()){
     try{ speechSynthesis.cancel(); }catch(_){}
   }
@@ -16479,6 +16483,10 @@ async function ttsReproducirDesde(indice, desde, token){
   if(indice >= ttsState.queue.length){ ttsFinLectura(); return; }
   ttsState.idx = indice;
   ttsAsegurarDescargas(token);
+  /* Continuidad del PDF: la vista sigue al bloque que empieza y, si queda
+   * menos que el colchón, se encola el capítulo siguiente en la misma cola. */
+  ttsPdfSeguirVista();
+  ttsPdfAsegurarContinuidad();
 
   const bloque = ttsState.queue[indice];
   /* Bloque de silencio estructural (§P0700§/§P1000§): esperar sin audio y
@@ -16570,6 +16578,9 @@ function ttsBloqueTerminado(el){
     ttsState.idx = siguiente;
     ttsState.status = 'playing';
     ttsActualizarUI();
+    /* La pausa de capítulo es el primer bloque del capítulo nuevo: la vista
+     * ya puede pasar a él mientras suena el silencio. */
+    ttsPdfSeguirVista();
     ttsProgramarSilencio(bloque.pausaMs, ()=>{
       if(token !== ttsState._speakToken) return;
       ttsReproducirDesde(siguiente + 1, 0, token);
@@ -16589,6 +16600,8 @@ function ttsBloqueTerminado(el){
     ttsState.status = 'playing';
     ttsActualizarUI();
     ttsAsegurarDescargas(token);
+    ttsPdfSeguirVista();
+    ttsPdfAsegurarContinuidad();
     ttsPrecargarSiguiente(token);
     return;
   }
@@ -16703,7 +16716,99 @@ const jgAudiolibro = { activo:false, sourceId:null, siguiente:null, alTerminar:n
  * capítulos sin tener que reproducir audio de verdad. */
 if (typeof window !== 'undefined') window.jgAudiolibro = jgAudiolibro;
 
+/* ── Continuidad del PDF entre capítulos (S-04/P4.1) ───────────────────
+ *
+ * La voz del PDF nunca se detiene entre capítulos: cuando a la cola le quedan
+ * menos segundos que el colchón (TTS_COLCHON_SEG), los bloques del capítulo
+ * siguiente se añaden a la MISMA cola (con su silencio de capítulo de
+ * 1000 ms), como ya hacía el camino continuation de ttsFinLectura. La vista
+ * pasa al capítulo nuevo cuando empieza a sonar su primer bloque; el audio no
+ * espera a que la vista termine de pintar. Todo va acotado a origen pdf con
+ * proveedor del lector (window.jgPdfVoz): las demás pestañas ni lo notan.
+ *
+ * El capítulo se encola de uno en uno (el siguiente del último encolado): con
+ * capítulos reales (~40 min) basta uno por delante; con capítulos diminutos
+ * se encadenan varios hasta superar el colchón. */
+
+/** Capítulo que el lector muestra ahora, o -1 sin proveedor ni documento. */
+function ttsPdfCapituloActual(){
+  try{
+    const prov = (typeof window !== 'undefined') ? window.jgPdfVoz : null;
+    if(!prov || typeof prov.capituloActual !== 'function') return -1;
+    const cap = prov.capituloActual();
+    return Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : -1;
+  }catch(_){ return -1; }
+}
+
+/** Segundos estimados que le quedan a la cola (audio 1×). */
+function ttsPdfQuedaSeg(){
+  try{ return Math.max(0, ttsDuracionTotal() - ttsTiempoActual()); }
+  catch(_){ return 0; }
+}
+
+/** Añade el capítulo siguiente a la misma cola. Devuelve true si añadió. */
+function ttsPdfEncolarSiguiente(){
+  if(ttsState.sourceId !== 'pdf' || ttsState.pdfFin) return false;
+  const prov = (typeof window !== 'undefined') ? window.jgPdfVoz : null;
+  if(!prov || typeof prov.siguienteTras !== 'function') return false;
+  const caps = ttsState.pdfCaps || [];
+  const ultimo = caps.length ? caps[caps.length - 1].indice : ttsPdfCapituloActual();
+  if(ultimo < 0) return false;
+  let sig = null;
+  try{ sig = prov.siguienteTras(ultimo); }catch(_){ sig = null; }
+  if(!sig || !String(sig.texto || '').trim()){ ttsState.pdfFin = true; return false; }
+  const maxChunk = ttsState.engineUsed === 'browser' ? TTS_BROWSER_MAX : ttsMaxBloque();
+  let extras = null;
+  try{ extras = ttsCrearCola(sig.texto, sig.lang || ttsState.langHint, maxChunk, ttsState.modo); }
+  catch(_){ extras = null; }
+  if(!extras || !extras.length){ ttsState.pdfFin = true; return false; }
+  const inicio = ttsState.queue.length;
+  extras.forEach((b, i)=>{ if(b){ b.pdfCap = sig.indice; if(i === 0) b.pdfInicioCap = true; } });
+  ttsState.queue.push(...extras);
+  caps.push({ indice: sig.indice, inicio });
+  ttsState.pdfCaps = caps;
+  ttsAsegurarDescargas(ttsState._speakToken);
+  return true;
+}
+
+/** Si queda menos que el colchón, se encola el capítulo siguiente. */
+function ttsPdfAsegurarContinuidad(){
+  if(ttsState.sourceId !== 'pdf' || ttsState.pdfFin) return;
+  if(ttsState.status !== 'playing' && ttsState.status !== 'buffering' && ttsState.status !== 'loading') return;
+  let vueltas = 0;
+  while(vueltas < 60 && ttsPdfQuedaSeg() < TTS_COLCHON_SEG){
+    if(!ttsPdfEncolarSiguiente()) break;
+    vueltas += 1;
+  }
+}
+
+/** La vista sigue a la voz: al empezar el primer bloque de otro capítulo, se
+ * le pide al lector que lo muestre, sin esperar (el audio no se pausa). */
+function ttsPdfSeguirVista(){
+  if(ttsState.sourceId !== 'pdf') return;
+  const b = ttsState.queue[ttsState.idx];
+  if(!b || !b.pdfInicioCap) return;
+  if(ttsState.pdfCapMostrado === b.pdfCap) return;
+  ttsState.pdfCapMostrado = b.pdfCap;
+  try{
+    const prov = (typeof window !== 'undefined') ? window.jgPdfVoz : null;
+    if(prov && typeof prov.mostrar === 'function') prov.mostrar(b.pdfCap);
+  }catch(_){}
+}
+
 function ttsFinLectura(){
+  /* Continuidad del PDF (S-04/P4.1): al acabarse la cola, si queda capítulo
+   * por leer se encola en la MISMA cola y se sigue sin parar el audio. Solo
+   * cuando el proveedor dice que no hay más se termina de verdad. */
+  if(ttsState.sourceId === 'pdf' && typeof window !== 'undefined' && window.jgPdfVoz){
+    try{
+      const desde = ttsState.queue.length;
+      if(ttsPdfEncolarSiguiente()){
+        ttsReproducirDesde(desde, 0, ttsState._speakToken);
+        return;
+      }
+    }catch(_){}
+  }
   // Antes de dar por terminada la lectura: si hay un audiolibro en marcha,
   // se encadena la parte siguiente en vez de parar.
   if(jgAudiolibro.activo && jgAudiolibro.sourceId === ttsState.sourceId &&
@@ -16857,6 +16962,21 @@ function ttsHablarBrowserDesde(startIdx, token){
         jgAudiolibro.activo = false;
         if(typeof jgAudiolibro.alTerminar === 'function') jgAudiolibro.alTerminar();
       }
+      /* Continuidad del PDF con el motor del navegador (S-04/P4.1): vale en
+       * Páginas y en Desplazamiento. El proveedor da el capítulo siguiente ya
+       * preparado y mueve la vista; aquí sí hay un relevo (el navegador no
+       * permite encolar sin cortes como el motor neural). */
+      if(ttsState.sourceId === 'pdf' && typeof window !== 'undefined' && window.jgPdfVoz){
+        try{
+          const actual = ttsPdfCapituloActual();
+          const sig = window.jgPdfVoz.siguienteTras(actual >= 0 ? actual : 0);
+          if(sig && String(sig.texto || '').trim()){
+            window.jgPdfVoz.mostrar(sig.indice);
+            ttsHablar(sig.texto, { sourceId: 'pdf', langHint: sig.lang || ttsState.langHint });
+            return;
+          }
+        }catch(_){}
+      }
       if(typeof window.jgPdfContinuarLectura === 'function' && ttsState.sourceId === 'pdf'){
         try {
           if(window.jgPdfContinuarLectura()) return;
@@ -16994,6 +17114,21 @@ function ttsHablar(texto, opts){
   ttsState._modeloVoz = '';
   ttsState._fallosNeural = 0;
   ttsState.sourceId = opts.sourceId || null;
+  /* Continuidad del PDF entre capítulos (S-04/P4.1): la cola se marca con el
+   * capítulo que suena para poder añadir el siguiente a la MISMA cola antes
+   * de que se acabe. Solo para origen pdf con proveedor del lector; las demás
+   * pestañas quedan igual que antes. */
+  ttsState.pdfCaps = null;
+  ttsState.pdfFin = false;
+  ttsState.pdfCapMostrado = -1;
+  if(esPdf && ttsState.queue.length){
+    const cap = ttsPdfCapituloActual();
+    if(cap >= 0){
+      ttsState.queue.forEach((b, i)=>{ if(b){ b.pdfCap = cap; if(i === 0) b.pdfInicioCap = true; } });
+      ttsState.pdfCaps = [{ indice: cap, inicio: 0 }];
+      ttsState.pdfCapMostrado = cap;
+    }
+  }
   ttsState.status = 'loading';
   ttsActualizarUI();
 
