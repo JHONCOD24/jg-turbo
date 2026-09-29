@@ -15589,10 +15589,10 @@ function ttsCrearCola(texto, langHint, maxLen, mode){
   }
   /* P1.7: los títulos diminutos (menos de 25 letras) no se sintetizan solos:
    * los motores tipo LLM son menos estables con entradas tan cortas. Se unen
-   * al bloque de voz siguiente y la pausa de título queda delante como
-   * silencio previo. Solo en unified, que es como lee el PDF; las demás
-   * pestañas quedan igual. */
-  if(mode === 'unified'){
+   * al bloque siguiente y la pausa de título queda delante como silencio
+   * previo. En unified (PDF con Fish) y en off (PDF con voz nativa, P1.6);
+   * los modos con segmentación por idioma quedan igual. */
+  if(mode === 'unified' || mode === 'off'){
     for(let i = 0; i < cola.length;){
       const cur = cola[i];
       if(!cur || cur.silencio || cur.text.length >= 25){ i += 1; continue; }
@@ -16828,7 +16828,14 @@ function ttsPdfEncolarSiguiente(){
   catch(_){ extras = null; }
   if(!extras || !extras.length){ ttsState.pdfFin = true; return false; }
   const inicio = ttsState.queue.length;
-  extras.forEach((b, i)=>{ if(b){ b.pdfCap = sig.indice; if(i === 0) b.pdfInicioCap = true; } });
+  let nativo = ttsState.modo === 'off';
+  try{ nativo = nativo && !ttsPrefs().preferFish; }catch(_){}
+  extras.forEach((b, i)=>{
+    if(!b) return;
+    b.pdfCap = sig.indice;
+    if(i === 0) b.pdfInicioCap = true;
+    if(nativo && !b.silencio) b.idiomaFijo = true;
+  });
   ttsState.queue.push(...extras);
   caps.push({ indice: sig.indice, inicio });
   ttsState.pdfCaps = caps;
@@ -17164,16 +17171,21 @@ function ttsHablar(texto, opts){
   ttsState.langHint = ttsIdiomaParaNarrar(text, hint);
   // El modo «misma voz» (una voz multilingüe para ES + EN) solo tiene sentido en
   // español o inglés; en los demás idiomas manda la voz nativa del idioma.
-  // Para PDF largo, se fuerza modo «unified» (una sola voz sin cortes por idioma):
-  // la segmentación bilingüe «regional» parte oraciones en tramos ES/EN con voces
-  // distintas, generando pausas a mitad de frase y cambios de timbre que suenan
-  // robóticos — sobre todo en redes móviles donde cada tramo es una petición HTTP.
+  // PDF con Fish: modo «unified» (una sola voz sin cortes por idioma).
+  // PDF sin Fish (P1.6): modo «off» con idioma fijo — la voz NATIVA del acento
+  // elegido (Salomé/Gonzalo en es-CO), no la multilingüe en-US. La
+  // segmentación bilingüe «regional» partiría oraciones en tramos ES/EN con
+  // voces distintas (pausas y timbres que suenan robóticos); con «off» no se
+  // segmenta y con idioma fijo el servidor no pasa nada a voz inglesa.
   const esPdf = opts.sourceId === 'pdf';
+  const pdfNativo = esPdf && !prefs.preferFish;
   let modo;
   if (ttsState.langHint !== 'es' && ttsState.langHint !== 'en') {
     modo = 'off';
-  } else if (esPdf) {
+  } else if (esPdf && !pdfNativo) {
     modo = 'unified';
+  } else if (pdfNativo) {
+    modo = 'off';
   } else {
     modo = prefs.bilingualMode;
   }
@@ -17200,6 +17212,12 @@ function ttsHablar(texto, opts){
       ttsState.pdfCaps = [{ indice: cap, inicio: 0 }];
       ttsState.pdfCapMostrado = cap;
     }
+  }
+  /* P1.6: sin Fish, cada bloque del PDF viaja con idioma fijo para que el
+   * servidor use la voz nativa del acento elegido (X-TTS-Voice = la elegida)
+   * y nunca la multilingüe en-US. Con Fish no se marca: ahí manda unified. */
+  if(pdfNativo){
+    ttsState.queue.forEach((b)=>{ if(b && !b.silencio) b.idiomaFijo = true; });
   }
   ttsState.status = 'loading';
   ttsActualizarUI();

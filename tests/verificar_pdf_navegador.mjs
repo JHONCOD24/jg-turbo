@@ -910,6 +910,20 @@ for (const modo of ['paginas', 'scroll']) {
   comprobar((llegada.encolados ?? 0) >= 3 && (llegada.mismaCola ?? 0) > 0,
     `[${etiqueta}] los tres capítulos viven en la misma cola (${llegada.encolados} encolados)`);
   comprobar((llegada.vista ?? -1) >= 2, `[${etiqueta}] la vista sigue a la voz hasta el tercer capítulo`);
+  /* P1.6: sin Fish elegido, el PDF suena con la voz nativa del acento (modo
+   * off + idioma fijo en cada bloque), nunca con la multilingüe en-US. */
+  const nativo = await pagina.evaluate(() => {
+    try {
+      const q = (window.ttsState.queue || []).filter((b) => b && !b.silencio && String(b.text || '').trim());
+      return {
+        modo: window.ttsState.modo,
+        todosEs: q.every((b) => String(b.lang || '') === 'es'),
+        fijos: q.every((b) => b.idiomaFijo === true),
+      };
+    } catch (_) { return {}; }
+  });
+  comprobar(nativo.modo === 'off', `[${etiqueta}] sin Fish el PDF va en modo nativo (off)`);
+  comprobar(nativo.todosEs === true && nativo.fijos === true, `[${etiqueta}] todos los bloques piden idioma fijo (voz nativa)`);
   await pagina.waitForTimeout(1500);
   const analisis = await pagina.evaluate(() => {
     const evs = (window.__ev || []).slice();

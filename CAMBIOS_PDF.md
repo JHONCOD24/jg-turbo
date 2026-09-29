@@ -47,6 +47,24 @@ documentado desde v2.81.0). `test_pdf_continuidad`, `test_tts_narracion`,
 en verde. La prueba real con pantalla apagada solo se puede hacer en el
 dominio: anotada para la verificación final.
 
+## 2026-09-29 · P1.6 · Sin Fish, el PDF suena con la voz nativa elegida (V-04)
+
+Medido contra producción: con `unified:true` y sin Fish, `/api/tts`
+responde `X-TTS-Voice: en-US-AvaMultilingualNeural` aunque la persona haya
+elegido Salomé o Gonzalo. Con `unified:false` + `idioma_fijo:true`
+responde `es-CO-SalomeNeural` (verificado 2026-09-29, motor
+`azure-neural-regional` en los dos casos).
+
+**Cambio (solo cliente, `index.html` `ttsHablar`):** PDF sin Fish va en modo
+`off` con `idiomaFijo` en cada bloque (como el doblaje v152): voz nativa
+del acento elegido y ningún tramo pasa a voz inglesa. PDF con Fish sigue en
+`unified` (ahí el respaldo ya era nativo). Sin cambios en el servidor ni en
+las demás pestañas. La unión de diminutos (P1.7) vale en `unified` y en
+`off`.
+
+**Pruebas:** `verificar_pdf_navegador` §8b (modo `off`, bloques `es` con
+idioma fijo, en Páginas y en Desplazamiento) + suites TTS en verde.
+
 ## 2026-09-29 · P1.2 · Corte en frontera de cláusula y pausas de drill (V-01)
 
 Medido antes: entre el 11 % y el 22 % de los bloques Fish terminaban sin
