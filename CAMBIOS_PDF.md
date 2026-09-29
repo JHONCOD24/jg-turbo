@@ -3,6 +3,32 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-09-29 · P1.1 · Línea base de bloques de voz (plan de auditoría del lector)
+
+Medición con el motor real antes de tocar la segmentación: extracción en el
+navegador (pdf.js legacy en Node + `atomos.js` + `reconstruccion.js`, misma
+receta que `tests/test_pdf_reales.mjs`), `prepararParaVoz` de
+`js/pdf/vozTexto.js` y las funciones reales de cola de `index.html`
+(`ttsNormalizarTextoNarracion`, `ttsPartirOraciones`, `ttsPartirTexto`,
+`ttsCrearCola`), con bloques Fish (máximo 290, modo `unified`, como lee el
+PDF). Un bloque que termina en `)` o `»` cuenta como cierre: es un título o
+un inciso, no una frase partida a mitad.
+
+Script: `node tests/medir_bloques_voz.mjs`.
+
+| Libro | Páginas | Bloques Fish 290 | Sin cierre % (n) | Minúscula inicial (n) | <25 caracteres (n) |
+|---|---|---|---|---|---|
+| Aprendiz | 427 | 3263 | 22,3 % (729) | 259 | 103 |
+| Placebo | 426 | 3043 | 12,3 % (373) | 312 | 29 |
+| Marketing | 262 | 1502 | 13,8 % (207) | 80 | 16 |
+| Presuasión | 322 | 2638 | 14,9 % (393) | 504 | 39 |
+| Sobrenatural | 574 | 3746 | 11,1 % (417) | 362 | 62 |
+
+Reproduce la línea base del plan (22,3 / 12,3 / 13,8 / 14,9 / 11,1 % y
+259 / 312 / 80 / 504 / 362 en minúscula). Nota: en Aprendiz salen 3263
+bloques frente a los 3262 del informe (un bloque más, mismo 729 sin cierre);
+el porcentaje queda igual a una décima. Sin cambios de código en esta tarea.
+
 ## 2026-09-14 · v2.84.0 · Carátula de *Esto es marketing* en todos los aparatos (`JG_JS_V=v140`, shell-v140)
 
 **Lo pedido:** la portada de *Esto es marketing* (Seth Godin) no aparecía; las carátulas debían verse igual en celular, tablet y escritorio.
