@@ -2,6 +2,12 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+**Voz v159:** PDF y videos ofrecen Ava y Andrew multilingues. En el telefono,
+PDF > Voz > Mas ajustes abre el selector. Configuracion > Voz permite conservar
+terminos de desarrollo web en nuevas traducciones ingles-español; activar y
+Guardar. No reescribe traducciones ya guardadas. Las continuaciones de frases
+se unen antes de pedir voz, con limites de tiempo/tamaño. Ver `CAMBIOS_TTS.md`.
+
 PDF v2.53.0: versión final consolidada del plan PDF móvil. Continuidad F5,
 carga diferida, toques ≥44 px, pisos accesibles ≥12 px y diseño limpio.
 Detalle: [CAMBIOS_PDF.md](CAMBIOS_PDF.md).

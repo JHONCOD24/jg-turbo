@@ -1,5 +1,16 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Un acordeon oculto no se puede probar con un clic (2026-09-29)
+
+**Sintoma:** la prueba de voz esperaba un boton de acordeon invisible en el
+telefono. Al seguir el recorrido actual, Mas ajustes tambien estaba oculto.
+**Causa:** una regla con `!important` para `data-desplegado=no` se aplicaba
+fuera del rango de tablet/escritorio. La hoja movil no usa ese acordeon.
+**Regla:** acotar el plegado a su viewport y probar los controles visibles
+del recorrido actual. No usar clics forzados para tapar un control inaccesible.
+En esta sesion se asumio que el selector estaba visible antes de comprobarlo;
+la captura de estado refuto esa suposicion y se corrigio antes del despliegue.
+
 ## El PDF que apaga Fish hace que el selector mienta
 
 **Síntoma (antes de v2.77.0):** elegías una voz Fish (luego Roberto) y el libro

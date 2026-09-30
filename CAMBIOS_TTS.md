@@ -1,5 +1,71 @@
 # Lectura en voz alta (TTS) — JG Turbo
 
+## v159 (2026-09-29): voces multilingues, tecnicismos y frases continuas
+
+Pedido del dueño: llevar las mejoras de Udemy a PDF y videos y evitar pausas
+dentro de «siempre y cuando». La publicacion de esta tanda se registra aqui
+despues de verificar el dominio real; no se cambia la API ni las dependencias.
+
+- Ava y Andrew aparecen en los selectores de lectura y doblaje. Elegir
+  `neural:multi:female` o `neural:multi:male` pide `unified: true`, tambien
+  en PDF, precalentado y descarga. Una voz regional elegida sigue siendo regional.
+  Las voces Fish existentes se conservan; no se agregan proveedores ni cobros.
+- Configuracion > Voz: «Conservar términos de desarrollo web al traducir».
+  Inicia apagado, se guarda con Guardar y se incluye en el respaldo de config.
+  Protege una lista de nombres y terminos en traducciones ingles-español,
+  restaura cada uno antes del texto visible y la voz, y rechaza marcadores
+  perdidos, duplicados o movidos a otro segmento. No cubre todos los tecnicismos.
+- No se borran ni se retraducen libros o videos guardados. La proteccion
+  aplica a nuevas traducciones; un resultado anterior conserva su contenido.
+- Un salto doble seguido por una continuacion en minuscula ya no añade un
+  punto artificial a la narracion. Los cortes largos respetan conectores
+  compuestos. Titulos, pausas estructurales y puntuacion existente se mantienen.
+- Doblaje: une continuaciones traducidas antes de generar voz cuando falta
+  una pausa escrita, sin unir hablantes ni silencios originales mayores a
+  0,8 segundos. Tope 18 segundos / 600 caracteres. Conserva indices para
+  avanzar, retroceder y mostrar cada subtitulo. Tambien aplica a las descargas.
+- PDF movil: el plegado del acordeon solo se aplica desde 641 px. En el
+  telefono, Mas ajustes vuelve a estar disponible para elegir la voz.
+
+### Evidencia local
+
+Primero fallaron: export inexistente de frases continuas, voces ausentes,
+punto artificial dentro del ejemplo y acceso movil a ajustes. Despues:
+
+| Comando / conjunto | Comprobaciones OK |
+|---|---:|
+| 19 unitarias PDF/TTS | 1231 |
+| YouTube doblaje / sincronia / X / biblioteca videos | 139 / 74 / 70 / 100 |
+| `test_voz_frases_continuas.mjs` / `test_voz_multilingue.mjs` | 14 / 11 |
+| Total 25 archivos unitarios | 1639 |
+| `verificar_voz_multilingue.mjs` | 13 |
+| YouTube / X en navegador | 110 / 24 |
+| Voz PDF acordeon / arranque ligero | 21 / 10 |
+| PDF movil / geometria / scroll | 60 / 137 / 39 |
+
+La prueba vieja del acordeon fallaba tambien con main intacto: pulsaba un
+control que ya no existe a la vista en movil. Se actualizo al recorrido
+Mas ajustes y se descubrio/corrigio la regla de CSS que lo ocultaba.
+La suite completa del lector encontro un aviso OCR no observable en su
+comprobacion; tambien falla en main intacto. Se registra su resultado final
+en el cierre de esta entrega, sin ocultarlo bajo el total de unitarias.
+
+Las pruebas de navegador usan voz y traduccion simuladas. Comprueban rutas,
+texto completo y contratos, no la calidad auditiva ni la pronunciacion humana.
+La escucha final de un PDF y de una clase real queda con el dueño.
+
+### Entrega
+
+- [x] Cambio local, pruebas de fallo y paso, comprobaciones contadas.
+- [x] Motor de extension copiado con `copiar_motor.mjs`, version 0.3.1.
+- [ ] Publicacion unica desde copia limpia del commit, con enlace a jg-turbo.
+- [ ] HTML, SW, modulos y salud verificados contra jg-turbo.vercel.app.
+- [ ] Cambio respaldado en origin/main.
+
+Despliegue anterior recuperable: v158, `dpl_ARxZxzq427BUPPr6piep7fsnH8Xh`.
+
+---
+
 **Documento maestro** del módulo texto a voz. Aquí queda registrado: qué hace el sistema, cómo funciona, qué se cambió en cada versión, por qué, cómo se prueba, cómo se despliega y dónde está el código.
 
 | Campo | Valor |

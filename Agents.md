@@ -1,5 +1,16 @@
 # JG Turbo — reglas para agentes
 
+## Voz v159 (2026-09-29)
+
+PDF/videos ofrecen `neural:multi:female` (Ava) y `neural:multi:male` (Andrew).
+Solo la eleccion multilingue pide unified con idioma fijo; no volver a forzar
+voz regional sobre esa eleccion ni aplicar modo multilingue a un video regional.
+`jg_tts_terminos_web` es opcional y aditivo: solo nuevas traducciones en-es.
+`prepararTextoDeUnidad` une continuaciones antes de sintetizar sin reindexar
+el motor. Pruebas nuevas: `test_voz_frases_continuas` 14,
+`test_voz_multilingue` 11, `verificar_voz_multilingue` 13. Detalle/publicacion:
+`CAMBIOS_TTS.md`. No cambia permisos ni acceso de la extension Udemy.
+
 ## Context7 (docs de librerías)
 
 Este repo tiene el MCP Context7 (`.grok/config.toml`, `.mcp.json`, `.cursor/mcp.json`).

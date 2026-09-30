@@ -17,6 +17,7 @@ Documento para **humanos y agentes de IA**. Objetivo: que las actualizaciones de
 | Nombres de las voces Fish | Catálogo del servidor (`FISH_CATALOGO_BASE`); `FISH_VOICE_*_NAME` solo pisa Nico Robin / Locutor K | **Sí** (servidor; no viven en el navegador) |
 | Acento TTS | `jg_tts_locale` | **Sí** |
 | Pronunciación bilingüe TTS | `jg_tts_bilingual` | **Sí** |
+| Conservar terminos de desarrollo web al traducir | `jg_tts_terminos_web` (`0` / `1`, inicia apagado) | **Si** |
 | Tono TTS | `jg_tts_tone` | **Sí** |
 | Velocidad TTS | `jg_tts_rate` | **Sí** |
 | Motor TTS (neural/browser) | `jg_tts_engine` | **Sí** |

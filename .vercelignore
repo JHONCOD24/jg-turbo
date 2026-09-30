@@ -23,6 +23,8 @@ install_torch_verbose.txt
 tests/
 
 .worktrees/
+tmp/
+extension-udemy/
 
 # Build legacy de PDF.js: solo lo usan las pruebas en Node, no el navegador.
 js/vendor/pdfjs/pdf.legacy.min.mjs

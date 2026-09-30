@@ -1,5 +1,22 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## v159 (2026-09-29): continuaciones completas antes de la voz
+
+El ejemplo «siempre / y cuando» viaja en una sola sintesis cuando sus unidades
+contiguas no terminan en puntuacion, sin saltos reales ni cambios de hablante.
+Limites: 18 s / 600 caracteres. No se reindexa el arreglo vivo: las unidades
+absorbidas quedan sin voz y con tiempo final ordenado. La prueba ejecuta el
+motor real, comprueba una sola sintesis, subtitulos por segmento, salto dentro
+de la frase y regeneracion al retroceder: 14 OK. Descargas usan la misma union.
+YouTube conserva 139 unitarias, sincronia 74 y navegador 110; X 70 y 24.
+
+Ava y Andrew se eligen por video sin pisar la voz del PDF. El adaptador pide
+modo multilingue tambien al descargar. El glosario opcional para ingles-español
+vive en el punto comun de traduccion. No borra traducciones guardadas ni cambia
+IndexedDB. Una frase unida tiene un texto distinto y regenera solo su audio.
+Version frontend/SW v159. Publicacion y limites de escucha en `CAMBIOS_TTS.md`.
+
+
 ## Mejora 2026-09-28 (v157) · La voz entra centrada y lo guardado no se vuelve a medir
 
 Pedido del dueño: las mejoras 2 y 3 propuestas tras la auditoría v156.
