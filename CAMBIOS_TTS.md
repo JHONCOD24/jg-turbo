@@ -42,13 +42,21 @@ punto artificial dentro del ejemplo y acceso movil a ajustes. Despues:
 | YouTube / X en navegador | 110 / 24 |
 | Voz PDF acordeon / arranque ligero | 21 / 10 |
 | PDF movil / geometria / scroll | 60 / 137 / 39 |
+| Lector PDF completo | 156 OK / 1 fallo previo (aviso OCR) |
+| API real JG Turbo, frases inventadas, sin audio guardado | 3 |
 
 La prueba vieja del acordeon fallaba tambien con main intacto: pulsaba un
 control que ya no existe a la vista en movil. Se actualizo al recorrido
 Mas ajustes y se descubrio/corrigio la regla de CSS que lo ocultaba.
 La suite completa del lector encontro un aviso OCR no observable en su
-comprobacion; tambien falla en main intacto. Se registra su resultado final
-en el cierre de esta entrega, sin ocultarlo bajo el total de unitarias.
+comprobacion; tambien falla en main intacto. El comando final dio 156 OK y
+1 fallo, sin modificar ni saltar esa comprobacion. Una espera adicional de
+15 s tampoco encontro el aviso y se retiro de la prueba. No se declara esta
+suite completa en verde ni se cambia el OCR en esta tarea de voz.
+
+La API real anuncio `en-US-AvaMultilingualNeural` (29520 bytes) y
+`en-US-AndrewMultilingualNeural` (29664 bytes). La traduccion real conservo
+seis tecnicismos dentro de sus segmentos. No se guardo audio ni se uso Udemy.
 
 Las pruebas de navegador usan voz y traduccion simuladas. Comprueban rutas,
 texto completo y contratos, no la calidad auditiva ni la pronunciacion humana.
