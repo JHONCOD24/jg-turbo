@@ -66,11 +66,22 @@ La escucha final de un PDF y de una clase real queda con el dueño.
 
 - [x] Cambio local, pruebas de fallo y paso, comprobaciones contadas.
 - [x] Motor de extension copiado con `copiar_motor.mjs`, version 0.3.1.
-- [ ] Publicacion unica desde copia limpia del commit, con enlace a jg-turbo.
-- [ ] HTML, SW, modulos y salud verificados contra jg-turbo.vercel.app.
+- [x] Publicacion unica desde copia limpia del commit, con enlace a jg-turbo.
+- [x] HTML, SW, modulos y salud verificados contra jg-turbo.vercel.app.
 - [ ] Cambio respaldado en origin/main.
 
 Despliegue anterior recuperable: v158, `dpl_ARxZxzq427BUPPr6piep7fsnH8Xh`.
+
+**Produccion:** `dpl_zziGZvV8afSpoNq1VwaPiLRnr5bs`, READY, publicado desde
+`git archive` de `6fbb905` en el proyecto `jg-turbo`. Dominio confirmado:
+https://jg-turbo.vercel.app. Un solo despliegue de esta tanda.
+
+`node tests/verificar_voz_produccion.mjs --dominio-real`: 9 OK; seis archivos
+coinciden byte por byte (SHA-256) con el commit: HTML, SW, servicio de voz,
+preparacion, controlador y terminos web. HTML/SW v159 y salud HTTP 200.
+`JG_BASE=https://jg-turbo.vercel.app node tests/verificar_voz_multilingue.mjs`:
+13 OK con frontend publicado y API simulada. No acredita escucha humana ni
+prueba de iPhone fisico. El dueño prueba la calidad de la pronunciacion.
 
 ---
 
@@ -78,7 +89,7 @@ Despliegue anterior recuperable: v158, `dpl_ARxZxzq427BUPPr6piep7fsnH8Xh`.
 
 | Campo | Valor |
 |---|---|
-| **Versión app** | **2.88.2** (aviso nombra Azure/Edge real · 2026-09-18) · SW `jg-turbo-shell-v145` |
+| **Versión app** | **v159** (voces multilingues y frases continuas · 2026-09-29) · SW `jg-turbo-shell-v159` |
 | **Motor principal** | Fish Audio gratuito (`s2.1-pro-free`, voces clonadas: Roberto, Amy…) |
 | **Respaldo 1** | **Azure Speech F0 oficial** (500k chars/mes gratis; ver §Estrategia) |
 | **Respaldo 2** | `edge-tts` (gratis, no oficial) → `speechSynthesis` del navegador |

@@ -2,6 +2,11 @@
 
 ## Un acordeon oculto no se puede probar con un clic (2026-09-29)
 
+**Finales de linea:** en esta sesion se normalizo a CRLF un documento que
+tenia finales mixtos. El diff aviso de miles de lineas; se restauro cada
+final original sin quitar la entrada nueva antes de commitear. Regla:
+verificar los bytes originales y el diff; no asumir un formato unico.
+
 **Sintoma:** la prueba de voz esperaba un boton de acordeon invisible en el
 telefono. Al seguir el recorrido actual, Mas ajustes tambien estaba oculto.
 **Causa:** una regla con `!important` para `data-desplegado=no` se aplicaba
