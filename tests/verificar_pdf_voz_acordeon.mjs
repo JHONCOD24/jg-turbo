@@ -4,7 +4,7 @@
  * botón «Voz». Esta prueba vigila que el MISMO interruptor de acordeón
  * (#btnPdfDockDesplegar) pliega y despliega la paleta entera en tablet y
  * escritorio, y que el teléfono conserva su comportamiento original
- * (la hoja abierta solo pliega voz/velocidad, no la consola).
+ * (la voz se elige dentro de Mas ajustes, sin otro acordeon).
  *
  * Desde PDF-07 la voz NACE PLEGADA cuando no hay preferencia guardada: la
  * primera entrada sin audio no despliega la configuración completa. Por eso
@@ -209,22 +209,24 @@ try {
   let m = await estadoDock(tel);
   comprobar('teléfono: la hoja «Voz» abre con la consola a la vista', m.abierto === 'si' && m.consolaVisible,
     JSON.stringify({ abierto: m.abierto, consola: m.consolaVisible }));
-  /* La hoja nace con los ajustes plegados (PDF-07): el primer toque los
-   * despliega y el segundo los vuelve a plegar. */
-  await tel.locator('#btnPdfDockDesplegar').click();
+  await tel.locator('#pdfTtsMas > summary').click();
   await tel.waitForTimeout(300);
   m = await estadoDock(tel);
-  comprobar('teléfono: desplegar muestra el selector de voz dentro de la hoja', m.selectorVozVisible && m.btnExpandido,
-    JSON.stringify({ selector: m.selectorVozVisible, aria: m.btnExpandido }));
-  await tel.locator('#btnPdfDockDesplegar').click();
+  comprobar('teléfono: Más ajustes muestra voz sin otro acordeón', m.selectorVozVisible && !m.btnVisible,
+    JSON.stringify({ selector: m.selectorVozVisible, boton: m.btnVisible }));
+  await tel.locator('#pdfDockNav [data-tts-voice-select]').selectOption('neural:multi:female');
+  comprobar('teléfono: elegir Ava aplica voz multilingüe', await tel.evaluate(() => ttsPrefs().bilingualMode === 'unified'));
+  await tel.keyboard.press('Escape');
   await tel.waitForTimeout(300);
   m = await estadoDock(tel);
-  comprobar('teléfono: el acordeón NO esconde la consola (solo voz y velocidad)', m.consolaVisible,
-    'la consola desapareció dentro de la hoja abierta');
-  comprobar('teléfono: el selector de voz queda plegado dentro de la hoja', !m.selectorVozVisible && !m.btnExpandido,
-    JSON.stringify({ selector: m.selectorVozVisible, aria: m.btnExpandido }));
-  comprobar('teléfono: la hoja sigue abierta tras plegar los ajustes', m.abierto === 'si', `abierto=${m.abierto}`);
-  await tel.screenshot({ path: join(destino, 'telefono-hoja-plegada.png') });
+  comprobar('teléfono: cerrar la hoja retira la consola', m.abierto !== 'si' && !m.consolaVisible,
+    JSON.stringify({ abierto: m.abierto, consola: m.consolaVisible }));
+  await despertarCromo(tel);
+  await tel.locator('#btnPdfBmVoz').click();
+  await tel.waitForTimeout(300);
+  if (!(await tel.locator('#pdfTtsMas').evaluate((e) => e.open))) await tel.locator('#pdfTtsMas > summary').click();
+  comprobar('teléfono: reabrir conserva la voz elegida', await tel.locator('#pdfDockNav [data-tts-voice-select]').inputValue() === 'neural:multi:female');
+  await tel.screenshot({ path: join(destino, 'telefono-hoja-voz.png') });
   await tel.close();
 } finally {
   await navegador.close();

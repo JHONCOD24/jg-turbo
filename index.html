@@ -1867,11 +1867,11 @@
      acordeón — como el botón «Voz» del teléfono esconde la hoja, aquí el
      mismo interruptor esconde la consola y queda la cabecera con el
      toggle. Ocultar no detiene la lectura. */
-  #pdfDockNav[data-desplegado="no"] .tts-voice-select,
-  #pdfDockNav[data-desplegado="no"] .tts-rate-control,
-  #pdfDockNav[data-desplegado="no"] #pdfTtsMas,
-  #pdfDockNav[data-desplegado="no"] .tts-field-label{display:none!important}
   @media (min-width:641px){
+    #pdfDockNav[data-desplegado="no"] .tts-voice-select,
+    #pdfDockNav[data-desplegado="no"] .tts-rate-control,
+    #pdfDockNav[data-desplegado="no"] #pdfTtsMas,
+    #pdfDockNav[data-desplegado="no"] .tts-field-label{display:none!important}
     .pdf-voz-acordeon{display:inline-flex}
     .pdf-voz-cab-textos{display:block}
     #pdfDockNav[data-desplegado="no"] .tts-console{display:none!important}
@@ -8499,6 +8499,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                 <option value="off">Leerlo todo con la voz en español</option>
               </select>
               <span class="cfg-voz__ayuda">La voz multilingüe conserva el timbre en todos los idiomas, pero su base es inglesa: en ese modo el acento latino no aplica.</span>
+              <label><input type="checkbox" id="settingsTtsWeb"> Conservar términos de desarrollo web al traducir</label>
             </div>
           </div>
         </details>
@@ -8726,6 +8727,7 @@ const JG_CONFIG_KEYS = [
   'jg_tts_rate',
   'jg_tts_engine',
   'jg_tts_bilingual',
+  'jg_tts_terminos_web',
   'jg_pdf_orden',
   'jg_pdf_orden_manual',
 ];
@@ -9390,6 +9392,8 @@ const abrirConfiguracion = () => {
   // (ttsSincronizarConfigVoz); aquí van los ajustes que no dependen de la voz.
   const ttsToneEl = document.getElementById('settingsTtsTone');
   const ttsBilingualEl = document.getElementById('settingsTtsBilingual');
+  const ttsWebEl = document.getElementById('settingsTtsWeb');
+  if (ttsWebEl) ttsWebEl.checked = jgCfgGet('jg_tts_terminos_web', '0') === '1';
   const ttsRateEl = document.getElementById('settingsTtsRate');
   const ttsRateVal = document.getElementById('settingsTtsRateVal');
   if (typeof ttsRellenarLocales === 'function') ttsRellenarLocales();
@@ -9520,6 +9524,8 @@ btnSettingsSave.addEventListener('click', async () => {
   // todo junto para que «Guardar» nunca deje algo a medias.
   const ttsToneSave = document.getElementById('settingsTtsTone');
   const ttsBilingualSave = document.getElementById('settingsTtsBilingual');
+  const ttsWebSave = document.getElementById('settingsTtsWeb');
+  if (ttsWebSave) localStorage.setItem('jg_tts_terminos_web', ttsWebSave.checked ? '1' : '0');
   const ttsRateSave = document.getElementById('settingsTtsRate');
   if (ttsToneSave) localStorage.setItem('jg_tts_tone', ttsToneSave.value || 'neutral');
   if (ttsBilingualSave) localStorage.setItem('jg_tts_bilingual', ttsNormalizarModo(ttsBilingualSave.value));
@@ -10483,6 +10489,9 @@ function jgPeorValidacion(a, b){
 
 /** Una petición de traducción, con un reintento ante fallo pasajero. */
 async function jgPedirTraduccion(cuerpo, timeoutMs, signal = null){
+  const proteger = cuerpo.direction === 'en-es' && jgCfgGet('jg_tts_terminos_web', '0') === '1';
+  const terminos = proteger ? (await import('/js/youtube/terminosWeb.js?v=' + JG_JS_V)).protegerTerminos(cuerpo.text) : null;
+  const peticion = terminos ? { ...cuerpo, text: terminos.texto } : cuerpo;
   let ultimoError = null;
   for(let intento = 0; intento < 2; intento++){
     if(signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
@@ -10491,10 +10500,13 @@ async function jgPedirTraduccion(cuerpo, timeoutMs, signal = null){
       const resp = await fetchApi('/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cuerpo),
+        body: JSON.stringify(peticion),
         signal,
       }, timeoutMs);
-      if(resp.ok) return await resp.json();
+      if(resp.ok){
+        const datos = await resp.json();
+        return terminos ? { ...datos, text: terminos.restaurar(datos.text) } : datos;
+      }
       if(resp.status === 504 || resp.status === 502){
         ultimoError = new Error('El servidor tardó demasiado con este bloque.');
         continue;
@@ -14879,7 +14891,9 @@ function ttsSincronizarConfigVoz(){
   if([...acentoEl.options].some(o => o.value === locale)) acentoEl.value = locale;
 
   const bilEl = document.getElementById('settingsTtsBilingual');
-  const modo = ttsNormalizarModo(bilEl ? bilEl.value : jgCfgGet('jg_tts_bilingual', 'regional'));
+  const modo = voz.provider === 'neural' && voz.locale === 'multi'
+    ? 'unified' : ttsNormalizarModo(bilEl ? bilEl.value : jgCfgGet('jg_tts_bilingual', 'regional'));
+  if(bilEl) bilEl.value = modo;
 
   // El nombre solo se promete cuando se sabe cuál va a sonar: con las voces del
   // navegador manda el sistema operativo, así que ahí se ofrece solo el género.
@@ -14943,13 +14957,18 @@ function ttsGuardarConfigVoz(){
     clave = 'fish:' + ((item && item.id) || 'jg-narradora');
   } else {
     const gender = vozEl.value === 'male' ? 'male' : 'female';
-    clave = 'neural:' + ((acentoEl && acentoEl.value) || 'es-CO') + ':' + gender;
+    const bilEl = document.getElementById('settingsTtsBilingual');
+    const locale = motor === 'neural' && bilEl?.value === 'unified' ? 'multi' : ((acentoEl && acentoEl.value) || 'es-CO');
+    clave = 'neural:' + locale + ':' + gender;
   }
   ttsCambiarVozEnVivo(clave);
 }
 
 function ttsCatalogoVoces(){
-  const lista = [];
+  const lista = [
+    { value:'neural:multi:female', group:'Multilingües', label:'Ava · Español e inglés', corto:'Ava · Multilingüe' },
+    { value:'neural:multi:male', group:'Multilingües', label:'Andrew · Español e inglés', corto:'Andrew · Multilingüe' },
+  ];
   TTS_NEURAL_ACCENTS.forEach(item => {
     const nombres = TTS_NOMBRES_NEURAL[item.value] || TTS_NOMBRES_NEURAL.auto;
     const pais = item.value === 'auto' ? 'Recomendado · Colombia' : (TTS_ACCENT_LABELS[item.value] || item.value);
@@ -15069,8 +15088,8 @@ function ttsPrefs(){
   rate = Math.min(2, Math.max(0.75, rate));
   const engine = jgCfgGet('jg_tts_engine', 'neural') || 'neural';
   const bilingualStored = jgCfgGet('jg_tts_bilingual', 'regional') || 'regional';
-  const bilingualMode = ttsNormalizarModo(bilingualStored);
   const voz = ttsVozActual();
+  const bilingualMode = voz.locale === 'multi' ? 'unified' : ttsNormalizarModo(bilingualStored);
   return {
     gender: voz.gender,
     locale: voz.locale || 'auto',
@@ -15099,6 +15118,7 @@ function ttsPrefsParaVoz(clave){
   const esFish = voz.provider === 'fish' && ttsFishInfo.active !== false;
   return {
     ...base,
+    bilingualMode: voz.locale === 'multi' ? 'unified' : (esFish ? base.bilingualMode : 'off'),
     gender: voz.gender,
     locale: voz.locale || 'auto',
     preferFish: esFish,
@@ -15230,7 +15250,7 @@ function ttsPartirOraciones(texto){
  * entero aunque el bloque crezca). Los comentarios quedan ANTES del const a
  * propósito: las pruebas extraen cada declaración hasta su último cierre y
  * un punto y coma dentro de un comentario de atrás la rompería. */
-const TTS_CONECTORES_CORTE = /\b(y|e|o|u|pero|mas|sino|porque|pues|aunque|mientras|cuando|donde|como|si|que|entonces|además|ademas|sin embargo|no obstante|es decir|por tanto|por lo tanto)\b/gi;
+const TTS_CONECTORES_CORTE = /\b(siempre y cuando|a pesar de que|con tal de que|por lo tanto|sin embargo|es decir|y|e|o|u|pero|mas|sino|porque|pues|aunque|mientras|cuando|donde|como|si|que|entonces|además|ademas|no obstante|por tanto)\b/gi;
 
 /* Corte en frontera de cláusula: devuelve el índice o -1. */
 function ttsCorteClausula(s, desde, limite){
@@ -15258,7 +15278,10 @@ function ttsCorteClausula(s, desde, limite){
   }
   if(mejor > desde) return mejor;
   /* Último recurso: el espacio, aunque quede por debajo del 60 %. */
-  const sp = s.lastIndexOf(' ', tope);
+  let sp = s.lastIndexOf(' ', tope);
+  for (const conector of s.matchAll(/\b(?:siempre y cuando|a pesar de que|con tal de que|por lo tanto|sin embargo|es decir)\b/gi)) {
+    if (sp > conector.index && sp < conector.index + conector[0].length && conector.index > desde) sp = conector.index;
+  }
   if(sp > desde) return sp;
   /* Ni siquiera hay un espacio: token larguísimo (una URL). Se conserva
    * entero hasta el espacio siguiente (tope +60 de cortesía) antes que
@@ -15335,6 +15358,8 @@ function ttsNormalizarTextoNarracion(texto, langHint){
     .replace(/^\s*[-*•]\s+/gm, '. ')
     .replace(/^\s*(\d+)[.)]\s+/gm, '$1. ')
     .replace(/[ \t]+/g, ' ')
+    // Si la continuacion empieza en minuscula, el salto no termina la frase.
+    .replace(/([^.!?…:;\n])(["»'’”)\]]*)[ \t]*\n{2,}[ \t]*(?=[a-záéíóúüñ])/g, '$1$2 ')
     // Cierra el pendiente «regresión directa de `..`». Un párrafo que ya
     // termina en signo no necesita otro punto: añadirlo producía «aquí.. Y el
     // segundo», «¿qué ocurrió?.» o «decir….», y esas caídas tonales dobles son
@@ -15742,7 +15767,10 @@ function ttsBuscarCorte(texto, objetivo){
     if(pos >= objetivo) break;
   }
   if(mejor > 0) return mejor;
-  const espacio = ventana.lastIndexOf(' ', objetivo);
+  let espacio = ventana.lastIndexOf(' ', objetivo);
+  for (const m of texto.matchAll(/\b(?:siempre y cuando|a pesar de que|con tal de que|por lo tanto|sin embargo|es decir)\b/gi)) {
+    if (espacio > m.index && espacio < m.index + m[0].length) espacio = m.index;
+  }
   return espacio > objetivo * 0.45 ? espacio : -1;
 }
 
@@ -16213,7 +16241,7 @@ async function ttsFetchNeuralChunk(item, prefs, rateServidor, sourceId, reintent
   // natural y el navegador lo acelera. Así el mismo texto sirve para cualquier
   // velocidad y se puede reutilizar del caché.
   let tone = prefs.tone;
-  const unified = language === 'multi';
+  const unified = language === 'multi' || (!!item?.idiomaFijo && prefs.bilingualMode === 'unified');
   if(unified){
     // Modo "misma voz": la voz multilingüe pronuncia cada idioma sin ayuda.
     // Sin guías, sin frenar el inglés, sin cambio de voz entre fragmentos.
@@ -16928,7 +16956,7 @@ function ttsCalentarPdf(textoPreparado, langHint){
     const limpio = String(textoPreparado || '').trim();
     if(limpio.length <= 40) return false;
     const codigo = String(langHint || 'es').slice(0, 2);
-    const modo = (codigo !== 'es' && codigo !== 'en') ? 'off' : (prefs.preferFish ? 'unified' : 'off');
+    const modo = (codigo !== 'es' && codigo !== 'en') ? 'off' : ((prefs.preferFish || prefs.bilingualMode === 'unified') ? 'unified' : 'off');
     const probe = ttsCrearCola(limpio, langHint || 'es', ttsMaxBloque(prefs), modo);
     /* El primer bloque con voz (si el capítulo abre con título, el [0] es su
      * silencio de 700 ms y ese nunca se pide al servidor). */
@@ -17341,7 +17369,8 @@ function ttsHablar(texto, opts){
   // El modo «misma voz» (una voz multilingüe para ES + EN) solo tiene sentido en
   // español o inglés; en los demás idiomas manda la voz nativa del idioma.
   // PDF con Fish: modo «unified» (una sola voz sin cortes por idioma).
-  // PDF sin Fish (P1.6): modo «off» con idioma fijo — la voz NATIVA del acento
+  // PDF sin Fish: respeta una eleccion explicita multilingue. En otro caso,
+  // modo «off» con idioma fijo — la voz NATIVA del acento
   // elegido (Salomé/Gonzalo en es-CO), no la multilingüe en-US. La
   // segmentación bilingüe «regional» partiría oraciones en tramos ES/EN con
   // voces distintas (pausas y timbres que suenan robóticos); con «off» no se
@@ -17354,7 +17383,7 @@ function ttsHablar(texto, opts){
   } else if (esPdf && !pdfNativo) {
     modo = 'unified';
   } else if (pdfNativo) {
-    modo = 'off';
+    modo = prefs.bilingualMode === 'unified' ? 'unified' : 'off';
   } else {
     modo = prefs.bilingualMode;
   }
@@ -17385,8 +17414,8 @@ function ttsHablar(texto, opts){
     }
   }
   /* P1.6: sin Fish, cada bloque del PDF viaja con idioma fijo para que el
-   * servidor use la voz nativa del acento elegido (X-TTS-Voice = la elegida)
-   * y nunca la multilingüe en-US. Con Fish no se marca: ahí manda unified. */
+   * servidor respete la voz elegida. Solo una eleccion multilingue explicita
+   * usa unified. Con Fish no se marca: ahi manda unified. */
   if(pdfNativo){
     ttsState.queue.forEach((b)=>{ if(b && !b.silencio) b.idiomaFijo = true; });
   }
@@ -17888,7 +17917,19 @@ function ttsRellenarLocales(){
       contenedor.appendChild(option);
     });
     const existe = [...select.options].some(option => option.value === previo);
-    select.value = existe ? previo : (catalogo[0] ? catalogo[0].value : actual);
+    if(!existe){
+      const voz = ttsVozActual();
+      const prefs = ttsPrefs();
+      const nombres = prefs.bilingualMode === 'unified'
+        ? { female:'Ava', male:'Andrew' }
+        : (TTS_NOMBRES_NEURAL[voz.locale] || TTS_NOMBRES_NEURAL.auto);
+      const opcion = document.createElement('option');
+      opcion.value = previo;
+      opcion.textContent = 'Voz guardada · ' + (prefs.engine === 'browser' ? 'Navegador'
+        : (voz.provider === 'fish' ? ttsNombreFish(voz.fishId) : nombres[voz.gender]));
+      select.appendChild(opcion);
+    }
+    select.value = previo;
   });
 }
 
@@ -19021,7 +19062,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v158';
+const JG_JS_V = 'v159';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;
@@ -19060,6 +19101,7 @@ function asegurarYoutubeSincronizado(){
             // guardadas y, sin esto, las aceleradas sonaban con otro carácter.
             tone: prefs.tone || 'neutral',
             idioma_fijo: true,
+            unified: prefs.bilingualMode === 'unified',
             evitar_azure: opciones.evitarAzure !== false,
             source: 'yt',
           }),

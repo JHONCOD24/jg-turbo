@@ -55,7 +55,7 @@ comprobar(/function ttsCalentarPdf\(textoPreparado, langHint\)/.test(html),
   'el motor expone ttsCalentarPdf(texto ya preparado, idioma)');
 comprobar(/ttsCrearCola\(limpio, langHint \|\| 'es', ttsMaxBloque\(prefs\), modo\)/.test(html),
   'el calentado construye el primer bloque real con maxChunk y modo');
-comprobar(/prefs\.preferFish \? 'unified' : 'off'/.test(html),
+comprobar(/prefs\.preferFish \|\| prefs\.bilingualMode === 'unified'/.test(html),
   'el calentado usa el mismo modo que la lectura (unified/off)');
 comprobar((controlador.match(/window\.ttsCalentarPdf\(/g) || []).length === 2,
   'los dos prefetch del PDF llaman al calentado del motor');
