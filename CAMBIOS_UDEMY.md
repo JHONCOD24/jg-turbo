@@ -1,5 +1,19 @@
 # Udemy: extensión personal de Chrome
 
+## Frases continuas, version 0.3.1 (2026-09-29)
+
+El dueño dio el ejemplo «siempre / y cuando». Se reproduce primero en una
+prueba que falla; el motor une continuaciones antes de pedir la voz, hasta
+una pausa escrita, sin cambiar hablante ni borrar silencios reales. Limites:
+18 segundos y 600 caracteres. Conserva los indices y los subtitulos de cada
+segmento; retroceder vuelve a generar la frase completa. Copia actualizada
+con `node extension-udemy/copiar_motor.mjs`, 13 archivos.
+
+Pruebas locales: frases continuas 14; Udemy unitarias 116 y navegador falso
+31. La escucha del cambio en una clase real queda pendiente del dueño.
+Recargar la extension en chrome://extensions, luego recargar la clase y abrir
+de nuevo el panel de la extension. No se abre la aplicacion para doblar Udemy.
+
 ## Diagnóstico recibido del dueño, 2026-09-29
 
 Un video en el documento principal, duración 635,233 s, sin textTracks.

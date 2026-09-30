@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JG Turbo | Udemy",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Voz en español a partir de subtítulos de una clase abierta por su dueño.",
   "permissions": ["sidePanel", "storage", "webRequest"],
   "host_permissions": [
