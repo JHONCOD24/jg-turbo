@@ -68,7 +68,7 @@ La escucha final de un PDF y de una clase real queda con el dueño.
 - [x] Motor de extension copiado con `copiar_motor.mjs`, version 0.3.1.
 - [x] Publicacion unica desde copia limpia del commit, con enlace a jg-turbo.
 - [x] HTML, SW, modulos y salud verificados contra jg-turbo.vercel.app.
-- [ ] Cambio respaldado en origin/main.
+- [x] Cambio respaldado en origin/main.
 
 Despliegue anterior recuperable: v158, `dpl_ARxZxzq427BUPPr6piep7fsnH8Xh`.
 
@@ -82,6 +82,12 @@ preparacion, controlador y terminos web. HTML/SW v159 y salud HTTP 200.
 `JG_BASE=https://jg-turbo.vercel.app node tests/verificar_voz_multilingue.mjs`:
 13 OK con frontend publicado y API simulada. No acredita escucha humana ni
 prueba de iPhone fisico. El dueño prueba la calidad de la pronunciacion.
+
+Respaldo confirmado: main avanzo por fast-forward y se envio a origin/main.
+`git fetch origin` y `git log --oneline origin/main..HEAD` no muestran commits
+pendientes. Las 25 unitarias se repitieron en el checkout principal: 1639 OK.
+La extension 0.3.1 esta respaldada en `origin/feat/udemy-doblaje`; no se integra
+a main ni se cierra Tarea 10/11 de Udemy hasta completar la lista del dueño.
 
 ---
 
