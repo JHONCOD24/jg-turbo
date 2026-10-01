@@ -187,9 +187,10 @@ incluidas frases completas, voz más larga que el original y subtítulo acorde
 con la voz. Las APIs y el reproductor de YouTube están simulados: se comprueba
 el código servido por producción, no una escucha con proveedores reales.
 
-Respaldo previsto: incorporación mediante avance rápido a `main` y push a
-`origin/main`, seguido de comprobar que no quedan commits locales sin subir.
-El archivo original de mediciones del proyecto principal se conserva en una
-copia recuperable antes de incorporar su versión con seguimiento.
+Respaldo realizado: incorporación mediante avance rápido a `main`, push a
+`origin/main` y `git log origin/main..HEAD` vacío tras fetch. El archivo original
+de mediciones del proyecto principal se conservó en
+`.worktrees/mediciones-originales-antes-merge-v164.md` de este checkout, antes
+de incorporar su versión con seguimiento. Ambos SHA-256 coinciden.
 
 El commit v163 y su despliegue previo permiten volver a la entrega anterior.
