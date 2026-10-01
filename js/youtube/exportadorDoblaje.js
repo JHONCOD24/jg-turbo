@@ -1,7 +1,7 @@
 /**
  * Archivos del doblaje, armados en el navegador con Mediabunny:
  *  - `exportarMp3`: la voz en español del video entero, cada frase en su segundo.
- *  - `exportarMp4DobladoX`: el video de X con la voz en español y el audio original bajito.
+ *  - `exportarMp4Doblado`: el video (de X o del equipo) con la voz en español y el original bajito.
  *  - `descargarOriginalX`: el MP4 original de X, sin tocarlo.
  *
  * Nada de esto cabe en el servidor (60 s y ~4,5 MB por petición). Medido en
@@ -146,25 +146,37 @@ export async function exportarMp3({
   return { frases: voces.plan.length, aceleradas: voces.aceleradas, corridas: voces.corridas };
 }
 
-/** El video de X con la voz en español. El video se copia tal cual (no se recodifica). */
-export async function exportarMp4DobladoX({
-  mp4Url, frases, sintetizar, destino, signal = null, onProgreso = () => {},
+/**
+ * El video con la voz en español. El video se copia tal cual (no se recodifica).
+ * Fuente: `mp4Url` (X) o `archivo` (un video del equipo, File/Blob leído por rangos).
+ */
+export async function exportarMp4Doblado({
+  mp4Url = '', archivo = null, frases, sintetizar, destino, signal = null, onProgreso = () => {},
   volumenOriginal = VOLUMEN_ORIGINAL, rutaMedios = RUTA_MEDIOS,
 }) {
   const mb = await cargarMedios(rutaMedios);
   await asegurarAac(mb, rutaMedios);
   // X responde 403 a peticiones con Referer de otro dominio (TRAMPAS.md): Mediabunny pide por rangos con esto.
   const input = new mb.Input({
-    source: new mb.UrlSource(mp4Url, { requestInit: { referrerPolicy: 'no-referrer', credentials: 'omit' } }),
+    source: archivo
+      ? new mb.BlobSource(archivo)
+      : new mb.UrlSource(mp4Url, { requestInit: { referrerPolicy: 'no-referrer', credentials: 'omit' } }),
     formats: mb.ALL_FORMATS,
   });
   let output = null;
   try {
+    const pistaVideo = await input.getPrimaryVideoTrack();
+    // Un códec que MP4 no lleva obligaría a recodificar el video entero: minutos u horas en el navegador.
+    if (pistaVideo && !new mb.Mp4OutputFormat().getSupportedVideoCodecs().includes(pistaVideo.codec)) {
+      throw new Error('El video de este archivo no se puede guardar como MP4 sin recodificarlo. Descarga el audio en español (MP3).');
+    }
     const duracionVideoS = await input.computeDuration();
     const voces = await prepararVoces(frases, { sintetizar, duracionVideoS, signal, onProgreso });
     const pistaOriginal = await input.getPrimaryAudioTrack();
     const original = pistaOriginal && await pistaOriginal.canDecode() ? new mb.AudioBufferSink(pistaOriginal) : null;
-    const hz = pistaOriginal?.sampleRate || HZ_MP4;
+    // El AAC del navegador no acepta cualquier frecuencia (32 kHz de un AC-3 falló en Chrome, medido):
+    // fuera de 44,1/48 kHz se mezcla a 48 kHz (OfflineAudioContext remuestrea el original solo).
+    const hz = [44100, 48000].includes(pistaOriginal?.sampleRate) ? pistaOriginal.sampleRate : HZ_MP4;
     output = new mb.Output({
       // Al disco, el índice va al final (se escribe por posiciones); en memoria, al principio.
       format: new mb.Mp4OutputFormat({ fastStart: destino.tipo === 'disco' ? false : 'in-memory' }),
@@ -199,6 +211,9 @@ export async function exportarMp4DobladoX({
     input.dispose?.();
   }
 }
+
+/** Nombre de antes: X lo sigue usando igual. */
+export const exportarMp4DobladoX = exportarMp4Doblado;
 
 /** El MP4 original de X, de un tirón: al disco en escritorio, en memoria en el celular. */
 export async function descargarOriginalX({ mp4Url, destino, signal = null, onProgreso = () => {} }) {
