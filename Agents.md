@@ -197,6 +197,9 @@ se cortó.
 | `node tests/verificar_x_doblaje.mjs` | **Obligatoria al tocar el doblaje de X**: enlace de X en el mismo campo, audio en partes de ≤3,2 MB, **ninguna petición a video.twimg.com con Referer** (falla si lo lleva), iframe `/x-reproductor.html`, caché `x:<id>`, cancelar que corta verdad, errores que se leen y teléfono sin desborde | 24 |
 | `node tests/verificar_biblioteca_datos.mjs` | **Obligatoria al tocar `cacheDoblaje.js` o los archivos doblados**: migración v1→v2, «lo automático nunca pisa lo que organizó la persona», deshacer, tope de voces, MP3/MP4 con voces reales, **recorte del silencio de una voz real de producción**, medida guardada con la voz y cancelar — en Chromium sin códecs **y** Chrome instalado | 48 |
 | `node tests/verificar_biblioteca_videos.mjs` | **Obligatoria al tocar la biblioteca de videos** (`bibliotecaVista.js` o su marcado/CSS): migración al abrir, «Seguir viendo», búsqueda (también en lo que se dijo), filtros, temas, deshacer, teclado, «Listo al instante» sin gastar limitador, las tres descargas, el botón «Guardar archivo» y la voz guardada con su medida — con API, reproductor y red simulados | 52 |
+| `node tests/test_archivo_doblaje.mjs` | **Obligatoria al tocar videos del equipo** (reglas puras, huella, partes, servicio con dobles, biblioteca) | 65 |
+| `node tests/verificar_archivo_audio.mjs` | **Obligatoria al tocar videos del equipo** (Mediabunny real en Chromium y Chrome: MP3, copia AC-3, miniatura, MP4 doblado) | 26 |
+| `node tests/verificar_archivo_doblaje.mjs` | **Obligatoria al tocar videos del equipo** (punta a punta con API simulada: elegir, doblar, biblioteca, reabrir, MP4, errores, Archivo, teléfono) | 38 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -324,6 +327,23 @@ arquitectura, validación y guía de activación).
 - `crearDestino` (`destinoArchivo.js`) es lo **primero** del clic en «Descargar»:
   `showSaveFilePicker` exige el gesto (TRAMPAS.md).
 - **De YouTube solo se ofrece el audio doblado (MP3)**: nunca video de YouTube.
+
+## Videos del equipo (leer antes de tocar `archivoLocal.js`, `medioLocal.js`, `servicioArchivo.js`)
+
+- Documento maestro: **`CAMBIOS_VIDEO_LOCAL.md`** (especificación:
+  `docs/superpowers/specs/2026-10-01-doblaje-video-local-design.md`, plan:
+  `PLAN_VIDEO_LOCAL_DOBLAJE_IMPLEMENTACION_LLM.md`, medidas: `docs/video-local/MEDICIONES.md`).
+- **El video nunca viaja al servidor ni se copia** (ni IndexedDB, ni OPFS, ni Cache).
+  Solo viajan partes de audio de ≤ 3,2 MB a `/api/transcribe`. Nunca
+  `file.arrayBuffer()` del video entero: se lee por rangos (`BlobSource`).
+- **Una sola puerta a `/api/transcribe`:** `subirParte` de `transcripcionPartes.js`
+  (X y archivos). No escribir otra.
+- **Mediabunny carga diferido** (`medios.js`, `import('./medioLocal.js')`): nunca al
+  abrir la app (`verificar_arranque_ligero`).
+- **La base `jg_youtube` sigue en v2.** Nada de almacenes nuevos. El registro parcial
+  vive dentro de `doblajes` y lo reemplaza `completarSesion`.
+- Pruebas: `test_archivo_doblaje` 65 · `verificar_archivo_audio` 26 ·
+  `verificar_archivo_doblaje` 38 (**obligatorias al tocar videos del equipo**).
 
 ## PDF (leer antes de tocar `js/pdf/`)
 

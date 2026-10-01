@@ -1593,3 +1593,35 @@ pasar página de verdad: ninguna remedición la toca), expuesta para pruebas
 como window.__jgPaginas(). **Regla:** en paginado con cromo flotante, los
 gestos y transiciones se afirman por ancla (avanza / no se mueve / su bloque
 sigue en pantalla), nunca por igualdad de etiquetas.
+
+## WebCodecs no existe fuera de contexto seguro (2026-10-01)
+
+**Síntoma:** una prueba servida en `http://host-inventado` dice «no se puede
+decodificar» para todos los videos, aunque en la app (https) sí se decodifican.
+
+**Causa:** WebCodecs (lo que decodifica el audio con Mediabunny) solo existe en
+contexto seguro: https, `localhost`, `127.0.0.1` (medido M1).
+
+**Regla:** las pruebas de video local se sirven en `localhost`/`127.0.0.1`;
+nunca un host inventado.
+
+## El AAC del navegador no acepta cualquier frecuencia (2026-10-01)
+
+**Síntoma:** el MP4 doblado de un MKV con AC-3 fallaba en Chrome:
+`mp4a.40.2, 128000 bps, 2 channels, 32000 Hz is not supported`.
+
+**Causa:** el exportador usaba la frecuencia del audio original (32 kHz del AC-3)
+y el AAC del navegador no la acepta (medido M15).
+
+**Regla:** al mezclar se usa 44,1/48 kHz siempre; fuera de esas se mezcla a
+48 kHz (`exportadorDoblaje.js`).
+
+## 44 px exactos miden 43,99 en densidad 2,625 (2026-10-01)
+
+**Síntoma:** un botón de 44 px exactos medía 43,99 px en un teléfono con densidad
+2,625 y fallaba el mínimo táctil.
+
+**Causa:** el redondeo de píxeles físicos a CSS en esa densidad (medido).
+
+**Regla:** donde haga falta, usar 48 px de mínimo (la ficha del archivo lo hace);
+los toques se miden en el navegador, no se deducen del CSS.

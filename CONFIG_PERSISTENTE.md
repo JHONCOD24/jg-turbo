@@ -160,6 +160,16 @@ desde v2 no se elimina nada que la persona organizó (quitar es manual, con
 Deshacer). Sin claves nuevas de `localStorage`. Un deploy no la borra; en modo
 privado del navegador la lectura puede fallar y la app lo dice en pantalla.
 
+Videos del equipo (2026-10-01): se guardan en la **misma** base `jg_youtube`
+(sigue en v2, sin almacenes nuevos) con clave **`archivo:<huella>`** (16 hex del
+SHA-256 de tamaño + 1 MiB inicial + 1 MiB final) en `doblajes`, `videos` y `voces`.
+La ficha en `videos` trae `plataforma: 'archivo'`, `url: ''`, `portada` como
+`data:image/jpeg` del propio video, `nombreArchivo` y `bytes`. Mientras se
+transcribe, el registro en `doblajes` trae el campo temporal **`parcial`**
+(`{ trozoS, idioma, partes: [[k, segmentos]] }`); `completarSesion` lo reemplaza
+por el registro completo. **El video nunca se guarda**: ni el archivo, ni blob,
+ni copia en IndexedDB/OPFS/Cache.
+
 ## Qué NO es persistente (normal)
 
 - Texto de la última transcripción (no se guarda en el servidor).
