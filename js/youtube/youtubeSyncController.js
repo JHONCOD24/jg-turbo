@@ -10,7 +10,7 @@ import { TranscriptionService, ErrorYoutube } from './transcriptionService.js';
 import { detectarFuente } from './fuenteVideo.js';
 import { ServicioX, tituloX } from './servicioX.js';
 import { ServicioArchivo } from './servicioArchivo.js';
-import { validarArchivo, huellaArchivo, resumenAntesDeEmpezar } from './archivoLocal.js';
+import { validarArchivo, huellaArchivo, resumenAntesDeEmpezar, esClaveArchivo } from './archivoLocal.js';
 import { elegirMp4 } from './audioX.js';
 import { XVideoPlayer } from './XVideoPlayer.js';
 import { TranslationService } from './translationService.js';
@@ -83,6 +83,7 @@ export function inicializarYoutubeSincronizado({
     volVoz: $('ytVolVoz'), volVozVal: $('ytVolVozVal'), volOriginal: $('ytVolOriginal'), volOriginalVal: $('ytVolOriginalVal'),
       metricas: $('ytSyncMetrics'), reproducir: $('ytDubReproducir'), buffer: $('ytBuffer'),
       voz: $('ytVozSelect'), voz2: $('ytVoz2Select'), voz2Wrap: $('ytVoz2Wrap'),
+      otraVoz: $('ytOtraVoz'),
     tarjeta: $('ytDubProgreso'), barra: $('ytDubBarra'), mensaje: $('ytDubMensaje'), tiempo: $('ytDubTiempo'),
     ayuda: $('ytDubAyuda'), cancelar: $('ytDubCancelar'),
     archivo: $('ytArchivo'), elegirArchivo: $('ytElegirArchivo'), ficha: $('ytFichaArchivo'),
@@ -234,6 +235,8 @@ export function inicializarYoutubeSincronizado({
     function vozNuevaDesde(select, clave) {
       guardar(clave, select.value);
       if (!sesion) return;
+      sesion.otroHablante = false;
+      pintarOtraVoz();
       resolverVocesSesion(sesion);
       if (sesion.registro) registrarVideo({ clave: sesion.videoId, voz: sesion.voz || '', vozSecundaria: sesion.vozSecundaria || 'ninguna' });
       // La voz nueva entra desde la próxima frase, sin cortar la actual.
@@ -252,6 +255,32 @@ export function inicializarYoutubeSincronizado({
       ui.voz2.value = (recordada2 && vozValida(ui.voz2, recordada2)) ? recordada2 : vozPorDefecto();
       ui.voz2.addEventListener('change', () => vozNuevaDesde(ui.voz2, CLAVE_VOZ2));
     }
+    // Videos del equipo sin diálogo: lo transcrito no dice quién habla, así que
+    // la 2.ª voz no entra sola. La persona toca cuando cambia quien habla y desde
+    // ahí suena la otra voz, hasta que lo vuelve a tocar (estilo pódcast).
+    function pintarOtraVoz() {
+      if (!ui.otraVoz) return;
+      ui.otraVoz.setAttribute('aria-pressed', String(Boolean(sesion?.otroHablante)));
+      ui.otraVoz.textContent = sesion?.otroHablante ? 'Volver a la primera voz' : 'Aquí habla otra persona';
+    }
+    ui.otraVoz?.addEventListener('click', () => {
+      const viva = sesion;
+      if (!viva || !viva.servicioVoz) return;
+      if (!viva.vozSecundaria) {
+        viva.vozSecundaria = `neural:auto:${generoDeVoz(viva.voz) === 'male' ? 'female' : 'male'}`;
+      }
+      const ahora = Number(viva.player?.getCurrentTime?.()) || 0;
+      const anterior = viva.voz;
+      viva.voz = viva.vozSecundaria;
+      viva.vozSecundaria = anterior;
+      viva.otroHablante = !viva.otroHablante;
+      viva.servicioVoz.invalidarDesde(ahora + 1);
+      if (viva.registro) registrarVideo({ clave: viva.videoId, voz: viva.voz || '', vozSecundaria: viva.vozSecundaria || 'ninguna' });
+      pintarOtraVoz();
+      ui.estado.textContent = viva.otroHablante
+        ? 'Desde aquí habla la otra voz. Tócalo de nuevo cuando vuelva la primera.'
+        : 'De nuevo la primera voz.';
+    });
 
   async function alternarPantallaCompleta() {
     const shell = ui.area.querySelector('.yt-player-shell');
@@ -448,6 +477,7 @@ export function inicializarYoutubeSincronizado({
   function reiniciarVista() {
     ui.botonVoz.disabled = true;
     if (ui.voz2Wrap) ui.voz2Wrap.hidden = true;
+    if (ui.otraVoz) ui.otraVoz.hidden = true;
     $('ytDesdeInicio').hidden = true;
     ponerEstadoBotonVoz(false);
     ui.etiquetaVoz.textContent = 'Voz en español';
@@ -706,6 +736,13 @@ export function inicializarYoutubeSincronizado({
     actual.origen = origen;
     actual.tituloVideo = tituloVideo;
     resolverVocesSesion(actual);
+    // Sin diálogo y del equipo: se ofrece el cambio manual de voz (la
+    // automática necesita marcas de quién habla y lo transcrito no las trae).
+    if (ui.otraVoz) {
+      actual.otroHablante = false;
+      ui.otraVoz.hidden = !(esClaveArchivo(actual.videoId) && ui.voz2Wrap?.hidden);
+      pintarOtraVoz();
+    }
     const limitador = crearLimitador();
     const servicioVoz = new DubbingService({
       // Cada frase suena con su hablante: monólogo = 1 voz, diálogo = 2.

@@ -4045,6 +4045,9 @@
   .yt-equipo-aviso{margin:0 0 12px;font-size:13px;line-height:1.45;color:var(--hot-1)}
   .yt-equipo-aviso:empty{display:none}
   .yt-area.yt-soltando{outline:2px dashed var(--cyan);outline-offset:-6px;border-radius:16px}
+  /* Videos del equipo sin diálogo: cambio manual de voz («Aquí habla otra persona»). */
+  .yt-area .yt-sync-extras #ytOtraVoz{min-height:48px;font-size:13px}
+  .yt-area .yt-sync-extras #ytOtraVoz[aria-pressed="true"]{border-color:var(--cyan-glow);color:var(--cyan)}
   .yt-source-badge{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
     padding:2px 7px;border-radius:999px;margin-left:6px}
   .yt-source-badge.subs{background:rgba(39,225,193,.12);color:var(--cyan);border:1px solid var(--cyan-glow)}
@@ -6716,6 +6719,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             <div class="yt-sync-extras">
               <button class="mini-btn" id="ytDesdeInicio" type="button" hidden>Empezar desde el inicio</button>
               <button class="mini-btn" id="ytPantallaCompleta" type="button" aria-pressed="false">Pantalla completa</button>
+              <button class="mini-btn" id="ytOtraVoz" type="button" hidden aria-pressed="false">Aquí habla otra persona</button>
               <label class="yt-opcion" for="ytVozSelect">Voz
                 <select id="ytVozSelect" class="tts-voice-select" aria-label="Voz del doblaje"></select>
               </label>

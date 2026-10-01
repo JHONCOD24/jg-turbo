@@ -182,6 +182,17 @@ try {
     comprobar('«Ver con voz en español» arranca el video y avanza', t1 > t0 + 1, `${t0.toFixed(1)} → ${t1.toFixed(1)} s`);
     comprobar('y se pide la voz en español', reg.tts > 0, String(reg.tts));
     comprobar('el motor de voz vive (jgDoblajeDiagnostico)', await pagina.evaluate(() => Boolean(window.jgDoblajeDiagnostico?.())));
+    comprobar('sin diálogo hay botón «Aquí habla otra persona»', await pagina.isVisible('#ytOtraVoz'));
+    const altoOtra = await pagina.evaluate(() => document.getElementById('ytOtraVoz').getBoundingClientRect().height);
+    comprobar('«Aquí habla otra persona» mide al menos 44 px', altoOtra >= 44, `${altoOtra} px`);
+    const ttsAntes = reg.tts;
+    await pagina.click('#ytOtraVoz');
+    comprobar('al tocarlo ofrece volver a la primera voz', /Volver a la primera voz/.test(await pagina.textContent('#ytOtraVoz')));
+    await esperar(2500);
+    const t2 = await tiempoVideo(pagina);
+    comprobar('y el video sigue avanzando con la otra voz', t2 > t1 && reg.tts > ttsAntes, `${t1.toFixed(1)} → ${t2.toFixed(1)} s · tts ${reg.tts}`);
+    await pagina.click('#ytOtraVoz');
+    comprobar('al tocarlo de nuevo vuelve la primera voz', /Aquí habla otra persona/.test(await pagina.textContent('#ytOtraVoz')));
 
     await pagina.click('#btnYtSyncClose');
     await pagina.waitForSelector('.vid-tarjeta', { timeout: 10000 }).catch(() => {});
