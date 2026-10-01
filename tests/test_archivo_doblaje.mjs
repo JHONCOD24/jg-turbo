@@ -255,6 +255,38 @@ const io = await modulo('idiomaOrigen.js');
   comprobar(r.idioma === 'cy', 'el idioma fijado es el código «cy»');
 }
 
+// ── T6: subtítulos .srt/.vtt junto al video (mejora 1) ───────────────────
+const st = await modulo('subtitulosArchivo.js');
+{
+  const srt = `1\n00:00:01,000 --> 00:00:04,000\n<i>Hello world.</i>\n\n2\n00:00:05,000 --> 00:00:08,500\n>> Good morning, class.\nSecond line.\n\n3\n00:00:10,000 --> 00:00:12,000\nAna: let's begin.\n`;
+  const cues = st.parsearSRT(srt);
+  comprobar(cues.length === 3 && cues[0].start === 1 && cues[0].end === 4, 'SRT: 3 frases con sus tiempos');
+  comprobar(cues[1].text.includes('>>') && cues[2].text.startsWith('Ana:'), 'SRT: las marcas de quién habla se conservan');
+  const { segmentos, formato } = st.segmentosDesdeSubtitulos(srt, 'clase.srt');
+  comprobar(formato === 'srt' && segmentos.length === 3, 'SRT válido → 3 segmentos con tiempos');
+  comprobar(segmentos[0].text === 'Hello world.' && !/<|>/.test(segmentos[0].text), 'las etiquetas <i> se limpian');
+  comprobar(segmentos[1].cambioHablante === true && segmentos[2].cambioHablante === true, '«>>» y «Ana:» marcan cambio de hablante (la 2.ª voz entra sola)');
+
+  const vtt = `WEBVTT\n\nNOTE intro\n\ncorta-1\n00:00.500 --> 00:03.000 align:start\nFirst <b>line</b>.\n\n00:05,000 --> 00:07.000\nSecond line.\n`;
+  const { segmentos: sv, formato: fv } = st.segmentosDesdeSubtitulos(vtt, 'clase.vtt');
+  comprobar(fv === 'vtt' && sv.length === 2 && sv[0].startTime === 0.5 && sv[0].text === 'First line.', 'VTT con NOTE e identificador se lee (punto o coma valen)');
+
+  comprobar(st.detectarFormatoSubtitulo('x.srt') === 'srt' && st.detectarFormatoSubtitulo('x.vtt') === 'vtt', 'la extensión decide');
+  comprobar(st.detectarFormatoSubtitulo('x.txt', 'WEBVTT\n\n00:01.000 --> 00:02.000\nhi\n') === 'vtt', 'sin extensión se adivina por el contenido');
+
+  const latin1 = new File([new Uint8Array([0x6e, 0x69, 0xf1, 0x6f])], 'n.srt', { type: 'text/plain' });
+  comprobar((await st.leerTextoSubtitulo(latin1)) === 'niño', 'un .srt de Windows (Latin-1) no rompe las tildes');
+
+  const tiro = async (archivo, nombre, codigo) => {
+    let error = null;
+    try { await st.leerTextoSubtitulo(archivo); st.segmentosDesdeSubtitulos('xx', nombre); } catch (e) { error = e; }
+    return error?.codigo === codigo;
+  };
+  comprobar(await tiro(new File([], 'v.srt'), 'v.srt', 'srt_vacio'), 'subtítulo vacío → srt_vacio');
+  comprobar(await tiro(archivo(bytesDe(10), 'nota.mp3', 'audio/mp3'), 'nota.mp3', 'srt_no_es'), 'un audio → srt_no_es');
+  comprobar(await tiro(archivo(bytesDe(10), 'mal.srt'), 'mal.srt', 'srt_formato'), 'texto sin tiempos → srt_formato');
+}
+
 // ── Resumen ──────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);
