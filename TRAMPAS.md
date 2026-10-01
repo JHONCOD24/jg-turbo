@@ -1681,3 +1681,17 @@ cuando Playwright devuelve el control. Además, al crear una envoltura nueva de
 video hay que recrear `#ytPlayer` dentro de ella, no dentro del shell completo.
 **Regla:** esperar el estado real de pantalla completa antes de medir y de salir;
 comprobar la geometría del iframe tras recrearlo. No usar clics forzados.
+
+## Sondear sin requestAnimationFrame (auditoría local, 2026-10-01)
+
+**Síntoma:** la suite de YouTube agotaba el tiempo de espera en producción,
+con el formulario ya presente pero antes de interactuar con el controlador.
+La espera añadida también agotó el tiempo en el escenario sin rAF.
+**Causa:** el marcado llega antes de los módulos diferidos; además,
+`waitForFunction` usa rAF para sondear por defecto y ese escenario lo deshabilita.
+**Regla:** esperar una señal de inicialización del controlador, no solo el DOM;
+usar `polling: 100` cuando la propia prueba deshabilita rAF. Los intentos
+interrumpidos o con timeout no cuentan como suites aprobadas.
+La misma espera aplica tras F5, antes de medir preferencias restauradas. Para
+geometría de biblioteca esperar también `link[data-vid-css].sheet`: el CSS
+diferido ya define 44 px, pero antes de cargar se mide el estilo general de 36 px.

@@ -200,12 +200,17 @@ async function abrir(navegador, escenario = {}) {
   });
   await pagina.goto(`${base}/?tab=yt`, { waitUntil: 'domcontentloaded' });
   await pagina.waitForSelector('#ytUrl', { state: 'attached' });
+  // El formulario existe antes de que termine la carga diferida del controlador.
+  // Esperar su inicialización evita pulsar un botón sin su listener en red real.
+  await pagina.waitForFunction(() => Boolean(window.jgVideoLocal)
+    && Boolean(document.querySelector('link[data-vid-css]')?.sheet),
+  null, { timeout: 30000, polling: 100 });
   return { contexto, pagina, reg };
 }
 
 async function pegarEnlace(pagina, url = URL_VIDEO) {
   await pagina.fill('#ytUrl', url);
-  await pagina.waitForFunction(() => !document.getElementById('ytSyncBtn').disabled, null, { timeout: 10000 }).catch(() => {});
+  await pagina.waitForFunction(() => !document.getElementById('ytSyncBtn').disabled, null, { timeout: 10000, polling: 100 });
 }
 /** ¿Está el doblaje listo para sonar? (vale antes y después de T1.7) */
 const listo = (pagina) => pagina.evaluate(() => {
@@ -217,6 +222,13 @@ const listo = (pagina) => pagina.evaluate(() => {
 async function esperarListo(pagina, ms = 30000) {
   const fin = Date.now() + ms;
   while (Date.now() < fin) { if (await listo(pagina)) return true; await esperar(150); }
+  console.log('DIAGNOSTICO: doblaje no listo', await pagina.evaluate(() => ({
+    estado: document.getElementById('ytSyncStatus')?.textContent,
+    mensaje: document.getElementById('ytDubMensaje')?.textContent,
+    aviso: document.getElementById('ytStatus')?.textContent,
+    boton: document.getElementById('ytSyncBtn')?.disabled,
+    reproductor: Boolean(window.__yt),
+  })));
   return false;
 }
 /** Pulsa lo que la interfaz ofrezca para ver el video con voz en español. */
@@ -475,6 +487,7 @@ try {
     await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
     await pagina.check('#ytToggleCaption');
     await pagina.reload(); await pagina.waitForSelector('#ytUrl', { state: 'attached' });
+    await pagina.waitForFunction(() => Boolean(window.jgVideoLocal), null, { timeout: 30000, polling: 100 });
     comprobar('el interruptor de subtítulos se recuerda', await pagina.isChecked('#ytToggleCaption'));
     await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
     await pagina.click('#ytPantallaCompleta'); await esperar(500);
