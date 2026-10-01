@@ -66,5 +66,6 @@ export function nombreArchivo({ titulo = '', plataforma = 'youtube', tipo = 'dob
   const base = String(titulo).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || 'video';
   const sufijo = { original: 'original', doblado: 'doblado-es', audio: 'audio-es' }[tipo] || tipo;
-  return `jg-turbo-${plataforma === 'x' ? 'x' : 'youtube'}-${base}-${sufijo}.${extension}`;
+  const origen = { x: 'x', archivo: 'equipo' }[plataforma] || 'youtube';
+  return `jg-turbo-${origen}-${base}-${sufijo}.${extension}`;
 }

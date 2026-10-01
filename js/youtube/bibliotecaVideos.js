@@ -58,9 +58,13 @@ export function fraccionVista(posicionS, duracionS) {
   return Math.max(0, Math.min(1, (Number(posicionS) || 0) / duracion));
 }
 
-/** La clave de caché dice la plataforma: YouTube = id tal cual; X = «x:<id>» o «x:<id>:<n>». */
+/**
+ * La clave de caché dice la plataforma: YouTube = id tal cual; X = «x:<id>» o
+ * «x:<id>:<n>»; video del equipo = «archivo:<huella>» (archivoLocal.js).
+ */
 export function datosDeClave(clave) {
   const texto = String(clave || '');
+  if (texto.startsWith('archivo:')) return { plataforma: 'archivo', id: texto.slice(8), indice: 0 };
   if (texto.startsWith('x:')) {
     const [, id = '', n = '0'] = texto.split(':');
     return { plataforma: 'x', id, indice: Number(n) || 0 };
@@ -68,7 +72,9 @@ export function datosDeClave(clave) {
   return { plataforma: 'youtube', id: texto, indice: 0 };
 }
 
+/** Un video del equipo no tiene enlace: vive en el disco de la persona. */
 export function urlCanonica({ plataforma, id, indice = 0 }) {
+  if (plataforma === 'archivo') return '';
   if (plataforma === 'x') return `https://x.com/i/status/${id}${indice ? `/video/${indice + 1}` : ''}`;
   return `https://www.youtube.com/watch?v=${id}`;
 }
@@ -84,7 +90,7 @@ export function fusionarEntrada(previa, nueva, ahora = Date.now()) {
   const datos = datosDeClave(clave);
   const duracionS = Number(nueva?.duracionS) || Number(base.duracionS) || 0;
   const posicionS = Number(nueva?.posicionS ?? base.posicionS) || 0;
-  const tituloPorDefecto = datos.plataforma === 'x' ? 'Video de X' : 'Video de YouTube';
+  const tituloPorDefecto = { x: 'Video de X', archivo: 'Video de tu equipo' }[datos.plataforma] || 'Video de YouTube';
   return {
     clave,
     plataforma: datos.plataforma,
@@ -100,6 +106,9 @@ export function fusionarEntrada(previa, nueva, ahora = Date.now()) {
     // 2.ª voz de los diálogos tal como sonó: 'ninguna' = todo con la principal.
     // undefined en fichas anteriores a la auditoría (entonces, la del otro género).
     vozSecundaria: nueva?.vozSecundaria ?? base.vozSecundaria,
+    // Solo videos del equipo: para pedir «elige otra vez <nombre>» y estimar descargas.
+    nombreArchivo: String(nueva?.nombreArchivo || base.nombreArchivo || ''),
+    bytes: Number(nueva?.bytes) || Number(base.bytes) || 0,
     etiquetas: Array.isArray(base.etiquetas) ? base.etiquetas : [],
     favorito: Boolean(base.favorito),
     posicionS,
