@@ -18,6 +18,8 @@ if (!document.querySelector('link[data-vid-css]')) {
 }
 
 const $ = (selector, raiz = document) => raiz.querySelector(selector);
+const NOMBRE_PLATAFORMA = { youtube: 'YouTube', x: 'X', archivo: 'Tu equipo' };
+const nombrePlataforma = (video) => NOMBRE_PLATAFORMA[video?.plataforma] || 'YouTube';
 const escapar = (valor) => String(valor ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
@@ -66,6 +68,7 @@ export function montarBibliotecaVideos(raiz, deps) {
     'vidDeshacer', 'vidTemasDialogo', 'vidTemasTitulo', 'vidTemasActuales', 'vidTemaNuevo', 'vidTemasSugerencias',
     'vidTemasMensaje', 'vidTemasListo', 'vidDescargasDialogo', 'vidDescargasAyuda', 'vidCalidad',
     'vidDescargaEstado', 'vidDescargar', 'vidDescargaCancelar', 'vidDescargasCerrar', 'vidGuardarOtraVez',
+    'vidElegirOriginal',
   ].map((id) => [id, document.getElementById(id)]));
   let videos = [];
   let conVoz = new Set();
@@ -121,7 +124,7 @@ export function montarBibliotecaVideos(raiz, deps) {
       <button class="vid-abrir" type="button" aria-label="Abrir ${escapar(video.titulo)}">
         ${portadaHtml(video)}
         <span class="vid-tarjeta-cuerpo">
-          <span class="vid-plataforma">${video.plataforma === 'x' ? 'X' : 'YouTube'}</span>
+          <span class="vid-plataforma">${nombrePlataforma(video)}</span>
           <strong>${escapar(video.titulo)}</strong>
           <span class="vid-meta">${escapar(video.autor || fechaRelativa(video.abierto || video.creado))}</span>
           ${progresoHtml(video)}
@@ -135,8 +138,8 @@ export function montarBibliotecaVideos(raiz, deps) {
         <button type="button" role="menuitem" data-accion="temas">Editar temas</button>
         <button type="button" role="menuitem" data-accion="favorito">${video.favorito ? 'Quitar de favoritos' : 'Marcar como favorito'}</button>
         <button type="button" role="menuitem" data-accion="descargar">Descargar</button>
-        <button type="button" role="menuitem" data-accion="copiar">Copiar enlace</button>
-        <button type="button" role="menuitem" data-accion="origen">Abrir en ${video.plataforma === 'x' ? 'X' : 'YouTube'}</button>
+        ${video.url ? `<button type="button" role="menuitem" data-accion="copiar">Copiar enlace</button>
+        <button type="button" role="menuitem" data-accion="origen">Abrir en ${nombrePlataforma(video)}</button>` : ''}
         <button type="button" role="menuitem" data-accion="quitar">Quitar de la biblioteca</button>
       </div>
       ${coincidencia ? `<div class="vid-coincidencia"><p>${escapar(coincidencia.fragmento)}</p><button type="button" data-accion="abrir-aqui" data-segundo="${coincidencia.segundo}">Abrir aquí · ${formatearDuracion(coincidencia.segundo)}</button></div>` : ''}
@@ -219,8 +222,12 @@ export function montarBibliotecaVideos(raiz, deps) {
   // terminaste). Un segundo explícito es solo para «Abrir aquí».
   function abrirVideo(video, segundo = 0) {
     const resultado = deps.abrir(video, { segundo });
-    if (resultado?.abierto) plegar(true);
-    else avisar(resultado?.motivo || 'No pudimos abrir este video.');
+    if (resultado?.abierto) { plegar(true); return; }
+    avisar(resultado?.motivo || 'No pudimos abrir este video.');
+    // Video del equipo: se está eligiendo el archivo; el resultado llega después.
+    resultado?.pendiente?.then((final) => {
+      if (final?.abierto) { avisar(''); plegar(true); } else avisar(final?.motivo || '');
+    }).catch(() => avisar('No pudimos abrir este video.'));
   }
 
   function pintarEditorTemas() {
@@ -269,7 +276,8 @@ export function montarBibliotecaVideos(raiz, deps) {
   function pintarTiposDescarga(video, listo = false) {
     ui.vidDescargasDialogo.querySelectorAll('[data-tipo]').forEach((label) => {
       const tipo = $('input', label).value;
-      label.hidden = tipo !== 'mp3' && (video.plataforma !== 'x' || !listo);
+      const ofrece = video.plataforma === 'x' || (video.plataforma === 'archivo' && tipo === 'mp4');
+      label.hidden = tipo !== 'mp3' && (!ofrece || !listo);
     });
     ui.vidDescargasDialogo.querySelector('input[value="mp3"]').checked = true;
   }
@@ -295,10 +303,30 @@ export function montarBibliotecaVideos(raiz, deps) {
       }
       ui.vidDescargaEstado.textContent = video.plataforma === 'x' ? 'Elige el archivo y la calidad.' : `Audio estimado: ${formatearBytes(opcionesDescarga.mp3?.bytes)}`;
       ui.vidDescargar.disabled = false;
+      pintarOriginal();
     } catch (error) {
       console.error('[jg-biblioteca-opciones]', error);
       ui.vidDescargaEstado.textContent = 'No pudimos calcular las opciones de descarga.';
     }
+  }
+
+  /** Video del equipo + MP4: hace falta el original (no se copió a la app). */
+  function pintarOriginal() {
+    if (!ui.vidElegirOriginal) return;
+    const falta = videoDescarga?.plataforma === 'archivo' && tipoDescarga() === 'mp4' && !opcionesDescarga?.archivoListo;
+    ui.vidElegirOriginal.hidden = !falta;
+    ui.vidDescargar.disabled = Boolean(falta) || !opcionesDescarga;
+    if (falta) {
+      ui.vidDescargaEstado.textContent = `Para el video doblado hace falta el original: «${videoDescarga.nombreArchivo || videoDescarga.titulo}». Pesará unos ${formatearBytes(opcionesDescarga.mp4?.bytes)}.`;
+    } else if (videoDescarga?.plataforma === 'archivo' && tipoDescarga() === 'mp4') {
+      ui.vidDescargaEstado.textContent = `Video doblado estimado: ${formatearBytes(opcionesDescarga.mp4?.bytes)}.`;
+    }
+  }
+
+  async function elegirOriginal() {
+    const r = await deps.elegirArchivoPara(videoDescarga);
+    if (r?.ok) { opcionesDescarga.archivoListo = true; pintarOriginal(); ui.vidDescargar.focus(); }
+    else if (r?.motivo) ui.vidDescargaEstado.textContent = r.motivo;
   }
 
   function tipoDescarga() {
@@ -447,6 +475,8 @@ export function montarBibliotecaVideos(raiz, deps) {
     await deps.restaurarVideo(deshecho); clearTimeout(temporizadorDeshacer); deshecho = null; ui.vidDeshacer.hidden = true; avisar('Video restaurado.'); await refrescar();
   });
   ui.vidDescargar.addEventListener('click', descargar);
+  ui.vidElegirOriginal?.addEventListener('click', () => { elegirOriginal().catch(() => { ui.vidDescargaEstado.textContent = 'No pudimos leer ese archivo.'; }); });
+  ui.vidDescargasDialogo.addEventListener('change', (evento) => { if (evento.target.name === 'vidTipo') pintarOriginal(); });
   ui.vidDescargaCancelar.addEventListener('click', () => controladorDescarga?.abort());
   ui.vidGuardarOtraVez?.addEventListener('click', () => { guardarOtraVez?.(); });
   ui.vidDescargasCerrar.addEventListener('click', () => { controladorDescarga?.abort(); soltarArchivo(); cerrarDialogo(ui.vidDescargasDialogo); });
