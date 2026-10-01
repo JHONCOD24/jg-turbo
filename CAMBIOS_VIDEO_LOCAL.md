@@ -141,7 +141,9 @@ los mismos números.
 
 ## Despliegues
 
-- v160: `JG_JS_V='v160'`, shell-v160. `dpl_…` (se anota en Tarea 13).
+- v160: `JG_JS_V='v160'`, shell-v160. `dpl_7Q4xcP8U7gZhuB4zyhieun4QoewG` (el video
+  real del dueño la tumbó al final con el 400 del galés; ver Corrección v161).
+- v161: `JG_JS_V='v161'`, shell-v161. `dpl_…` (se anota en Tarea 13).
 - Sale desde copia `git archive` del commit, una sola vez, verificado contra
   https://jg-turbo.vercel.app (versión, módulos con 200 y sha256 igual, video real
   doblado) y empujado a `origin/main`.

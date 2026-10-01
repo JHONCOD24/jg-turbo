@@ -27,10 +27,27 @@ cp .vercel/project.json "$D/.vercel/project.json"   # prj_EfuyBt2YDNqQNVaKif9DKU
 cd "$D" && npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
-`dpl_…` READY, alias `https://jg-turbo.vercel.app`.
+`dpl_7Q4xcP8U7gZhuB4zyhieun4QoewG` READY, alias `https://jg-turbo.vercel.app`.
 Marcador `JG_JS_V=v160`, shell-v160. Verificado: HTML con v160, módulos
 `archivoLocal.js`, `medioLocal.js`, `servicioArchivo.js` y `transcripcionPartes.js`
 con 200 y sha256 igual al commit, `/api/health` ok y un video real doblado en el dominio.
+
+## Corrección v161 (idioma galés), 2026-10-01 · desde una copia exacta del commit
+
+El video real del dueño tumbó v160 al final con «Groq Error 400: unsupported
+language: welsh». Causa y arreglo: `CAMBIOS_VIDEO_LOCAL.md` §Corrección v161
+(normalizar a código ISO en el cliente, sin cambios en `api/`).
+
+```bash
+D="$TEMP/jg-turbo-deploy" && rm -rf "$D" && mkdir -p "$D/.vercel"
+git archive HEAD | tar -x -C "$D"
+cp .vercel/project.json "$D/.vercel/project.json"   # prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8
+cd "$D" && npx vercel --prod --yes --scope jhoncod24s-projects
+```
+
+`dpl_…` READY, alias `https://jg-turbo.vercel.app`.
+Marcador `JG_JS_V=v161`, shell-v161. Verificado: HTML con v161, módulos con 200
+y sha256 igual al commit, `/api/health` ok.
 
 ## Publicación PDF v158 (P4.3 + P-01/P-02), 2026-09-29 · desde una copia exacta del commit
 
