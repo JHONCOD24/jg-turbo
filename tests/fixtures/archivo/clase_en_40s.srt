@@ -1,0 +1,19 @@
+1
+00:00:01,000 --> 00:00:06,000
+Welcome to this class about learning.
+
+2
+00:00:07,000 --> 00:00:12,000
+>> Good morning, everyone.
+
+3
+00:00:13,000 --> 00:00:18,000
+Today we practice listening every day.
+
+4
+00:00:19,000 --> 00:00:24,000
+>> Repeat after me, please.
+
+5
+00:00:25,000 --> 00:00:31,000
+Very good, see you in the next lesson.

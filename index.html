@@ -1024,9 +1024,10 @@
   .yt-area.has-results > p,
   .yt-area.has-results .panel-lead,
   .yt-area.has-results .ytrow,
-  .yt-area.has-results .yt-equipo,
-  .yt-area.has-results .yt-ficha-archivo,
-  .yt-area.has-results .yt-equipo-aviso,
+   .yt-area.has-results .yt-equipo,
+   .yt-area.has-results .yt-ficha-archivo,
+   .yt-area.has-results .yt-equipo-aviso,
+   .yt-area.has-results .yt-srt,
   .yt-area.has-results .yt-opts,
   .yt-area.has-results .yt-manual,
   .yt-area.has-results #ytServerWarn {
@@ -4028,6 +4029,11 @@
   .file-doblar[hidden]{display:none}
   .file-doblar p{margin:0;font-size:13px;color:var(--muted)}
   .file-area .file-doblar .btn{min-height:var(--h-touch)}
+  /* Subtítulos del usuario (.srt/.vtt): segunda puerta opcional del video del equipo. */
+  .yt-srt{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0 0 12px;flex:none}
+  .yt-srt[hidden]{display:none}
+  .yt-area .yt-srt .yt-srt-btn{min-height:var(--h-touch);gap:8px;font-size:13px}
+  .yt-area .yt-srt .yt-srt-btn svg{width:18px;height:18px;flex:none}
   /* Video del equipo: segunda puerta de entrada, al mismo nivel que el enlace. */
   .yt-equipo{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0 0 12px;flex:none}
   .yt-equipo-o{font-size:var(--fs-xs);color:var(--muted-2);text-transform:uppercase;letter-spacing:.08em}
@@ -4282,9 +4288,11 @@
     .ytrow{flex-direction:column;align-items:stretch}
     .ytrow input{min-width:0;width:100%;font-size:15px !important}
     .ytrow .btn{width:100%;min-width:0 !important;max-width:none}
-    .yt-equipo{flex-direction:column;align-items:stretch}
-    .yt-equipo-o{text-align:center}
-    .yt-area .yt-equipo .yt-equipo-btn{width:100%;justify-content:center}
+     .yt-equipo{flex-direction:column;align-items:stretch}
+     .yt-equipo-o{text-align:center}
+     .yt-area .yt-equipo .yt-equipo-btn{width:100%;justify-content:center}
+     .yt-srt{flex-direction:column;align-items:stretch}
+     .yt-area .yt-srt .yt-srt-btn{width:100%;justify-content:center}
     .yt-opts select, .file-opts select{
       width:100%;
       max-width:100%;
@@ -6609,6 +6617,20 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
           <div class="yt-ficha-texto"><strong id="ytFichaNombre"></strong><span id="ytFichaDatos"></span></div>
           <button class="mini-btn" id="ytFichaQuitar" type="button" aria-label="Quitar el video elegido">Quitar</button>
+        </div>
+        <!-- Subtítulos del usuario: si los tiene, el doblaje usa ese texto exacto sin transcribir. -->
+        <div class="yt-srt" id="ytSrt" hidden>
+          <button class="btn yt-srt-btn" id="ytElegirSubtitulo" type="button" aria-describedby="ytSrtAyuda">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+            Agregar subtítulos (.srt o .vtt, opcional)
+          </button>
+          <input type="file" id="ytSubtitulo" class="sr-only" tabindex="-1" aria-hidden="true" accept=".srt,.vtt,text/plain">
+          <p class="yt-equipo-ayuda" id="ytSrtAyuda">Si los tienes, se usa ese texto exacto sin transcribir (gratis). Si marcan quién habla (>>, Nombre:), la segunda voz entra sola.</p>
+        </div>
+        <div class="yt-ficha-archivo" id="ytSrtFicha" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <div class="yt-ficha-texto"><strong id="ytSrtNombre"></strong><span id="ytSrtDatos"></span></div>
+          <button class="mini-btn" id="ytSrtQuitar" type="button" aria-label="Quitar los subtítulos">Quitar</button>
         </div>
         <p class="yt-equipo-aviso" id="ytEquipoAviso" role="status" aria-live="polite"></p>
 

@@ -11,6 +11,7 @@ import { detectarFuente } from './fuenteVideo.js';
 import { ServicioX, tituloX } from './servicioX.js';
 import { ServicioArchivo } from './servicioArchivo.js';
 import { validarArchivo, huellaArchivo, resumenAntesDeEmpezar, esClaveArchivo } from './archivoLocal.js';
+import { leerTextoSubtitulo, segmentosDesdeSubtitulos } from './subtitulosArchivo.js';
 import { elegirMp4 } from './audioX.js';
 import { XVideoPlayer } from './XVideoPlayer.js';
 import { TranslationService } from './translationService.js';
@@ -22,7 +23,7 @@ import { DubbingEngine } from './dubbingEngine.js';
 import { MotorPreparacion } from './motorPreparacion.js';
 import { crearLimitador } from './limitador.js';
 import { VOZ_INICIAL_S } from './planificador.js';
-import { decidirDoblaje, nombreIdioma, IDIOMAS_DOBLABLES } from './idiomaOrigen.js';
+import { decidirDoblaje, nombreIdioma, codigoCorto, IDIOMAS_DOBLABLES } from './idiomaOrigen.js';
 import {
   leerDoblaje, guardarDoblaje, registrarVideo, leerVoz, guardarVoz, podarVoces, pedirPersistencia,
   listarVideos, listarDoblajes, videosConVoz, actualizarVideo, quitarVideo, restaurarVideo, espacioYPersistencia,
@@ -89,6 +90,8 @@ export function inicializarYoutubeSincronizado({
     archivo: $('ytArchivo'), elegirArchivo: $('ytElegirArchivo'), ficha: $('ytFichaArchivo'),
     fichaNombre: $('ytFichaNombre'), fichaDatos: $('ytFichaDatos'), fichaQuitar: $('ytFichaQuitar'),
     avisoEquipo: $('ytEquipoAviso'),
+    srt: $('ytSrt'), elegirSubtitulo: $('ytElegirSubtitulo'), subtitulo: $('ytSubtitulo'),
+    srtFicha: $('ytSrtFicha'), srtNombre: $('ytSrtNombre'), srtDatos: $('ytSrtDatos'), srtQuitar: $('ytSrtQuitar'),
   };
   const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
   const transcripciones = new TranscriptionService({ fetchApi });
@@ -407,7 +410,9 @@ export function inicializarYoutubeSincronizado({
   const avisarEquipo = (texto) => { if (ui.avisoEquipo) ui.avisoEquipo.textContent = texto || ''; };
   function quitarArchivo() {
     archivoElegido = null;
+    quitarSubtitulo();
     if (ui.ficha) ui.ficha.hidden = true;
+    if (ui.srt) ui.srt.hidden = true;
     if (ui.archivo) ui.archivo.value = '';
     actualizarBoton();
   }
@@ -423,8 +428,41 @@ export function inicializarYoutubeSincronizado({
       ui.fichaDatos.textContent = `${formatearBytes(archivo.size)} · listo para doblar`;
       ui.ficha.hidden = false;
     }
+    quitarSubtitulo();
+    if (ui.srt) ui.srt.hidden = false;
     actualizarBoton();
     return true;
+  }
+  // ── Subtítulos del usuario (.srt/.vtt, opcional) ──────────────────────
+  // Si los trae, el doblaje usa ese texto exacto sin transcribir (gratis).
+  // Se validan al elegirlos: un error se dice aquí y el video sigue (por Whisper).
+  let subtituloElegido = null;   // { archivo, segmentos, formato }
+  function quitarSubtitulo() {
+    subtituloElegido = null;
+    if (ui.srtFicha) ui.srtFicha.hidden = true;
+    if (ui.subtitulo) ui.subtitulo.value = '';
+    if (ui.srt) ui.srt.hidden = !archivoElegido;
+  }
+  async function ponerSubtitulo(archivo) {
+    if (!archivoElegido) { avisarEquipo('Elige primero el video y luego sus subtítulos.'); return false; }
+    try {
+      const texto = await leerTextoSubtitulo(archivo);
+      const { segmentos, formato } = segmentosDesdeSubtitulos(texto, archivo.name);
+      subtituloElegido = { archivo, segmentos, formato };
+      avisarEquipo('');
+      if (ui.srtFicha) {
+        ui.srtNombre.textContent = archivo.name || 'Subtítulos';   // nombre ajeno: textContent, nunca innerHTML
+        ui.srtDatos.textContent = `${segmentos.length} frases · se usan tal cual, sin transcribir`;
+        ui.srtFicha.hidden = false;
+      }
+      if (ui.srt) ui.srt.hidden = true;
+      actualizarBoton();
+      return true;
+    } catch (error) {
+      avisarEquipo(error?.message || 'No pudimos leer esos subtítulos.');
+      quitarSubtitulo();
+      return false;
+    }
   }
   /** Un selector de archivo para un solo uso, abierto DENTRO del gesto que lo pide. */
   function pedirArchivo() {
@@ -443,6 +481,11 @@ export function inicializarYoutubeSincronizado({
   ui.elegirArchivo?.addEventListener('click', () => ui.archivo.click());
   ui.archivo?.addEventListener('change', () => { if (ui.archivo.files?.[0]) ponerArchivo(ui.archivo.files[0]); });
   ui.fichaQuitar?.addEventListener('click', () => { quitarArchivo(); ui.elegirArchivo?.focus(); });
+  ui.elegirSubtitulo?.addEventListener('click', () => ui.subtitulo.click());
+  ui.subtitulo?.addEventListener('change', () => {
+    if (ui.subtitulo.files?.[0]) ponerSubtitulo(ui.subtitulo.files[0]).catch(() => avisarEquipo('No pudimos leer esos subtítulos.'));
+  });
+  ui.srtQuitar?.addEventListener('click', () => { quitarSubtitulo(); ui.elegirSubtitulo?.focus(); });
   ui.url.addEventListener('input', () => { if (ui.url.value.trim() && archivoElegido) quitarArchivo(); });
   // Escritorio: soltar el video sobre el panel.
   const zona = document.querySelector('.yt-area');
@@ -1118,7 +1161,10 @@ export function inicializarYoutubeSincronizado({
 
       const guardado = await leerDoblaje(ficha.clave);
       const elegidoEnFormulario = ui.idioma?.value || 'auto';
-      const sirve = Boolean(guardado?.segmentos?.length)
+      // Con subtítulos del usuario manda su texto: la caché no sirve (otra
+      // segmentación) y no se transcribe nada.
+      const conSubtitulos = Boolean(subtituloElegido?.segmentos?.length);
+      const sirve = !conSubtitulos && Boolean(guardado?.segmentos?.length)
         && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === guardado.idiomaOrigen);
       // Lo que ya se transcribió en un intento anterior (Groq llegó a su límite, se cerró…) no se vuelve a pagar.
       const parcial = !sirve && guardado?.parcial?.trozoS === ficha.extraccion.trozoS ? guardado.parcial : null;
@@ -1143,6 +1189,25 @@ export function inicializarYoutubeSincronizado({
       if (sirve) {
         datos = { segmentos: guardado.segmentos, idioma: guardado.idiomaOrigen, confianza: 1, fuente: 'usuario', conflicto: false };
         decision = { accion: 'doblar', idioma: guardado.idiomaOrigen, mensaje: '' };
+      } else if (conSubtitulos) {
+        progreso.ayuda('Usamos tus subtítulos tal cual: no se transcribe ni se gasta nada. Mientras tanto puedes darle play.');
+        progreso.paso('leer', 'Leyendo los subtítulos…');
+        const elegido = elegidoEnFormulario === 'auto' ? '' : codigoCorto(elegidoEnFormulario);
+        datos = {
+          segmentos: subtituloElegido.segmentos, idioma: elegido, solicitado: elegido,
+          confianza: elegido ? 1 : 0, fuente: elegido ? 'usuario' : 'subtitulos',
+          conflicto: false, disponibles: [], titulo: ficha.titulo, duracionS: ficha.duracionS,
+        };
+        decision = decidirDoblaje(datos);
+        if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
+          progreso.mensaje('Confirma el idioma de los subtítulos para seguir.');
+          const picked = await elegirIdioma(decision, signal);
+          if (!picked) { terminarSesion(); return; }
+          datos.idioma = picked;
+          datos.confianza = 1;
+          datos.fuente = 'usuario';
+          decision = { accion: 'doblar', idioma: picked, mensaje: '' };
+        }
       } else {
         progreso.ayuda(`${resumenAntesDeEmpezar({ duracionS: ficha.duracionS, modo: ficha.extraccion.modo, trozoS: ficha.extraccion.trozoS })} Mientras tanto puedes darle play.`);
         const conPrevias = Boolean(parcial) && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === parcial.idioma);

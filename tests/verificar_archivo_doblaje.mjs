@@ -32,6 +32,9 @@ const VIDEO = join(app, 'tests/fixtures/archivo/clase_en_40s.webm');
 const OTRO = join(app, 'tests/fixtures/archivo/dos_pistas_40s.mkv');
 const SIN_AUDIO = join(app, 'tests/fixtures/archivo/sin_audio_10s.webm');
 const NOTA = join(app, 'tests/fixtures/biblioteca/voz_1s.mp3');
+const SRT = join(app, 'tests/fixtures/archivo/clase_en_40s.srt');
+const VTT = join(app, 'tests/fixtures/archivo/clase_en_40s.vtt');
+const SRT_MALO = join(app, 'tests/fixtures/archivo/subtitulo_malo.srt');
 
 function wavSilencio(segundos) {
   const muestras = Math.max(1, Math.round(8000 * segundos));
@@ -243,6 +246,43 @@ try {
     const [otraVezSelector] = await Promise.all([p3.waitForEvent('filechooser'), tarjeta(p3).locator('.vid-abrir').click()]);
     await otraVezSelector.setFiles(VIDEO);
     comprobar('con el MISMO archivo abre listo y sin transcribir de nuevo', await esperarListo(p3, 20000) && tercera.reg.subidas.length === 0, String(tercera.reg.subidas.length));
+    await contexto.close();
+  }
+
+  console.log('\n── Con subtítulos propios (.srt/.vtt) ─────────────────────────');
+  {
+    const { contexto, pagina, reg } = await abrir(navegador);
+    await elegir(pagina, VIDEO);
+    comprobar('al elegir el video se ofrece agregar subtítulos', await pagina.isVisible('#ytSrt'));
+    await pagina.setInputFiles('#ytSubtitulo', SRT);
+    await pagina.waitForSelector('#ytSrtFicha:not([hidden])', { timeout: 10000 }).catch(() => {});
+    comprobar('el .srt elegido muestra sus frases', /5 frases/.test(await pagina.textContent('#ytSrtDatos')));
+    await pagina.click('#ytSyncBtn');
+    await pagina.waitForSelector('#ytLangConfirm:not([hidden])', { timeout: 15000 }).catch(() => {});
+    comprobar('sin idioma en el formulario, pregunta el de los subtítulos', await pagina.isVisible('#ytLangConfirm'));
+    await pagina.click('#ytLangConfirmYes');
+    const mensajes = [];
+    const llego = await esperarListo(pagina, 40000, mensajes);
+    comprobar('con .srt queda listo', llego, mensajes.filter(Boolean).slice(-3).join(' | '));
+    comprobar('y no se transcribe nada (0 partes a Whisper)', reg.subidas.length === 0, String(reg.subidas.length));
+    comprobar('con marcas >>, la segunda voz se ofrece sola', await pagina.isVisible('#ytVoz2Wrap'));
+    await pagina.click('#ytDubReproducir');
+    const s0 = await tiempoVideo(pagina);
+    await esperar(2500);
+    comprobar('la voz en español avanza sobre el texto exacto', (await tiempoVideo(pagina)) > s0 && reg.tts > 0, String(reg.tts));
+    comprobar('sin errores de JavaScript', reg.errores.length === 0, reg.errores.join(' | '));
+    await contexto.close();
+  }
+  {
+    const { contexto, pagina } = await abrir(navegador);
+    await elegir(pagina, VIDEO);
+    await pagina.setInputFiles('#ytSubtitulo', SRT_MALO);
+    await esperar(500);
+    comprobar('un .srt sin tiempos se rechaza con motivo visible', /frases/.test(await pagina.textContent('#ytEquipoAviso')));
+    comprobar('y el video sigue elegido (va por Whisper)', await pagina.isVisible('#ytFichaArchivo'));
+    await pagina.setInputFiles('#ytSubtitulo', VTT);
+    await pagina.waitForSelector('#ytSrtFicha:not([hidden])', { timeout: 10000 }).catch(() => {});
+    comprobar('el .vtt también se acepta', /3 frases/.test(await pagina.textContent('#ytSrtDatos')));
     await contexto.close();
   }
 
