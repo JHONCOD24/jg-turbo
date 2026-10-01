@@ -1433,18 +1433,18 @@
   .yt-sync-head p{font-size:var(--fs-sm);color:var(--muted);margin-top:2px}
   /* El video manda: ancho completo del panel. La transcripción ya no le quita
      la mitad de la pantalla; vive en un desplegable debajo. */
-  .yt-player-shell{position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#050608}
+  .yt-player-shell{position:relative;display:flex;flex-direction:column;width:100%;border-radius:12px;overflow:hidden;background:#050608}
+  .yt-video-frame{position:relative;width:100%;aspect-ratio:16/9;flex:none}
   .yt-area .yt-url-nota{margin:6px 0 0;font-size:13px;line-height:1.45;color:var(--muted-2)}
   #ytPlayer{position:absolute;inset:0;width:100%;height:100%}
   .yt-caption{
-    position:absolute;left:50%;transform:translateX(-50%);bottom:9%;width:min(92%,760px);
-    margin:0;padding:8px 14px;border-radius:10px;background:rgba(4,6,10,.78);
-    color:#fff;font-size:clamp(14px,2.1vw,19px);line-height:1.35;font-weight:600;
-    text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none;
+    position:static;box-sizing:border-box;width:100%;flex:none;min-height:4.7em;
+    margin:0;padding:12px 16px;background:var(--surface);
+    color:var(--text);font-size:clamp(16px,2.1vw,19px);line-height:1.45;font-weight:600;
+    text-align:center;overflow-wrap:anywhere;
   }
   .yt-caption[hidden]{display:none}
-  /* Tamaño del subtítulo a elección (v152). Solo cambia el tamaño de letra: el
-     diseño establecido (fondo, tipografía, posición) es el de .yt-caption. */
+  /* La franja reserva espacio debajo de la imagen, incluso entre frases. */
   .yt-caption[data-tamano="mediano"]{font-size:clamp(17px,2.6vw,24px)}
   .yt-caption[data-tamano="grande"]{font-size:clamp(20px,3.2vw,30px)}
   /* Selectores del doblaje: ≥44 px para el dedo en pantallas táctiles (medían 38). */
@@ -3955,7 +3955,7 @@
     display:grid;grid-template-columns:minmax(96px,auto) 1fr auto;align-items:center;gap:10px;
     font-size:var(--fs-xs);color:var(--muted);
   }
-  .yt-mixer-fila input[type=range]{width:100%;min-width:90px;accent-color:var(--cyan);height:24px}
+  .yt-mixer-fila input[type=range]{width:100%;min-width:90px;accent-color:var(--cyan);height:48px}
   .yt-mixer-fila output{font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
   .yt-sync-extras{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .yt-opcion{display:flex;align-items:center;gap:7px;font-size:var(--fs-sm);color:var(--muted)}
@@ -3972,11 +3972,12 @@
 
 .yt-player-shell:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0;background:#000}
 .yt-player-shell.yt-pantalla-completa{position:fixed;inset:0;z-index:1000;width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0;background:#000}
-.yt-player-shell:fullscreen .yt-caption,.yt-player-shell.yt-pantalla-completa .yt-caption{font-size:clamp(18px,3vw,30px);bottom:12%}
+.yt-player-shell:fullscreen .yt-video-frame,.yt-player-shell.yt-pantalla-completa .yt-video-frame{flex:1;min-height:0;aspect-ratio:auto}
+.yt-player-shell:fullscreen .yt-caption,.yt-player-shell.yt-pantalla-completa .yt-caption{font-size:clamp(18px,3vw,30px);min-height:0;max-height:35%;overflow-y:auto;padding-bottom:max(12px,env(safe-area-inset-bottom))}
 .yt-player-shell:fullscreen .yt-caption[data-tamano="mediano"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-tamano="mediano"]{font-size:clamp(22px,3.7vw,38px)}
 .yt-player-shell:fullscreen .yt-caption[data-tamano="grande"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-tamano="grande"]{font-size:clamp(26px,4.5vw,46px)}
 .yt-player-shell .yt-salir-pantalla{display:none}
-.yt-player-shell.yt-pantalla-completa .yt-salir-pantalla{display:inline-flex;position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;z-index:2;min-height:44px}
+.yt-player-shell:fullscreen .yt-salir-pantalla,.yt-player-shell.yt-pantalla-completa .yt-salir-pantalla{display:inline-flex;position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;z-index:2;min-height:48px}
 .yt-mixer-fila[hidden]{display:none !important}   /* el selector de clase le ganaba a [hidden] (TRAMPAS «Un selector con identificador le gana a hidden») */
 .yt-nota{margin:0;font-size:var(--fs-xs);color:var(--muted)}
 .yt-nota[hidden]{display:none}
@@ -4002,6 +4003,10 @@
   @keyframes ytSyncCambio{from{opacity:.25;transform:translateY(4px)}to{opacity:1;transform:none}}
   .yt-sync-controls{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
   .yt-sync-controls select{min-width:88px}
+  .yt-sync-controls select,.yt-confirm select{min-height:48px;font-size:var(--fs-sm)}
+  .yt-sync-area .mini-btn{min-height:48px;min-width:48px}
+  .yt-sync-controls select:focus-visible,.yt-caption:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .yt-sync-extras .yt-opcion:not(.yt-opcion-check){flex-wrap:wrap;min-width:0}
   #ytSyncStatus{margin-top:8px;font-size:var(--fs-sm);color:var(--muted);min-height:1.4em}
   .yt-sync-voice{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
   .yt-sync-voice[data-estado="activo"]{color:var(--cyan);border-color:rgba(39,225,193,.35);background:rgba(39,225,193,.08)}
@@ -6692,8 +6697,8 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           </div>
 
           <div class="yt-player-shell">
-            <div id="ytPlayer"></div>
-            <p class="yt-caption" id="ytCaption" data-sync-caption aria-hidden="true" hidden></p>
+            <div class="yt-video-frame"><div id="ytPlayer"></div></div>
+            <p class="yt-caption" id="ytCaption" data-sync-caption aria-label="Subtítulos sincronizados" tabindex="0" hidden></p>
             <button class="mini-btn yt-salir-pantalla" id="ytSalirPantalla" type="button">Salir de pantalla completa</button>
           </div>
 
@@ -6761,7 +6766,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               </label>
               <label class="yt-opcion yt-opcion-check" for="ytToggleCaption">
                 <input type="checkbox" id="ytToggleCaption">
-                Subtítulo sobre el video
+                Subtítulos debajo del video
               </label>
             </div>
           </div>
@@ -19164,7 +19169,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v163';
+const JG_JS_V = 'v164';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

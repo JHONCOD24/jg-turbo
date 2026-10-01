@@ -929,3 +929,10 @@ Nunca desde la raíz del workspace. Señal de deploy correcto: log con pocos arc
 4. En el navegador: Ctrl+F5 y probar mujer/hombre con texto mixto ES+EN  
 
 Procedimiento detallado y tabla de deploys: **`CAMBIOS_TTS.md`** secciones 8–11.
+
+## Auditoría de video local v164 (2026-10-01)
+
+Entrega: `CAMBIOS_VIDEO_LOCAL.md` y `docs/auditoria-video-local/INFORME.md`.
+Publicar una sola vez desde `git archive` del commit verificado, con el enlace al
+proyecto `jg-turbo`. Versiones: `JG_JS_V=v164`, `jg-turbo-shell-v164`.
+El informe distingue checks locales, dominio real y pruebas humanas pendientes.

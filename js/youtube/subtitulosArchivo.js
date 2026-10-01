@@ -16,11 +16,12 @@ const MARGEN_FIN_S = 120;
 
 const esNombreSubtitulo = (nombre) => /\.(srt|vtt)$/i.test(String(nombre || ''));
 
-const RE_TIEMPO = /(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})/;
+const RE_TIEMPO = /^(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})(?:\s+.*)?$/;
 function aSegundos(texto) {
-  const m = RE_TIEMPO.exec(String(texto || ''));
+  const m = RE_TIEMPO.exec(String(texto || '').trim());
   if (!m) return NaN;
   const [, h = '0', min, seg, ms] = m;
+  if (Number(min) >= 60 || Number(seg) >= 60) return NaN;
   return Number(h) * 3600 + Number(min) * 60 + Number(seg) + Number(ms.padEnd(3, '0')) / 1000;
 }
 
@@ -110,6 +111,8 @@ export async function leerTextoSubtitulo(archivo) {
     throw new ErrorYoutube('Eso no parece un archivo de subtítulos (.srt o .vtt).', 'srt_no_es');
   }
   const bytes = new Uint8Array(await archivo.arrayBuffer());
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes);
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes);
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch (_) {
@@ -126,6 +129,10 @@ export function segmentosDesdeSubtitulos(texto, nombre) {
   const formato = detectarFormatoSubtitulo(nombre, texto);
   if (!formato) throw new ErrorYoutube('No reconocimos esos subtítulos. Usa un .srt o un .vtt.', 'srt_formato');
   const crudos = formato === 'srt' ? parsearSRT(texto) : parsearVTT(texto);
+  const declarados = bloques(texto).filter((ls) => !/^(NOTE|STYLE|REGION)(?:\s|$)/i.test(ls[0]) && ls.some((l) => l.includes('-->'))).length;
+  if (crudos.length !== declarados) {
+    throw new ErrorYoutube('Hay frases con tiempos o texto inválidos en esos subtítulos. Corrige el archivo y vuelve a elegirlo.', 'srt_formato');
+  }
   const segmentos = normalizarSegmentos(crudos);
   if (!segmentos.length) {
     throw new ErrorYoutube('No encontramos frases en esos subtítulos. Revisa que sea un .srt o .vtt válido.', 'srt_formato');
@@ -135,4 +142,12 @@ export function segmentosDesdeSubtitulos(texto, nombre) {
     throw new ErrorYoutube(`Esos subtítulos duran ${Math.round(fin / 60)} min. Por ahora se doblan videos de hasta ${MAX_DURACION_S / 3600} horas.`, 'srt_largo');
   }
   return { segmentos, formato };
+}
+
+/** Rechaza otro episodio o una línea fuera del video antes de traducir o sintetizar. */
+export function validarSubtitulosParaVideo(segmentos, duracionS) {
+  const fin = Math.max(0, ...segmentos.map((s) => s.endTime));
+  if (duracionS > 0 && fin > duracionS + 2) {
+    throw new ErrorYoutube('Los subtítulos llegan más allá del final del video. Elige los subtítulos de este mismo video.', 'srt_video');
+  }
 }

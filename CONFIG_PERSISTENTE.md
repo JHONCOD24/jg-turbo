@@ -215,3 +215,9 @@ Los deploys **no borran** `localStorage`. Historial TTS: `CAMBIOS_TTS.md`. En **
 - GitHub: `JHONCOD24/jg-turbo` (raíz del repo = esta carpeta app)
 - URL: https://jg-turbo.vercel.app
 - Cuenta Vercel: `jhoncod24` / email `juanloras35@gmail.com`
+
+## Video local v164
+
+`jg_yt_subtitulos` y `jg_yt_subtitulo_tamano` mantienen sus nombres y valores.
+Los subtítulos visibles pasan debajo del video. No hay claves ni almacenes nuevos;
+`jg_youtube` continúa en v2. La espera de voz existe únicamente en la sesión local.

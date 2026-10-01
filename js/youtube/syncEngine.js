@@ -40,12 +40,13 @@ export class SyncEngine {
    * español. Si da un número, el texto muestra esa línea (la que se oye); si da
    * `null`, sigue al reloj del video como siempre.
    */
-  constructor({ player, segmentos, onSegmentChange, onPlaybackRateChange = () => {}, reloj = null, indiceExterno = null }) {
+  constructor({ player, segmentos, onSegmentChange, onPlaybackRateChange = () => {}, reloj = null, indiceExterno = null, seguirEnPausa = () => false }) {
     this.player = player;
     this.segmentos = segmentos;
     this.onSegmentChange = onSegmentChange;
     this.onPlaybackRateChange = onPlaybackRateChange;
     this.indiceExterno = typeof indiceExterno === 'function' ? indiceExterno : null;
+    this.seguirEnPausa = seguirEnPausa;
     this.reloj = reloj || crearReloj(() => this.#actualizar(), { intervaloMs: 150 });
     this.indiceActivo = -2;
     this.reproduciendo = false;
@@ -66,16 +67,16 @@ export class SyncEngine {
 
   #cambiarEstado(estado) {
     this.reproduciendo = estado === 'playing';
-    if (this.reproduciendo) this.reloj.iniciar();
+    if (this.reproduciendo || this.seguirEnPausa()) this.reloj.iniciar();
     else {
       this.reloj.detener();
-      this.#actualizar();
     }
+    this.#actualizar();
   }
 
   #actualizar() {
     const deLaVoz = this.indiceExterno?.();
-    const indice = Number.isInteger(deLaVoz) && deLaVoz >= 0
+    const indice = Number.isInteger(deLaVoz) && deLaVoz >= -1
       ? deLaVoz
       : buscarIndiceSegmento(this.segmentos, this.player.getCurrentTime());
     if (indice === this.indiceActivo) return;

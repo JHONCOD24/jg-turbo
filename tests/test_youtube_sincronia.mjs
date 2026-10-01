@@ -161,7 +161,7 @@ function unidadesContinuas(cantidad, { ventana = 4, voz = 5.6, segmentosPorFrase
   }));
 }
 
-function escenario(unidades, { ritmoAutomatico = true, pasoMs = 20, servicio = null } = {}) {
+function escenario(unidades, { ritmoAutomatico = true, pasoMs = 20, servicio = null, esperarVoz = false } = {}) {
   let ahora = 0;
   const registro = { cortes: [], completas: [], plays: [], saltosDentro: [], tasasVoz: [], estados: [], tasasBase: [] };
   // `audioS`: lo que dura el archivo (con silencios); `duracionVoz`: lo que se habla.
@@ -177,6 +177,7 @@ function escenario(unidades, { ritmoAutomatico = true, pasoMs = 20, servicio = n
     reloj: (f) => { tic = f; return { iniciar() {}, detener() {}, activo: true }; },
     ahora: () => ahora,
     ritmoAutomatico,
+    esperarVoz,
     onStatus: (mensaje) => registro.estados.push(mensaje),
     onTasaBase: (tasa) => registro.tasasBase.push(tasa),
   });
@@ -456,5 +457,59 @@ comprobar(RETRASO_MAXIMO_S === 5, 'la voz solo se rinde con más de 5 s de atras
 }
 
 // ── Resumen ─────────────────────────────────────────────────────────────
+// Archivo local: la espera conserva frases incluso con una voz muy larga o lenta.
+{
+  const s = escenario(unidadesContinuas(12, { voz: 12 }), { esperarVoz: true });
+  s.motor.activarYReproducir();
+  await s.correr(140);
+  comprobar(s.registro.completas.length === 12 && enOrdenSinHuecos(s.registro.completas), 'local: español 3 veces más largo termina las 12 frases en orden, incluida la última');
+  comprobar(s.motor.metricas().frasesSaltadas === 0 && s.registro.cortes.length === 0, 'local: voz extrema sin cortes ni frases saltadas');
+  comprobar(s.registro.estados.some((m) => m.includes('espera a que termine')), 'local: informa que el video espera a la frase');
+}
+{
+  const unidades = unidadesContinuas(5, { voz: 3 });
+  unidades[0].estado = 'sin_traducir';
+  const s = escenario(unidades, { esperarVoz: true });
+  s.motor.activarYReproducir();
+  await s.correr(8);
+  comprobar(s.jugador.t < 0.2 && s.registro.plays.length === 0, 'local: voz tardía detiene el video antes de perder el inicio');
+  comprobar(s.motor.indiceSegmentoVoz() === -1, 'local: mientras espera no adelanta el subtítulo');
+  unidades[0].estado = 'listo';
+  await s.correr(7);
+  comprobar(s.jugador.t > 4 && s.registro.plays[0]?.url === 'voz-0' && s.registro.plays[0]?.desde < 0.05, 'local: voz disponible reanuda desde la primera frase completa');
+  s.jugador.pauseVideo();
+  const t = s.jugador.t;
+  await s.correr(2);
+  comprobar(s.jugador.t === t, 'local: una pausa manual permanece en pausa');
+  s.motor.desactivar();
+}
+{
+  const jugador = new JugadorVirtual();
+  let indice = 0;
+  const vistos = [];
+  let tics = 0;
+  const sync = new SyncEngine({ player: jugador, segmentos: [{ startTime: 0, endTime: 20 }], indiceExterno: () => indice, seguirEnPausa: () => true,
+    onSegmentChange: (i) => vistos.push(i), reloj: { iniciar() { tics++; }, detener() {} } });
+  sync.iniciar();
+  indice = -1;
+  jugador.pauseVideo();
+  comprobar(vistos.at(-1) === -1, 'subtítulo: índice -1 de la voz oculta la línea aunque el video esté en ella');
+  comprobar(tics > 0, 'subtítulo: el reloj sigue durante la espera automática del video');
+  sync.destruir();
+}
+{
+  const { TranscriptionDisplay } = await modulo('TranscriptionDisplay.js');
+  const elemento = () => ({ textContent: '', classList: { add() {}, remove() {} } });
+  const elementos = new Map();
+  const raiz = { querySelector: (selector) => { if (!elementos.has(selector)) elementos.set(selector, elemento()); return elementos.get(selector); } };
+  const caption = elemento();
+  const previo = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (f) => f();
+  const vista = new TranscriptionDisplay(raiz, caption);
+  vista.definirSegmentos([{ text: 'Hola.' }]); vista.mostrar(0); vista.mostrar(-1); vista.refrescar();
+  comprobar(caption.textContent === '', 'una traducción tardía no resucita el subtítulo de una frase terminada');
+  globalThis.requestAnimationFrame = previo;
+}
+
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

@@ -185,3 +185,27 @@ Whisper. Latin-1 (tildes de Windows) se lee bien. Si marcan quién habla (`>>`,
 - Límite de Groq: esperar y volver a pulsar «Doblar al español»; sigue donde iba.
 - Selector que no abre: debe abrirse dentro del toque (reabrir y MP4 lo hacen así);
   si el navegador lo bloquea, elegir el archivo desde «Elegir un video de tu equipo».
+
+## Auditoría v164 (2026-10-01)
+
+Plan y especificación contrastados con la entrega v163. Referencias conservadas
+sin cambios en `docs/video-local/PLAN_REFERENCIA.md`, `ESPECIFICACION_REFERENCIA.md`
+y `MEDICIONES.md`. Informe: `docs/auditoria-video-local/INFORME.md`.
+
+- Subtítulos debajo del video, también en pantalla completa; tamaños existentes
+  y preferencia `jg_yt_subtitulos` conservados. Selectores, volumen y botones
+  con superficie de al menos 44 px en las pruebas de cinco viewports.
+- SRT/VTT: rechaza bloques con tiempos inválidos y subtítulos que exceden el
+  video; admite UTF-16 con BOM. La selección asíncrona queda ligada al video
+  elegido; no puede incorporarse tarde a otro archivo ni arrancar Whisper
+  mientras todavía se está leyendo.
+- Video local: espera cuando falta la voz. Con ritmo automático, espera también
+  a que termine una frase que no cabe, incluida la última. El reloj del subtítulo
+  sigue a la voz durante esa espera. Un subtítulo terminado no vuelve a aparecer
+  cuando llega una traducción tardía. El límite de reintentos y el aviso de voz
+  fallida se conservan; un proveedor definitivamente caído puede dejar voz parcial.
+- Validación local: 26 suites unitarias, 1.743 OK; archivo 88, sincronía 90.
+  E2E local ampliado: 78; audio real Chromium/Chrome: 26. Contraprueba:
+  desactivar la espera provoca 6 fallos. Ver tabla completa y límites en el informe.
+- Escucha del curso completo e iPhone físico: pendientes, no sustituidas por
+  pruebas con servicios simulados. Publicación y respaldo: ver cierre del informe.

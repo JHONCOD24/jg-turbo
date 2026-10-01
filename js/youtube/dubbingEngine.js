@@ -66,10 +66,11 @@ export class DubbingEngine {
     colchonSegundos = 90,
     modoSilenciarOriginal = false,
     ritmoAutomatico = true,
+    esperarVoz = false,
   }) {
     Object.assign(this, {
       player, servicio, onStatus, onMetricas, onFin, onRitmo, onTasaBase, ahora,
-      colchonSegundos, modoSilenciarOriginal, ritmoAutomatico,
+      colchonSegundos, modoSilenciarOriginal, ritmoAutomatico, esperarVoz,
     });
     // Doble audio alternado (igual que el lector PDF): mientras suena una frase,
     // la siguiente ya está cargada en el otro elemento y entra sin micro-cortes.
@@ -118,6 +119,7 @@ export class DubbingEngine {
     this.cargaPendiente = null;
     this.avisoSinVoz = null;
     this.avisoPreparando = null;
+    this.pausaPorVoz = null;
     // `reloj` puede ser una fábrica `(tic) => reloj`: así las pruebas simulan el
     // tiempo sin esperar de verdad (tests/test_youtube_sincronia.mjs).
     this.reloj = typeof reloj === 'function'
@@ -155,6 +157,8 @@ export class DubbingEngine {
   desactivar() {
     if (!this.activo) return;
     this.activo = false;
+    const reanudar = Boolean(this.pausaPorVoz);
+    this.pausaPorVoz = null;
     for (const el of this.elementos) {
       el.pause();
       el.removeAttribute('src');
@@ -170,6 +174,7 @@ export class DubbingEngine {
     this.#restaurarTasa();   // con el audio original, el video vuelve a la velocidad de la persona
     if (this.modoSilenciarOriginal) this.player.unMute?.();
     this.player.setVolume?.(this.volumenOriginalPrevio);
+    if (reanudar) this.player.playVideo();
     this.onStatus('Audio original activo.', 'inactivo');
   }
 
@@ -200,6 +205,7 @@ export class DubbingEngine {
    */
   indiceSegmentoVoz() {
     if (!this.activo) return null;
+    if (this.pausaPorVoz === 'espera') return -1;
     const unidades = this.servicio.unidades;
     if (this.hablando >= 0 && unidades[this.hablando]) {
       return segmentoPorAvance(unidades[this.hablando], this.#avance());
@@ -260,6 +266,10 @@ export class DubbingEngine {
   }
 
   #cambiarEstado(estado) {
+    // La pausa del búfer conserva el reloj de preparación. Si una frase sigue
+    // sonando, conserva también su audio hasta terminarla.
+    if (estado === 'paused' && this.pausaPorVoz) return;
+    if (estado === 'playing') this.pausaPorVoz = null;
     if (estado === 'ended') this.onFin();
     this.reproduciendo = estado === 'playing';
     if (!this.activo) return;
@@ -301,13 +311,39 @@ export class DubbingEngine {
     if (this.#huboSalto(t, ahora, tasa)) this.#resincronizar(t);
     this.#mantenerColchon(t);
     if (this.reproduciendo) {
+      if (this.pausaPorVoz === 'espera') {
+        const unidad = this.servicio.unidades[this.ultima + 1];
+        if (!unidad || unidad.estado === 'listo' || ESTADOS_SIN_VOZ.has(unidad.estado)) this.#reanudarVideo();
+      }
       if (this.hablando >= 0) this.#seguirFrase(t, tasa);
+      if (this.pausaPorVoz === 'frase' && this.hablando < 0) this.#reanudarVideo();
       if (this.hablando < 0) this.#quizasEmpezar(t, tasa);
       this.#precargarSiguiente();
       this.#ajustarRitmo(t, tasa, ahora);
+      if (this.esperarVoz && this.ritmoAutomatico) {
+        const siguiente = this.servicio.unidades[this.hablando + 1];
+        const unidad = this.servicio.unidades[this.hablando];
+        const duracion = Number(this.player.getDuration?.()) || Infinity;
+        const limite = siguiente ? siguiente.startTime + 0.5 : Math.min(unidad?.endTime ?? Infinity, duracion) - 0.15;
+        if (this.hablando >= 0 && t >= limite) this.#pausarParaVoz('frase');
+      }
     }
     this.#medir(t, ahora);
     this.#duckear(t);
+  }
+
+  #pausarParaVoz(motivo) {
+    if (this.pausaPorVoz) return;
+    this.pausaPorVoz = motivo;
+    this.player.pauseVideo();
+    this.onStatus(motivo === 'frase' ? 'El video espera a que termine la frase en español.' : 'El video espera a que esté lista la voz en español.', 'cargando');
+  }
+
+  #reanudarVideo() {
+    this.pausaPorVoz = null;
+    this.tAnterior = Number(this.player.getCurrentTime()) || 0;
+    this.relojAnterior = this.ahora();
+    this.player.playVideo();
   }
 
   #huboSalto(t, ahora, tasa) {
@@ -317,7 +353,7 @@ export class DubbingEngine {
     this.tAnterior = t;
     this.relojAnterior = ahora;
     if (antes === null) return false;
-    const esperado = antes + ((ahora - relojAntes) / 1000) * tasa;
+    const esperado = antes + (this.pausaPorVoz ? 0 : ((ahora - relojAntes) / 1000) * tasa);
     return Math.abs(t - esperado) > SALTO_S;
   }
 
@@ -362,7 +398,11 @@ export class DubbingEngine {
       this.#resincronizar(t, { omitir: true });
       return;
     }
-    if (unidad.estado !== 'listo') { this.#pedirFrase(j); return; }   // mientras, suena el original
+    if (unidad.estado !== 'listo') {
+      if (this.esperarVoz) this.#pausarParaVoz('espera');
+      this.#pedirFrase(j);
+      return;
+    }
     this.#empezar(j, 0, t, tasa);
   }
 

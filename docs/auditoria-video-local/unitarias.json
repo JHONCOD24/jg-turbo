@@ -1,0 +1,132 @@
+[
+  {
+    "prueba": "test_archivo_doblaje",
+    "ok": 88,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_biblioteca_videos",
+    "ok": 100,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_ancla",
+    "ok": 13,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_auditoria_p0",
+    "ok": 51,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_busqueda",
+    "ok": 19,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_caratula",
+    "ok": 55,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_cola_correccion",
+    "ok": 90,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_continuidad",
+    "ok": 218,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_exportar",
+    "ok": 35,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_limpieza",
+    "ok": 91,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_mejora_apartado",
+    "ok": 65,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_progreso",
+    "ok": 61,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_pulido_mecanico",
+    "ok": 25,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_pulido_troceo",
+    "ok": 22,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_sincronizacion",
+    "ok": 115,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_traduccion",
+    "ok": 27,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_pdf_voz",
+    "ok": 130,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_tts_narracion",
+    "ok": 80,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_tts_pausas",
+    "ok": 12,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_tts_voces_biblioteca",
+    "ok": 103,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_tts_voz_estable",
+    "ok": 19,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_voz_frases_continuas",
+    "ok": 14,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_voz_multilingue",
+    "ok": 11,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_x_doblaje",
+    "ok": 70,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_youtube_doblaje",
+    "ok": 139,
+    "fallos": 0
+  },
+  {
+    "prueba": "test_youtube_sincronia",
+    "ok": 90,
+    "fallos": 0
+  }
+]

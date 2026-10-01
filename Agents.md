@@ -700,3 +700,12 @@ Config `jg_tts_bilingual`: `regional` (defecto) | `unified` | `off`. El valor an
   tenía dos enlaces al MISMO proyecto de producción: desplegar desde ahí sobrescribía
   jg-turbo.vercel.app con la versión vieja. El 2026-09-04 se renombraron a
   `.vercel.NO-DESPLEGAR-CARPETA-ANTIGUA`; no los restaures. Detalle en `TRAMPAS.md` §9.3.
+
+## Auditoría de video local v164 (2026-10-01)
+
+Subtítulos debajo de la imagen, también en pantalla completa, por pedido del
+dueño. Video local espera a la voz pendiente y, con ritmo automático, a la frase
+que no cabe. `SyncEngine` sigue a la voz durante esa espera. SRT/VTT valida tiempos
+y duración, conserva UTF-16 y descarta selecciones asíncronas de otro video.
+Informe: `docs/auditoria-video-local/INFORME.md`. Pruebas actuales: archivo 88,
+sincronía 90 y E2E local 78. Las pruebas físicas y de escucha se reportan aparte.

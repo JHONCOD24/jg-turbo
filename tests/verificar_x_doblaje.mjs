@@ -63,7 +63,7 @@ const servidor = createServer(async (q, r) => {
   } catch { r.writeHead(404).end(); }
 });
 await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
-const base = `http://127.0.0.1:${servidor.address().port}`;
+const base = process.env.JG_BASE || `http://127.0.0.1:${servidor.address().port}`;
 
 let ok = 0;
 const fallos = [];

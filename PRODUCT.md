@@ -63,7 +63,7 @@ escuchando su audio, porque X casi nunca publica subtítulos.
 ## Brand Commitments
 
 - Nombre: **JG Turbo**. Idioma de toda la interfaz: español de Colombia, con tildes.
-- El diseño de los subtítulos del doblaje (`.yt-caption`) lo fijó el dueño: no se cambia su aspecto.
+- Los subtítulos del doblaje (`.yt-caption`) se muestran debajo del video por pedido del dueño (2026-10-01), también en pantalla completa.
 - La app ya tiene un sistema visual oscuro propio (tokens en `:root` de `index.html`: `--bg`,
   `--surface`, `--cyan`, `--hot-1/2`, escala `--fs-*`, `--space-*`, `--h-touch`). Las superficies
   nuevas extienden ese sistema; la biblioteca de PDF es la referencia más cercana.

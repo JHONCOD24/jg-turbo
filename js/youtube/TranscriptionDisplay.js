@@ -37,6 +37,7 @@ export class TranscriptionDisplay {
 
   mostrar(indice) {
     if (indice < 0 && this.yaMostro) {
+      this.indice = indice; // una traducción que llega tarde no repinta el subtítulo anterior
       if (this.caption) this.caption.textContent = '';   // en silencio no hay subtítulo
       return;
     }

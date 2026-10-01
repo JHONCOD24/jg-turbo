@@ -1671,3 +1671,13 @@ texto crudo creyendo que la limpieza las quitaba.
 **Regla:** el parser de subtítulos entrega el texto ya sin etiquetas (las marcas
 `>>`/`Ana:` se conservan para la 2.ª voz); la prueba exige el texto limpio
 exacto, no solo que exista.
+
+## Pantalla completa es asíncrona (auditoría local, 2026-10-01)
+
+**Síntoma:** la nueva comprobación medía antes de entrar en pantalla completa y
+buscaba inmediatamente el botón de salida del respaldo, todavía oculto.
+**Causa:** el clic inicia `requestFullscreen()` y la transición no ha terminado
+cuando Playwright devuelve el control. Además, al crear una envoltura nueva de
+video hay que recrear `#ytPlayer` dentro de ella, no dentro del shell completo.
+**Regla:** esperar el estado real de pantalla completa antes de medir y de salir;
+comprobar la geometría del iframe tras recrearlo. No usar clics forzados.

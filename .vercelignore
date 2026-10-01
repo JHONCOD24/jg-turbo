@@ -47,3 +47,7 @@ bin/
 
 
 .impeccable/
+
+# Evidencia de auditoria local, no es parte de la app
+docs/auditoria-video-local/
+docs/video-local/

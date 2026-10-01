@@ -11,7 +11,7 @@
  *   node tests/verificar_archivo_doblaje.mjs --headed
  */
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { resolve, join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -56,7 +56,7 @@ const servidor = createServer(async (q, r) => {
   } catch { r.writeHead(404).end(); }
 });
 await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
-const base = `http://127.0.0.1:${servidor.address().port}`;
+const base = process.env.JG_BASE || `http://127.0.0.1:${servidor.address().port}`;
 
 let ok = 0;
 const fallos = [];
@@ -334,6 +334,69 @@ try {
     await esperarListo(pagina);
     desborde = await pagina.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     comprobar('sin desborde horizontal con el video doblando', desborde <= 0, `${desborde} px`);
+    await contexto.close();
+  }
+  // Auditoría de SRT y de la franja debajo del video en las tres clases de dispositivo.
+  {
+    const { contexto, pagina, reg } = await abrir(navegador);
+    await elegir(pagina, VIDEO);
+    await pagina.setInputFiles('#ytSubtitulo', { name: 'otro.srt', mimeType: 'text/plain', buffer: Buffer.from('1\n00:01:00,000 --> 00:01:05,000\nAnother episode.') });
+    await pagina.waitForSelector('#ytSrtFicha:not([hidden])');
+    await pagina.click('#ytSyncBtn');
+    const mensaje = await esperarTexto(pagina, '#ytDubMensaje', /más allá/);
+    comprobar('SRT de otro episodio: explica la incompatibilidad', /más allá/.test(mensaje));
+    comprobar('SRT incompatible: no gasta transcripción ni síntesis', reg.subidas.length === 0 && reg.tts === 0);
+    await contexto.close();
+  }
+  {
+    const { contexto, pagina } = await abrir(navegador);
+    await pagina.evaluate(() => {
+      const leer = File.prototype.arrayBuffer;
+      File.prototype.arrayBuffer = async function () {
+        if (this.name === 'lento.srt') await new Promise((r) => setTimeout(r, 800));
+        return leer.call(this);
+      };
+    });
+    await elegir(pagina, VIDEO);
+    await pagina.setInputFiles('#ytSubtitulo', { name: 'lento.srt', mimeType: 'text/plain', buffer: Buffer.from('1\n00:00:01,000 --> 00:00:02,000\nHi.') });
+    comprobar('mientras lee el SRT no permite empezar por Whisper accidentalmente', await pagina.isDisabled('#ytSyncBtn'));
+    await elegir(pagina, OTRO);
+    await esperar(1000);
+    comprobar('cambiar de video descarta el SRT que terminó de leerse tarde', !(await pagina.isVisible('#ytSrtFicha')));
+    await contexto.close();
+  }
+  await mkdir(join(app, 'docs/auditoria-video-local/capturas'), { recursive: true });
+  for (const [nombre, ancho, alto] of [['movil', 360, 800], ['movil-horizontal', 800, 360], ['tablet', 820, 1180], ['tablet-horizontal', 1180, 820], ['escritorio', 1440, 900]]) {
+    const ctx = await navegador.newContext({ viewport: { width: ancho, height: alto } });
+    const { contexto, pagina } = await abrir(navegador, { contexto: ctx });
+    await elegir(pagina, VIDEO);
+    await pagina.selectOption('#ytLang', 'en');
+    await pagina.setInputFiles('#ytSubtitulo', SRT);
+    await pagina.waitForSelector('#ytSrtFicha:not([hidden])');
+    await pagina.click('#ytSyncBtn');
+    await esperarListo(pagina);
+    await pagina.check('#ytToggleCaption');
+    await pagina.selectOption('#ytTamanoSubtitulo', 'grande');
+    await pagina.evaluate(() => { document.getElementById('ytCaption').textContent = 'Esta frase larga permite leer el subtítulo completo debajo del video sin tapar la imagen ni sus controles.'; });
+    const medir = () => pagina.evaluate(() => {
+      const video = document.getElementById('ytPlayer').getBoundingClientRect();
+      const caption = document.getElementById('ytCaption').getBoundingClientRect();
+      const botones = ['ytDubbingBtn', 'ytPantallaCompleta', 'ytOtraVoz', 'ytTamanoSubtitulo', 'ytVoz', 'ytVoz2', 'btnYtSyncClose', 'ytVolVoz', 'ytVolOriginal'].map((id) => document.getElementById(id)).filter((e) => e && e.getClientRects().length);
+      return { debajo: caption.top >= video.bottom - 1, videoAlto: video.height, desborde: document.documentElement.scrollWidth - innerWidth, pequenos: botones.filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.id) };
+    });
+    let m = await medir();
+    comprobar(`[${nombre}] subtítulo debajo de la imagen`, m.debajo && m.videoAlto > 100);
+    comprobar(`[${nombre}] sin desborde horizontal`, m.desborde <= 0);
+    comprobar(`[${nombre}] controles de voz y subtítulos de al menos 44 px`, m.pequenos.length === 0, m.pequenos.join(', '));
+    await pagina.locator('.yt-player-shell').scrollIntoViewIfNeeded();
+    await pagina.screenshot({ path: join(app, `docs/auditoria-video-local/capturas/${nombre}.png`) });
+    await pagina.click('#ytPantallaCompleta');
+    await pagina.waitForFunction(() => document.fullscreenElement || document.querySelector('.yt-pantalla-completa'));
+    m = await medir();
+    comprobar(`[${nombre}] pantalla completa conserva subtítulos debajo`, m.debajo && m.videoAlto > 100);
+    if (await pagina.evaluate(() => Boolean(document.fullscreenElement))) await pagina.evaluate(() => document.exitFullscreen());
+    else await pagina.click('#ytSalirPantalla');
+    await pagina.waitForFunction(() => !document.fullscreenElement && !document.querySelector('.yt-pantalla-completa'));
     await contexto.close();
   }
 } finally {

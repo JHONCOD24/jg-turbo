@@ -287,6 +287,22 @@ const st = await modulo('subtitulosArchivo.js');
   comprobar(await tiro(archivo(bytesDe(10), 'mal.srt'), 'mal.srt', 'srt_formato'), 'texto sin tiempos → srt_formato');
 }
 
+// Auditoría: un subtítulo parcialmente roto no puede omitir frases en silencio.
+{
+  const malo = '1\n00:00:01,000 --> 00:00:02,000\nHi.\n\n2\n00:99:02,000 --> 00:99:04,000\nLost phrase.';
+  let fallo = null;
+  try { st.segmentosDesdeSubtitulos(malo, 'bad.srt'); } catch (e) { fallo = e; }
+  comprobar(fallo?.codigo === 'srt_formato', 'SRT mixto: rechaza tiempos inválidos en vez de perder una frase');
+  comprobar(st.parsearSRT('1\n-00:00:01,000 --> 00:00:02,000\nHi.').length === 0, 'SRT: un tiempo negativo no se convierte en positivo');
+  fallo = null;
+  try { st.validarSubtitulosParaVideo([{ endTime: 100 }], 40); } catch (e) { fallo = e; }
+  comprobar(fallo?.codigo === 'srt_video', 'SRT de otro video: rechaza antes de gastar traducción y voz');
+  st.validarSubtitulosParaVideo([{ endTime: 40.5 }], 40);
+  comprobar(true, 'SRT: admite redondeo de hasta 2 s al final del video');
+  const utf16 = new Uint8Array([0xff, 0xfe, 0x6e, 0, 0x69, 0, 0xf1, 0, 0x6f, 0]);
+  comprobar(await st.leerTextoSubtitulo(new File([utf16], 'utf16.srt')) === 'niño', 'SRT UTF-16 de Windows: conserva tildes');
+}
+
 // ── Resumen ──────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);

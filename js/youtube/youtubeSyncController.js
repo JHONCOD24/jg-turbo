@@ -11,7 +11,7 @@ import { detectarFuente } from './fuenteVideo.js';
 import { ServicioX, tituloX } from './servicioX.js';
 import { ServicioArchivo } from './servicioArchivo.js';
 import { validarArchivo, huellaArchivo, resumenAntesDeEmpezar, esClaveArchivo } from './archivoLocal.js';
-import { leerTextoSubtitulo, segmentosDesdeSubtitulos } from './subtitulosArchivo.js';
+import { leerTextoSubtitulo, segmentosDesdeSubtitulos, validarSubtitulosParaVideo } from './subtitulosArchivo.js';
 import { elegirMp4 } from './audioX.js';
 import { XVideoPlayer } from './XVideoPlayer.js';
 import { TranslationService } from './translationService.js';
@@ -383,8 +383,9 @@ export function inicializarYoutubeSincronizado({
 
   // ── Botón principal: ocupado mientras trabaja (auditoría H7) ────────────
   const estaOcupado = () => ui.boton.dataset.ocupado === '1';
+  let leyendoSubtitulo = false;
   function actualizarBoton() {
-    ui.boton.disabled = estaOcupado() || !(archivoElegido || detectarFuente(ui.url.value)) || !estaServidorOnline();
+    ui.boton.disabled = estaOcupado() || leyendoSubtitulo || !(archivoElegido || detectarFuente(ui.url.value)) || !estaServidorOnline();
   }
   function marcarOcupado(activo) {
     if (activo) ui.boton.dataset.ocupado = '1';
@@ -437,16 +438,25 @@ export function inicializarYoutubeSincronizado({
   // Si los trae, el doblaje usa ese texto exacto sin transcribir (gratis).
   // Se validan al elegirlos: un error se dice aquí y el video sigue (por Whisper).
   let subtituloElegido = null;   // { archivo, segmentos, formato }
+  let revisionSubtitulo = 0;
   function quitarSubtitulo() {
+    revisionSubtitulo += 1;
+    leyendoSubtitulo = false;
     subtituloElegido = null;
     if (ui.srtFicha) ui.srtFicha.hidden = true;
     if (ui.subtitulo) ui.subtitulo.value = '';
     if (ui.srt) ui.srt.hidden = !archivoElegido;
+    actualizarBoton();
   }
   async function ponerSubtitulo(archivo) {
     if (!archivoElegido) { avisarEquipo('Elige primero el video y luego sus subtítulos.'); return false; }
+    const revision = ++revisionSubtitulo;
+    const video = archivoElegido;
+    leyendoSubtitulo = true;
+    actualizarBoton();
     try {
       const texto = await leerTextoSubtitulo(archivo);
+      if (revision !== revisionSubtitulo || video !== archivoElegido) return false;
       const { segmentos, formato } = segmentosDesdeSubtitulos(texto, archivo.name);
       subtituloElegido = { archivo, segmentos, formato };
       avisarEquipo('');
@@ -459,9 +469,12 @@ export function inicializarYoutubeSincronizado({
       actualizarBoton();
       return true;
     } catch (error) {
+      if (revision !== revisionSubtitulo) return false;
       avisarEquipo(error?.message || 'No pudimos leer esos subtítulos.');
       quitarSubtitulo();
       return false;
+    } finally {
+      if (revision === revisionSubtitulo) { leyendoSubtitulo = false; actualizarBoton(); }
     }
   }
   /** Un selector de archivo para un solo uso, abierto DENTRO del gesto que lo pide. */
@@ -511,7 +524,7 @@ export function inicializarYoutubeSincronizado({
     ui.etiquetaVoz.textContent = activo ? 'Volver al audio original' : 'Escuchar en español';
   }
   function recrearDestino() {
-    const contenedor = ui.area.querySelector('.yt-player-shell');
+    const contenedor = ui.area.querySelector('.yt-video-frame');
     contenedor.querySelector('#ytPlayer')?.remove();
     const destino = document.createElement('div');
     destino.id = 'ytPlayer';
@@ -873,6 +886,7 @@ export function inicializarYoutubeSincronizado({
       },
       modoSilenciarOriginal: esIOS,
       ritmoAutomatico: ritmoAutomatico(),
+      esperarVoz: esClaveArchivo(actual.videoId),
       onStatus: (mensaje, tipo) => { ui.estado.textContent = mensaje; display.mostrarVoz(tipo); },
       onMetricas: (metricas) => { actual.metricas = metricas; },   // solo diagnóstico (H28)
       onFin: () => { ui.estado.textContent = 'El video terminó.'; display.mostrarVoz('fin'); },
@@ -888,6 +902,7 @@ export function inicializarYoutubeSincronizado({
       onSegmentChange: (indice) => display.mostrar(indice),
       // Con la voz en español sonando, el texto muestra la línea que se OYE.
       indiceExterno: () => actual.motorVoz?.indiceSegmentoVoz() ?? null,
+      seguirEnPausa: () => Boolean(actual.motorVoz?.pausaPorVoz),
     });
     actual.sync.iniciar();
     aplicarTasaGuardada(player);
@@ -1137,6 +1152,7 @@ export function inicializarYoutubeSincronizado({
   }
 
   async function iniciarSesionArchivo(archivo) {
+    const subtitulosSesion = subtituloElegido;
     let clave;
     try { clave = await huellaArchivo(archivo); } catch (_) {
       avisarEquipo('No pudimos leer ese archivo. Elígelo otra vez.');
@@ -1163,7 +1179,8 @@ export function inicializarYoutubeSincronizado({
       const elegidoEnFormulario = ui.idioma?.value || 'auto';
       // Con subtítulos del usuario manda su texto: la caché no sirve (otra
       // segmentación) y no se transcribe nada.
-      const conSubtitulos = Boolean(subtituloElegido?.segmentos?.length);
+      const conSubtitulos = Boolean(subtitulosSesion?.segmentos?.length);
+      if (conSubtitulos) validarSubtitulosParaVideo(subtitulosSesion.segmentos, ficha.duracionS);
       const sirve = !conSubtitulos && Boolean(guardado?.segmentos?.length)
         && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === guardado.idiomaOrigen);
       // Lo que ya se transcribió en un intento anterior (Groq llegó a su límite, se cerró…) no se vuelve a pagar.
@@ -1194,7 +1211,7 @@ export function inicializarYoutubeSincronizado({
         progreso.paso('leer', 'Leyendo los subtítulos…');
         const elegido = elegidoEnFormulario === 'auto' ? '' : codigoCorto(elegidoEnFormulario);
         datos = {
-          segmentos: subtituloElegido.segmentos, idioma: elegido, solicitado: elegido,
+          segmentos: subtitulosSesion.segmentos, idioma: elegido, solicitado: elegido,
           confianza: elegido ? 1 : 0, fuente: elegido ? 'usuario' : 'subtitulos',
           conflicto: false, disponibles: [], titulo: ficha.titulo, duracionS: ficha.duracionS,
         };
