@@ -173,7 +173,7 @@ Whisper. Latin-1 (tildes de Windows) se lee bien. Si marcan quién habla (`>>`,
   real del dueño la tumbó al final con el 400 del galés; ver Corrección v161).
 - v161: `JG_JS_V='v161'`, shell-v161. `dpl_85XCooxfDqWz8sKpraWLG6Kg4KK2`.
 - v162: `JG_JS_V='v162'`, shell-v162. `dpl_FKsHWNzoUQ9qmr6XagFUuStpatH1`.
-- v163: `JG_JS_V='v163'`, shell-v163. `dpl_…` (se anota al publicar).
+- v163: `JG_JS_V='v163'`, shell-v163. `dpl_39QYDBjcywAAMAsqgUCBy7ydYLJf`.
 - Sale desde copia `git archive` del commit, una sola vez, verificado contra
   https://jg-turbo.vercel.app (versión, módulos con 200 y sha256 igual, video real
   doblado) y empujado a `origin/main`.
