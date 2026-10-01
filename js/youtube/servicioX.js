@@ -7,23 +7,14 @@
  * responde 403 (medido 2026-09-27; curl no lo muestra porque no manda Referer).
  */
 import { ErrorYoutube, normalizarSegmentos } from './transcriptionService.js';
-import { codigoCorto } from './idiomaOrigen.js';
+import { transcribirPorPartes, enParalelo, esperarMs, cancelado } from './transcripcionPartes.js';
 import {
   elegirPistaAudio, leerListaAudio, planearTrozos, unirTranscripciones, urlTwimg, duracionMaximaTrozo,
 } from './audioX.js';
 
 export const MAX_DURACION_X_S = 60 * 60;
 const ESPERA_INFO_MS = 20000;            // /api/x-video: ≤ 2 consultas de 8 s
-const ESPERA_PARTE_MS = 90000;           // subir ~3 MB + Whisper sobre 6 min de audio
 const DESCARGAS_EN_PARALELO = 8;
-const PARTES_EN_PARALELO = 2;            // Groq gratis: 20 peticiones/min
-const RE_LIMITE = /l[ií]mite de uso|rate limit|429/i;
-
-const cancelado = () => new DOMException('Cancelado', 'AbortError');
-const esperarMs = (ms, signal) => new Promise((resolver, rechazar) => {
-  const t = setTimeout(resolver, ms);
-  signal?.addEventListener('abort', () => { clearTimeout(t); rechazar(cancelado()); }, { once: true });
-});
 
 export function fetchTwimg(url, { signal } = {}) {
   return fetch(url, { referrerPolicy: 'no-referrer', credentials: 'omit', signal });
@@ -35,21 +26,6 @@ export function tituloX(info) {
   if (!texto) return `Video de ${autor}`;
   const titulo = `${autor} · ${texto}`;
   return titulo.length > 120 ? `${titulo.slice(0, 119)}…` : titulo;
-}
-
-/** Corre `trabajo` sobre cada elemento con a lo sumo `limite` a la vez; el primer fallo detiene el resto. */
-async function enParalelo(elementos, limite, trabajo) {
-  let siguiente = 0;
-  let fallo = null;
-  const trabajadores = Array.from({ length: Math.min(limite, elementos.length) }, async () => {
-    while (!fallo && siguiente < elementos.length) {
-      const i = siguiente;
-      siguiente += 1;
-      try { await trabajo(elementos[i], i); } catch (error) { fallo = fallo || error; }
-    }
-  });
-  await Promise.all(trabajadores);
-  if (fallo) throw fallo;
 }
 
 export class ServicioX {
@@ -89,31 +65,19 @@ export class ServicioX {
     const inicial = await this.#bytes(urlTwimg(lista.init, info.hls), signal);
     const trozos = planearTrozos(lista.segmentos, { maxS: duracionMaximaTrozo(pista.kbps) });
 
-    const elegido = idiomaOrigen && idiomaOrigen !== 'auto' ? codigoCorto(idiomaOrigen) : '';
-    let idioma = elegido;
-    const resultados = new Array(trozos.length);
-    let hechas = 0;
-    const transcribirParte = async (trozo, k) => {
-      const partes = [inicial];
+    const fabricarParte = async (k) => {
+      const trozo = trozos[k];
       const urls = lista.segmentos.slice(trozo.desde, trozo.hasta).map((s) => urlTwimg(s.uri, info.hls));
       const bytes = new Array(urls.length);
       await enParalelo(urls, DESCARGAS_EN_PARALELO, async (url, i) => { bytes[i] = await this.#bytes(url, signal); });
-      partes.push(...bytes);
-      const audio = new Blob(partes, { type: 'audio/mp4' });
-      resultados[k] = await this.#subir(audio, k, { idioma: idioma || 'auto', apiKey, context, signal });
-      hechas += 1;
-      onProgress(`Transcribiendo el audio: ${hechas} de ${trozos.length} ${trozos.length === 1 ? 'parte' : 'partes'}…`, hechas / trozos.length);
+      return { audio: new Blob([inicial, ...bytes], { type: 'audio/mp4' }), nombre: `x_parte_${k + 1}.m4a` };
     };
-
-    onProgress(`Transcribiendo el audio: 0 de ${trozos.length} ${trozos.length === 1 ? 'parte' : 'partes'}…`, 0);
-    // La 1.ª parte va sola: fija el idioma para las demás (Whisper podría cambiarlo parte a parte).
-    await transcribirParte(trozos[0], 0);
-    idioma = idioma || codigoCorto(resultados[0].idioma);
-    const soloPrimera = !elegido && idioma === 'es';   // ya está en español: no se gasta cuota en el resto
-    if (!soloPrimera) await enParalelo(trozos.slice(1), PARTES_EN_PARALELO, (trozo, i) => transcribirParte(trozo, i + 1));
-
-    const usados = soloPrimera ? trozos.slice(0, 1) : trozos;
-    const segmentos = normalizarSegmentos(unirTranscripciones(usados, resultados.slice(0, usados.length).map((r) => r.segmentos)));
+    const { resultados, usadas, soloPrimera, idioma, elegido } = await transcribirPorPartes({
+      total: trozos.length, fabricarParte, fetchApi: this.fetchApi, idiomaOrigen, apiKey, context, signal, onProgress,
+      esperar: this.esperar, esperasLimiteMs: this.esperasLimiteMs, codigoError: 'x_transcripcion',
+    });
+    const usados = trozos.slice(0, usadas);
+    const segmentos = normalizarSegmentos(unirTranscripciones(usados, resultados.slice(0, usadas)));
     if (!segmentos.length && !soloPrimera) {
       throw new ErrorYoutube('No se oye voz que se pueda doblar en este video (¿solo música?).', 'sin_segmentos');
     }
@@ -145,30 +109,6 @@ export class ServicioX {
         if (error?.name === 'AbortError' || signal?.aborted) throw cancelado();
         if (intento >= 1) throw error instanceof ErrorYoutube ? error : new ErrorYoutube('Se cortó la descarga del audio de X. Revisa la conexión e intenta de nuevo.', 'x_red');
       }
-    }
-  }
-
-  async #subir(audio, k, { idioma, apiKey, context, signal }) {
-    const formulario = new FormData();
-    formulario.append('file', audio, `x_parte_${k + 1}.m4a`);
-    formulario.append('language', idioma);
-    formulario.append('fast', 'false');   // verbose_json: Whisper entrega start/end por frase
-    if (apiKey) formulario.append('api_key', apiKey);
-    if (context) formulario.append('context', String(context).slice(0, 4000));
-    for (let intento = 0; ; intento += 1) {
-      if (signal?.aborted) throw cancelado();
-      const respuesta = await this.fetchApi('/transcribe', { method: 'POST', body: formulario, signal }, ESPERA_PARTE_MS);
-      const datos = await respuesta.json().catch(() => ({}));
-      if (signal?.aborted) throw cancelado();
-      if (respuesta.ok) {
-        return { segmentos: Array.isArray(datos.segments) ? datos.segments : [], idioma: datos.language || '' };
-      }
-      const detalle = typeof datos?.detail === 'string' ? datos.detail : '';
-      if ((respuesta.status === 429 || RE_LIMITE.test(detalle)) && intento < this.esperasLimiteMs.length) {
-        await this.esperar(this.esperasLimiteMs[intento], signal);
-        continue;
-      }
-      throw new ErrorYoutube(detalle || `No se pudo transcribir el audio del video (HTTP ${respuesta.status}).`, 'x_transcripcion', datos);
     }
   }
 }
