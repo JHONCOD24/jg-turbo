@@ -1024,6 +1024,9 @@
   .yt-area.has-results > p,
   .yt-area.has-results .panel-lead,
   .yt-area.has-results .ytrow,
+  .yt-area.has-results .yt-equipo,
+  .yt-area.has-results .yt-ficha-archivo,
+  .yt-area.has-results .yt-equipo-aviso,
   .yt-area.has-results .yt-opts,
   .yt-area.has-results .yt-manual,
   .yt-area.has-results #ytServerWarn {
@@ -4021,6 +4024,27 @@
   .ytrow input{flex:1;min-width:180px;background:var(--bg-2);border:1px solid var(--line);color:var(--text);
     font-family:inherit;font-size:13px;padding:9px 12px;border-radius:10px;outline:none;transition:.15s}
   .ytrow input:focus{border-color:var(--cyan-glow)}
+  .file-doblar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0 0 12px}
+  .file-doblar[hidden]{display:none}
+  .file-doblar p{margin:0;font-size:13px;color:var(--muted)}
+  .file-area .file-doblar .btn{min-height:var(--h-touch)}
+  /* Video del equipo: segunda puerta de entrada, al mismo nivel que el enlace. */
+  .yt-equipo{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0 0 12px;flex:none}
+  .yt-equipo-o{font-size:var(--fs-xs);color:var(--muted-2);text-transform:uppercase;letter-spacing:.08em}
+  .yt-area .yt-equipo .yt-equipo-btn{min-height:var(--h-touch);gap:8px}
+  .yt-area .yt-equipo .yt-equipo-btn svg{width:18px;height:18px;flex:none}
+  .yt-equipo-ayuda{flex-basis:100%;margin:0;font-size:13px;line-height:1.45;color:var(--muted-2)}
+  .yt-ficha-archivo{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:10px 12px;flex:none;
+    background:var(--surface);border:1px solid var(--cyan-glow);border-radius:12px}
+  .yt-ficha-archivo[hidden]{display:none}
+  .yt-ficha-archivo > svg{width:22px;height:22px;flex:none;color:var(--cyan)}
+  .yt-ficha-texto{display:flex;flex-direction:column;min-width:0;flex:1}
+  .yt-ficha-texto strong{font-size:var(--fs-sm);color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+  .yt-ficha-texto span{font-size:13px;color:var(--muted)}
+  .yt-ficha-archivo .mini-btn{min-height:48px;min-width:48px;flex:none}   /* 44 exactos dan 43,99 px en pantallas de densidad 2,625 */
+  .yt-equipo-aviso{margin:0 0 12px;font-size:13px;line-height:1.45;color:var(--hot-1)}
+  .yt-equipo-aviso:empty{display:none}
+  .yt-area.yt-soltando{outline:2px dashed var(--cyan);outline-offset:-6px;border-radius:16px}
   .yt-source-badge{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
     padding:2px 7px;border-radius:999px;margin-left:6px}
   .yt-source-badge.subs{background:rgba(39,225,193,.12);color:var(--cyan);border:1px solid var(--cyan-glow)}
@@ -4255,6 +4279,9 @@
     .ytrow{flex-direction:column;align-items:stretch}
     .ytrow input{min-width:0;width:100%;font-size:15px !important}
     .ytrow .btn{width:100%;min-width:0 !important;max-width:none}
+    .yt-equipo{flex-direction:column;align-items:stretch}
+    .yt-equipo-o{text-align:center}
+    .yt-area .yt-equipo .yt-equipo-btn{width:100%;justify-content:center}
     .yt-opts select, .file-opts select{
       width:100%;
       max-width:100%;
@@ -6355,6 +6382,11 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           <span class="drop-action" aria-hidden="true">Elegir archivo</span>
           <input type="file" class="sr-only" id="fileInput" name="archivo_audio" aria-label="Archivo de audio" accept="audio/*,audio/ogg,audio/opus,audio/mp4,audio/aac,audio/amr,.ogg,.opus,.m4a,.mp3,.wav,.aac,.webm,.flac,.caf,.amr,.3gp,video/mp4,video/webm">
         </div>
+        <!-- Un VIDEO elegido o compartido aquí se puede ver doblado en la pestaña Videos (sin copiarlo). -->
+        <div class="file-doblar" id="fileDoblarVideo" hidden>
+          <p>Es un video: también puedes verlo con voz en español.</p>
+          <button class="btn" id="btnFileDoblarVideo" type="button">Doblar este video al español</button>
+        </div>
 
         <div class="file-opts" aria-label="Opciones de la transcripción">
           <label class="select-labeled" for="fileLang">
@@ -6543,13 +6575,13 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     <div class="card">
       <div class="yt-area">
         <div class="panel-lead">
-          <h2>Mira videos de YouTube y X en español</h2>
-          <p>Pega el enlace de YouTube o de X (Twitter) y pulsa <b>Doblar al español</b>: la voz empieza en segundos y el resto se prepara mientras ves. Funciona con videos en inglés, portugués, francés, alemán o italiano.</p>
+          <h2>Mira videos en español: de YouTube, de X o de tu equipo</h2>
+          <p>Pega el enlace de YouTube o de X (Twitter), o elige un video que tengas guardado, y pulsa <b>Doblar al español</b>: la voz empieza en segundos y el resto se prepara mientras ves. Funciona con videos en inglés, portugués, francés, alemán o italiano.</p>
         </div>
 
         <div id="ytServerWarn" class="notice warn" style="margin:0 0 12px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <div>Conecta el servidor (indicador de arriba) para usar YouTube y X.</div>
+          <div>Conecta el servidor (indicador de arriba) para doblar videos.</div>
         </div>
 
         <div class="ytrow">
@@ -6559,6 +6591,23 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           </label>
           <p class="yt-url-nota" id="ytUrlNota" hidden>Enlace de X: pulsa <b>Doblar al español</b>. El texto completo traducido sale después con el botón <b>Texto completo</b>.</p>
         </div>
+
+        <!-- Video del equipo: el archivo NO se copia a la app; solo su audio viaja (por partes) para transcribirlo. -->
+        <div class="yt-equipo" id="ytEquipo">
+          <span class="yt-equipo-o" aria-hidden="true">o</span>
+          <button class="btn yt-equipo-btn" id="ytElegirArchivo" type="button" aria-describedby="ytEquipoAyuda">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
+            Elegir un video de tu equipo
+          </button>
+          <input type="file" id="ytArchivo" class="sr-only" tabindex="-1" aria-hidden="true" accept="video/*,.mp4,.m4v,.mov,.mkv,.webm">
+          <p class="yt-equipo-ayuda" id="ytEquipoAyuda">MP4, MOV, MKV o WebM, de hasta 3 horas. El video no sale de tu equipo: solo viaja su audio para transcribirlo.</p>
+        </div>
+        <div class="yt-ficha-archivo" id="ytFichaArchivo" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
+          <div class="yt-ficha-texto"><strong id="ytFichaNombre"></strong><span id="ytFichaDatos"></span></div>
+          <button class="mini-btn" id="ytFichaQuitar" type="button" aria-label="Quitar el video elegido">Quitar</button>
+        </div>
+        <p class="yt-equipo-aviso" id="ytEquipoAviso" role="status" aria-live="polite"></p>
 
         <div class="yt-opts" aria-label="Idioma del video">
           <label class="task-field" for="ytLang">
@@ -6728,7 +6777,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             <div class="vid-vacio" id="vidVacio" hidden>
               <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="7"/><path d="m21 18 10 6-10 6z"/><path d="M14 6h20"/></svg>
               <strong>Tu biblioteca empieza con el próximo video</strong>
-              <p>Dobla un enlace con el botón de arriba. Aquí quedará listo para retomarlo, organizarlo y descargar su voz.</p>
+              <p>Dobla un enlace o un video de tu equipo con el botón de arriba. Aquí quedará listo para retomarlo, organizarlo y descargar su voz.</p>
             </div>
             <article class="vid-seguir" id="vidSeguir" hidden></article>
             <div class="vid-herramientas">
@@ -6743,6 +6792,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <button type="button" data-vista="todos" aria-pressed="true">Todos</button>
               <button type="button" data-plataforma="youtube" aria-pressed="false">YouTube</button>
               <button type="button" data-plataforma="x" aria-pressed="false">X</button>
+              <button type="button" data-plataforma="archivo" aria-pressed="false">Tu equipo</button>
               <button type="button" data-vista="favoritos" aria-pressed="false">Favoritos</button>
               <button type="button" data-vista="viendo" aria-pressed="false">En curso</button>
               <button type="button" data-vista="vistos" aria-pressed="false">Vistos</button>
@@ -6777,6 +6827,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               </fieldset>
               <label class="vid-calidad" for="vidCalidad">Calidad<select id="vidCalidad"></select></label>
               <p id="vidDescargaEstado" role="status" aria-live="polite">Calculando tamaño…</p>
+              <button class="btn" id="vidElegirOriginal" type="button" hidden>Elegir el video original</button>
               <div class="vid-descarga-acciones"><button class="btn primary" id="vidDescargar" type="button">Descargar</button><button class="btn" id="vidDescargaCancelar" type="button" hidden>Cancelar</button><button class="btn" id="vidGuardarOtraVez" type="button" hidden>Guardar archivo</button></div>
             </div>
           </dialog>
@@ -12975,9 +13026,34 @@ function asignarArchivoAlInput(file){
   }
 }
 
+/* Un video (también los compartidos desde el teléfono) se ofrece para doblarlo en
+ * Videos. Se guarda la referencia: si pesa más que el límite de transcripción,
+ * el input se vacía abajo y el doblaje igual puede usarlo (allí no hay ese límite). */
+let jgVideoParaDoblar = null;
+function ofrecerDoblarVideo(f){
+  const caja = document.getElementById('fileDoblarVideo');
+  if(!caja) return;
+  const esVideo = /^video\//i.test((f && f.type) || '') || /\.(mp4|m4v|mov|mkv|webm)$/i.test((f && f.name) || '');
+  jgVideoParaDoblar = esVideo ? f : null;
+  caja.hidden = !esVideo;
+}
+document.getElementById('btnFileDoblarVideo')?.addEventListener('click', async () => {
+  const f = jgVideoParaDoblar;
+  if(!f) return;
+  activarTab('yt');
+  try{ await window.jgAsegurarYoutube?.(); }catch(_){}
+  if(window.jgVideoLocal && window.jgVideoLocal.elegir(f)){
+    document.getElementById('ytSyncBtn')?.focus();
+  } else {
+    const caja = document.getElementById('fileDoblarVideo');
+    if(caja) caja.querySelector('p').textContent = 'No pudimos pasar el video a la pestaña Videos. Elígelo allí con «Elegir un video de tu equipo».';
+  }
+});
+
 function onFileSelected(opts = {}){
   const f = fileInput.files[0];
   if(!f) return;
+  ofrecerDoblarVideo(f);
   if((f.size / 1024 / 1024) > limitesServidor.maxAudioMb){
     fname.textContent = `✗ Archivo demasiado grande. Máximo: ${limitesServidor.maxAudioMb} MB`;
     if(fileActionHint) fileActionHint.textContent = `Elige un archivo de máximo ${limitesServidor.maxAudioMb} MB.`;
