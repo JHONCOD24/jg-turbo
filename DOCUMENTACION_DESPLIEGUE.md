@@ -933,6 +933,8 @@ Procedimiento detallado y tabla de deploys: **`CAMBIOS_TTS.md`** secciones 8–1
 ## Auditoría de video local v164 (2026-10-01)
 
 Entrega: `CAMBIOS_VIDEO_LOCAL.md` y `docs/auditoria-video-local/INFORME.md`.
-Publicar una sola vez desde `git archive` del commit verificado, con el enlace al
-proyecto `jg-turbo`. Versiones: `JG_JS_V=v164`, `jg-turbo-shell-v164`.
+Publicado desde `git archive` de `5c76660`, proyecto `jg-turbo`:
+`dpl_HYorNpiKTYXxrgWmGDPP81vAPPJq`. Versiones: `JG_JS_V=v164`,
+`jg-turbo-shell-v164`. Ocho hashes coinciden en el dominio real y health
+responde `ok`; detalle y resultados en `produccion.json` del informe.
 El informe distingue checks locales, dominio real y pruebas humanas pendientes.

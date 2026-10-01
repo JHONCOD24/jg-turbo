@@ -209,3 +209,9 @@ y `MEDICIONES.md`. Informe: `docs/auditoria-video-local/INFORME.md`.
   desactivar la espera provoca 6 fallos. Ver tabla completa y límites en el informe.
 - Escucha del curso completo e iPhone físico: pendientes, no sustituidas por
   pruebas con servicios simulados. Publicación y respaldo: ver cierre del informe.
+
+Cierre publicado: v164, commit de app `5c76660`,
+`dpl_HYorNpiKTYXxrgWmGDPP81vAPPJq`. En el dominio real: ocho hashes coinciden,
+health `ok`, archivo 78, YouTube 110, X 24 y móvil 60 sin fallos. Móvil tuvo
+dos casos de scroll no aplicables. Detalle de servicios simulados y límites:
+`docs/auditoria-video-local/produccion.json`.

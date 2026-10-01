@@ -165,7 +165,31 @@ para resolver un problema fuera de este alcance.
 
 ## Publicación
 
-Pendiente de registrar la publicación v164 y la comprobación de hashes del
-dominio real. El commit v163 y su despliegue previo permiten volver a la entrega
-anterior. Se conserva el código de auditoría en una rama independiente antes
-de incorporarlo a `main`.
+Publicada v164 desde `git archive` del commit `5c76660`, despliegue
+`dpl_HYorNpiKTYXxrgWmGDPP81vAPPJq`, en https://jg-turbo.vercel.app.
+Los ocho archivos comprobados respondieron HTTP 200 y sus SHA-256 coinciden
+con el commit publicado. `/api/health` respondió `status=ok`, con Groq e IA
+configurados. Evidencia: `produccion.json`.
+
+En el dominio real, el recorrido de archivo completó 78 comprobaciones y X 24,
+sin fallos, con API simulada. Las cinco capturas de `capturas/` corresponden a
+esa ejecución publicada. Móvil completó 60, sin fallos: dos comprobaciones de
+scroll no aplicaron porque Archivo no desbordaba en iPhone 14 y Pixel. Se
+recorrieron todos los dispositivos y pestañas; no se confunde este resultado
+con el timeout del primer intento, que quedó descartado.
+
+La suite de YouTube espera ahora la inicialización del controlador diferido
+antes de interactuar, espera el CSS diferido antes de medir botones y vuelve
+a esperar la restauración después de F5. El sondeo usa 100 ms, también en el caso
+que deshabilita `requestAnimationFrame`. Los intentos incompletos anteriores
+no cuentan como aprobación. La ejecución final completó **110 OK y 0 fallos**,
+incluidas frases completas, voz más larga que el original y subtítulo acorde
+con la voz. Las APIs y el reproductor de YouTube están simulados: se comprueba
+el código servido por producción, no una escucha con proveedores reales.
+
+Respaldo previsto: incorporación mediante avance rápido a `main` y push a
+`origin/main`, seguido de comprobar que no quedan commits locales sin subir.
+El archivo original de mediciones del proyecto principal se conserva en una
+copia recuperable antes de incorporar su versión con seguimiento.
+
+El commit v163 y su despliegue previo permiten volver a la entrega anterior.

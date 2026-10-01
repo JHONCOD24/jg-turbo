@@ -1,0 +1,68 @@
+{
+  "version": "v164",
+  "deployment": "dpl_HYorNpiKTYXxrgWmGDPP81vAPPJq",
+  "commit_desplegado": "5c76660",
+  "dominio": "https://jg-turbo.vercel.app",
+  "pruebas_navegador": [
+    { "suite": "verificar_archivo_doblaje", "ok": 78, "fallos": 0, "api_simulada": true },
+    { "suite": "verificar_youtube_doblaje", "ok": 110, "fallos": 0, "api_y_reproductor_simulados": true },
+    { "suite": "verificar_x_doblaje", "ok": 24, "fallos": 0, "api_simulada": true },
+    { "suite": "verificar_movil_pantalla", "ok": 60, "fallos": 0, "casos_scroll_no_aplicables": 2 }
+  ],
+  "limites": ["Sin prueba fisica de iPhone", "Sin escucha humana del curso completo"],
+  "archivos": [
+    {
+      "archivo": "js/youtube/biblioteca-videos.css",
+      "http": 200,
+      "sha256": "7164a3c24d70214641bd958267074efb411b25287f67521b18ecb9f2af0a6c79",
+      "coincide_commit": true
+    },
+    {
+      "archivo": "index.html",
+      "http": 200,
+      "sha256": "29de40f8d22f33f186f8b909b83b38a0b9b493f3fca9dea99a6346358fb644d5",
+      "coincide_commit": true
+    },
+    {
+      "archivo": "sw.js",
+      "http": 200,
+      "sha256": "6e922b75703c32be8ee55591fe1a3dfb4b24769b7ce1bcff4bf3479b6189137f",
+      "coincide_commit": true
+    },
+    {
+      "archivo": "js/youtube/TranscriptionDisplay.js",
+      "http": 200,
+      "sha256": "793dcdcf5ffc634e1d5900cc3ef7f620cf75757e8bcd4c705d6658395d62f629",
+      "coincide_commit": true
+    },
+    {
+      "archivo": "js/youtube/dubbingEngine.js",
+      "http": 200,
+      "sha256": "91ce24f0ee94e6697b73457fef1f064dd7e72fc484fe4ccc7caffef32c70cf61",
+      "coincide_commit": true
+    },
+    {
+      "archivo": "js/youtube/subtitulosArchivo.js",
+      "http": 200,
+      "sha256": "185f0db2fda55b27a24af1560147590488afa6f9e171b64be4873fcc89b4c968",
+      "coincide_commit": true
+    },
+    {
+      "archivo": "js/youtube/syncEngine.js",
+      "http": 200,
+      "sha256": "d9c4aaddae75617d96560da0283f7c70f22ebfb9345336d8232f50d0efa76276",
+      "coincide_commit": true
+    },
+    {
+      "archivo": "js/youtube/youtubeSyncController.js",
+      "http": 200,
+      "sha256": "e1dbaa9e87b09b1c9cb5c457831366670dfad203ab16f6e09def5f3ae8674f47",
+      "coincide_commit": true
+    }
+  ],
+  "health": {
+    "status": "ok",
+    "groq_configured": true,
+    "ia_configured": true
+  }
+}
