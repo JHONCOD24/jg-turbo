@@ -9,6 +9,8 @@
 import { TranscriptionService, ErrorYoutube } from './transcriptionService.js';
 import { detectarFuente } from './fuenteVideo.js';
 import { ServicioX, tituloX } from './servicioX.js';
+import { ServicioArchivo } from './servicioArchivo.js';
+import { validarArchivo, huellaArchivo, resumenAntesDeEmpezar } from './archivoLocal.js';
 import { elegirMp4 } from './audioX.js';
 import { XVideoPlayer } from './XVideoPlayer.js';
 import { TranslationService } from './translationService.js';
@@ -27,7 +29,7 @@ import {
 } from './cacheDoblaje.js';
 import { claveDeVoz } from './bibliotecaVideos.js';
 import { medirHabla } from './hablaVoz.js';
-import { estimarBytesMp3, estimarBytesVideo, opcionesCalidadX, nombreArchivo, BITRATE_AUDIO_DOBLADO } from './descargaDestino.js';
+import { estimarBytesMp3, estimarBytesVideo, opcionesCalidadX, nombreArchivo, BITRATE_AUDIO_DOBLADO, formatearBytes } from './descargaDestino.js';
 import { crearDestino } from './destinoArchivo.js';
 import {
   hayDialogo, elegirVocesAutomaticas, vozParaUnidad, generoDeVoz,
@@ -83,10 +85,18 @@ export function inicializarYoutubeSincronizado({
       voz: $('ytVozSelect'), voz2: $('ytVoz2Select'), voz2Wrap: $('ytVoz2Wrap'),
     tarjeta: $('ytDubProgreso'), barra: $('ytDubBarra'), mensaje: $('ytDubMensaje'), tiempo: $('ytDubTiempo'),
     ayuda: $('ytDubAyuda'), cancelar: $('ytDubCancelar'),
+    archivo: $('ytArchivo'), elegirArchivo: $('ytElegirArchivo'), ficha: $('ytFichaArchivo'),
+    fichaNombre: $('ytFichaNombre'), fichaDatos: $('ytFichaDatos'), fichaQuitar: $('ytFichaQuitar'),
+    avisoEquipo: $('ytEquipoAviso'),
   };
   const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
   const transcripciones = new TranscriptionService({ fetchApi });
   const servicioX = new ServicioX({ fetchApi });
+  const servicioArchivo = new ServicioArchivo({ fetchApi });
+  // Video del equipo elegido en el formulario (uno a la vez) y el último que se abrió:
+  // el MP4 doblado necesita el archivo original y la app no lo copia.
+  let archivoElegido = null;
+  let ultimoArchivo = null;   // { clave, archivo }
   // Ritmo de Mistral gratis (≈1 petición/s) para TODA llamada del traductor:
   // lotes, mitades de un lote partido y el texto completo.
   const traductor = new TranslationService({ traducirTexto, intervaloMinMs: 1100 });
@@ -342,7 +352,7 @@ export function inicializarYoutubeSincronizado({
   // ── Botón principal: ocupado mientras trabaja (auditoría H7) ────────────
   const estaOcupado = () => ui.boton.dataset.ocupado === '1';
   function actualizarBoton() {
-    ui.boton.disabled = estaOcupado() || !detectarFuente(ui.url.value) || !estaServidorOnline();
+    ui.boton.disabled = estaOcupado() || !(archivoElegido || detectarFuente(ui.url.value)) || !estaServidorOnline();
   }
   function marcarOcupado(activo) {
     if (activo) ui.boton.dataset.ocupado = '1';
@@ -362,6 +372,65 @@ export function inicializarYoutubeSincronizado({
   };
   ui.url.addEventListener('input', pintarNotaUrl);
   pintarNotaUrl();
+
+  // ── Video del equipo: elegir, arrastrar, quitar ─────────────────────────
+  const ACEPTA_VIDEO = 'video/*,.mp4,.m4v,.mov,.mkv,.webm';
+  const avisarEquipo = (texto) => { if (ui.avisoEquipo) ui.avisoEquipo.textContent = texto || ''; };
+  function quitarArchivo() {
+    archivoElegido = null;
+    if (ui.ficha) ui.ficha.hidden = true;
+    if (ui.archivo) ui.archivo.value = '';
+    actualizarBoton();
+  }
+  /** Pone el archivo en el formulario (no empieza: el idioma y «Doblar» siguen siendo de la persona). */
+  function ponerArchivo(archivo) {
+    const valido = validarArchivo(archivo);
+    if (!valido.ok) { avisarEquipo(valido.motivo); quitarArchivo(); return false; }
+    avisarEquipo('');
+    archivoElegido = archivo;
+    if (ui.url.value) { ui.url.value = ''; pintarNotaUrl(); }
+    if (ui.ficha) {
+      ui.fichaNombre.textContent = archivo.name || 'Video de tu equipo';   // nombre ajeno: textContent, nunca innerHTML
+      ui.fichaDatos.textContent = `${formatearBytes(archivo.size)} · listo para doblar`;
+      ui.ficha.hidden = false;
+    }
+    actualizarBoton();
+    return true;
+  }
+  /** Un selector de archivo para un solo uso, abierto DENTRO del gesto que lo pide. */
+  function pedirArchivo() {
+    return new Promise((resolver) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = ACEPTA_VIDEO;
+      input.hidden = true;
+      document.body.append(input);
+      const terminar = (archivo) => { input.remove(); resolver(archivo || null); };
+      input.addEventListener('change', () => terminar(input.files?.[0]), { once: true });
+      input.addEventListener('cancel', () => terminar(null), { once: true });
+      input.click();
+    });
+  }
+  ui.elegirArchivo?.addEventListener('click', () => ui.archivo.click());
+  ui.archivo?.addEventListener('change', () => { if (ui.archivo.files?.[0]) ponerArchivo(ui.archivo.files[0]); });
+  ui.fichaQuitar?.addEventListener('click', () => { quitarArchivo(); ui.elegirArchivo?.focus(); });
+  ui.url.addEventListener('input', () => { if (ui.url.value.trim() && archivoElegido) quitarArchivo(); });
+  // Escritorio: soltar el video sobre el panel.
+  const zona = document.querySelector('.yt-area');
+  if (zona) {
+    const conArchivos = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    zona.addEventListener('dragover', (e) => { if (!conArchivos(e)) return; e.preventDefault(); zona.classList.add('yt-soltando'); });
+    zona.addEventListener('dragleave', (e) => { if (!zona.contains(e.relatedTarget)) zona.classList.remove('yt-soltando'); });
+    zona.addEventListener('drop', (e) => {
+      if (!conArchivos(e)) return;
+      e.preventDefault();
+      zona.classList.remove('yt-soltando');
+      const archivo = e.dataTransfer.files?.[0];
+      if (archivo && !estaOcupado()) ponerArchivo(archivo);
+    });
+  }
+  // La pestaña Archivo (y lo compartido desde el celular) entrega aquí un video.
+  window.jgVideoLocal = { elegir: (archivo) => ponerArchivo(archivo) };
 
   // ── Vista ───────────────────────────────────────────────────────────────
   const mostrarIdioma = (texto, tipo) => { ui.insignia.textContent = texto; ui.insignia.dataset.estado = tipo; };
@@ -424,6 +493,8 @@ export function inicializarYoutubeSincronizado({
       actual.servicioVoz?.liberar();
       actual.sync?.destruir();
       actual.player?.destruir();
+      actual.cerrarArchivo?.();
+      if (actual.urlArchivo) URL.revokeObjectURL(actual.urlArchivo);
     }
     marcarOcupado(false);
     reiniciarVista();
@@ -548,6 +619,17 @@ export function inicializarYoutubeSincronizado({
     if (!mp4) throw new ErrorYoutube('Este post de X no trae un video que el navegador pueda reproducir.', 'x_sin_video');
     const player = new XVideoPlayer('ytPlayer', { mp4: mp4.url, portada: info.portada || '', titulo: tituloX(info) });
     // A diferencia de YouTube, un fallo de carga sí se informa: sin video no hay qué doblar.
+    await Promise.race([player.inicializar(), new Promise((r) => setTimeout(r, ESPERA_REPRODUCTOR_MS))]);
+    if (signal.aborted) { player.destruir(); throw cancelado(); }
+    return player;
+  }
+
+  async function crearReproductorArchivo(url, titulo, signal) {
+    recrearDestino();
+    const player = new XVideoPlayer('ytPlayer', {
+      mp4: url, titulo, etiqueta: 'Video de tu equipo',
+      mensajeError: 'Este navegador no puede reproducir este video (formato o códec). Ábrelo en Chrome de computador o conviértelo a MP4 (H.264 + AAC).',
+    });
     await Promise.race([player.inicializar(), new Promise((r) => setTimeout(r, ESPERA_REPRODUCTOR_MS))]);
     if (signal.aborted) { player.destruir(); throw cancelado(); }
     return player;
@@ -784,6 +866,7 @@ export function inicializarYoutubeSincronizado({
     registrarVideo({
       clave: actual.videoId, titulo: tituloVideo, duracionS, idiomaOrigen: decision.idioma,
       autor: meta.autor || '', portada: meta.portada || '', posicionS: actual.registro.posicionS, abierto: Date.now(),
+      nombreArchivo: meta.nombreArchivo, bytes: meta.bytes,
     }).then((entrada) => {
       if (!entrada) return;
       pedirPersistencia();   // sin esto iOS borra la biblioteca tras días sin uso
@@ -809,6 +892,10 @@ export function inicializarYoutubeSincronizado({
   }
 
   async function iniciarSesion() {
+    if (archivoElegido) {
+      if (!estaServidorOnline()) return;
+      return iniciarSesionArchivo(archivoElegido);
+    }
     const url = ui.url.value.trim();
     const fuente = detectarFuente(url);
     if (!fuente || !estaServidorOnline()) return;
@@ -964,6 +1051,95 @@ export function inicializarYoutubeSincronizado({
     }
   }
 
+  async function iniciarSesionArchivo(archivo) {
+    let clave;
+    try { clave = await huellaArchivo(archivo); } catch (_) {
+      avisarEquipo('No pudimos leer ese archivo. Elígelo otra vez.');
+      return;
+    }
+    const actual = abrirSesion(clave);
+    const { signal } = actual.controlador;
+    try {
+      progreso.paso('leer', 'Abriendo tu video…');
+      const ficha = await servicioArchivo.inspeccionar(archivo);
+      actual.cerrarArchivo = () => ficha.abierto.cerrar();
+      if (signal.aborted) throw cancelado();
+      ultimoArchivo = { clave: ficha.clave, archivo };
+      ui.titulo.textContent = ficha.titulo;
+      actual.urlArchivo = URL.createObjectURL(archivo);
+      const promesaPlayer = crearReproductorArchivo(actual.urlArchivo, ficha.titulo, signal).then((player) => {
+        if (sesion === actual) actual.player = player; else player.destruir();
+        return player;
+      });
+      promesaPlayer.catch(() => {});   // un fallo se atiende abajo, al esperarlo
+      const promesaPortada = import('./medioLocal.js').then((m) => m.capturarPortada(actual.urlArchivo)).catch(() => '');
+
+      const guardado = await leerDoblaje(ficha.clave);
+      const elegidoEnFormulario = ui.idioma?.value || 'auto';
+      const sirve = Boolean(guardado?.segmentos?.length)
+        && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === guardado.idiomaOrigen);
+      // Lo que ya se transcribió en un intento anterior (Groq llegó a su límite, se cerró…) no se vuelve a pagar.
+      const parcial = !sirve && guardado?.parcial?.trozoS === ficha.extraccion.trozoS ? guardado.parcial : null;
+      const transcribir = (idiomaOrigen, conPrevias) => {
+        const previas = new Map(conPrevias ? parcial?.partes || [] : []);
+        return servicioArchivo.obtenerParaDoblaje(ficha, {
+          idiomaOrigen, signal, previas, idiomaPrevio: conPrevias ? parcial?.idioma || '' : '',
+          apiKey: leer('jg_groq_api_key') || '',
+          context: leer('jg_glossary') || '',
+          onProgress: (mensaje, fraccion) => { progreso.mensaje(mensaje); progreso.barra(fraccion ?? null); },
+          alTerminarParte: (k, segmentos, idioma) => {
+            previas.set(k, segmentos);
+            return guardarDoblaje({
+              videoId: ficha.clave, titulo: ficha.titulo, duracionS: ficha.duracionS,
+              parcial: { trozoS: ficha.extraccion.trozoS, idioma, partes: [...previas] },
+            });
+          },
+        });
+      };
+      let datos;
+      let decision;
+      if (sirve) {
+        datos = { segmentos: guardado.segmentos, idioma: guardado.idiomaOrigen, confianza: 1, fuente: 'usuario', conflicto: false };
+        decision = { accion: 'doblar', idioma: guardado.idiomaOrigen, mensaje: '' };
+      } else {
+        progreso.ayuda(`${resumenAntesDeEmpezar({ duracionS: ficha.duracionS, modo: ficha.extraccion.modo, trozoS: ficha.extraccion.trozoS })} Mientras tanto puedes darle play.`);
+        const conPrevias = Boolean(parcial) && (elegidoEnFormulario === 'auto' || elegidoEnFormulario === parcial.idioma);
+        datos = await transcribir(elegidoEnFormulario, conPrevias);
+        decision = decidirDoblaje(datos);
+        if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
+          progreso.mensaje('Confirma el idioma del video para seguir.');
+          const elegido = await elegirIdioma(decision, signal);
+          if (!elegido) { terminarSesion(); return; }
+          if (elegido !== datos.idioma) datos = await transcribir(elegido, false);
+          decision = { accion: 'doblar', idioma: elegido, mensaje: '' };
+        }
+      }
+      if (decision.accion === 'sin_doblaje') {
+        mostrarIdioma('El video ya está en español', 'ok');
+        progreso.error(decision.mensaje);
+        return;
+      }
+      mostrarIdioma(`Idioma del video: ${nombreIdioma(decision.idioma)}`, 'ok');
+      actual.player = await promesaPlayer;
+      if (signal.aborted) throw cancelado();
+      const duracionS = actual.player.getDuration() || ficha.duracionS;
+      await completarSesion(actual, {
+        decision, datos, tituloVideo: ficha.titulo, duracionS, guardado, sirve,
+        meta: { portada: await promesaPortada, nombreArchivo: ficha.nombreArchivo, bytes: ficha.bytes },
+      });
+      if (ficha.originalMudo && sesion === actual) {
+        ui.estado.textContent = 'Este navegador no reproduce el sonido original de este archivo (por ejemplo AC-3). La voz en español sí suena.';
+      }
+      quitarArchivo();   // ya está en la biblioteca; el formulario queda libre
+    } catch (error) {
+      if (signal.aborted || error?.name === 'AbortError') return;
+      mostrarIdioma('No se pudo preparar el doblaje', 'no');
+      progreso.error(textoDeError(error));
+    } finally {
+      if (sesion === actual) marcarOcupado(false);
+    }
+  }
+
   // ── Biblioteca: abrir un video guardado y bajar sus archivos ───────────
 
   /**
@@ -972,6 +1148,7 @@ export function inicializarYoutubeSincronizado({
    * instante. `segundo`: abrir donde se dijo lo que se buscó.
    */
   function abrirDesdeBiblioteca(video, { segundo = 0 } = {}) {
+    if (video?.plataforma === 'archivo') return abrirArchivoDeBiblioteca(video, segundo);
     if (!video?.url) return { abierto: false, motivo: 'Este video no tiene enlace guardado.' };
     if (estaOcupado()) return { abierto: false, motivo: 'Espera a que termine de prepararse el video actual.' };
     if (!estaServidorOnline()) return { abierto: false, motivo: 'Conecta el servidor (indicador de arriba) para abrir el video.' };
@@ -984,6 +1161,47 @@ export function inicializarYoutubeSincronizado({
       progreso.error('Algo falló al abrir el video. Vuelve a intentarlo.');
     });
     return { abierto: true, motivo: '' };
+  }
+
+  /**
+   * El video del equipo no se copió: se pide el mismo archivo (en el MISMO toque,
+   * o el navegador no abre el selector) y la huella confirma que es ese.
+   * Devuelve `pendiente`: la vista avisa cuando se sepa si abrió.
+   */
+  function abrirArchivoDeBiblioteca(video, segundo) {
+    if (estaOcupado()) return { abierto: false, motivo: 'Espera a que termine de prepararse el video actual.' };
+    if (!estaServidorOnline()) return { abierto: false, motivo: 'Conecta el servidor (indicador de arriba) para abrir el video.' };
+    const empezar = (archivo) => {
+      ponerArchivo(archivo);
+      if (ui.idioma) ui.idioma.value = 'auto';   // con «auto» la caché del video sirve siempre
+      abrirEnPendiente = Number(segundo) || 0;
+      iniciarSesion().catch((error) => {
+        console.error('[jg-youtube]', error);
+        progreso.error('Algo falló al abrir el video. Vuelve a intentarlo.');
+      });
+      return { abierto: true, motivo: '' };
+    };
+    if (ultimoArchivo?.clave === video.clave) return empezar(ultimoArchivo.archivo);
+    const nombre = video.nombreArchivo || video.titulo;
+    const pendiente = pedirArchivo().then(async (archivo) => {
+      if (!archivo) return { abierto: false, motivo: '' };
+      if (await huellaArchivo(archivo).catch(() => '') !== video.clave) {
+        return { abierto: false, motivo: `Ese archivo no es «${nombre}». Elige el mismo video que doblaste.` };
+      }
+      return empezar(archivo);
+    });
+    return { abierto: false, pendiente, motivo: `Elige otra vez «${nombre}» en tu equipo: los videos no se copian a la app.` };
+  }
+
+  /** Para el MP4 doblado hace falta el original: se pide y se confirma por la huella. */
+  async function elegirArchivoPara(video) {
+    const archivo = await pedirArchivo();
+    if (!archivo) return { ok: false, motivo: '' };
+    if (await huellaArchivo(archivo).catch(() => '') !== video.clave) {
+      return { ok: false, motivo: `Ese archivo no es «${video.nombreArchivo || video.titulo}». Elige el mismo video que doblaste.` };
+    }
+    ultimoArchivo = { clave: video.clave, archivo };
+    return { ok: true, motivo: '' };
   }
 
   const esMovil = () => Boolean(navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
@@ -1057,6 +1275,10 @@ export function inicializarYoutubeSincronizado({
       mp3: { bytes: estimarBytesMp3(video.duracionS) },
       calidades: [],
     };
+    if (video.plataforma === 'archivo') {
+      salida.mp4 = { bytes: (Number(video.bytes) || 0) + estimarBytesVideo(BITRATE_AUDIO_DOBLADO, video.duracionS) };
+      salida.archivoListo = ultimoArchivo?.clave === video.clave;
+    }
     if (video.plataforma === 'x') {
       const info = await servicioX.info(video.url);
       salida.calidades = opcionesCalidadX(info.mp4, Number(info.duracion_s) || video.duracionS);
@@ -1071,11 +1293,16 @@ export function inicializarYoutubeSincronizado({
    */
   async function descargarDeBiblioteca(video, tipo, { calidad = null, signal = null, onProgreso = () => {} } = {}) {
     const esX = video?.plataforma === 'x';
-    if (tipo !== 'mp3' && !esX) throw new Error('De YouTube solo se descarga el audio doblado.');
-    if (tipo !== 'mp3' && !calidad?.url) throw new Error('Elige una calidad del video.');
+    const esArchivo = video?.plataforma === 'archivo';
+    if (tipo !== 'mp3' && !esX && !esArchivo) throw new Error('De YouTube solo se descarga el audio doblado.');
+    if (esArchivo && tipo === 'original') throw new Error('El original ya está en tu equipo.');
+    if (esArchivo && tipo === 'mp4' && ultimoArchivo?.clave !== video.clave) {
+      throw new Error(`Para el video doblado elige primero el original («${video.nombreArchivo || video.titulo}»).`);
+    }
+    if (esX && tipo !== 'mp3' && !calidad?.url) throw new Error('Elige una calidad del video.');
     const bytesEstimados = tipo === 'mp3'
       ? estimarBytesMp3(video.duracionS)
-      : calidad.bytes + (tipo === 'mp4' ? estimarBytesVideo(BITRATE_AUDIO_DOBLADO, video.duracionS) : 0);
+      : (esArchivo ? Number(video.bytes) || 0 : calidad.bytes) + (tipo === 'mp4' ? estimarBytesVideo(BITRATE_AUDIO_DOBLADO, video.duracionS) : 0);
     const destino = await crearDestino({
       nombre: nombreArchivo({
         titulo: video.titulo, plataforma: video.plataforma,
@@ -1095,8 +1322,9 @@ export function inicializarYoutubeSincronizado({
       if (tipo === 'mp3') {
         return conRespaldo(await archivos.exportarMp3({ frases, duracionVideoS: video.duracionS, sintetizar, destino, signal, onProgreso }));
       }
-      return conRespaldo(await archivos.exportarMp4DobladoX({
-        mp4Url: calidad.url, frases, sintetizar, destino, signal, onProgreso,
+      return conRespaldo(await archivos.exportarMp4Doblado({
+        ...(esArchivo ? { archivo: ultimoArchivo.archivo } : { mp4Url: calidad.url }),
+        frases, sintetizar, destino, signal, onProgreso,
         volumenOriginal: Number(ui.volOriginal.value) / 100,
       }));
     } catch (error) {
@@ -1111,7 +1339,7 @@ export function inicializarYoutubeSincronizado({
     import('./bibliotecaVista.js').then(({ montarBibliotecaVideos }) => {
       biblioteca = montarBibliotecaVideos(raizBiblioteca, {
         listarVideos, listarDoblajes, videosConVoz, actualizarVideo, quitarVideo, restaurarVideo, espacioYPersistencia,
-        abrir: abrirDesdeBiblioteca, opcionesDescarga, descargar: descargarDeBiblioteca,
+        abrir: abrirDesdeBiblioteca, opcionesDescarga, descargar: descargarDeBiblioteca, elegirArchivoPara,
         servidorEnLinea: () => Boolean(estaServidorOnline()),
       });
     }).catch((error) => {
