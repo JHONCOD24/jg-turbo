@@ -1625,3 +1625,20 @@ y el AAC del navegador no la acepta (medido M15).
 
 **Regla:** donde haga falta, usar 48 px de mínimo (la ficha del archivo lo hace);
 los toques se miden en el navegador, no se deducen del CSS.
+
+## Whisper a veces oye galés donde hay silencio (2026-10-01)
+
+**Síntoma:** un curso en inglés se demoró toda la transcripción y al final cayó
+con «Groq Error 400: unsupported language: welsh».
+
+**Causa:** Whisper devolvió el NOMBRE del idioma («welsh», alucinado por el
+silencio del inicio) en vez del código («cy»); el cliente fijó ese texto como
+idioma y todas las partes siguientes viajaron con `language=welsh`, que Groq
+rechaza. El fallo solo aparecía al final porque las partes se suben antes de
+decidir el doblaje.
+
+**Regla:** lo que Whisper detecta se normaliza a código ISO en el cliente
+(`normalizarCodigoIdioma`: nombre → código, lo raro → auto) antes de fijarlo;
+nunca viaja un texto que el servidor no pueda mandar. Y un 400 con «unsupported
+language» se lee como detección fallida (el flujo pregunta el idioma), no como
+video indoblable.

@@ -110,7 +110,7 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 
 | Prueba | Línea base | Con el plan |
 |---|---:|---:|
-| `node tests/test_archivo_doblaje.mjs` (nueva) | — | 65 OK |
+| `node tests/test_archivo_doblaje.mjs` (nueva) | — | 71 OK |
 | `node tests/verificar_archivo_audio.mjs` (nueva, Chromium + Chrome) | — | 26 OK |
 | `node tests/verificar_archivo_doblaje.mjs` (nueva, punta a punta) | — | 38 OK |
 | `node tests/test_x_doblaje.mjs` | 70 | 70 |
@@ -126,6 +126,18 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 
 Contraprueba: `huellaArchivo` incluyendo el nombre hace fallar solo
 «renombrar el archivo NO cambia la huella» (64 OK · 1 fallo); restaurada, 65 OK.
+
+## Corrección v161 (2026-10-01, con el video real del dueño)
+
+Whisper devolvió el nombre «welsh» (en vez del código «cy») en la 1.ª parte de un
+curso en inglés que abría con silencio; las demás partes se subieron con
+`language=welsh` y Groq las rechazó con 400 al final de toda la espera.
+Ahora `transcripcionPartes.js` normaliza lo detectado a código ISO
+(`normalizarCodigoIdioma` en `idiomaOrigen.js`: «welsh» → «cy»; lo raro → auto)
+antes de fijarlo: Groq recibe un código válido y el flujo pregunta el idioma
+(«parece estar en galés…») en vez de tumbarse. Sin cambios en `api/`. Pruebas
+T5 en `test_archivo_doblaje.mjs` (6 nuevas, total 71); X/YouTube/biblioteca con
+los mismos números.
 
 ## Despliegues
 
