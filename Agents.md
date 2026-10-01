@@ -199,7 +199,7 @@ se cortó.
 | `node tests/verificar_biblioteca_videos.mjs` | **Obligatoria al tocar la biblioteca de videos** (`bibliotecaVista.js` o su marcado/CSS): migración al abrir, «Seguir viendo», búsqueda (también en lo que se dijo), filtros, temas, deshacer, teclado, «Listo al instante» sin gastar limitador, las tres descargas, el botón «Guardar archivo» y la voz guardada con su medida — con API, reproductor y red simulados | 52 |
 | `node tests/test_archivo_doblaje.mjs` | **Obligatoria al tocar videos del equipo** (reglas puras, huella, partes, servicio con dobles, biblioteca, idioma como código) | 71 |
 | `node tests/verificar_archivo_audio.mjs` | **Obligatoria al tocar videos del equipo** (Mediabunny real en Chromium y Chrome: MP3, copia AC-3, miniatura, MP4 doblado) | 26 |
-| `node tests/verificar_archivo_doblaje.mjs` | **Obligatoria al tocar videos del equipo** (punta a punta con API simulada: elegir, doblar, biblioteca, reabrir, MP4, errores, Archivo, teléfono) | 38 |
+| `node tests/verificar_archivo_doblaje.mjs` | **Obligatoria al tocar videos del equipo** (punta a punta con API simulada: elegir, doblar, biblioteca, reabrir, MP4, errores, Archivo, teléfono, cambio manual de voz) | 43 |
 
 **Backend:** `python -m pytest backend/tests -q`.
 ⚠️ Falla al recolectar 5 módulos por importar `api.subtitulos_limpieza` y `api.pulido`, que no
@@ -343,7 +343,9 @@ arquitectura, validación y guía de activación).
 - **La base `jg_youtube` sigue en v2.** Nada de almacenes nuevos. El registro parcial
   vive dentro de `doblajes` y lo reemplaza `completarSesion`.
 - Pruebas: `test_archivo_doblaje` 71 · `verificar_archivo_audio` 26 ·
-  `verificar_archivo_doblaje` 38 (**obligatorias al tocar videos del equipo**).
+  `verificar_archivo_doblaje` 43 (**obligatorias al tocar videos del equipo**).
+- Lo transcrito no dice quién habla: la 2.ª voz automática no entra sola en estos
+  videos; hay cambio manual («Aquí habla otra persona», `#ytOtraVoz`). No quitarlo.
 
 ## PDF (leer antes de tocar `js/pdf/`)
 

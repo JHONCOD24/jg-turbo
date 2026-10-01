@@ -112,14 +112,14 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 |---|---:|---:|
 | `node tests/test_archivo_doblaje.mjs` (nueva) | — | 71 OK |
 | `node tests/verificar_archivo_audio.mjs` (nueva, Chromium + Chrome) | — | 26 OK |
-| `node tests/verificar_archivo_doblaje.mjs` (nueva, punta a punta) | — | 38 OK |
+| `node tests/verificar_archivo_doblaje.mjs` (nueva, punta a punta) | — | 43 OK |
 | `node tests/test_x_doblaje.mjs` | 70 | 70 |
 | `node tests/verificar_x_doblaje.mjs` | 24 | 24 |
 | `node tests/test_biblioteca_videos.mjs` | 100 | 100 |
 | `node tests/verificar_biblioteca_datos.mjs` | 48 | 48 |
 | `node tests/verificar_biblioteca_videos.mjs` | 52 | 52 |
 | `node tests/test_youtube_doblaje.mjs` | 139 | 139 |
-| `node tests/test_youtube_sincronia.mjs` | 74 | 74 |
+| `node tests/test_youtube_sincronia.mjs` | 74 | 80 |
 | `node tests/verificar_youtube_doblaje.mjs` | 110 | 110 |
 | `node tests/verificar_movil_pantalla.mjs` | 62 | 62 |
 | `node tests/verificar_arranque_ligero.mjs` | 9 OK + 1 fallo previo (1 062 KB > 1 MB) | 9 OK + el mismo fallo (1 067 KB: +5 KB de marcado y CSS) |
@@ -139,11 +139,27 @@ antes de fijarlo: Groq recibe un código válido y el flujo pregunta el idioma
 T5 en `test_archivo_doblaje.mjs` (6 nuevas, total 71); X/YouTube/biblioteca con
 los mismos números.
 
+## Corrección v162 (2026-10-02, con el video real del dueño)
+
+El dueño oyó el video en inglés durante los primeros 5–6 párrafos y el español
+entró después. Causa: las primeras voces fallaron al generarse (proveedor lento
+o caído justo al abrir) y quedaban en estado `error` para siempre: nada las
+volvía a pedir y el motor en vivo las daba por originales. Ahora el motor de
+preparación las repite en segundo plano (tope 2 por frase, para no quemar cuota)
+y el «Listo» avisa si alguna del comienzo aún se prepara. Además, botón
+**«Aquí habla otra persona»** en videos del equipo sin diálogo: lo transcrito no
+dice quién habla (los subtítulos de YouTube sí traen `>>`), así que la 2.ª voz
+nunca entraba sola; la persona toca cuando cambia quien habla y desde ahí suena
+la otra voz, hasta volverlo a tocar (estilo pódcast). Los subtítulos y el ritmo
+no se tocaron. Pruebas: `test_youtube_sincronia` 80 (+6), `verificar_archivo_doblaje`
+43 (+5); YouTube/X/biblioteca con los mismos números.
+
 ## Despliegues
 
 - v160: `JG_JS_V='v160'`, shell-v160. `dpl_7Q4xcP8U7gZhuB4zyhieun4QoewG` (el video
   real del dueño la tumbó al final con el 400 del galés; ver Corrección v161).
 - v161: `JG_JS_V='v161'`, shell-v161. `dpl_85XCooxfDqWz8sKpraWLG6Kg4KK2`.
+- v162: `JG_JS_V='v162'`, shell-v162. `dpl_…` (se anota al publicar).
 - Sale desde copia `git archive` del commit, una sola vez, verificado contra
   https://jg-turbo.vercel.app (versión, módulos con 200 y sha256 igual, video real
   doblado) y empujado a `origin/main`.

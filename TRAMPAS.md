@@ -1642,3 +1642,19 @@ decidir el doblaje.
 nunca viaja un texto que el servidor no pueda mandar. Y un 400 con «unsupported
 language» se lee como detección fallida (el flujo pregunta el idioma), no como
 video indoblable.
+
+## La voz que falla al abrir queda en inglés para siempre (2026-10-02)
+
+**Síntoma:** un video del equipo sonó en inglés los primeros 5–6 párrafos y el
+español entró después, sin ningún aviso.
+
+**Causa:** las primeras voces fallaron al generarse y quedaron en estado
+`error`. El motor en vivo da las unidades en `error` por originales (no las
+reintenta) y el motor de preparación solo pedía unidades `pendiente`: nada
+volvía a pedir esas voces. Además `segundosCubiertos` cuenta `error` como
+cubierto, así que el «Listo» salió como si todo estuviera bien.
+
+**Regla:** una voz en `error` se repite en segundo plano con tope
+(`MAX_REINTENTOS_VOZ = 2` en `planificador.js`, contador `reintentosVoz` en la
+unidad) para no quemar cuota; y si al dar «Listo» hubo fallos de voz, el mensaje
+lo dice en vez de prometer un arranque perfecto.
