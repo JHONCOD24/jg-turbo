@@ -820,7 +820,12 @@ export function inicializarYoutubeSincronizado({
     display.mostrarVoz('activo');
     ui.reproducir.hidden = player.getPlayerState() === 1;
     if (!ui.reproducir.hidden) ui.reproducir.focus({ preventScroll: true });
-    ui.estado.textContent = 'Listo. El resto del doblaje se prepara mientras ves el video.';
+    // Si alguna voz del comienzo falló, el motor ya la está repitiendo en segundo
+    // plano: se dice en vez de prometer un «Listo» perfecto (TRAMPAS §8.2).
+    const fallosVoz = Number(motor?.errores?.voz) || 0;
+    ui.estado.textContent = fallosVoz > 0
+      ? 'Listo. Algunas frases del comienzo aún preparan su voz y pueden sonar en inglés un momento; se corrigen solas. El resto del doblaje se prepara mientras ves el video.'
+      : 'Listo. El resto del doblaje se prepara mientras ves el video.';
     pintarBuffer(actual);
     actual.relojCache = setInterval(() => guardarSesion(actual), 5000);
   }

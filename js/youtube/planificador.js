@@ -16,6 +16,11 @@ export const HORIZONTE_VOZ_S = 90;
 // (la tercera empezaba en 9,0 s) y tres lotes de traducción antes del primer sonido.
 export const VOZ_INICIAL_S = 6;
 export const MARGEN_ATRAS_S = 2;
+// Una voz que falló (proveedor caído justo al abrir) quedaba en inglés para
+// siempre: nada la volvía a pedir. Se reintenta en segundo plano, con tope
+// para no quemar cuota si el proveedor sigue caído (medido 2026-10-02 con un
+// video del equipo: las primeras 5–6 frases sonaron en inglés y luego entró).
+export const MAX_REINTENTOS_VOZ = 2;
 // Lote corto cuando no hay nada traducido cerca: la IA contesta antes con 4
 // segmentos que con 8 (2,4 s medidos en el primer lote de un video real).
 export const LOTE_ARRANQUE = 4;
@@ -65,9 +70,11 @@ export function siguienteLoteTraduccion(segmentos, { traducido, enCurso }, posic
 export function unidadesAGenerar(unidades, posicionS, { horizonteS = HORIZONTE_VOZ_S, limite = 2 } = {}) {
   const fin = posicionS + horizonteS;
   const salida = [];
+  const reintentable = (u) => u.estado === 'pendiente'
+    || (u.estado === 'error' && (Number(u.reintentosVoz) || 0) < MAX_REINTENTOS_VOZ);
   for (let i = indiceDesde(unidades, posicionS); i < unidades.length && salida.length < limite; i += 1) {
     if (unidades[i].startTime > fin) break;
-    if (unidades[i].estado === 'pendiente') salida.push(i);
+    if (reintentable(unidades[i])) salida.push(i);
   }
   return salida;
 }

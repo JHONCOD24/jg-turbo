@@ -412,6 +412,49 @@ function enOrdenSinHuecos(completas) {
 
 comprobar(RETRASO_MAXIMO_S === 5, 'la voz solo se rinde con más de 5 s de atraso');
 
+// ── La voz que falla al abrir se reintenta en segundo plano ─────────────
+// Caso del dueño (2026-10-02, video del equipo): las primeras frases fallaron al
+// generar su voz y quedaron en inglés para siempre; nada las volvía a pedir.
+{
+  const plan = await modulo('planificador.js');
+  const servicio = await modulo('dubbingService.js');
+  comprobar(plan.MAX_REINTENTOS_VOZ === 2, 'la voz fallida se reintenta 2 veces, no para siempre (cuota)');
+  const base = [
+    { startTime: 0, endTime: 4, estado: 'pendiente', text: 'a' },
+    { startTime: 5, endTime: 9, estado: 'error', reintentosVoz: 0, text: 'b' },
+    { startTime: 10, endTime: 14, estado: 'error', reintentosVoz: 2, text: 'c' },
+    { startTime: 15, endTime: 19, estado: 'listo', text: 'd' },
+  ];
+  comprobar(JSON.stringify(plan.unidadesAGenerar(base, 0, { horizonteS: 90, limite: 10 })) === '[0,1]',
+    'se piden las pendientes y las fallidas con reintentos; las agotadas y las listas, no');
+
+  let llamadas = 0;
+  const voz = new servicio.DubbingService({ generarAudio: async () => { llamadas += 1; if (llamadas === 1) throw new Error('TTS caído'); return new Blob(['x']); } });
+  voz.definirUnidades(servicio.agruparPorTiempo([{ startTime: 0, endTime: 3, text: 'hola mundo' }]));
+  voz.fijarTexto(0, 'hola mundo');
+  await voz.asegurar(0).catch(() => {});
+  comprobar(voz.unidades[0].estado === 'error' && voz.unidades[0].reintentosVoz === 1, 'el fallo cuenta su reintento');
+  await voz.asegurar(0);
+  comprobar(voz.unidades[0].estado === 'listo', 'al repetir, la voz entra');
+
+  const { MotorPreparacion } = await modulo('motorPreparacion.js');
+  const pedidas = [];
+  const falso = {
+    unidades: [{ startTime: 0, endTime: 4, estado: 'error', reintentosVoz: 1, text: 'hola' }],
+    liberarAntesDe() {},
+    async asegurar(i) { pedidas.push(i); const u = this.unidades[i]; u.estado = 'listo'; return u; },
+  };
+  const motor = new MotorPreparacion({
+    segmentos: [], servicioVoz: falso, traductor: { traducirLote: async () => new Map() },
+    posicion: () => 0, signal: null,
+  });
+  motor.paso();
+  await new Promise((r) => setTimeout(r, 50));
+  motor.detener();
+  comprobar(pedidas.join() === '0' && falso.unidades[0].estado === 'listo', 'el motor repite la voz fallida sin que nadie se lo pida');
+  comprobar(motor.errores.voz === 0, 'y no la cuenta como fallo');
+}
+
 // ── Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

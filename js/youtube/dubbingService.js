@@ -81,6 +81,7 @@ export function agruparPorTiempo(segmentos) {
     return {
       ...grupo, indice, endTime, duration: endTime - grupo.startTime,
       text: '', estado: 'sin_traducir', blob: null, url: '', error: '', promesa: null,
+      reintentosVoz: 0,
     };
   });
 }
@@ -326,6 +327,7 @@ export class DubbingService {
         return unidad;
       } catch (error) {
         unidad.estado = 'error';
+        unidad.reintentosVoz = (Number(unidad.reintentosVoz) || 0) + 1;
         unidad.error = String(error?.message || error || 'No se pudo generar la voz.');
         throw error;
       } finally {
