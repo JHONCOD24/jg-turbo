@@ -18,8 +18,17 @@ export function estadoDeVideo(video, { arranco = false } = {}) {
 }
 
 export class XVideoPlayer {
-  constructor(elemento, { mp4 = '', portada = '', titulo = '' } = {}) {
+  /**
+   * `etiqueta` y `mensajeError`: los videos del equipo usan este mismo reproductor
+   * (un blob: del mismo origen carga igual dentro del iframe, medido 2026-10-01).
+   */
+  constructor(elemento, {
+    mp4 = '', portada = '', titulo = '', etiqueta = 'Video de X',
+    mensajeError = 'X no dejó reproducir este video aquí. Prueba de nuevo o ábrelo en x.com.',
+  } = {}) {
     this.destino = typeof elemento === 'string' ? document.getElementById(elemento) : elemento;
+    this.etiqueta = etiqueta;
+    this.mensajeError = mensajeError;
     this.mp4 = mp4;
     this.portada = portada;
     this.titulo = titulo;
@@ -35,7 +44,7 @@ export class XVideoPlayer {
     if (!this.destino) throw new Error('No hay dónde poner el reproductor de X.');
     const marco = document.createElement('iframe');
     marco.id = this.destino.id || 'ytPlayer';
-    marco.title = this.titulo ? `Video de X: ${this.titulo}` : 'Video de X';
+    marco.title = this.titulo ? `${this.etiqueta}: ${this.titulo}` : this.etiqueta;
     marco.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
     marco.setAttribute('referrerpolicy', 'no-referrer');
     const cargado = new Promise((resolver) => marco.addEventListener('load', resolver, { once: true }));
@@ -61,7 +70,7 @@ export class XVideoPlayer {
     await new Promise((resolver, rechazar) => {
       const limpiar = () => { clearTimeout(tope); video.removeEventListener('loadedmetadata', listo); video.removeEventListener('error', fallo); };
       const listo = () => { limpiar(); resolver(); };
-      const fallo = () => { limpiar(); rechazar(new Error('X no dejó reproducir este video aquí. Prueba de nuevo o ábrelo en x.com.')); };
+      const fallo = () => { limpiar(); rechazar(new Error(this.mensajeError)); };
       const tope = setTimeout(() => { limpiar(); resolver(); }, ESPERA_METADATOS_MS);   // lento ≠ roto: se sigue
       video.addEventListener('loadedmetadata', listo);
       video.addEventListener('error', fallo);
