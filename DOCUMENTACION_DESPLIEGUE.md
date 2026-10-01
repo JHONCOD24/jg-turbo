@@ -61,7 +61,7 @@ cp .vercel/project.json "$D/.vercel/project.json"   # prj_EfuyBt2YDNqQNVaKif9DKU
 cd "$D" && npx vercel --prod --yes --scope jhoncod24s-projects
 ```
 
-`dpl_…` READY, alias `https://jg-turbo.vercel.app`.
+`dpl_FKsHWNzoUQ9qmr6XagFUuStpatH1` READY, alias `https://jg-turbo.vercel.app`.
 Marcador `JG_JS_V=v162`, shell-v162. Verificado: HTML con v162, módulos con 200
 y sha256 igual al commit, `/api/health` ok.
 

@@ -159,7 +159,7 @@ no se tocaron. Pruebas: `test_youtube_sincronia` 80 (+6), `verificar_archivo_dob
 - v160: `JG_JS_V='v160'`, shell-v160. `dpl_7Q4xcP8U7gZhuB4zyhieun4QoewG` (el video
   real del dueño la tumbó al final con el 400 del galés; ver Corrección v161).
 - v161: `JG_JS_V='v161'`, shell-v161. `dpl_85XCooxfDqWz8sKpraWLG6Kg4KK2`.
-- v162: `JG_JS_V='v162'`, shell-v162. `dpl_…` (se anota al publicar).
+- v162: `JG_JS_V='v162'`, shell-v162. `dpl_FKsHWNzoUQ9qmr6XagFUuStpatH1`.
 - Sale desde copia `git archive` del commit, una sola vez, verificado contra
   https://jg-turbo.vercel.app (versión, módulos con 200 y sha256 igual, video real
   doblado) y empujado a `origin/main`.
