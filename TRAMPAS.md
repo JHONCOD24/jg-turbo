@@ -1658,3 +1658,16 @@ cubierto, así que el «Listo» salió como si todo estuviera bien.
 (`MAX_REINTENTOS_VOZ = 2` en `planificador.js`, contador `reintentosVoz` en la
 unidad) para no quemar cuota; y si al dar «Listo» hubo fallos de voz, el mensaje
 lo dice en vez de prometer un arranque perfecto.
+
+## La limpieza general no quita etiquetas HTML (2026-10-02)
+
+**Síntoma:** los subtítulos de un `.srt` con `<i>` llegaban a la voz con las
+etiquetas puestas («i Hello world punto i» leído en voz alta, medido en prueba).
+
+**Causa:** `limpiarNoHabla` (transcriptionService.js) quita marcas de
+hablante y sonidos, pero no etiquetas `<i>/<b>/<font>`: el parser les pasaba el
+texto crudo creyendo que la limpieza las quitaba.
+
+**Regla:** el parser de subtítulos entrega el texto ya sin etiquetas (las marcas
+`>>`/`Ana:` se conservan para la 2.ª voz); la prueba exige el texto limpio
+exacto, no solo que exista.

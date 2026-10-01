@@ -65,6 +65,22 @@ cd "$D" && npx vercel --prod --yes --scope jhoncod24s-projects
 Marcador `JG_JS_V=v162`, shell-v162. Verificado: HTML con v162, módulos con 200
 y sha256 igual al commit, `/api/health` ok.
 
+## Mejora 1 v163 (subtítulos .srt/.vtt), 2026-10-02 · desde una copia exacta del commit
+
+Agregar subtítulos propios junto al video del equipo: texto exacto sin
+transcribir. Detalle: `CAMBIOS_VIDEO_LOCAL.md` §Mejora 1 (v163).
+
+```bash
+D="$TEMP/jg-turbo-deploy" && rm -rf "$D" && mkdir -p "$D/.vercel"
+git archive HEAD | tar -x -C "$D"
+cp .vercel/project.json "$D/.vercel/project.json"   # prj_EfuyBt2YDNqQNVaKif9DKUjpVaz8
+cd "$D" && npx vercel --prod --yes --scope jhoncod24s-projects
+```
+
+`dpl_…` READY, alias `https://jg-turbo.vercel.app`.
+Marcador `JG_JS_V=v163`, shell-v163. Verificado: HTML con v163, módulos con 200
+y sha256 igual al commit, `/api/health` ok.
+
 ## Publicación PDF v158 (P4.3 + P-01/P-02), 2026-09-29 · desde una copia exacta del commit
 
 Un solo vocabulario de posición («Capítulo N de M»), página llena con el cromo

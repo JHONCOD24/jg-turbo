@@ -22,6 +22,8 @@ Documento maestro del doblaje de videos guardados en el teléfono o el computado
   `archivo:<huella>`). Si se elige otro archivo, lo dice.
 - Descargas de un video del equipo: **audio doblado MP3** y **video doblado MP4**
   (el MP4 pide el original si no está a mano). Nunca «video original».
+- Si tiene los subtítulos del curso (.srt o .vtt), los agrega al lado del video:
+  se usa ese texto exacto sin transcribir (gratis).
 
 ## Decisiones del dueño (2026-10-01, no se reabren)
 
@@ -98,6 +100,7 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 | reproductor | el `<video>` no lo reproduce | «Este navegador no puede reproducir este video (formato o códec). Ábrelo en Chrome de computador o conviértelo a MP4 (H.264 + AAC).» |
 | biblioteca | eligió otro archivo | «Ese archivo no es «x.mp4». Elige el mismo video que doblaste.» |
 | MP4 | códec que MP4 no lleva | «El video de este archivo no se puede guardar como MP4 sin recodificarlo. Descarga el audio en español (MP3).» |
+| `srt_vacio` / `srt_no_es` / `srt_formato` / `srt_grande` / `srt_largo` | subtítulos vacíos, con otra extensión, sin tiempos, de más de 2 MB o de más de 3 h | el motivo tal cual; el video sigue y va por Whisper |
 
 ## Límites
 
@@ -110,9 +113,9 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 
 | Prueba | Línea base | Con el plan |
 |---|---:|---:|
-| `node tests/test_archivo_doblaje.mjs` (nueva) | — | 71 OK |
+| `node tests/test_archivo_doblaje.mjs` (nueva) | — | 83 OK |
 | `node tests/verificar_archivo_audio.mjs` (nueva, Chromium + Chrome) | — | 26 OK |
-| `node tests/verificar_archivo_doblaje.mjs` (nueva, punta a punta) | — | 43 OK |
+| `node tests/verificar_archivo_doblaje.mjs` (nueva, punta a punta) | — | 54 OK |
 | `node tests/test_x_doblaje.mjs` | 70 | 70 |
 | `node tests/verificar_x_doblaje.mjs` | 24 | 24 |
 | `node tests/test_biblioteca_videos.mjs` | 100 | 100 |
@@ -122,7 +125,7 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 | `node tests/test_youtube_sincronia.mjs` | 74 | 80 |
 | `node tests/verificar_youtube_doblaje.mjs` | 110 | 110 |
 | `node tests/verificar_movil_pantalla.mjs` | 62 | 62 |
-| `node tests/verificar_arranque_ligero.mjs` | 9 OK + 1 fallo previo (1 062 KB > 1 MB) | 9 OK + el mismo fallo (1 067 KB: +5 KB de marcado y CSS) |
+| `node tests/verificar_arranque_ligero.mjs` | 9 OK + 1 fallo previo (1 062 KB > 1 MB) | 9 OK + el mismo fallo (1 069 KB: marcado y CSS de la puerta del equipo y el SRT) |
 
 Contraprueba: `huellaArchivo` incluyendo el nombre hace fallar solo
 «renombrar el archivo NO cambia la huella» (64 OK · 1 fallo); restaurada, 65 OK.
@@ -154,12 +157,23 @@ la otra voz, hasta volverlo a tocar (estilo pódcast). Los subtítulos y el ritm
 no se tocaron. Pruebas: `test_youtube_sincronia` 80 (+6), `verificar_archivo_doblaje`
 43 (+5); YouTube/X/biblioteca con los mismos números.
 
+## Mejora 1 (v163): subtítulos .srt/.vtt junto al video
+
+Si la persona tiene los subtítulos del curso, los agrega con
+**«Agregar subtítulos (.srt o .vtt, opcional)»** al lado del video elegido: el
+doblaje usa ese texto exacto sin transcribir (0 partes a Whisper, gratis) y
+pregunta el idioma si el formulario dice «auto». Se validan al elegirlos (vacío,
+extensión, formato, 3 h); un error se dice en el aviso y el video sigue por
+Whisper. Latin-1 (tildes de Windows) se lee bien. Si marcan quién habla (`>>`,
+«Nombre:»), la 2.ª voz entra sola. Pruebas T6 (12) y e2e (11 nuevas).
+
 ## Despliegues
 
 - v160: `JG_JS_V='v160'`, shell-v160. `dpl_7Q4xcP8U7gZhuB4zyhieun4QoewG` (el video
   real del dueño la tumbó al final con el 400 del galés; ver Corrección v161).
 - v161: `JG_JS_V='v161'`, shell-v161. `dpl_85XCooxfDqWz8sKpraWLG6Kg4KK2`.
 - v162: `JG_JS_V='v162'`, shell-v162. `dpl_FKsHWNzoUQ9qmr6XagFUuStpatH1`.
+- v163: `JG_JS_V='v163'`, shell-v163. `dpl_…` (se anota al publicar).
 - Sale desde copia `git archive` del commit, una sola vez, verificado contra
   https://jg-turbo.vercel.app (versión, módulos con 200 y sha256 igual, video real
   doblado) y empujado a `origin/main`.
