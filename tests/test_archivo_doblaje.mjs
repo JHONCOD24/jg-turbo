@@ -231,6 +231,30 @@ const dd = await modulo('descargaDestino.js');
   comprobar(dd.nombreArchivo({ titulo: 'a', plataforma: 'x', tipo: 'audio', extension: 'mp3' }) === 'jg-turbo-x-a-audio-es.mp3', 'X conserva su nombre de archivo');
 }
 
+// ── T5: el idioma detectado viaja como código (fallo real 2026-10-01) ──────
+// Whisper devolvió «welsh» (nombre) en la 1.ª parte de un curso en inglés y las
+// demás se subieron con language=welsh: Groq 400 y todo el video se perdió.
+// Ahora viaja «cy» (código, que Groq sí acepta) y el flujo pregunta el idioma.
+const io = await modulo('idiomaOrigen.js');
+{
+  comprobar(io.normalizarCodigoIdioma('welsh') === 'cy', '«welsh» se vuelve «cy»');
+  comprobar(io.normalizarCodigoIdioma('english') === 'en', '«english» se vuelve «en»');
+  comprobar(io.normalizarCodigoIdioma('en-US') === 'en' && io.normalizarCodigoIdioma('en') === 'en', 'los códigos pasan tal cual');
+  comprobar(io.normalizarCodigoIdioma('') === '' && io.normalizarCodigoIdioma('xxinventado') === '', 'vacío o raro → auto, nunca un texto inválido');
+  const subidas = [];
+  const fetchGales = async (_ruta, opciones = {}) => {
+    subidas.push(opciones.body.get('language'));
+    const n = subidas.length;
+    return Response.json({ language: n === 1 ? 'welsh' : 'cy', segments: [{ start: 1, end: 2, text: `Parte ${n}.` }] });
+  };
+  const r = await tp.transcribirPorPartes({
+    total: 3, fabricarParte: async (k) => ({ audio: new Blob([new Uint8Array(2000)]), nombre: `p${k + 1}.mp3` }),
+    fetchApi: fetchGales, esperar: async () => {},
+  });
+  comprobar(subidas[0] === 'auto' && subidas.slice(1).every((s) => s === 'cy'), 'tras detectar «welsh», las demás viajan con «cy» (nunca «welsh»)');
+  comprobar(r.idioma === 'cy', 'el idioma fijado es el código «cy»');
+}
+
 // ── Resumen ──────────────────────────────────────────────────────────────
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);

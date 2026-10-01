@@ -11,7 +11,7 @@
  * Cada parte viaja con ≤ 3,2 MB: Vercel rechaza cuerpos de ~4,5 MB y corta a los 60 s.
  */
 import { ErrorYoutube } from './transcriptionService.js';
-import { codigoCorto } from './idiomaOrigen.js';
+import { codigoCorto, normalizarCodigoIdioma } from './idiomaOrigen.js';
 
 export const BYTES_MAX_PARTE = 3.2 * 1024 * 1024;
 export const PARTES_EN_PARALELO = 2;
@@ -79,7 +79,9 @@ export async function transcribirPorPartes({
   previas = new Map(), idiomaPrevio = '', alTerminarParte = () => {}, enParaleloMax = PARTES_EN_PARALELO,
 }) {
   const elegido = idiomaOrigen && idiomaOrigen !== 'auto' ? codigoCorto(idiomaOrigen) : '';
-  let idioma = elegido || codigoCorto(idiomaPrevio);
+  // Lo que Whisper detecta puede venir como nombre («welsh»): se normaliza a
+  // código («cy») antes de fijarlo, o Groq rechaza la parte siguiente con 400.
+  let idioma = elegido || normalizarCodigoIdioma(idiomaPrevio);
   const resultados = new Array(total);
   let hechas = 0;
   const contar = () => onProgress(`Transcribiendo el audio: ${hechas} de ${total} ${total === 1 ? 'parte' : 'partes'}…`, hechas / total);
@@ -94,8 +96,8 @@ export async function transcribirPorPartes({
         idioma: idioma || 'auto', apiKey, context, signal, esperar, esperasLimiteMs, codigoError,
       });
       resultados[k] = r.segmentos;
-      if (!idioma) idioma = codigoCorto(r.idioma);
-      await alTerminarParte(k, r.segmentos, idioma || codigoCorto(r.idioma));
+      if (!idioma) idioma = normalizarCodigoIdioma(r.idioma);
+      await alTerminarParte(k, r.segmentos, idioma || normalizarCodigoIdioma(r.idioma));
     }
     hechas += 1;
     contar();

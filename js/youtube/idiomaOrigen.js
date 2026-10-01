@@ -17,7 +17,46 @@ const NOMBRES = {
   en: 'inglés', es: 'español', pt: 'portugués', fr: 'francés', de: 'alemán', it: 'italiano',
   ar: 'árabe', ru: 'ruso', hi: 'hindi', ja: 'japonés', ko: 'coreano', zh: 'chino',
   pl: 'polaco', tr: 'turco', nl: 'neerlandés', he: 'hebreo', el: 'griego', th: 'tailandés',
+  cy: 'galés',
 };
+
+/* Whisper a veces devuelve el nombre en inglés («welsh») en vez del código («cy»):
+ * el servidor lo pasa tal cual y Groq rechaza la parte siguiente con 400
+ * (medido 2026-10-01 con un curso en inglés que abrió con silencio).
+ * Aquí todo nombre se vuelve código; lo que no se reconoce se vuelve '' (auto),
+ * nunca un texto que el servidor no pueda mandar. */
+const CODIGO_POR_NOMBRE = {
+  afrikaans: 'af', albanian: 'sq', amharic: 'am', arabic: 'ar', armenian: 'hy',
+  assamese: 'as', azerbaijani: 'az', bashkir: 'ba', basque: 'eu', belarusian: 'be',
+  bengali: 'bn', bosnian: 'bs', breton: 'br', bulgarian: 'bg', burmese: 'my',
+  myanmar: 'my', catalan: 'ca', chinese: 'zh', mandarin: 'zh', cantonese: 'yue',
+  croatian: 'hr', czech: 'cs', danish: 'da', dutch: 'nl', flemish: 'nl',
+  english: 'en', estonian: 'et', finnish: 'fi', french: 'fr', fulah: 'ff',
+  pulaar: 'ff', galician: 'gl', georgian: 'ka', german: 'de', greek: 'el',
+  gujarati: 'gu', hausa: 'ha', hawaiian: 'haw', hebrew: 'he', hindi: 'hi',
+  hungarian: 'hu', icelandic: 'is', indonesian: 'id', italian: 'it',
+  japanese: 'ja', javanese: 'jv', kannada: 'kn', kazakh: 'kk', khmer: 'km',
+  cambodian: 'km', korean: 'ko', lao: 'lo', latin: 'la', latvian: 'lv',
+  lingala: 'ln', lithuanian: 'lt', luxembourgish: 'lb', macedonian: 'mk',
+  malagasy: 'mg', malay: 'ms', malayalam: 'ml', maltese: 'mt', maori: 'mi',
+  marathi: 'mr', mongolian: 'mn', nynorsk: 'nn', norwegian: 'no', occitan: 'oc',
+  pashto: 'ps', pushto: 'ps', punjabi: 'pa', panjabi: 'pa', persian: 'fa',
+  farsi: 'fa', polish: 'pl', portuguese: 'pt', romanian: 'ro', russian: 'ru',
+  sanskrit: 'sa', serbian: 'sr', shona: 'sn', sindhi: 'sd', sinhala: 'si',
+  sinhalese: 'si', slovak: 'sk', slovenian: 'sl', somali: 'so', spanish: 'es',
+  castilian: 'es', swahili: 'sw', swedish: 'sv', tajik: 'tg', tamil: 'ta',
+  tatar: 'tt', telugu: 'te', thai: 'th', tibetan: 'bo', turkish: 'tr',
+  turkmen: 'tk', ukrainian: 'uk', urdu: 'ur', uzbek: 'uz', vietnamese: 'vi',
+  welsh: 'cy', wolof: 'wo', yiddish: 'yi', yoruba: 'yo',
+};
+
+export function normalizarCodigoIdioma(valor) {
+  const crudo = String(valor || '').trim().toLowerCase().replace(/_/g, '-');
+  if (!crudo) return '';
+  const corto = crudo.split('-')[0];
+  if (/^[a-z]{2}$/.test(corto)) return corto;
+  return CODIGO_POR_NOMBRE[corto] || '';
+}
 
 export function codigoCorto(valor) {
   return String(valor || '').trim().toLowerCase().replace(/_/g, '-').split('-')[0];
