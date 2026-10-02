@@ -14811,6 +14811,7 @@ const TTS_FISH_CATALOGO_LOCAL = [
   { id:'michael', gender:'male', name:'Michael', lang:'es' },
   { id:'jg-narradora', gender:'female', name:'JG Narradora', lang:'es' },
   { id:'jg-narrador', gender:'male', name:'JG Narrador', lang:'es' },
+  { id:'harold', gender:'male', name:'Harold', lang:'es' },
 ];
 
 /* Voces retiradas de la biblioteca (vienen reemplazos): Robin, Chica, Nagi,
@@ -19169,7 +19170,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v164';
+const JG_JS_V = 'v165';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

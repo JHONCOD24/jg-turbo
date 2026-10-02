@@ -295,6 +295,7 @@ Fuente de verdad: `FISH_CATALOGO_BASE` en `origin/main`, no un `index.html` suci
 | Sandra Design Travel | `sandra-design-travel` | female | `ffd08eb8a7424826a31aaa1f526a3762` | retirada → Amy |
 | JG Narradora (Voice Design) | `jg-narradora` | female | `31cdd5b542c64e26be8aba2d9ee62ca2` | en el selector (v2.83.0) |
 | JG Narrador (Voice Design) | `jg-narrador` | male | `88d6dac3d12a402f9aa87ccf3a6c94b2` | en el selector (v2.83.0) |
+| Harold | `harold` | male | `a01c34a36f2b452780133358c2cd8ee5` | en el selector (v165) |
 
 Las de Voice Design no vienen de JG Voice: se crean en el estudio de fish.audio con la misma cuenta. La receta es idéntica (sección 5); solo cambia de dónde sale el id.
 

@@ -4412,6 +4412,8 @@ FISH_CATALOGO_BASE = (
     # Creadas con Voice Design (plan Plus). Slug con «jg-»: «narrador» es alias histórico.
     ("jg-narradora", "female", "JG Narradora", "31cdd5b542c64e26be8aba2d9ee62ca2", "", "es"),
     ("jg-narrador", "male", "JG Narrador", "88d6dac3d12a402f9aa87ccf3a6c94b2", "", "es"),
+    # Clon pedido por el usuario (2026-10-02): Harold, masculina en español.
+    ("harold", "male", "Harold", "a01c34a36f2b452780133358c2cd8ee5", "", "es"),
 )
 # Voces que se retiraron del listado: si llega el slug viejo, suena la del mismo género.
 FISH_VOCES_RETIRADAS = {

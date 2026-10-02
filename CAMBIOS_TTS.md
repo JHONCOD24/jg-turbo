@@ -1,5 +1,24 @@
 # Lectura en voz alta (TTS) — JG Turbo
 
+## v165 (2026-10-02): voz Harold en el selector
+
+Pedido del dueño: agregar el ID `a01c34a36f2b452780133358c2cd8ee5` al listado
+de PDF y de videos. Como ambos listados salen del mismo catálogo
+(`FISH_CATALOGO_BASE` en servidor + `TTS_FISH_CATALOGO_LOCAL` en cliente,
+vía `ttsCatalogoVoces()` / `ttsVocesParaDoblaje()`), una sola alta cubre los dos.
+
+- Alta: slug `harold`, masculina, nombre `Harold`, idioma `es`, al final del
+  catálogo sin reordenar (no toca fallbacks ni retiradas).
+- Servidor: `api/index.py` → `FISH_CATALOGO_BASE`. Cliente: `index.html` →
+  `TTS_FISH_CATALOGO_LOCAL`. Aparece en `Fish Audio · español · masculinas`.
+- Pruebas: `backend/tests/test_tts_voces_fish.py` (NUEVAS + género/nombre) y
+  `tests/test_tts_voces_biblioteca.mjs` (lista + `ttsFishPorId('harold')`).
+- Versión: `JG_JS_V=v165`, `CACHE_SHELL=jg-turbo-shell-v165`.
+- Pendiente de cerrar la tanda: commit solo de voces, deploy único al final,
+  verificación contra `https://jg-turbo.vercel.app` (`id:'harold'` en HTML,
+  `harold` en `GET /api/tts-voices`, `POST /api/tts` `fish_voice=harold`
+  `source=pdf` → `fish:Harold`) y `git push origin main`.
+
 ## v159 (2026-09-29): voces multilingues, tecnicismos y frases continuas
 
 Pedido del dueño: llevar las mejoras de Udemy a PDF y videos y evitar pausas

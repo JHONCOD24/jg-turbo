@@ -89,6 +89,7 @@ const RETIRADAS_0912 = {
     'voz-locutor', 'mario-alonso-puig', 'tatiana-mae',
     'hilary-narrador', 'jim-hopper', 'roberto',
     'amy', 'dora', 'michael', 'jg-narradora', 'jg-narrador',
+    'harold',
   ]) {
     comprobar(ids.includes(nueva), `"${nueva}" aparece en el catálogo`);
   }
@@ -108,6 +109,9 @@ const RETIRADAS_0912 = {
     'JG Narradora es femenina y en español');
   comprobar(jgNarrador && jgNarrador.gender === 'male' && jgNarrador.name === 'JG Narrador' && jgNarrador.lang === 'es',
     'JG Narrador es masculina y en español');
+  const harold = api.TTS_FISH_CATALOGO_LOCAL.find((v) => v.id === 'harold');
+  comprobar(harold && harold.gender === 'male' && harold.name === 'Harold' && harold.lang === 'es',
+    'Harold es masculina y en español');
 }
 
 /* ── La lista ofrecida filtra aunque el servidor las mande ───────── */
@@ -150,6 +154,8 @@ const RETIRADAS_0912 = {
   comprobar(api.ttsFishPorId('dora')?.id === 'dora', 'dora resuelve por su slug');
   comprobar(api.ttsFishPorId('michael')?.id === 'michael', 'michael resuelve por su slug');
   comprobar(api.ttsFishPorId('jg-narradora')?.id === 'jg-narradora', 'jg-narradora resuelve por su slug');
+  comprobar(api.ttsFishPorId('harold')?.id === 'harold', 'harold resuelve por su slug');
+  comprobar(api.ttsFishPorId('fish:harold')?.id === 'harold', 'fish:harold resuelve igual');
   comprobar(api.ttsFishPorId('fish:jg-narrador')?.id === 'jg-narrador', 'fish:jg-narrador resuelve igual');
   comprobar(api.ttsFishPorId('narrador')?.id === 'valentino', 'narrador a secas sigue yendo a valentino, no a jg-narrador');
   comprobar(api.ttsFishPorId('sandra-design-travel')?.id === 'amy',

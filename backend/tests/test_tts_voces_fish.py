@@ -26,6 +26,7 @@ NUEVAS = {
     "michael": "6b33f00f4d7a49d89a1c7a6f7abec6c4",
     "jg-narradora": "31cdd5b542c64e26be8aba2d9ee62ca2",
     "jg-narrador": "88d6dac3d12a402f9aa87ccf3a6c94b2",
+    "harold": "a01c34a36f2b452780133358c2cd8ee5",
 }
 
 
@@ -75,6 +76,7 @@ def test_clones_nuevos_genero_y_nombre():
         "amy": ("female", "Amy"),
         "dora": ("female", "Dora"),
         "michael": ("male", "Michael"),
+        "harold": ("male", "Harold"),
     }
     for slug, (genero, nombre) in esperadas.items():
         voz = api_module._tts_fish_resolver(f"fish:{slug}", "male")
