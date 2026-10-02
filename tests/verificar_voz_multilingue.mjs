@@ -21,6 +21,10 @@ const comprobar = (c, m) => { assert.ok(c, m); ok++; console.log(`OK: ${m}`); };
 try {
   const contexto = await navegador.newContext({ serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
   const cuerpos = [];
+  const textosTraducidos = [];
+  // Respuesta real de producción (2026-10-02) al lote 14-15 de la clase medida:
+  // el traductor quitó las marcas, dejó «hook» en inglés y se comió «array».
+  const respuestaReal1415 = '[[JG_SEG_000014]]\nEl hook más usado es useState, y te da dos cosas\n\n[[JG_SEG_000015]]\nel valor actual y una función para actualizarlo';
   const voz = await readFile(resolve(raiz, 'tests/fixtures/biblioteca/voz_real_es.mp3'));
   await contexto.route('**/api/**', async (ruta) => {
     const q = ruta.request(); const url = new URL(q.url());
@@ -30,7 +34,10 @@ try {
       return ruta.fulfill({ contentType: 'audio/mpeg', headers: { 'X-TTS-Voice': 'en-US-AvaMultilingualNeural', 'X-TTS-Engine': 'azure-neural-unified' }, body: voz });
     }
     if (url.pathname === '/api/translate') {
-      const datos = q.postDataJSON(); cuerpos.push(datos);
+      const datos = q.postDataJSON(); cuerpos.push(datos); textosTraducidos.push(datos.text);
+      if (datos.text.includes('[[JG_SEG_000014]]') && datos.text.includes('[[JG_SEG_000015]]')) {
+        return ruta.fulfill({ json: { text: respuestaReal1415, ia_used: true } });
+      }
       return ruta.fulfill({ json: { text: datos.text.replaceAll('Use ', 'Usa ').replaceAll(' and ', ' y '), ia_used: true } });
     }
     return ruta.fulfill({ json: { status: 'ok', online: true, ai_provider_server: 'gemini' } });
@@ -68,8 +75,38 @@ try {
   });
   comprobar(configuracion.modo === 'unified' && configuracion.voz === 'neural:multi:female', 'guardar configuracion conserva Ava multilingue');
   const traducido = await pagina.evaluate(async () => jgPedirTraduccion({ text: 'Use JavaScript and Node.js.', direction: 'en-es', provider: 'gemini', literal: true }, 20000));
+  comprobar(textosTraducidos.at(-1) === 'Use `JavaScript` and `Node.js`.', 'traductor recibe los tecnicismos marcados como codigo');
   comprobar(traducido.text === 'Usa JavaScript y Node.js.', 'traduccion comun restaura tecnicismos antes de mostrar texto');
-  comprobar(!traducido.text.includes('JGWEB'), 'sin tokens en texto visible');
+  comprobar(!/JGWEB|`/.test(traducido.text), 'sin fichas ni comillas en texto visible');
+  // Lote real del doblaje por el TranslationService real y la única puerta a
+  // /api/translate. La protección vieja rechazaba esta respuesta correcta y
+  // partía el lote (12 de 25 llamadas rechazadas, medido el 2026-10-02).
+  const llamadasAntes = textosTraducidos.length;
+  const loteReal = await pagina.evaluate(async () => {
+    const { TranslationService } = await import('/js/youtube/translationService.js?v=' + JG_JS_V);
+    // Mismo cableado que asegurarYoutubeSincronizado en index.html.
+    const servicio = new TranslationService({ traducirTexto: (texto, opciones = {}) => traducirTranscripcionDetallada(texto, opciones.origen || 'en', 'es', {
+      literal: true, revisar: false, contexto: opciones.contexto || null, signal: opciones.signal,
+    }) });
+    const clase = {
+      12: 'When the data needs to change over time, we use state,',
+      13: 'and in modern React we handle state with hooks.',
+      14: 'The most common hook is useState, and it gives you an array',
+      15: 'with two things: the current value and a function to update it.',
+    };
+    const segmentos = Array.from({ length: 16 }, (_, i) => ({ text: clase[i] || '', startTime: i * 4, endTime: i * 4 + 3.7 }));
+    return Object.fromEntries(await servicio.traducirLote([14, 15], segmentos));
+  });
+  comprobar(textosTraducidos.length - llamadasAntes === 1 && textosTraducidos.at(-1)
+    === '[[JG_SEG_000014]]\nThe most common `hook` is useState, and it gives you an `array`\n\n[[JG_SEG_000015]]\nwith two things: the current value and a function to update it.',
+  'lote real del doblaje sale en una sola llamada, sin partirse');
+  comprobar(loteReal[14] === 'El hook más usado es useState, y te da dos cosas' && loteReal[15] === 'el valor actual y una función para actualizarlo',
+    'traduccion correcta sin marcas se usa tal como vino');
+  await pagina.evaluate(async () => {
+    localStorage.removeItem('jg_tts_terminos_web');
+    await jgPedirTraduccion({ text: 'Use JavaScript and Node.js.', direction: 'en-es', provider: 'gemini', literal: true }, 20000);
+  });
+  comprobar(textosTraducidos.at(-1) === 'Use JavaScript and Node.js.', 'sin la opcion el texto viaja intacto');
   const cuerpoVoz = await pagina.evaluate(async () => {
     const prefs = ttsPrefsParaVoz('neural:multi:male');
     await ttsFetchNeuralChunk({ text: 'Usa React y hooks.', lang: 'es', idiomaFijo: true }, prefs, 1, 'yt');
