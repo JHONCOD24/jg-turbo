@@ -1,5 +1,83 @@
 # Lectura en voz alta (TTS) — JG Turbo
 
+## v166 (2026-10-02): tecnicismos marcados como código; la protección nunca rompe un lote
+
+Pedido del dueño: llevar a la app el diseño que se especificó para la extensión
+de Udemy (`PLAN_UDEMY_VOZ_ESTABLE_IMPLEMENTACION_LLM.md`, Tarea 2) en «Conservar
+términos de desarrollo web al traducir» (`jg_tts_terminos_web`, Configuración >
+Voz). Sigue **apagada por defecto** y la clave no cambia.
+
+**Causa medida.** Desde v159, `js/youtube/terminosWeb.js` cambiaba cada término
+por una ficha opaca (`JGWEB0X`) y `restaurar()` **lanzaba** si el traductor la
+perdía, la repetía o la movía de segmento. En el doblaje ese error decía
+«marcador» y `esFalloDeContenido` (`js/youtube/translationService.js`) lo tomaba
+por fallo de contenido: partía el lote hasta frase por frase. En Traducir y PDF
+salía «La traducción cambió un marcador de término técnico». Medido en producción
+el 2026-10-02 con una clase técnica de 36 subtítulos (rama
+`claude/udemy-extension-sync-voices-767b87`, `docs/udemy/mediciones/2026-10-02/LEEME.md`):
+**12 de 25 llamadas rechazadas, 3 subtítulos sin traducir y 29,0 s**, frente a
+10 llamadas y 11,6 s sin protección. Varias rechazadas eran traducciones
+correctas («El hook más usado es useState»).
+
+**Decisión.** `protegerTerminos(texto)` devuelve `{ texto, restaurar }` con cada
+término entre comillas invertidas (`` `array` ``): el traductor ve la palabra
+real y el formato le pide no traducirla. `restaurar` es `quitarMarcasDeTermino`,
+que **nunca lanza**: si el traductor quita las marcas, repite o mueve un término,
+o lo traduce, se usa lo que vino. Medido con la misma clase: 31 de 36 términos en
+inglés, 0 rechazos y español natural. La lista de términos es la misma.
+
+- Diferencia con el código del plan: cada comilla se quita con los espacios que
+  la rodean y deja uno si había alguno. La versión del plan empareja comillas y
+  recorta, y con una comilla perdida pega palabras (`` Usa `React y `hooks` `` →
+  «Usa React yhooks», comprobado). La extensión puede copiar esta versión.
+- `index.html` no dependía del `throw`: `jgPedirTraduccion` solo lo propagaba
+  (su reintento es para red y tiempo), así que no cambia salvo `JG_JS_V`. La
+  palabra «marcador» se queda en `esFalloDeContenido`: el servidor la usa para
+  los `[[JG_SEG_…]]` («La IA alteró los marcadores temporales del doblaje.»).
+
+**Límites (dichos, no escondidos).**
+- Con la opción encendida, las comillas invertidas que ya traía el texto en
+  inglés (por ejemplo, código Markdown pegado en Traducir) también se quitan.
+- Algunos términos se siguen traduciendo (medido: 5 de 36, como `array` →
+  «arreglo» o `branch` → «rama»). Es lo peor que puede pasar; ya no un subtítulo mudo.
+- Los segmentos que la protección vieja dejó sin traducir (`null`) en videos ya
+  guardados no se reintentan solos: el motor da un `null` guardado por resuelto.
+  Queda como tarea aparte (reintentar con tope al reabrir el video).
+
+**Pruebas (primero en rojo, luego en verde).**
+
+| Prueba | Antes | Con el módulo viejo | Ahora |
+|---|---:|---|---:|
+| `test_voz_multilingue.mjs` | 11 | código 1; sin cortar, fallan 10 de las 11 nuevas | **17** |
+| `verificar_voz_multilingue.mjs` | 13 | código 1; sin cortar, fallan 3 | **17** |
+
+Usan los casos reales de la evidencia: la respuesta de producción al lote 14-15
+(«El hook más usado es useState, y te da dos cosas», sin marcas y sin «array») y
+el texto medido con marcas de código («que te da un arreglo»). En el navegador,
+ese lote pasa por el `TranslationService` real y la única puerta
+`traducirTranscripcionDetallada`: con el módulo viejo salía en **3 llamadas** y
+descartaba la traducción correcta; ahora sale en **1** y se usa tal cual vino.
+Mutaciones del módulo: 7 de 7 atrapadas (quitar el orden por largo no cambia nada
+con esta lista: el borde de palabra ya obliga a probar «hooks» antes que «hook»).
+
+**Batería local completa (2026-10-02, comparada con la base `09c35be`).**
+- 49 unitarias `tests/test_*.mjs`: **2156 OK** (base 2150; la única diferencia
+  es `test_voz_multilingue` 11 → 17). `test_pdf_musica_crossfade` sale con código 1
+  igual que en la base: desde `.claude/worktrees/` no encuentra Playwright; con
+  un enlace a `jg-turbo/node_modules` pasa.
+- 34 verificaciones de navegador (todas menos las dos de solo producción):
+  **1181 OK**. Fallan seis, **idénticas en la base** (mismos conteos), ninguna de
+  traducción ni de voz: `verificar_arranque_ligero` (la app pide 1070 KB al
+  abrir, tope 1 MB), `verificar_lectura_movil` (2), `verificar_pdf_fidelidad` (1),
+  `verificar_pdf_indice_marcas` (4), `verificar_pdf_menus` (se corta tras 29 OK)
+  y `verificar_pdf_navegador` (156 OK, el fallo del aviso OCR ya anotado en v159).
+- Versión: `JG_JS_V=v166`, `CACHE_SHELL=jg-turbo-shell-v166`.
+- Producción: un solo despliegue junto con el reintento de traducciones guardadas
+  (`CAMBIOS_YOUTUBE.md`); comprobación contra el dominio:
+  `node tests/verificar_voz_produccion.mjs --dominio-real` (ahora lee la versión
+  del commit), `JG_BASE=https://jg-turbo.vercel.app node tests/verificar_voz_multilingue.mjs`
+  y, con el traductor real (unas 10 llamadas), `node tests/medir_terminos_web.mjs --red-real`.
+
 ## v165 (2026-10-02): voz Harold en el selector
 
 Pedido del dueño: agregar el ID `a01c34a36f2b452780133358c2cd8ee5` al listado
@@ -37,6 +115,8 @@ despues de verificar el dominio real; no se cambia la API ni las dependencias.
   Protege una lista de nombres y terminos en traducciones ingles-español,
   restaura cada uno antes del texto visible y la voz, y rechaza marcadores
   perdidos, duplicados o movidos a otro segmento. No cubre todos los tecnicismos.
+  **Cambiado en v166:** ese rechazo partía lotes del doblaje; ahora los términos
+  van marcados como código y nada se rechaza (ver §v166).
 - No se borran ni se retraducen libros o videos guardados. La proteccion
   aplica a nuevas traducciones; un resultado anterior conserva su contenido.
 - Un salto doble seguido por una continuacion en minuscula ya no añade un
@@ -117,7 +197,7 @@ a main ni se cierra Tarea 10/11 de Udemy hasta completar la lista del dueño.
 
 | Campo | Valor |
 |---|---|
-| **Versión app** | **v159** (voces multilingues y frases continuas · 2026-09-29) · SW `jg-turbo-shell-v159` |
+| **Versión app** | **v166** (tecnicismos marcados como código · 2026-10-02) · SW `jg-turbo-shell-v166` |
 | **Motor principal** | Fish Audio gratuito (`s2.1-pro-free`, voces clonadas: Roberto, Amy…) |
 | **Respaldo 1** | **Azure Speech F0 oficial** (500k chars/mes gratis; ver §Estrategia) |
 | **Respaldo 2** | `edge-tts` (gratis, no oficial) → `speechSynthesis` del navegador |

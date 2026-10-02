@@ -2,6 +2,12 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+**Voz v166:** con «Conservar términos de desarrollo web» encendido, los términos
+viajan al traductor marcados como código y ninguna traducción se descarta por
+ellos (antes se rechazaban lotes enteros y el doblaje quedaba mudo a ratos). Si
+el texto en inglés ya traía comillas invertidas, también se quitan. Ver
+`CAMBIOS_TTS.md` §v166.
+
 **Voz v159:** PDF y videos ofrecen Ava y Andrew multilingues. En el telefono,
 PDF > Voz > Mas ajustes abre el selector. Configuracion > Voz permite conservar
 terminos de desarrollo web en nuevas traducciones ingles-español; activar y
