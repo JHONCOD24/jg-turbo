@@ -1,5 +1,37 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## 2026-10-02 · Un tramo que no se pudo traducir se vuelve a pedir al reabrir
+
+**Síntoma.** En un video ya doblado, uno o varios tramos sonaban en el idioma
+original **siempre**, por más que se volviera a abrir. Medido el 2026-10-02:
+3 de 36 subtítulos, causados por la protección de tecnicismos de v165 (arreglada
+aparte en `terminosWeb.js`, rama `claude/sleepy-hamilton-46aa68`).
+
+**Causa.** Un segmento que no se pudo traducir queda `null` en
+`motor.traducciones` (correcto dentro de la sesión: evita reintentar en bucle),
+pero `guardarSesion` lo guardaba así en `doblajes` y, al reabrir,
+`MotorPreparacion.sembrar` lo metía en el mapa: `paso()` usa `traducciones.has(i)`,
+así que un `null` contaba como traducido. Lo mismo en las descargas
+(`frasesParaArchivo` → `traducirTodo({ ya })`). Arreglar el traductor no reparaba
+lo ya guardado (TRAMPAS.md §1.4).
+
+**Arreglo (compatible hacia atrás, sin almacén nuevo, base `jg_youtube` sigue en v2).**
+- `translationService.js`: `traduccionesReutilizables(entradas, intentosFallidos)`
+  deja fuera los `null` (se vuelven a pedir) y `anotarIntentos` lleva la cuenta.
+- Tope `MAX_INTENTOS_TRADUCCION = 3` **aperturas**: un segmento que la IA rechaza
+  siempre deja de pedirse a la tercera y no quema cuota. Dentro de una apertura se
+  intenta una sola vez, como antes.
+- El registro de `doblajes` gana un campo aditivo `intentosFallidos`
+  (`[[indice, n]]`). `traducciones` conserva su formato (`[[indice, texto|null]]`):
+  la extensión de Udemy y la búsqueda de la biblioteca lo siguen leyendo igual.
+- `MotorPreparacion.sembrar(entradas, intentosFallidos = [])`: el segundo
+  argumento es opcional; un registro viejo sin él trata cada `null` como 0 intentos.
+
+**Pruebas.** `test_youtube_doblaje` 139 → **150 OK** (11 nuevas: el `null` sembrado
+se vuelve a pedir y queda traducido, lo traducido no se repaga, el tope, un intento
+por apertura, registros viejos sin datos y la descarga). La prueba falló antes del
+arreglo («pedidos: ninguno»). Resto en la sección del despliegue de esta tanda.
+
 ## v159 (2026-09-29): continuaciones completas antes de la voz
 
 El ejemplo «siempre / y cuando» viaja en una sola sintesis cuando sus unidades

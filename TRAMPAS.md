@@ -550,6 +550,14 @@ falta una de estas dos:
   primera vez que se abre, o
 - una acción explícita para el usuario.
 
+**Volvió a pasar** (2026-10-02, doblaje de videos): un segmento que no se pudo
+traducir se guardaba como `null` en la caché del video y, al reabrir, `sembrar`
+lo daba por traducido: ese tramo sonaba en inglés para siempre aunque el traductor
+ya estuviera arreglado. **Regla extra:** un valor que significa «falló» no se
+guarda como si fuera un resultado; si se guarda, quien lo vuelve a leer debe
+reintentarlo, con un tope para no gastar cuota (`traduccionesReutilizables`,
+`CAMBIOS_YOUTUBE.md` §2026-10-02).
+
 ### 1.5 Un diálogo nativo puede bloquear una prueba visible sin lanzar error
 
 **Ocurrió** (2026-09-03, v2.33.0): `verificar_pdf_navegador` quedó vivo más de 15 minutos al

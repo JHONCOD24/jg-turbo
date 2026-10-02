@@ -13,7 +13,7 @@ import {
   HORIZONTE_TRADUCCION_S, HORIZONTE_VOZ_S, VOZ_INICIAL_S, LOTE_ARRANQUE,
 } from './planificador.js';
 import { prepararTextoDeUnidad } from './dubbingService.js';
-import { esLimiteDeUso } from './translationService.js';
+import { esLimiteDeUso, traduccionesReutilizables, anotarIntentos } from './translationService.js';
 import { fraccionesDeUnidad } from './ritmoDoblaje.js';
 import { crearReloj } from './reloj.js';
 
@@ -52,6 +52,7 @@ export class MotorPreparacion {
       onCambio, onTraduccion, signal,
     });
     this.traducciones = new Map();   // índice de segmento → texto | null (no se pudo)
+    this.intentosFallidos = new Map();   // índice → aperturas en que volvió null (se guarda)
     this.enCurso = new Set();
     this.lotesActivos = 0;
     this.vozActiva = 0;
@@ -63,9 +64,13 @@ export class MotorPreparacion {
     this.reloj = reloj || crearReloj(() => this.paso(), { intervaloMs: 300 });
   }
 
-  /** Traducciones ya guardadas (caché, T3.1): no se vuelven a pagar. */
-  sembrar(entradas) {
-    for (const [indice, texto] of entradas || []) this.traducciones.set(Number(indice), texto);
+  /**
+   * Traducciones ya guardadas (caché, T3.1): no se vuelven a pagar. Un `null`
+   * guardado se vuelve a pedir hasta MAX_INTENTOS_TRADUCCION aperturas (v167).
+   */
+  sembrar(entradas, intentosFallidos = []) {
+    for (const [indice, texto] of traduccionesReutilizables(entradas, intentosFallidos)) this.traducciones.set(indice, texto);
+    this.intentosFallidos = new Map(intentosFallidos || []);
     this.#rellenarUnidades();
   }
 
@@ -113,6 +118,7 @@ export class MotorPreparacion {
       });
       this.rachasLimite = 0;   // hubo éxito: se olvida la racha de 429
       this.rachasFallo = 0;
+      this.intentosFallidos = new Map(anotarIntentos(this.intentosFallidos, mapa));
       for (const [indice, texto] of mapa) {
         this.traducciones.set(indice, texto);
         if (texto === null) this.errores.traduccion += 1;
