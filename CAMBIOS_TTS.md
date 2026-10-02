@@ -14,10 +14,13 @@ vía `ttsCatalogoVoces()` / `ttsVocesParaDoblaje()`), una sola alta cubre los do
 - Pruebas: `backend/tests/test_tts_voces_fish.py` (NUEVAS + género/nombre) y
   `tests/test_tts_voces_biblioteca.mjs` (lista + `ttsFishPorId('harold')`).
 - Versión: `JG_JS_V=v165`, `CACHE_SHELL=jg-turbo-shell-v165`.
-- Pendiente de cerrar la tanda: commit solo de voces, deploy único al final,
-  verificación contra `https://jg-turbo.vercel.app` (`id:'harold'` en HTML,
-  `harold` en `GET /api/tts-voices`, `POST /api/tts` `fish_voice=harold`
-  `source=pdf` → `fish:Harold`) y `git push origin main`.
+- Deploy: `Cmr8ACV7SAwwvvbouE5ehACiozyP` · `READY` · alias `https://jg-turbo.vercel.app`
+  (desde copia limpia de `6af0af2` vía `git archive`, 2026-10-02).
+  Verificado contra el dominio: HTML con `JG_JS_V=v165` e `id:'harold'`,
+  `sw.js` con `jg-turbo-shell-v165`, `GET /api/tts-voices` lista `harold`
+  (male/Harold, sin `reference_id`), `/api/health` 200.
+  Sin prueba de síntesis en vivo (no gastar cuota Fish/Azure por una voz
+  ya cubierta por `test_tts_voces_fish.py`).
 
 ## v159 (2026-09-29): voces multilingues, tecnicismos y frases continuas
 
