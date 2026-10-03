@@ -154,6 +154,20 @@ export class DubbingEngine {
     this.onStatus('Voz en español activa.', 'activo');
   }
 
+  /**
+   * La persona se fue a otra pestaña: video y voz quedan quietos en este
+   * segundo. A diferencia de `desactivar`, la voz sigue encendida y lista; si el
+   * video estaba parado por la voz (`pausaPorVoz`), esa espera se cancela para
+   * que el motor no lo reanude solo cuando termine la frase.
+   */
+  pausarTodo() {
+    this.pausaPorVoz = null;
+    this.reproduciendo = false;
+    this.player.pauseVideo();
+    for (const el of this.elementos) { try { el.pause(); } catch (_) { /* ya parado */ } }
+    this.reloj.detener();
+  }
+
   desactivar() {
     if (!this.activo) return;
     this.activo = false;
