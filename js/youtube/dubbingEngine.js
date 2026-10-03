@@ -1,4 +1,5 @@
 import { crearReloj } from './reloj.js';
+import { progresoEnSegmento } from './subtituloDinamico.js';
 import {
   velocidadVoz, limitesDeUnidad, demandaVoz, tasaVideoCruda, tasaVideoObjetivo, segmentoPorAvance,
   posicionVozEnVideo, avanceDeVideo, unidadEn, rangoVoz, duracionVozEstimada,
@@ -216,6 +217,19 @@ export class DubbingEngine {
     const t = Number(this.player.getCurrentTime()) || 0;
     if (t >= dicha.startTime - 0.5 && (!siguiente || t < siguiente.startTime)) return dicha.hasta;
     return null;
+  }
+
+  /**
+   * Segmento que dice la voz y cuánto lleva dicho de él (0–1), para que el
+   * subtítulo dinámico cambie de trozo al ritmo de lo que se oye. Entre frases
+   * (la voz ya terminó la última) el segmento va completo: progreso 1.
+   */
+  progresoSegmentoVoz() {
+    const indice = this.indiceSegmentoVoz();
+    if (!Number.isInteger(indice) || indice < 0) return null;
+    const unidad = this.servicio.unidades[this.hablando];
+    const hablaEsta = this.hablando >= 0 && unidad && indice >= unidad.desde && indice <= unidad.hasta;
+    return { indice, progreso: hablaEsta ? progresoEnSegmento(unidad, this.#avance(), indice) : 1 };
   }
 
   /** Cómo va la sincronía: retraso de la voz frente al video y lo que tuvo que hacer el motor. */

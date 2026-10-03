@@ -1695,3 +1695,40 @@ interrumpidos o con timeout no cuentan como suites aprobadas.
 La misma espera aplica tras F5, antes de medir preferencias restauradas. Para
 geometría de biblioteca esperar también `link[data-vid-css].sheet`: el CSS
 diferido ya define 44 px, pero antes de cargar se mide el estilo general de 36 px.
+
+## `position:fixed` dentro de un panel con `transform` no cubre la pantalla (subtítulos, 2026-10-03)
+
+**Síntoma:** en el respaldo de pantalla completa (`.yt-pantalla-completa`, el que usa
+iPhone) la imagen quedaba corrida ~98 px abajo y 10 px a la derecha, con el subtítulo
+cortado por el borde inferior. La Fullscreen API real no tenía el problema, y por eso
+nadie lo vio: las pruebas anteriores solo comprobaban «subtítulo debajo de la imagen».
+**Causa:** `.panel.active` anima con `transform`; un ancestro con `transform` es el
+bloque contenedor de sus descendientes `position:fixed`, así que `inset:0` se calculaba
+respecto al panel y no a la ventana.
+**Regla:** el respaldo de pantalla completa neutraliza la animación del panel
+(`.panel:has(.yt-pantalla-completa){animation:none;transform:none}`). Y toda prueba
+de pantalla completa mide la geometría en AMBOS modos (real y respaldo): que algo
+«esté debajo» no prueba que esté dentro de la ventana.
+
+## El subtítulo se mide contra la imagen, nunca contra la ventana (2026-10-03)
+
+**Síntoma (evitado):** con `position:fixed; bottom:…` el subtítulo de pantalla completa
+caía en la franja negra, lejos de la imagen, siempre que la pantalla era más alta que 16:9.
+**Regla:** la caja de la imagen sale de su proporción con CSS
+(`--yt-ancho = min(ancho útil, (100dvh − alto del subtítulo) × 16/9)`) y el subtítulo
+usa ese mismo ancho y va pegado debajo. Cuando no sobra sitio (teléfono horizontal,
+`max-height:500px`) se superpone en el tercio inferior de la imagen, 36 px por encima
+del borde para no tapar la barra de YouTube. El alto del subtítulo dinámico es fijo
+(2 renglones): si dependiera del texto, el ancho de la imagen cambiaría con cada trozo.
+Recortar con `line-clamp` o puntos suspensivos está prohibido: pierde palabras.
+
+## Con 360-390 px de alto, el encabezado y las pestañas se comen la mitad (2026-10-03)
+
+**Síntoma:** en 844×390 con un video abierto, `.yt-area` (el contenedor que se desplaza)
+solo tenía 207 px visibles: ni la imagen cabía.
+**Causa:** el encabezado y la barra de pestañas son fijos (`sticky`) y quedan FUERA del
+contenedor que se desplaza.
+**Regla:** en teléfono horizontal con un doblaje abierto
+(`body:has(#panelYt.active .yt-area.modo-doblaje)`) se ocultan; reaparecen al cerrar el
+video o al girar a vertical. Para medir «cabe en el alto visible» hay que contar también
+el margen superior de la página (20 px), o la última línea queda cortada.

@@ -40,13 +40,14 @@ export class SyncEngine {
    * español. Si da un número, el texto muestra esa línea (la que se oye); si da
    * `null`, sigue al reloj del video como siempre.
    */
-  constructor({ player, segmentos, onSegmentChange, onPlaybackRateChange = () => {}, reloj = null, indiceExterno = null, seguirEnPausa = () => false }) {
+  constructor({ player, segmentos, onSegmentChange, onPlaybackRateChange = () => {}, reloj = null, indiceExterno = null, seguirEnPausa = () => false, onTic = () => {} }) {
     this.player = player;
     this.segmentos = segmentos;
     this.onSegmentChange = onSegmentChange;
     this.onPlaybackRateChange = onPlaybackRateChange;
     this.indiceExterno = typeof indiceExterno === 'function' ? indiceExterno : null;
     this.seguirEnPausa = seguirEnPausa;
+    this.onTic = onTic;   // en cada tic del reloj, haya o no cambio de segmento (subtítulo dinámico)
     this.reloj = reloj || crearReloj(() => this.#actualizar(), { intervaloMs: 150 });
     this.indiceActivo = -2;
     this.reproduciendo = false;
@@ -79,9 +80,11 @@ export class SyncEngine {
     const indice = Number.isInteger(deLaVoz) && deLaVoz >= -1
       ? deLaVoz
       : buscarIndiceSegmento(this.segmentos, this.player.getCurrentTime());
-    if (indice === this.indiceActivo) return;
-    this.indiceActivo = indice;
-    this.onSegmentChange(indice);
+    if (indice !== this.indiceActivo) {
+      this.indiceActivo = indice;
+      this.onSegmentChange(indice);
+    }
+    this.onTic();
   }
 
   destruir() {

@@ -382,7 +382,7 @@ try {
       const video = document.getElementById('ytPlayer').getBoundingClientRect();
       const caption = document.getElementById('ytCaption').getBoundingClientRect();
       const botones = ['ytDubbingBtn', 'ytPantallaCompleta', 'ytOtraVoz', 'ytTamanoSubtitulo', 'ytVoz', 'ytVoz2', 'btnYtSyncClose', 'ytVolVoz', 'ytVolOriginal'].map((id) => document.getElementById(id)).filter((e) => e && e.getClientRects().length);
-      return { debajo: caption.top >= video.bottom - 1, videoAlto: video.height, desborde: document.documentElement.scrollWidth - innerWidth, pequenos: botones.filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.id) };
+      return { debajo: caption.top >= video.bottom - 1, tercio: caption.top >= video.top + video.height * 2 / 3 - 1 && caption.bottom <= video.bottom + 1, videoAlto: video.height, desborde: document.documentElement.scrollWidth - innerWidth, pequenos: botones.filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.id) };
     });
     let m = await medir();
     comprobar(`[${nombre}] subtítulo debajo de la imagen`, m.debajo && m.videoAlto > 100);
@@ -393,7 +393,8 @@ try {
     await pagina.click('#ytPantallaCompleta');
     await pagina.waitForFunction(() => document.fullscreenElement || document.querySelector('.yt-pantalla-completa'));
     m = await medir();
-    comprobar(`[${nombre}] pantalla completa conserva subtítulos debajo`, m.debajo && m.videoAlto > 100);
+    // Sin sitio debajo (teléfono horizontal) el subtítulo se superpone en el tercio inferior de la imagen (2026-10-03).
+    comprobar(`[${nombre}] pantalla completa conserva subtítulos debajo`, (m.debajo || m.tercio) && m.videoAlto > 100);
     if (await pagina.evaluate(() => Boolean(document.fullscreenElement))) await pagina.evaluate(() => document.exitFullscreen());
     else await pagina.click('#ytSalirPantalla');
     await pagina.waitForFunction(() => !document.fullscreenElement && !document.querySelector('.yt-pantalla-completa'));

@@ -160,6 +160,17 @@ export function inicializarYoutubeSincronizado({
     aplicarTamano(leer('jg_yt_subtitulo_tamano'));
     tamano?.addEventListener('change', () => guardar('jg_yt_subtitulo_tamano', aplicarTamano(tamano.value)));
 
+    // Estilo: «Dinámico» muestra trozos de ≤ 2 renglones al ritmo de la voz; «Completo» el segmento entero.
+    const estilo = $('ytEstiloSubtitulo');
+    const aplicarEstilo = (valor) => {
+      const elegido = valor === 'completo' ? 'completo' : 'dinamico';
+      display.definirEstilo(elegido);
+      if (estilo) estilo.value = elegido;
+      return elegido;
+    };
+    aplicarEstilo(leer('jg_yt_subtitulo_estilo'));
+    estilo?.addEventListener('change', () => guardar('jg_yt_subtitulo_estilo', aplicarEstilo(estilo.value)));
+
     // ── Ritmo automático (encendido por defecto, se recuerda) ──────────────
     // Frena el video lo justo cuando el español necesita más tiempo que el
     // inglés, para que la voz diga todo sin saltarse líneas. Apagado, la voz
@@ -295,14 +306,22 @@ export function inicializarYoutubeSincronizado({
       return;
     }
     if (shell.requestFullscreen) {
-      try { await shell.requestFullscreen({ navigationUI: 'hide' }); return; } catch (_) { /* iPhone: sin pantalla completa de elementos */ }
+      try {
+        await shell.requestFullscreen({ navigationUI: 'hide' });
+        // Android: el video se ve mejor girado. iPhone y escritorio no lo permiten: se ignora.
+        try { if (matchMedia('(pointer:coarse)').matches) screen.orientation?.lock?.('landscape')?.catch(() => {}); } catch (_) { /* sin bloqueo */ }
+        return;
+      } catch (_) { /* iPhone: sin pantalla completa de elementos */ }
     }
     shell.classList.add('yt-pantalla-completa');   // respaldo: ocupa toda la ventana
     boton.setAttribute('aria-pressed', 'true');
   }
   $('ytPantallaCompleta').addEventListener('click', alternarPantallaCompleta);
   $('ytSalirPantalla').addEventListener('click', alternarPantallaCompleta);
-  document.addEventListener('fullscreenchange', () => $('ytPantallaCompleta').setAttribute('aria-pressed', document.fullscreenElement ? 'true' : 'false'));
+  document.addEventListener('fullscreenchange', () => {
+    $('ytPantallaCompleta').setAttribute('aria-pressed', document.fullscreenElement ? 'true' : 'false');
+    if (!document.fullscreenElement) try { screen.orientation?.unlock?.(); } catch (_) { /* sin bloqueo previo */ }
+  });
   if (esIOS) {
     // Safari no deja fijar el volumen desde código: el original se silencia y se explica.
     ui.volVoz.closest('.yt-mixer-fila').hidden = true;
@@ -903,6 +922,7 @@ export function inicializarYoutubeSincronizado({
       // Con la voz en español sonando, el texto muestra la línea que se OYE.
       indiceExterno: () => actual.motorVoz?.indiceSegmentoVoz() ?? null,
       seguirEnPausa: () => Boolean(actual.motorVoz?.pausaPorVoz),
+      onTic: () => display.actualizarProgreso(actual.motorVoz?.progresoSegmentoVoz() ?? null, player.getCurrentTime()),
     });
     actual.sync.iniciar();
     aplicarTasaGuardada(player);

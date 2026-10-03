@@ -1,5 +1,24 @@
 # Transcripción de YouTube · historial de cambios y operación
 
+## Subtítulo dinámico y pantalla completa (2026-10-03, sin desplegar)
+
+- **Estilo «Dinámico (1-2 líneas)»** (por defecto) o «Completo», en los ajustes del doblaje
+  (`#ytEstiloSubtitulo`, clave `jg_yt_subtitulo_estilo`). El segmento se parte en trozos de
+  ≤ 2 renglones medidos con `canvas.measureText` y la fuente real (`TranscriptionDisplay.js`,
+  lógica pura en `subtituloDinamico.js`). Corte: fin de oración, luego `, ; :`; nunca palabras.
+- **Al ritmo de la voz:** `DubbingEngine.progresoSegmentoVoz()` da `{indice, progreso}` (tramo
+  hablado medido, `hablaVoz.js`); `SyncEngine` llama `onTic` en cada tic de su reloj (no rAF).
+  El avance se reparte por costo de habla (letras + pausas), no por número de trozos. Sin voz,
+  sigue al reloj del video dentro del segmento.
+- **Alto fijo de 2 renglones** (el video no salta). `.yt-caption[hidden]` lleva `!important`.
+- **Pantalla completa:** `--yt-ancho` sale de la proporción 16:9 con CSS; el subtítulo va pegado
+  debajo y con el ancho de la imagen; con `max-height:500px` se superpone en su tercio inferior.
+  Corregido de paso el respaldo `.yt-pantalla-completa` (TRAMPAS: `fixed` dentro de `transform`).
+- **Teléfono horizontal:** con un doblaje abierto se ocultan encabezado y pestañas y la imagen
+  llena el alto visible; en Android, `screen.orientation.lock('landscape')` al entrar en pantalla
+  completa (con try/catch; iPhone no lo soporta).
+- Pruebas: `test_subtitulo_dinamico` 43 · `verificar_subtitulos_video` 192.
+
 ## v159 (2026-09-29): continuaciones completas antes de la voz
 
 El ejemplo «siempre / y cuando» viaja en una sola sintesis cuando sus unidades

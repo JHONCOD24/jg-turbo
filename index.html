@@ -1444,6 +1444,9 @@
     text-align:center;overflow-wrap:anywhere;
   }
   .yt-caption[hidden]{display:none}
+  /* Dinámico: alto fijo de 2 renglones (el video no salta al cambiar de trozo) y [hidden] sigue ganando. */
+  .yt-caption[data-estilo="dinamico"]{height:calc(2 * 1.45em + 24px);min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .yt-caption[hidden]{display:none !important}
   /* La franja reserva espacio debajo de la imagen, incluso entre frases. */
   .yt-caption[data-tamano="mediano"]{font-size:clamp(17px,2.6vw,24px)}
   .yt-caption[data-tamano="grande"]{font-size:clamp(20px,3.2vw,30px)}
@@ -3973,9 +3976,50 @@
 .yt-player-shell:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0;background:#000}
 .yt-player-shell.yt-pantalla-completa{position:fixed;inset:0;z-index:1000;width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0;background:#000}
 .yt-player-shell:fullscreen .yt-video-frame,.yt-player-shell.yt-pantalla-completa .yt-video-frame{flex:1;min-height:0;aspect-ratio:auto}
-.yt-player-shell:fullscreen .yt-caption,.yt-player-shell.yt-pantalla-completa .yt-caption{font-size:clamp(18px,3vw,30px);min-height:0;max-height:35%;overflow-y:auto;padding-bottom:max(12px,env(safe-area-inset-bottom))}
-.yt-player-shell:fullscreen .yt-caption[data-tamano="mediano"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-tamano="mediano"]{font-size:clamp(22px,3.7vw,38px)}
-.yt-player-shell:fullscreen .yt-caption[data-tamano="grande"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-tamano="grande"]{font-size:clamp(26px,4.5vw,46px)}
+/* ── Pantalla completa y teléfono horizontal ──────────────────────────────
+   La caja de la imagen se calcula por su proporción (16:9) con CSS, no con JS:
+   --yt-ancho = lo que cabe sin tapar el subtítulo; el subtítulo se pega justo debajo
+   y mide lo mismo que la imagen. Si el alto es tan corto que no sobra sitio debajo
+   (teléfono horizontal), la imagen llena el alto y el subtítulo se superpone en su
+   tercio inferior. */
+.yt-player-shell{--cap-k:1;--yt-prop:1.7778;--yt-util:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right))}
+.yt-player-shell:has(.yt-caption[data-tamano="mediano"]){--cap-k:1.23}
+.yt-player-shell:has(.yt-caption[data-tamano="grande"]){--cap-k:1.5}
+.yt-player-shell:fullscreen,.yt-player-shell.yt-pantalla-completa{
+  --cap-fs:calc(clamp(18px,3vw,30px) * var(--cap-k));--cap-h:calc(var(--cap-fs) * 2.9 + 24px);
+  --yt-ancho:min(var(--yt-util),calc((100dvh - var(--cap-h)) * var(--yt-prop)));
+  --yt-alto:calc(var(--yt-ancho) / var(--yt-prop));
+  align-items:center;justify-content:center}
+.yt-player-shell:fullscreen .yt-video-frame,.yt-player-shell.yt-pantalla-completa .yt-video-frame{flex:none;width:var(--yt-ancho);height:var(--yt-alto);aspect-ratio:auto}
+.yt-player-shell:fullscreen .yt-caption,.yt-player-shell.yt-pantalla-completa .yt-caption{
+  width:var(--yt-ancho);flex:none;font-size:var(--cap-fs);min-height:0;max-height:calc(100dvh - var(--yt-alto));overflow-y:auto;
+  padding:12px 16px;background:transparent;color:#fff;text-shadow:0 1px 3px #000,0 0 8px rgba(0,0,0,.85)}
+.yt-player-shell:fullscreen .yt-caption[data-estilo="dinamico"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-estilo="dinamico"]{height:var(--cap-h);overflow:hidden}
+@media (max-height:500px){
+  .yt-player-shell:fullscreen,.yt-player-shell.yt-pantalla-completa{--cap-fs:calc(clamp(13px,4.6dvh,20px) * var(--cap-k));--cap-h:0px}
+  .yt-player-shell:fullscreen .yt-caption,.yt-player-shell.yt-pantalla-completa .yt-caption{
+    position:absolute;left:50%;transform:translateX(-50%);bottom:calc((100dvh - var(--yt-alto)) / 2 + 36px);
+    width:calc(var(--yt-ancho) - 24px);max-height:calc(var(--yt-alto) / 3 - 36px);padding:6px 12px;border-radius:8px;
+    background:rgba(0,0,0,.62);pointer-events:none;line-height:1.3}
+  .yt-player-shell:fullscreen .yt-caption[data-estilo="dinamico"],.yt-player-shell.yt-pantalla-completa .yt-caption[data-estilo="dinamico"]{height:calc(var(--cap-fs) * 2.6 + 12px);max-height:none}
+  .yt-player-shell:fullscreen .yt-caption:empty,.yt-player-shell.yt-pantalla-completa .yt-caption:empty{background:transparent}
+}
+/* Teléfono horizontal sin pantalla completa: la imagen ocupa el alto visible y el subtítulo cabe debajo. */
+@media (orientation:landscape) and (max-height:500px){
+  /* Con un video abierto, el encabezado y las pestañas se van: con 360-390 px de alto se comían la mitad
+     de la pantalla. Se vuelven a ver al cerrar el video (botón «Cerrar») o al girar a vertical. */
+  body:has(#panelYt.active .yt-area.modo-doblaje) .wrap > header,
+  body:has(#panelYt.active .yt-area.modo-doblaje) .tabs-row{display:none}
+  .yt-player-shell:not(:fullscreen):not(.yt-pantalla-completa){
+    --cap-fs:calc(clamp(13px,4.2dvh,19px) * var(--cap-k));--cap-h:calc(var(--cap-fs) * 2.9 + 20px);
+    --yt-ancho:min(100%,calc((100dvh - var(--cap-h) - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * var(--yt-prop)));
+    align-items:center}
+  .yt-player-shell:not(:fullscreen):not(.yt-pantalla-completa) .yt-video-frame{width:var(--yt-ancho)}
+  .yt-player-shell:not(:fullscreen):not(.yt-pantalla-completa) .yt-caption{width:var(--yt-ancho);font-size:var(--cap-fs);padding:10px 12px}
+  .yt-player-shell:not(:fullscreen):not(.yt-pantalla-completa) .yt-caption[data-estilo="dinamico"]{height:var(--cap-h)}
+}
+/* El respaldo (iPhone) usa position:fixed; un ancestro con transform lo recoloca dentro de sí mismo. */
+.panel:has(.yt-player-shell.yt-pantalla-completa){animation:none !important;transform:none !important}
 .yt-player-shell .yt-salir-pantalla{display:none}
 .yt-player-shell:fullscreen .yt-salir-pantalla,.yt-player-shell.yt-pantalla-completa .yt-salir-pantalla{display:inline-flex;position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;z-index:2;min-height:48px}
 .yt-mixer-fila[hidden]{display:none !important}   /* el selector de clase le ganaba a [hidden] (TRAMPAS «Un selector con identificador le gana a hidden») */
@@ -6762,6 +6806,12 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                   <option value="pequeno">Pequeño</option>
                   <option value="mediano">Mediano</option>
                   <option value="grande">Grande</option>
+                </select>
+              </label>
+              <label class="yt-opcion" for="ytEstiloSubtitulo">Estilo del subtítulo
+                <select id="ytEstiloSubtitulo" class="tts-voice-select" aria-label="Estilo del subtítulo: dinámico o completo">
+                  <option value="dinamico">Dinámico (1-2 líneas)</option>
+                  <option value="completo">Completo</option>
                 </select>
               </label>
               <label class="yt-opcion yt-opcion-check" for="ytToggleCaption">
