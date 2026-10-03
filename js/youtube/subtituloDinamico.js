@@ -38,8 +38,25 @@ const FIN_ORACION = /[.!?…]["'”’)\]»]*$/;
 const FIN_CLAUSULA = /[,;:–—]["'”’)\]»]*$/;
 
 /**
+ * Palabras que no pueden quedar COLGANDO al final de un trozo («…en la nueva era
+ * de la»): artículos, preposiciones cortas, conjunciones, posesivos y pronombres
+ * átonos. El renglón siguiente empezaría con el resto de la idea y el ojo la lee
+ * partida (medido en el doblaje real).
+ */
+const FUNCIONALES = new Set([
+  'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'e', 'o', 'u', 'ni', 'que', 'en', 'a', 'al',
+  'con', 'por', 'para', 'se', 'su', 'sus', 'mi', 'mis', 'tu', 'tus', 'lo', 'le', 'no', 'sin', 'como', 'más',
+]);
+/** Si al retroceder el trozo queda más corto que esto (fracción de un renglón), se deja como estaba: uno diminuto es peor. */
+const MINIMO_TRAS_RETROCEDER = 0.4;
+const soloLetras = (palabra) => palabra.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+/** Termina en palabra funcional y sin puntuación que justifique el corte. */
+const cuelga = (palabra) => !FIN_ORACION.test(palabra) && !FIN_CLAUSULA.test(palabra) && FUNCIONALES.has(soloLetras(palabra));
+
+/**
  * Parte `texto` en trozos que caben en `maxLineas` renglones de `anchoMax`.
- * Corte preferido: fin de oración; luego `, ; :`; si no, lo último que cabe.
+ * Corte preferido: fin de oración; luego `, ; :`; si no, lo último que cabe, sin
+ * dejar un artículo, preposición o conjunción colgando al final del trozo.
  */
 export function trocearSubtitulo(texto, { medir, anchoMax, maxLineas = 2 } = {}) {
   const palabras = normalizarTexto(texto).split(' ').filter(Boolean);
@@ -59,6 +76,12 @@ export function trocearSubtitulo(texto, { medir, anchoMax, maxLineas = 2 } = {})
     if (corte < 0) corte = j;
     // Sin dejar una palabra huérfana como último trozo.
     if (palabras.length - 1 - corte === 1 && corte > i) corte -= 1;
+    // Ni una palabra funcional colgando («…de la»): el corte retrocede hasta antes de ella.
+    if (cuelga(palabras[corte])) {
+      let antes = corte;
+      while (antes > i && cuelga(palabras[antes])) antes -= 1;
+      if (!cuelga(palabras[antes]) && medir(palabras.slice(i, antes + 1).join(' ')) >= MINIMO_TRAS_RETROCEDER * anchoMax) corte = antes;
+    }
     trozos.push(palabras.slice(i, corte + 1).join(' '));
     i = corte + 1;
   }
