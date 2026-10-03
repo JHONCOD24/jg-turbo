@@ -190,11 +190,16 @@ const INSTRUMENTO = () => {
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__oculta });
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (window.__oculta ? 'hidden' : 'visible') });
   const intervalo0 = window.setInterval.bind(window);
+  const limpiar0 = window.clearInterval.bind(window);
+  window.__intervalos = new Set();   // temporizadores periódicos vivos: al cerrar la sesión no debe quedar ninguno suyo
   window.setInterval = (fn, espera, ...resto) => {
-    if (typeof fn !== 'function' || !(espera <= 200)) return intervalo0(fn, espera, ...resto);
-    let n = 0;
-    return intervalo0(() => { n += 1; if (!window.__oculta || n % 10 === 0) fn(...resto); }, espera);
+    let id;
+    if (typeof fn !== 'function' || !(espera <= 200)) id = intervalo0(fn, espera, ...resto);
+    else { let n = 0; id = intervalo0(() => { n += 1; if (!window.__oculta || n % 10 === 0) fn(...resto); }, espera); }
+    window.__intervalos.add(id);
+    return id;
   };
+  window.clearInterval = (id) => { window.__intervalos.delete(id); return limpiar0(id); };
   window.addEventListener('error', (e) => v.errores.push(String(e.message).slice(0, 200)));
 };
 
@@ -480,8 +485,11 @@ try {
       await esperar(1000);
       const fin = await pagina.evaluate(() => ({ oyentes: window.__voz.oyentesVivos(), creadas: window.__voz.urlsCreadas, soltadas: window.__voz.urlsSoltadas }));
       comprobar(`tras 3 videos nuevos: ${fin.oyentes} oyentes (sigue siendo 1 motor × 2 audios, sin acumular)`, fin.oyentes === 2, JSON.stringify(fin));
+      const abiertos = await pagina.evaluate(() => window.__intervalos.size);
       await pagina.click('#ytCambiarVideo');
       await esperar(800);
+      const tras = await pagina.evaluate(() => window.__intervalos.size);
+      comprobar(`al cerrar: los temporizadores periódicos de la sesión se detienen (${abiertos} → ${tras}; quedan solo los de la app)`, tras < abiertos && tras <= 4, `${abiertos} → ${tras}`);
       const cierre = await pagina.evaluate(() => ({ oyentes: window.__voz.oyentesVivos(), creadas: window.__voz.urlsCreadas, soltadas: window.__voz.urlsSoltadas, sonando: window.__sonando() }));
       comprobar(`al cerrar: 0 oyentes de voz, 0 sonando (${JSON.stringify(cierre)})`, cierre.oyentes === 0 && cierre.sonando === 0);
       comprobar(`al cerrar: las URLs de voz se sueltan (${cierre.creadas} creadas, ${cierre.soltadas} soltadas)`, cierre.soltadas >= cierre.creadas);
@@ -489,6 +497,33 @@ try {
 
     comprobar(`${vp.nombre}: sin errores de JavaScript`, reg.errores.length === 0, reg.errores.join(' | '));
     comprobar(`${vp.nombre}: sin errores en consola`, reg.consola.filter((t) => !/Failed to load resource|favicon|net::ERR/.test(t)).length === 0, reg.consola.join(' | ').slice(0, 300));
+    await contexto.close();
+  }
+  console.log('\n── H. Panel del video en cuatro pantallas: toques, desborde y consola ──');
+  for (const vp of [
+    { nombre: '390×844', viewport: { width: 390, height: 844 }, movil: true },
+    { nombre: '844×390', viewport: { width: 844, height: 390 }, movil: true },
+    { nombre: '768×1024', viewport: { width: 768, height: 1024 }, movil: true },
+    { nombre: '1440×900', viewport: { width: 1440, height: 900 }, movil: false },
+  ]) {
+    const { contexto, pagina, reg } = await abrir(navegador, vp);
+    await pegarYDoblar(pagina);
+    await esperarListo(pagina);
+    await conVoz(pagina);
+    await esperar(1500);
+    const medida = await pagina.evaluate(() => {
+      const area = document.getElementById('ytSyncArea');
+      const visible = (e) => { const r = e.getBoundingClientRect(); const c = getComputedStyle(e); return r.width > 0 && r.height > 0 && c.visibility !== 'hidden' && !e.closest('[hidden]'); };
+      const chicos = [...area.querySelectorAll('button, select, input[type=range], input[type=checkbox], a[href]')].filter(visible).map((e) => {
+        const r = e.getBoundingClientRect();
+        const caja = e.closest('label') ? e.closest('label').getBoundingClientRect() : r;
+        return { id: e.id || e.textContent.trim().slice(0, 24), w: Math.round(Math.max(r.width, caja.width)), h: Math.round(Math.max(r.height, caja.height)) };
+      }).filter((x) => x.h < 44 || x.w < 44);
+      return { desborde: document.documentElement.scrollWidth - document.documentElement.clientWidth, chicos };
+    });
+    comprobar(`${vp.nombre}: sin desplazamiento horizontal (${medida.desborde} px)`, medida.desborde <= 1);
+    comprobar(`${vp.nombre}: ningún control del panel mide menos de 44 px${medida.chicos.length ? ' · ' + JSON.stringify(medida.chicos) : ''}`, !vp.movil || medida.chicos.length === 0);
+    comprobar(`${vp.nombre}: sin errores de JavaScript ni de consola`, reg.errores.length === 0 && reg.consola.filter((t) => !/Failed to load resource|favicon|net::ERR/.test(t)).length === 0, reg.errores.concat(reg.consola).join(' | ').slice(0, 300));
     await contexto.close();
   }
 } finally {

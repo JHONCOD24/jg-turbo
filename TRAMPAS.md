@@ -1755,3 +1755,28 @@ pocos segundos puede repetir UNA petición de traducción pendiente; nunca la de
 contador vive en el objeto de la página y NO se reinicia con `reload()`. **Regla:** comparar
 contra el valor justo antes de recargar, no contra 0. Y el controlador de Videos solo carga
 al entrar en esa pestaña: una prueba con `?tab=mic` no puede esperar `window.jgVideoLocal`.
+
+## Doblaje: la voz que se pierde, se atrasa o se acumula (Video-C, 2026-10-03)
+
+**Síntoma 1:** tras bloquear el teléfono unos segundos, la voz repetía frases viejas una
+tras otra y quedaba atrasada. **Causa:** el motor solo se rendía con más de 5 s de atraso;
+un hueco de 4-5 s (ni reloj ni eventos) cabía y las frases pasadas se tocaban enteras.
+**Regla:** si pasan más de 1,5 s entre dos tics con el video corriendo, `dubbingEngine`
+vuelve al punto del video (`#alDespertar`) y no toca lo que ya pasó. La vista visible llama
+a `despertar()`.
+
+**Síntoma 2:** en YouTube y X, con la síntesis atrasada (cuota Azure de 18/min), la voz
+entraba tarde y luego se saltaban frases. **Causa:** `esperarVoz` solo estaba encendido
+para el video del equipo. **Regla:** `esperarVoz: true` para los tres orígenes (el video
+se detiene 0,3 s antes de la frase sin voz y la voz arranca cuando la imagen ya se mueve);
+`esperarFrase` (esperar a que la frase termine) sigue siendo solo del archivo. La espera se
+rinde a los 30 s y respeta el play de la persona.
+
+**Síntoma 3:** cada video nuevo dejaba 3 oyentes más en los dos `<audio>` compartidos
+(30 tras 5 videos). **Causa:** los oyentes del motor nunca se quitaban. **Regla:** todo
+`addEventListener` sobre un elemento que vive más que el objeto se quita en `destruir()`.
+
+**Síntoma 4 (pruebas):** `page.evaluate('() => x')` con una CADENA devuelve `undefined`
+(no invoca la función). **Regla:** `evaluate(\`(${codigo})()\`)` o pasar una función real.
+Un video de prueba con segmentos sin punto final se FUNDE en frases largas
+(`prepararTextoDeUnidad`): las absorbidas quedan `sin_voz` y parecen frases perdidas.
