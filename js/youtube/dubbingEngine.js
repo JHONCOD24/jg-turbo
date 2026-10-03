@@ -43,6 +43,23 @@ const ESPERA_TASA_MS = 2500;
  */
 const HISTERESIS_TASA = 0.04;
 const ESTADOS_SIN_VOZ = new Set(['sin_voz', 'error']);
+/**
+ * Más tiempo que esto entre dos tics seguidos con el video corriendo = el
+ * navegador durmió la página (teléfono bloqueado, pestaña congelada). El reloj
+ * normal late cada 100 ms y una pestaña oculta con audio, cada 1 s.
+ */
+const TIC_PERDIDO_MS = 1500;
+/**
+ * Si la voz de la frase que viene no está lista, el video se detiene este tanto
+ * ANTES de su segundo: YouTube tarda en obedecer `pauseVideo()` y así la voz
+ * entra en su segundo exacto en vez de tarde.
+ */
+const ANTICIPO_ESPERA_S = 0.3;
+/** Una voz que no llega en este tiempo se abandona: el video sigue y esa frase suena en su idioma. */
+const ESPERA_VOZ_MAX_MS = 30000;
+/** Tras reanudar el video por la voz, esta es la parte de imagen que debe verse antes de que ella arranque. */
+const AVANCE_TRAS_REANUDAR_S = 0.03;
+const ESPERA_REANUDAR_MAX_MS = 1500;
 
 /** Percentil sobre una lista de números (para el p95 del retraso). */
 export function percentil(valores, p = 0.95) {
@@ -67,27 +84,41 @@ export class DubbingEngine {
     colchonSegundos = 90,
     modoSilenciarOriginal = false,
     ritmoAutomatico = true,
+    // El video espera a que la voz esté lista (YouTube, X y archivo por igual).
     esperarVoz = false,
+    // Además, espera a que la frase termine antes de pasar a la siguiente (solo el video del equipo).
+    esperarFrase = esperarVoz,
   }) {
     Object.assign(this, {
       player, servicio, onStatus, onMetricas, onFin, onRitmo, onTasaBase, ahora,
-      colchonSegundos, modoSilenciarOriginal, ritmoAutomatico, esperarVoz,
+      colchonSegundos, modoSilenciarOriginal, ritmoAutomatico, esperarVoz, esperarFrase,
     });
     // Doble audio alternado (igual que el lector PDF): mientras suena una frase,
     // la siguiente ya está cargada en el otro elemento y entra sin micro-cortes.
     this.elementos = [crearAudio(), crearAudio()];
+    // Los dos audios son de la app y viven más que este motor (cada video nuevo
+    // crea otro motor con los mismos): los oyentes se quitan en `destruir`.
+    this.quitarOyentes = [];
     for (const el of this.elementos) {
       el.preload = 'auto';
       el.preservesPitch = true;
       el.crossOrigin = 'anonymous';
       // Al terminar una frase, la siguiente entra en el acto (sin esperar al tic).
-      el.addEventListener('ended', () => { if (this.activo && el === this.audio) this.#tic(); });
-      el.addEventListener('loadedmetadata', () => {
+      const alTerminar = () => { if (this.activo && el === this.audio) this.#tic(); };
+      const alTenerDuracion = () => {
         if (!this.activo || el !== this.audio) return;
         this.#aplicarAvancePendiente();
         this.#tic();
+      };
+      const alFallar = () => { if (this.activo && el === this.audio && this.hablando >= 0) this.#fraseFallida(); };
+      el.addEventListener('ended', alTerminar);
+      el.addEventListener('loadedmetadata', alTenerDuracion);
+      el.addEventListener('error', alFallar);
+      this.quitarOyentes.push(() => {
+        el.removeEventListener('ended', alTerminar);
+        el.removeEventListener('loadedmetadata', alTenerDuracion);
+        el.removeEventListener('error', alFallar);
       });
-      el.addEventListener('error', () => { if (this.activo && el === this.audio && this.hablando >= 0) this.#fraseFallida(); });
     }
     this.cual = 0;
     this.audio = this.elementos[0];
@@ -121,6 +152,10 @@ export class DubbingEngine {
     this.avisoSinVoz = null;
     this.avisoPreparando = null;
     this.pausaPorVoz = null;
+    this.esperaDesde = 0;        // cuándo empezó la espera de voz en curso
+    this.esperaOmitidaDe = -1;   // frase cuya espera se abandonó (la persona le dio play o tardó demasiado)
+    this.reanudando = null;      // { t, desde }: el video acaba de reanudarse por la voz
+    this.ultimoTic = null;       // último tic con el video corriendo (null = parado)
     // `reloj` puede ser una fábrica `(tic) => reloj`: así las pruebas simulan el
     // tiempo sin esperar de verdad (tests/test_youtube_sincronia.mjs).
     this.reloj = typeof reloj === 'function'
@@ -142,6 +177,7 @@ export class DubbingEngine {
     this.#resincronizar(t);
     this.tAnterior = t;
     this.relojAnterior = this.ahora();
+    this.ultimoTic = this.reproduciendo ? this.relojAnterior : null;
     this.#tic();
     if (this.reproduciendo) this.reloj.iniciar();
   }
@@ -149,6 +185,12 @@ export class DubbingEngine {
   activarYReproducir() {
     this.activar();
     this.reproduciendo = true;
+    // El tiempo que estuvo parado no cuenta como video corriendo: sin esto, un
+    // salto pedido justo antes (retomar donde ibas) podía coincidir con el reloj
+    // y no verse como salto.
+    this.relojAnterior = this.ahora();
+    this.ultimoTic = this.relojAnterior;
+    this.reanudando = null;
     this.reloj.iniciar();
     this.player.playVideo();
     this.#tic();
@@ -163,10 +205,20 @@ export class DubbingEngine {
    */
   pausarTodo() {
     this.pausaPorVoz = null;
+    this.reanudando = null;
+    this.ultimoTic = null;
     this.reproduciendo = false;
     this.player.pauseVideo();
     for (const el of this.elementos) { try { el.pause(); } catch (_) { /* ya parado */ } }
     this.reloj.detener();
+  }
+
+  /**
+   * La página volvió a primer plano (pestaña visible, teléfono desbloqueado):
+   * un tic ya, sin esperar al reloj, que además detecta si estuvo dormida.
+   */
+  despertar() {
+    if (this.activo) this.#tic();
   }
 
   desactivar() {
@@ -297,12 +349,19 @@ export class DubbingEngine {
     // La pausa del búfer conserva el reloj de preparación. Si una frase sigue
     // sonando, conserva también su audio hasta terminarla.
     if (estado === 'paused' && this.pausaPorVoz) return;
-    if (estado === 'playing') this.pausaPorVoz = null;
+    if (estado === 'playing') {
+      // «Playing» con una espera de voz en curso = la persona quiso seguir: esa
+      // frase ya no vuelve a detener el video (entra tarde, pero entra).
+      if (this.pausaPorVoz === 'espera') this.esperaOmitidaDe = this.ultima + 1;
+      this.pausaPorVoz = null;
+    }
     if (estado === 'ended') this.onFin();
     this.reproduciendo = estado === 'playing';
+    if (!this.reproduciendo) this.ultimoTic = null;
     if (!this.activo) return;
     const t = Number(this.player.getCurrentTime()) || 0;
     if (this.reproduciendo) {
+      this.ultimoTic = this.ahora();
       // ¿Buscó otro punto mientras estaba en pausa o cargando? (`tAnterior`
       // guarda el último instante visto sonando: en pausa el video no avanza.)
       if (this.tAnterior !== null && Math.abs(t - this.tAnterior) > 1) this.#resincronizar(t);
@@ -336,19 +395,27 @@ export class DubbingEngine {
     const t = Number(this.player.getCurrentTime()) || 0;
     const ahora = this.ahora();
     const tasa = this.#tasaReal();
+    // ¿Estuvo dormida la página? (teléfono bloqueado: ni reloj ni eventos)
+    const dormido = this.reproduciendo && !this.pausaPorVoz && this.ultimoTic !== null && ahora - this.ultimoTic > TIC_PERDIDO_MS;
+    this.ultimoTic = this.reproduciendo ? ahora : null;
     if (this.#huboSalto(t, ahora, tasa)) this.#resincronizar(t);
+    else if (dormido) this.#alDespertar(t);
     this.#mantenerColchon(t);
     if (this.reproduciendo) {
       if (this.pausaPorVoz === 'espera') {
         const unidad = this.servicio.unidades[this.ultima + 1];
-        if (!unidad || unidad.estado === 'listo' || ESTADOS_SIN_VOZ.has(unidad.estado)) this.#reanudarVideo();
+        const demasiado = ahora - this.esperaDesde > ESPERA_VOZ_MAX_MS;
+        if (!unidad || unidad.estado === 'listo' || ESTADOS_SIN_VOZ.has(unidad.estado) || demasiado) {
+          if (demasiado && unidad && unidad.estado !== 'listo') this.esperaOmitidaDe = this.ultima + 1;
+          this.#reanudarVideo();
+        }
       }
       if (this.hablando >= 0) this.#seguirFrase(t, tasa);
       if (this.pausaPorVoz === 'frase' && this.hablando < 0) this.#reanudarVideo();
       if (this.hablando < 0) this.#quizasEmpezar(t, tasa);
       this.#precargarSiguiente();
       this.#ajustarRitmo(t, tasa, ahora);
-      if (this.esperarVoz && this.ritmoAutomatico) {
+      if (this.esperarFrase && this.ritmoAutomatico) {
         const siguiente = this.servicio.unidades[this.hablando + 1];
         const unidad = this.servicio.unidades[this.hablando];
         const duracion = Number(this.player.getDuration?.()) || Infinity;
@@ -363,15 +430,27 @@ export class DubbingEngine {
   #pausarParaVoz(motivo) {
     if (this.pausaPorVoz) return;
     this.pausaPorVoz = motivo;
+    this.esperaDesde = this.ahora();
     this.player.pauseVideo();
-    this.onStatus(motivo === 'frase' ? 'El video espera a que termine la frase en español.' : 'El video espera a que esté lista la voz en español.', 'cargando');
+    this.onStatus(motivo === 'frase' ? 'El video espera a que termine la frase en español.' : 'Preparando la voz…', 'cargando');
   }
 
   #reanudarVideo() {
     this.pausaPorVoz = null;
     this.tAnterior = Number(this.player.getCurrentTime()) || 0;
     this.relojAnterior = this.ahora();
+    this.ultimoTic = this.relojAnterior;
+    // La voz espera a ver moverse la imagen: YouTube tarda en obedecer `playVideo()`.
+    this.reanudando = { t: this.tAnterior, desde: this.relojAnterior };
     this.player.playVideo();
+    this.onStatus('Voz en español activa.', 'activo');
+  }
+
+  /** La página estuvo dormida con el video corriendo: se vuelve al punto del video sin soltar ráfagas de frases atrasadas. */
+  #alDespertar(t) {
+    const el = this.audio;
+    if (this.hablando >= 0 && !el.paused && !el.ended) return;   // la frase siguió sonando sola: nada que corregir
+    this.#resincronizar(t);
   }
 
   #huboSalto(t, ahora, tasa) {
@@ -413,6 +492,10 @@ export class DubbingEngine {
   /** Voz libre: ¿le toca ya a la siguiente frase? */
   #quizasEmpezar(t, tasa) {
     const unidades = this.servicio.unidades;
+    if (this.reanudando) {
+      if (t > this.reanudando.t + AVANCE_TRAS_REANUDAR_S || this.ahora() - this.reanudando.desde > ESPERA_REANUDAR_MAX_MS) this.reanudando = null;
+      else return;
+    }
     let j = this.ultima + 1;
     // Frases sin voz posible: ahí suena el original y la voz sigue con la próxima.
     while (j < unidades.length && ESTADOS_SIN_VOZ.has(unidades[j].estado) && unidades[j].startTime <= t + 0.03) {
@@ -421,13 +504,22 @@ export class DubbingEngine {
       j += 1;
     }
     const unidad = unidades[j];
-    if (!unidad || unidad.startTime > t + ANTICIPO_ARRANQUE_S) return;   // aún no le toca: pausa natural
+    if (!unidad) return;
+    const espera = this.esperarVoz && this.esperaOmitidaDe !== j && unidad.estado !== 'listo' && !ESTADOS_SIN_VOZ.has(unidad.estado);
+    if (unidad.startTime > t + ANTICIPO_ARRANQUE_S) {
+      // Aún no le toca (pausa natural). Pero si su voz no está lista, el video se detiene un instante antes.
+      if (espera && unidad.startTime <= t + ANTICIPO_ESPERA_S) {
+        this.#pausarParaVoz('espera');
+        this.#pedirFrase(j);
+      }
+      return;
+    }
     if (t - unidad.startTime > RETRASO_MAXIMO_S) {
       this.#resincronizar(t, { omitir: true });
       return;
     }
     if (unidad.estado !== 'listo') {
-      if (this.esperarVoz) this.#pausarParaVoz('espera');
+      if (espera) this.#pausarParaVoz('espera');
       this.#pedirFrase(j);
       return;
     }
@@ -497,6 +589,7 @@ export class DubbingEngine {
     const antes = this.ultima;
     this.hablando = -1;
     this.ultimaDicha = -1;
+    this.reanudando = null;
     const j = unidadEn(unidades, t);
     if (j < 0) { this.ultima = unidades.length - 1; return; }
     const unidad = unidades[j];
@@ -520,7 +613,7 @@ export class DubbingEngine {
     }
     if (this.cargaPendiente === indice) return;
     this.cargaPendiente = indice;
-    this.onStatus('Preparando la voz de este tramo…', 'cargando');
+    this.onStatus('Preparando la voz…', 'cargando');
     Promise.resolve(this.servicio.asegurar(indice))
       .then(() => { if (this.activo) this.onStatus('Voz en español activa.', 'activo'); })
       .catch(() => { /* quedó en «error»: el siguiente tic la da por pasada y lo anuncia */ })
@@ -666,6 +759,9 @@ export class DubbingEngine {
     this.desactivar();
     this.desuscribirEstado?.();
     this.desuscribirVelocidad?.();
+    for (const quitar of this.quitarOyentes) quitar();
+    this.quitarOyentes = [];
+    for (const el of this.elementos) el.jgPidiendo = false;
     this.audio.removeAttribute('src');
     this.audio.load();
   }

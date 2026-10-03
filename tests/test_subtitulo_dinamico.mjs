@@ -51,6 +51,51 @@ comprobar('solo signos → un trozo con los signos', JSON.stringify(trocearSubti
 }
 comprobar('sin medida o ancho inválido → el texto entero en un trozo', trocearSubtitulo(LARGO, { medir: null, anchoMax: ANCHO }).length === 1 && trocearSubtitulo(LARGO, { medir, anchoMax: 0 }).length === 1);
 
+console.log('── sin palabra funcional colgando al final del trozo ──');
+{
+  const FUNC = ['de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'y', 'o', 'que', 'en', 'a', 'al', 'con', 'por', 'para', 'se', 'su', 'sus', 'lo', 'le', 'no', 'sin', 'como', 'más'];
+  const ultima = (t) => t.split(' ').pop().toLowerCase();
+  const cuelga = (t) => FUNC.includes(ultima(t));   // sin puntuación pegada: «de,» no cuenta
+  const MEDIDO = 'Cuando construyes una marca que vende en la nueva era de la inteligencia artificial, lo primero que debes entender es que la confianza se gana despacio';
+  // El caso medido en el doblaje real: «…en la nueva era de la».
+  const t320 = trocearSubtitulo(MEDIDO, { medir, anchoMax: 320 });
+  comprobar('caso medido: el trozo ya no termina en «de la» (termina en «nueva era»)', t320[0].endsWith('nueva era') && !t320.some((t) => /\b(de la|era de)$/.test(t)), JSON.stringify(t320));
+  comprobar('caso medido: lo retirado abre el trozo siguiente (ninguna palabra se pierde)', t320[1].startsWith('de la') && palabras(t320.join(' ')).join(' ') === palabras(MEDIDO).join(' '), JSON.stringify(t320));
+  // Barrido: 4 textos × anchos de 150 a 500 px. Un trozo (salvo el último) solo puede colgar si retroceder lo dejaría < 40 % del renglón.
+  const TEXTOS = [LARGO, MEDIDO,
+    'Es la hora de que el equipo se ponga a trabajar con los datos y a mirar lo que de verdad importa para el cliente en la tienda y en la calle',
+    'Una de las cosas que más me gusta de esto es que no hace falta saber de todo para empezar a hacer algo con lo que ya tienes en casa'];
+  let trozosRevisados = 0; let colgando = 0; let colgandoInjustificado = 0; let rotos = 0;
+  for (const texto of TEXTOS) {
+    for (let ancho = 150; ancho <= 500; ancho += 10) {
+      const lista = trocearSubtitulo(texto, { medir, anchoMax: ancho });
+      if (palabras(lista.join(' ')).join(' ') !== palabras(texto).join(' ') || lista.some((t) => lineasQueOcupa(t, medir, ancho) > 2)) rotos += 1;
+      lista.slice(0, -1).forEach((t, k) => {
+        trozosRevisados += 1;
+        if (!cuelga(t)) return;
+        colgando += 1;
+        // ¿Habría alternativa? Quitar las palabras funcionales del final debe dejar < 40 % de un renglón (o nada).
+        const p = palabras(t);
+        while (p.length && FUNC.includes(p[p.length - 1].toLowerCase())) p.pop();
+        if (p.length && p.join(' ').length * 10 >= 0.4 * ancho) colgandoInjustificado += 1;
+      });
+    }
+  }
+  comprobar(`barrido: ${trozosRevisados} trozos revisados, ninguno cuelga sin motivo (${colgandoInjustificado}; ${colgando} cuelgan por la excepción del 40 %)`, trozosRevisados > 200 && colgandoInjustificado === 0);
+  comprobar('barrido: la unión de trozos es el texto original y todos caben en 2 renglones', rotos === 0, `${rotos}`);
+  // La excepción: si retroceder deja un trozo diminuto, se conserva el corte.
+  const diminuto = trocearSubtitulo('a la supercalifragilisticoespialidosoincreible adiós y más cosas por hacer', { medir, anchoMax: 200 });
+  comprobar('excepción: «a la» (< 40 % del renglón) no se vacía: retroceder dejaría un trozo inexistente', diminuto[0] === 'a la' && diminuto[1] === 'supercalifragilisticoespialidosoincreible', JSON.stringify(diminuto));
+  const sobra = trocearSubtitulo('Hoy hablamos de la supercalifragilisticoespialidosoincreible manera de vivir en un mundo nuevo', { medir, anchoMax: 200 });
+  comprobar('retroceder sí cuando queda ≥ 40 %: «Hoy hablamos» deja de colgar «de la»', sobra[0] === 'Hoy hablamos' && sobra[1] === 'de la', JSON.stringify(sobra));
+  // Con puntuación el corte es legítimo: «…por eso, y» no, pero «…de la vida.» sí termina en palabra no funcional.
+  const conComa = trocearSubtitulo('Llegamos tarde a casa y cenamos con calma, en la mesa de siempre, hablando de todo un poco y de nada', { medir, anchoMax: 300 });
+  comprobar('con coma o punto el corte es legítimo y no se mueve', conComa.some((t) => /calma,$/.test(t)), JSON.stringify(conComa));
+  // Varias funcionales seguidas retroceden todas.
+  const dobles = trocearSubtitulo('Entramos juntos a contarte lo que pasa al final de la historia de un hombre que cambió el mundo', { medir, anchoMax: 280 });
+  comprobar('varias funcionales seguidas («de la», «en el»…) retroceden juntas', !dobles.slice(0, -1).some(cuelga), JSON.stringify(dobles));
+}
+
 console.log('── lineasQueOcupa ──');
 comprobar('cabe justo en un renglón', lineasQueOcupa('a'.repeat(30), medir, ANCHO) === 1);
 comprobar('31 caracteres sin espacios (palabra ancha) ocupan 2', lineasQueOcupa('a'.repeat(31), medir, ANCHO) === 2);
