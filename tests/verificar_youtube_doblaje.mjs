@@ -489,7 +489,8 @@ try {
     await pagina.reload(); await pagina.waitForSelector('#ytUrl', { state: 'attached' });
     await pagina.waitForFunction(() => Boolean(window.jgVideoLocal), null, { timeout: 30000, polling: 100 });
     comprobar('el interruptor de subtítulos se recuerda', await pagina.isChecked('#ytToggleCaption'));
-    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    // Desde el video activo (tests/verificar_video_persistencia.mjs) recargar REABRE el video: ya no hay que volver a pegarlo.
+    comprobar('tras recargar, el video abierto se restaura solo desde la caché', await esperarListo(pagina));
     await pagina.click('#ytPantallaCompleta'); await esperar(500);
     const agrandado = await pagina.evaluate(() => Boolean(document.fullscreenElement?.classList.contains('yt-player-shell'))
       || document.querySelector('.yt-player-shell').classList.contains('yt-pantalla-completa'));

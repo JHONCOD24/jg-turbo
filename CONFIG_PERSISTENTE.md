@@ -86,6 +86,14 @@ Definidas en `index.html` como `JG_CONFIG_KEYS`:
 - `jg_yt_voz2` admite además `ninguna` (v152): una sola voz aunque sea diálogo.
 - `jg_yt_subtitulos` (`1` / `0`): si se ven los subtítulos del doblaje sobre el
   video.
+- `jg_yt_video_activo` (JSON `{tipo, clave, url, segundo, titulo, actualizado, preparando}`;
+  `tipo` = `youtube` | `x` | `archivo`): **el video que la persona tiene abierto** y su
+  segundo. Es solo un puntero (nada pesado): el doblaje vive en la caché `jg_youtube`.
+  Al recargar o reabrir la app el video vuelve desde la caché, en pausa, sin pedir
+  texto ni traducción. En `archivo` NO se guarda el video (regla dura): se pide elegir
+  el mismo archivo. **Solo lo borran «Cerrar», «Cambiar video», «Cancelar» y «Descartar»**;
+  no está en `jg_config_bundle` (es estado de sesión, no configuración). Código:
+  `js/youtube/videoActivo.js`. Prueba: `tests/test_video_activo.mjs`.
 
 ## Reglas obligatorias para agentes / futuros LLM
 

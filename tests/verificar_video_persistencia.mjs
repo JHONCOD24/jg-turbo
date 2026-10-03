@@ -13,7 +13,7 @@
  *   node tests/verificar_video_persistencia.mjs --headed
  */
 import { createServer } from 'node:http';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -38,6 +38,10 @@ const MP4_X = await readFile(join(app, 'tests/fixtures/biblioteca/video_x_20s.mp
 const VIDEO = join(app, 'tests/fixtures/archivo/clase_en_40s.webm');
 const OTRO = join(app, 'tests/fixtures/archivo/dos_pistas_40s.mkv');
 const CLAVE = 'jg_yt_video_activo';
+const capturar = process.argv.includes('--capturas');   // guarda imágenes en .impeccable/review para revisar el diseño
+const carpetaCapturas = join(app, '.impeccable', 'review');
+if (capturar) await mkdir(carpetaCapturas, { recursive: true });
+const captura = async (pagina, nombre) => { if (capturar) await pagina.screenshot({ path: join(carpetaCapturas, `persistencia_${nombre}.png`) }); };
 
 const respuestaYoutube = () => ({
   status: 200,
@@ -260,6 +264,7 @@ try {
       comprobar('vacío: el botón Borrar no se ve', !(await visible(pagina, '#ytUrlBorrar')));
       await pagina.fill('#ytUrl', 'hola');
       comprobar('con texto: aparece el botón Borrar', await visible(pagina, '#ytUrlBorrar'));
+      await captura(pagina, `${vp.movil ? 'movil' : 'escritorio'}_borrar`);
       const caja = await pagina.locator('#ytUrlBorrar').boundingBox();
       comprobar('Borrar mide al menos 44×44 px (toque cómodo)', caja && caja.width >= 43.9 && caja.height >= 43.9, JSON.stringify(caja));
       comprobar('Borrar tiene nombre accesible «Borrar el enlace»', (await pagina.getAttribute('#ytUrlBorrar', 'aria-label')) === 'Borrar el enlace');
@@ -299,6 +304,7 @@ try {
       await pegarYDoblar(pagina);
       comprobar('el doblaje queda listo', await esperarListo(pagina));
       comprobar('con un video abierto «Cambiar video» se ve', await visible(pagina, '#ytCambiarVideo'));
+      await captura(pagina, `${vp.movil ? 'movil' : 'escritorio'}_cambiar`);
       const cajaCambiar = await pagina.locator('#ytCambiarVideo').boundingBox();
       comprobar('«Cambiar video» mide al menos 44 px de alto', cajaCambiar && cajaCambiar.height >= 43.9, JSON.stringify(cajaCambiar));
       comprobar('la voz suena antes de cambiar', await verConVoz(pagina));
@@ -389,6 +395,7 @@ try {
       const t = await tiempoYt(pagina);
       comprobar(`${etiqueta}: el video está en su segundo (±3 s)`, Math.abs(t - tReal) <= 3 && t > 250, `${tReal} → ${t}`);
       comprobar(`${etiqueta}: queda en pausa, sin reproducir solo`, (await estadoYt(pagina)) !== 1 && (await sonando(pagina)) === 0);
+      await captura(pagina, `${vp.movil ? 'movil' : 'escritorio'}_restaurado${ignorarStart ? '_b' : ''}`);
       comprobar(`${etiqueta}: avisa «Seguimos donde ibas: 5:0x»`, (await visible(pagina, '#ytReanudar')) && /Seguimos donde ibas: 5:\d\d/.test(await pagina.textContent('#ytReanudarTitulo')), await pagina.textContent('#ytReanudarTitulo'));
       comprobar(`${etiqueta}: 0 llamadas a texto, transcripción y traducción (todo salió de la caché)`, llamadas(reg) === antes, `antes ${antes} · ahora ${llamadas(reg)}`);
       comprobar(`${etiqueta}: el campo del enlace sigue conectado al video`, JSON.parse(await llave(pagina) || '{}').clave === 'dNWkwrqAkcM');
@@ -484,6 +491,7 @@ try {
       await pagina.reload({ waitUntil: 'domcontentloaded' });
       await esperarPanel(pagina);
       comprobar('archivo tras recargar: la ficha ofrece «Vuelve a elegir el archivo para seguir»', await hastaQue(() => visible(pagina, '#ytReanudarAccion'), 15000) && /Vuelve a elegir el archivo para seguir/.test(await pagina.textContent('#ytReanudarAccion')));
+      await captura(pagina, `${vp.movil ? 'movil' : 'escritorio'}_archivo`);
       comprobar('archivo tras recargar: explica con honestidad que no se copia', /no se copian/.test(await pagina.textContent('#ytReanudarMensaje')));
       comprobar('archivo tras recargar: no hay reproductor ni voz sonando', !(await visible(pagina, '#ytSyncArea')) && (await sonando(pagina)) === 0);
       comprobar('archivo tras recargar: sin errores de consola ni de JavaScript', reg.errores.length === 0 && reg.consola.filter((c) => !/Failed to load resource/.test(c)).length === 0, [...reg.errores, ...reg.consola].join(' | '));
