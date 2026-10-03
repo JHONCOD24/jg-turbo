@@ -518,6 +518,11 @@ try {
       await pegarYDoblar(pagina);
       await esperarListo(pagina);
       comprobar('con video abierto hay un video activo guardado', (await llave(pagina)) !== null);
+      // La preparación sigue traduciendo en segundo plano: se espera a que la red
+      // se calme antes de tomar la foto, o una traducción ya pedida antes de
+      // Cerrar se contaría como «pedida después» (medido: llega ~580 ms antes).
+      let previa = '';
+      for (let i = 0; i < 20 && previa !== llamadas(reg); i += 1) { previa = llamadas(reg); await esperar(1500); }
       const antesCerrar = llamadas(reg);
       await pagina.click('#btnYtSyncClose');
       comprobar('Cerrar borra el video activo', (await llave(pagina)) === null);
