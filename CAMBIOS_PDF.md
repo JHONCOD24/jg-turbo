@@ -3,6 +3,20 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-10-03 · PDF-1 · La voz y la página van a la par; el resaltado marca oraciones
+
+- `js/pdf/unidadesLectura.js` (nuevo, puro): la unidad marcada es la oración;
+  si pasa de 240 caracteres se parte en cláusulas (`;` `:` `—` `,`, mínimo 60,
+  tope duro 300). Respeta abreviaturas, decimales, cierres y diálogo con raya.
+  Prueba: `tests/test_pdf_unidades_lectura.mjs`.
+- `libroVista.seguirVoz`: la página la decide el carácter que suena, no el
+  inicio de la marca; solo avanza salvo salto pedido; tras girar/redimensionar
+  se resitúa en la voz sin animación. `marcarRango` pinta la unidad entera
+  (varios nodos y bloques).
+- Estilo de `mark` sin padding/borde/negrita (sombra interior para la barra).
+- Voz tras pasar página a mano: `arrancaEn` + primera oración que empieza en la página.
+- Prueba de navegador: `tests/verificar_pdf_voz_pagina.mjs`.
+
 ## 2026-09-29 · Fase 4 (parte 1) · Un solo vocabulario de posición y página llena en Páginas (P4.3, P-01, P-02)
 
 **P4.3 — la posición se dice una vez («Capítulo N de M» en la cabecera).**

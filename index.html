@@ -1805,18 +1805,15 @@
   .pdf-realce mark,
   .pdf-realce .pdf-linea-guia,
   .pdf-realce .pdf-frase-activa{
-    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 17%, transparent);
+    background:color-mix(in srgb, var(--lec-acento, var(--cyan)) 22%, transparent);
     color:transparent !important;
-    border-left:3.5px solid var(--lec-acento, var(--cyan));
-    border-radius:4px 8px 8px 4px;
-    box-shadow:0 1px 8px -1px color-mix(in srgb, var(--lec-acento, var(--cyan)) 20%, transparent);
-    box-decoration-break:clone;
-    -webkit-box-decoration-break:clone;
+    border-radius:4px;
+    box-shadow:inset 3px 0 0 var(--lec-acento, var(--cyan));
   }
   @media (prefers-reduced-motion: no-preference){
     .pdf-realce mark,
     .pdf-realce .pdf-linea-guia,
-    .pdf-realce .pdf-frase-activa{transition:background-color .2s ease, border-color .2s ease, box-shadow .2s ease}
+    .pdf-realce .pdf-frase-activa{transition:background-color .2s ease, box-shadow .2s ease}
   }
   @media (prefers-reduced-motion: reduce){
     .pdf-realce mark,
@@ -5526,22 +5523,21 @@ body.jg-voz-activa .pdf-lectura li{cursor:pointer}
 .pdf-lectura h2,.pdf-lectura h3{line-height:1.3;margin:1.2em 0 .6em}
 .pdf-lectura p{margin:0 0 1em}.pdf-lectura blockquote{border-left:3px solid var(--lec-linea);margin:0 0 1em;padding:.2em 0 .2em 1em;color:var(--lec-suave)}
 .pdf-lectura ul,.pdf-lectura ol{margin:0 0 1em;padding-left:1.4em}.pdf-lectura table{border-collapse:collapse;width:100%;margin:0 0 1em;display:block;overflow-x:auto}
-/* Guía viva de lectura por líneas (ventana de enfoque relajado de ~2 líneas con letra iluminada) */
+/* Guía viva de lectura: marca la oración (o cláusula) que suena.
+   REGLA: la marca NO puede cambiar las métricas del texto. Nada de negrita,
+   padding, borde ni margen: cada uno ensancha las palabras o los renglones,
+   remaqueta las columnas y mueve el borde de página (medido: la marca de una
+   línea al inicio de una página caía en la anterior por su margen negativo).
+   La barra lateral es una sombra interior: pinta pero no ocupa. */
 .pdf-lectura mark,
 .pdf-lectura .pdf-linea-guia,
 .pdf-lectura .pdf-frase-activa{
   color:var(--lec-guia-texto, #FFFFFF) !important;
-  font-weight:600;
   text-shadow:var(--lec-guia-glow, none);
-  background:color-mix(in srgb,var(--lec-acento,var(--cyan)) 17%,transparent);
-  border-left:3.5px solid var(--lec-acento,var(--cyan));
-  border-radius:4px 8px 8px 4px;
-  padding:0.16em 0.46em 0.16em 0.52em;
-  margin-inline:-0.2em;
-  box-decoration-break:clone;
-  -webkit-box-decoration-break:clone;
-  box-shadow:0 1px 8px -1px color-mix(in srgb,var(--lec-acento,var(--cyan)) 22%,transparent);
-  transition:background-color .22s ease, border-color .22s ease, box-shadow .22s ease, color .22s ease, text-shadow .22s ease;
+  background:color-mix(in srgb,var(--lec-acento,var(--cyan)) 22%,transparent);
+  border-radius:4px;
+  box-shadow:inset 3px 0 0 var(--lec-acento,var(--cyan));
+  transition:background-color .22s ease, box-shadow .22s ease, color .22s ease;
 }
 .pdf-lectura mark *,
 .pdf-lectura .pdf-linea-guia *,

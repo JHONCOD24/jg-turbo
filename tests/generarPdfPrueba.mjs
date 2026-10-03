@@ -29,7 +29,7 @@ const ROMANOS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
 
 const escapar = (t) => t.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 
-function flujoDeTexto(lineas) {
+export function flujoDeTexto(lineas) {
   let salida = 'BT\n';
   for (const [texto, x, y, tam] of lineas) {
     salida += `/F1 ${tam} Tf\n1 0 0 1 ${x} ${y} Tm\n(${escapar(texto)}) Tj\n`;
@@ -37,7 +37,7 @@ function flujoDeTexto(lineas) {
   return Buffer.from(salida + 'ET', 'latin1');
 }
 
-function armarPdf(flujos, ruta) {
+export function armarPdf(flujos, ruta) {
   const n = flujos.length;
   const idsPagina = Array.from({ length: n }, (_, i) => 4 + i * 2);
   const objetos = [

@@ -22,7 +22,7 @@ const vista = readFileSync(resolve(RAIZ, 'js/pdf/libroVista.js'), 'utf-8');
 console.log('── 1. Reglas CSS y diseño de guía por líneas en index.html ──');
 comprobar(html.includes('.pdf-linea-guia'), 'index.html define estilos para .pdf-linea-guia');
 comprobar(html.includes('.pdf-frase-activa'), 'index.html define estilos para .pdf-frase-activa');
-comprobar(/border-left:\s*3\.5px\s*solid\s*var\(--lec-acento/.test(html), 'el realce incluye borde lateral izquierdo de acento para anclaje visual');
+comprobar(/\.pdf-lectura \.pdf-frase-activa\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--lec-acento/.test(html), 'el realce lleva barra lateral de acento como sombra interior (sin borde ni padding: no mueve las páginas)');
 comprobar(/--lec-acento/.test(html) && /--lec-bg/.test(html), 'los estilos usan las variables del tema del lector (--lec-acento, --lec-bg)');
 comprobar(/--lec-guia-texto/.test(html) && /--lec-guia-glow/.test(html), 'se definen variables de letra iluminada (--lec-guia-texto, --lec-guia-glow)');
 comprobar(/color:\s*var\(--lec-guia-texto/.test(html) && /text-shadow:\s*var\(--lec-guia-glow/.test(html), 'la guía aplica color iluminado y halo luminoso de alto contraste a la letra');
@@ -152,7 +152,7 @@ comprobar(t2 && t2[0] <= textoPrueba.indexOf('Macondo') && t2[1] > textoPrueba.i
   'tramoEn ubica la ventana siguiente sin retrasos');
 
 console.log('\n── 3. Contrato de marcarRango en libroVista.js ──');
-comprobar(vista.includes('function marcarRango(ini, fin, palabraIni, palabraFin)'),
+comprobar(vista.includes('function marcarRango(ini, fin)'),
   'marcarRango mantiene firma compatible');
 comprobar(!vista.includes('pdf-palabra-capcut'), 'marcarRango NO genera etiquetas pdf-palabra-capcut');
 comprobar(vista.includes('pdf-linea-guia'), 'marcarRango asigna la clase pdf-linea-guia');
@@ -168,7 +168,7 @@ comprobar(/forzarNuevo:\s*false/.test(ctrl), 'el cambio de página usa forzarNue
 comprobar(/forzarNuevo:\s*true/.test(ctrl), 'el cambio de capítulo conserva forzarNuevo: true para nueva síntesis');
 comprobar(ctrl.includes('asegurarGuiaSincronizada'), 'pdfController prepara perezosamente las anclas con asegurarGuiaSincronizada');
 comprobar(ctrl.includes('window.ttsIrABloque'), 'pdfController utiliza window.ttsIrABloque para sincronización inmediata');
-comprobar(vista.includes('if (pag.saltando) return;'), 'libroVista protege el desplazamiento mientras el usuario pasa páginas');
+comprobar(vista.includes('!pag.saltando') && vista.includes('function seguirVoz'), 'libroVista no apila saltos mientras se anima el paso de página y sigue a la voz, no a la marca');
 
 console.log('\n── 5. Cambio de voz en vivo y eventos ──');
 comprobar(html.includes('jg-tts-cambio-voz'), 'index.html dispara jg-tts-cambio-voz al cambiar de voz');

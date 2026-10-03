@@ -143,6 +143,7 @@ export function initLibroVista({ el, estado, api }) {
     if (el.btnCortes) el.btnCortes.hidden = pend === 0;
     /* Capítulo nuevo: se reparte desde su primera página. */
     pag.actual = 0;
+    vozSeguida.caracter = -1;
     if (!conservar) {
       pag.ancla = 0;
       if (!hayPaginado()) {
@@ -296,53 +297,65 @@ export function initLibroVista({ el, estado, api }) {
   }
 
   let seguimiento = true;
-  /* Marca el tramo [ini, fin) del texto dentro de la vista como guía de lectura (enfoque de ~2 líneas).
+  /* Marca la unidad [ini, fin) del texto (una oración o, si es larguísima, una
+   * cláusula) dentro de la vista como guía de lectura.
    *
-   * Ilumina de forma calmada y continua la ventana de lectura de unas 2 líneas,
-   * permitiendo leer con anticipación fluida y concentración profunda sin saltos nerviosos. */
-  function marcarRango(ini, fin, palabraIni, palabraFin) {
+   * Pinta la unidad ENTERA: recorre todos los nodos de texto que la cubren, en
+   * uno o en varios bloques, y envuelve cada trozo en su <mark>. Antes se
+   * detenía tras el primer nodo y la marca quedaba a medias. Devuelve la
+   * primera marca (para el desplazamiento en modo continuo). */
+  function marcarRango(ini, fin) {
     if (!el.lectura || !(fin > ini)) return null;
     el.lectura.querySelectorAll('mark').forEach((previa) => {
       previa.replaceWith(document.createTextNode(previa.textContent));
     });
     try { el.lectura.normalize(); } catch (_) {}
 
-    const bloques = [...el.lectura.querySelectorAll('[data-ini]')];
-    if (!bloques.length) return null;
-    let bloque = bloques.slice().reverse()
-      .find((b) => Number(b.dataset.ini) <= ini && Number(b.dataset.fin) > ini);
-    if (!bloque) {
-      bloque = bloques.find((b) => Number(b.dataset.ini) >= ini) || bloques[bloques.length - 1];
+    /* Bloques «hoja»: los que no contienen a otro con posición (un <ul> trae
+     * sus <li>; se marca en el <li>, que es donde está el texto). */
+    const hojas = [...el.lectura.querySelectorAll('[data-ini]')].filter((b) => !b.querySelector('[data-ini]'));
+    if (!hojas.length) return null;
+    let tocados = hojas.filter((b) => Number(b.dataset.ini) < fin && Number(b.dataset.fin) > ini);
+    if (!tocados.length) {
+      const sig = hojas.find((b) => Number(b.dataset.ini) >= ini) || hojas[hojas.length - 1];
+      tocados = [sig];
     }
-    if (!bloque) return null;
 
-    const base = Number(bloque.dataset.ini);
-    const desde = Math.max(0, ini - base);
-    const hasta = Math.min(Math.max(desde + 1, fin - base), bloque.textContent.length);
-    if (!(hasta > desde)) return null;
-
-    const recorrido = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
-    let visto = 0;
-    let marca = null;
-    while (recorrido.nextNode()) {
-      const nodo = recorrido.currentNode;
-      const largo = nodo.textContent.length;
-      if (visto + largo > desde) {
+    let primera = null;
+    for (const bloque of tocados) {
+      const base = Number(bloque.dataset.ini);
+      const largo = bloque.textContent.length;
+      const desde = Math.max(0, ini - base);
+      const hasta = Math.min(Math.max(desde + 1, fin - base), largo);
+      if (!(hasta > desde)) continue;
+      /* Primero se reúnen los trozos y después se parte el DOM: cambiar los
+       * nodos mientras se recorren desordena el recorrido. */
+      const trozos = [];
+      const recorrido = document.createTreeWalker(bloque, NodeFilter.SHOW_TEXT);
+      let visto = 0;
+      while (recorrido.nextNode()) {
+        const nodo = recorrido.currentNode;
+        const n = nodo.textContent.length;
         const a = Math.max(0, desde - visto);
-        const b = Math.min(largo, hasta - visto);
-        const trozos = document.createDocumentFragment();
-        if (a > 0) trozos.appendChild(document.createTextNode(nodo.textContent.slice(0, a)));
-        marca = document.createElement('mark');
-        marca.className = 'pdf-linea-guia pdf-frase-activa';
-        marca.textContent = nodo.textContent.slice(a, b);
-        trozos.appendChild(marca);
-        if (b < largo) trozos.appendChild(document.createTextNode(nodo.textContent.slice(b)));
-        nodo.replaceWith(trozos);
-        break;
+        const z = Math.min(n, hasta - visto);
+        if (z > a) trozos.push([nodo, a, z]);
+        visto += n;
+        if (visto >= hasta) break;
       }
-      visto += largo;
+      for (const [nodo, a, z] of trozos) {
+        const texto = nodo.textContent;
+        const fragmento = document.createDocumentFragment();
+        if (a > 0) fragmento.appendChild(document.createTextNode(texto.slice(0, a)));
+        const marca = document.createElement('mark');
+        marca.className = 'pdf-linea-guia pdf-frase-activa';
+        marca.textContent = texto.slice(a, z);
+        fragmento.appendChild(marca);
+        if (z < texto.length) fragmento.appendChild(document.createTextNode(texto.slice(z)));
+        nodo.replaceWith(fragmento);
+        if (!primera) primera = marca;
+      }
     }
-    return marca;
+    return primera;
   }
 
   /* ── Paso de páginas ─────────────────────────────────────────────────
@@ -356,6 +369,9 @@ export function initLibroVista({ el, estado, api }) {
    * mismos `data-ini`, así que las posiciones guardadas, el resaltado de la
    * voz y «leer desde aquí» siguen funcionando sin enterarse. */
   const pag = { total: 1, actual: 0, paso: 0, activo: false, ancla: 0, saltando: false };
+  /* Dónde cree el lector que suena la voz (ver `seguirVoz`). */
+  const vozSeguida = { caracter: -1, t: 0 };
+  const REANUDA_MS = 1500;
   /* Un salto de página lleva ~300 ms de desplazamiento suave. Remaquetar
    * durante ese rato deja la lectura en un sitio que no eligió nadie. */
   let tempoSalto = null;
@@ -564,6 +580,7 @@ export function initLibroVista({ el, estado, api }) {
     pintarPaginacion();
     pintarPieLectura();
     pintarIrAbajo();
+    resituarEnLaVoz();
   }
 
   function rangoDeCaracter(caracter) {
@@ -661,19 +678,82 @@ export function initLibroVista({ el, estado, api }) {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
   }
 
+  /* Página en la que cae un carácter del texto, o -1 si no se puede medir. */
+  function paginaDeCaracter(caracter) {
+    if (!pag.activo || !pag.paso) return -1;
+    /* Un espacio al final de renglón no tiene caja: se prueba con los
+     * siguientes hasta dar con una letra que sí se pueda medir. */
+    for (let k = 0; k < 4; k += 1) {
+      const destino = rangoDeCaracter(Math.max(0, Math.floor(Number(caracter) || 0) + k));
+      const rect = destino && destino.getClientRects ? destino.getClientRects()[0] : null;
+      if (rect && (rect.width > 0 || rect.height > 0)) return Math.min(pag.total - 1, paginaDeRect(rect));
+    }
+    return -1;
+  }
+
+  /* La página sigue a la VOZ, no a la marca.
+   *
+   * Medido: la página se decidía por el INICIO de la marca. Una marca que
+   * empezaba en la última línea de una página y seguía en la siguiente dejaba
+   * la página atrás mientras la voz ya estaba en la otra; y una marca que
+   * empezaba en la PRIMERA línea de una página caía, por el margen negativo
+   * de su estilo, en la página anterior y la lectura «volvía sola» hacia atrás.
+   *
+   * Reglas:
+   *  · La página cambia cuando el carácter que suena cae en una posterior a la
+   *    que se ve (nunca antes), y solo hacia delante.
+   *  · Hacia atrás únicamente si la persona lo pidió (`retroceder`: barra de
+   *    posición, tocar un párrafo, saltar de frase, cambio de capítulo) o si
+   *    la voz se reanuda tras una pausa.
+   *  · Si la persona pasa página a mano con la voz sonando, la voz se reanuda
+   *    en esa página (`onCambioPaginaUsuario`), así que la voz y la vista
+   *    siguen juntas sin pelearse.
+   *  · Al repartir de nuevo las páginas (giro, cromo, tamaño) se vuelve a
+   *    situar la vista en la página de la voz, sin animación (`forzar`). */
+  function seguirVoz(caracter, { retroceder = false, forzar = false, instantaneo = false } = {}) {
+    if (!pag.activo || !pag.paso || !seguimiento) return false;
+    const destino = paginaDeCaracter(caracter);
+    if (destino < 0) return false;
+    const ahora = Date.now();
+    const reanuda = !forzar && ahora - vozSeguida.t > REANUDA_MS;
+    /* Una remedición no es noticia de la voz: no renueva su reloj. */
+    if (!forzar) { vozSeguida.caracter = caracter; vozSeguida.t = ahora; }
+    if (destino > pag.actual || ((retroceder || reanuda) && destino !== pag.actual)) {
+      irAPagina(destino, { suave: !instantaneo });
+      return true;
+    }
+    /* Misma página, pero tras repartir de nuevo la vista quedó a medio camino
+     * entre dos: se alinea. */
+    const art = el.lectura;
+    if (destino === pag.actual && !pag.saltando && art
+        && Math.abs(art.scrollLeft - pag.actual * pag.paso) > 3) {
+      irAPagina(pag.actual, { suave: false, guardar: false });
+      return true;
+    }
+    return false;
+  }
+
+  /* Tras repartir otra vez las páginas, la vista se coloca por el carácter que
+   * estaba al principio de la página (`pag.ancla`), que con la voz sonando
+   * puede ser una página atrás. Si la voz está viva, se sitúa en la suya. */
+  function resituarEnLaVoz() {
+    if (vozSeguida.caracter < 0 || Date.now() - vozSeguida.t > 2000) return;
+    seguirVoz(vozSeguida.caracter, { forzar: true, instantaneo: true });
+  }
+
   /* Lleva la marca a la zona cómoda de lectura (algo por encima del centro,
    * que es donde el ojo la espera) y solo cuando hace falta: si la frase ya se
-   * ve, mover la página sería un tirón gratuito. */
-  function desplazarA(elemento) {
-    if (!elemento || !seguimiento) return;
-    /* Con páginas no se desplaza: se pasa a la página donde suena la frase, y
-     * solo si no es la que ya se está viendo. */
+   * ve, mover la página sería un tirón gratuito.
+   *
+   * Con páginas manda la voz (`opciones.caracter`), no el elemento. */
+  function desplazarA(elemento, opciones = {}) {
+    if (!seguimiento) return;
     if (pag.activo) {
-      if (pag.saltando) return;
-      const destino = paginaDe(elemento);
-      if (destino !== pag.actual) irAPagina(destino);
+      const caracter = Number.isFinite(opciones.caracter) ? opciones.caracter : null;
+      if (caracter != null) seguirVoz(caracter, { retroceder: !!opciones.retroceder });
       return;
     }
+    if (!elemento) return;
     const caja = elemento.getBoundingClientRect();
     const alto = window.innerHeight || 800;
     if (caja.top > alto * 0.20 && caja.bottom < alto * 0.80) return;
@@ -742,6 +822,8 @@ export function initLibroVista({ el, estado, api }) {
    * de página con el refluido aunque el sitio esté intacto. */
   api.obtenerAnclaPagina = () => pag.ancla;
   if (typeof window !== 'undefined') window.__jgPaginas = () => ({ ...pag, visible: caracterVisible() });
+  /* Ventana de medición para pruebas de navegador (precedente: __jgPaginas). */
+  if (typeof window !== 'undefined') window.__jgMarcarRango = (ini, fin) => marcarRango(ini, fin);
 
   if (el.irAbajo) {
     el.irAbajo.addEventListener('click', () => {
@@ -2083,6 +2165,8 @@ export function initLibroVista({ el, estado, api }) {
     renderLectura,
     marcarRango,
     desplazarA,
+    seguirVoz,
+    paginaDeCaracter,
     irACaracter,
     caracterVisible,
     pintarCortes,

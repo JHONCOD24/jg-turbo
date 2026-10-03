@@ -25,6 +25,7 @@ import {
 import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconstruirDesdeAtomos, invarianteLetras } from './reconstruccion.js';
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
 import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync, estadoRevisionCortes } from './manifiesto.js';
+import { partirEnUnidades, unidadEn } from './unidadesLectura.js';
 import { compactarTexto, situarBloquesTexto, situarBloquesDetallado, rellenarAnclas, construirCostos, acumularCostos, posicionPorTiempo, tiempoPorPosicion, dentroDeHabla } from './guiaAnclas.js';
 import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndice, ANCHO_INDICE_DEF } from './panelIndice.js';
 import { componerAtomosFiel } from './fidelidad.js';
@@ -4592,6 +4593,7 @@ export function inicializarLectorPdf(deps = {}) {
      * principio, y anclarla con el desplazamiento viejo la corría entera. */
     guia.textoFijado = textoBruto;
     guia.desdeCaracter = -1;
+    guia.arrancaEn = -1;
     guia.saltar = true;
     guia.ultimoMarcadoVista = -1;
     // En español monolingüe, respetar voz regional (no forzar multilingüe); solo usar multi si preferencia o contenido lo pide
@@ -5206,7 +5208,7 @@ export function inicializarLectorPdf(deps = {}) {
    * fiable, no un karaoke palabra por palabra.
    */
   const guia = {
-    texto: null, frases: [], palabras: [], tramos: [], desde: -1, hasta: -1, palabraDesde: -1, ultimoMarcadoVista: -1, cola: null, anclas: [], compacto: '', mapa: null,
+    texto: null, frases: [], palabras: [], tramos: [], desde: -1, hasta: -1, palabraDesde: -1, ultimoMarcadoVista: -1, vozCaracter: -1, arrancaEn: -1, arrancaT: 0, cola: null, anclas: [], compacto: '', mapa: null,
     /* Cuántos bloques tenía la cola cuando se situaron las anclas: si crece,
      * hay que volver a situarlas o la marca barre el capítulo entero. */
     bloques: 0,
@@ -5410,109 +5412,19 @@ export function inicializarLectorPdf(deps = {}) {
   }
 
   /**
-   * Trocea un texto en ventanas de lectura concentrada de unas 2 líneas (~80-130 caracteres).
-   *
-   * Respeta saltos de párrafo, signos de puntuación fuerte (. ? ! …) y cláusulas
-   * intermedias (, ; : — – ) sin cortar palabras en medio, ofreciendo un campo visual
-   * estable y confortable para el lector.
+   * Unidades que se marcan al leer: la oración completa y, si es larguísima,
+   * sus cláusulas (`;` `:` `—` `,`). La lógica vive en `unidadesLectura.js`
+   * para poder probarse sin navegador; estos dos nombres se conservan porque
+   * el resto de la guía (y sus pruebas) los usa. Antes eran ventanas de
+   * 55–135 caracteres cortadas donde cayera un espacio, sin criterio gramatical.
    */
-  function partirEnLineasLectura(texto, { meta = 95, min = 55, max = 135 } = {}) {
-    if (!texto) return [];
-    const tramos = [];
-    const largo = texto.length;
-    let i = 0;
-
-    while (i < largo) {
-      while (i < largo && /\s/.test(texto[i])) i++;
-      if (i >= largo) break;
-
-      const inicio = i;
-      const objetivo = Math.min(largo, inicio + meta);
-      const limite = Math.min(largo, inicio + max);
-
-      if (limite >= largo) {
-        let fin = largo;
-        while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
-        if (fin > inicio) tramos.push([inicio, fin]);
-        break;
-      }
-
-      const salto = texto.indexOf('\n', inicio);
-      if (salto !== -1 && salto <= limite) {
-        let fin = salto;
-        while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
-        if (fin > inicio) {
-          tramos.push([inicio, fin]);
-          i = salto + 1;
-          continue;
-        }
-      }
-
-      let mejorCorte = -1;
-      const ventana = texto.slice(inicio, limite);
-
-      const reFuerte = /[.!?…]+(?=[\s\n]|$)/g;
-      let m;
-      while ((m = reFuerte.exec(ventana)) !== null) {
-        const idx = inicio + m.index + m[0].length;
-        if (idx >= inicio + min && idx <= limite) {
-          mejorCorte = idx;
-        }
-      }
-
-      if (mejorCorte === -1) {
-        const reMedia = /[,;:—–\)\]]+(?=[\s\n]|$)/g;
-        while ((m = reMedia.exec(ventana)) !== null) {
-          const idx = inicio + m.index + m[0].length;
-          if (idx >= inicio + min && idx <= limite) {
-            mejorCorte = idx;
-          }
-        }
-      }
-
-      if (mejorCorte === -1) {
-        let uEspacio = -1;
-        for (let k = limite; k >= inicio + min; k--) {
-          if (/\s/.test(texto[k])) { uEspacio = k; break; }
-        }
-        if (uEspacio !== -1) {
-          mejorCorte = uEspacio;
-        } else {
-          const pEspacio = texto.indexOf(' ', inicio + min);
-          if (pEspacio !== -1 && pEspacio < inicio + max * 1.5) {
-            mejorCorte = pEspacio;
-          } else {
-            mejorCorte = limite;
-          }
-        }
-      }
-
-      let fin = mejorCorte;
-      while (fin > inicio && /\s/.test(texto[fin - 1])) fin--;
-      if (fin > inicio) tramos.push([inicio, fin]);
-      i = mejorCorte;
-      while (i < largo && /\s/.test(texto[i])) i++;
-    }
-    return tramos.length ? tramos : [[0, largo]];
+  function partirEnLineasLectura(texto) {
+    return partirEnUnidades(texto);
   }
 
-  /** Tramo de lectura de ~2 líneas que contiene un punto del texto (búsqueda binaria). */
+  /** La unidad de lectura que contiene un punto del texto (búsqueda binaria). */
   function tramoEn(tramos, posicion) {
-    if (!tramos || !tramos.length) return null;
-    let bajo = 0;
-    let alto = tramos.length - 1;
-    while (bajo <= alto) {
-      const medio = (bajo + alto) >> 1;
-      const [ini, fin] = tramos[medio];
-      if (posicion < ini) alto = medio - 1;
-      else if (posicion >= fin) bajo = medio + 1;
-      else return tramos[medio];
-    }
-    if (alto >= 0 && posicion >= tramos[alto][0] && (bajo >= tramos.length || posicion < tramos[bajo][0])) {
-      return tramos[alto];
-    }
-    const idx = Math.max(0, Math.min(tramos.length - 1, bajo));
-    return tramos[idx] || null;
+    return unidadEn(tramos, posicion);
   }
 
   /** Corta el texto en palabras respetando límites naturales y símbolos. */
@@ -5562,6 +5474,7 @@ export function inicializarLectorPdf(deps = {}) {
     guia.hasta = -1;
     guia.palabraDesde = -1;
     guia.ultimoMarcadoVista = -1;
+    guia.vozCaracter = -1;
     guia.cola = null;
     guia.bloques = 0;
     /* Se viene de un cambio de capítulo o de parar la lectura: la próxima
@@ -5586,6 +5499,7 @@ export function inicializarLectorPdf(deps = {}) {
         bloques: guia.bloques,
         anclas: Array.isArray(guia.anclas) ? guia.anclas.slice() : [],
         textoLen: (guia.texto || '').length,
+        voz: guia.vozCaracter,
       });
     }
   } catch (_) { /* en pruebas sin ventana no existe */ }
@@ -5629,12 +5543,16 @@ export function inicializarLectorPdf(deps = {}) {
     const punto = porBloque != null
       ? porBloque
       : Math.max(0, Math.min(texto.length - 1, Math.round((Number(datos.fraccion) || 0) * texto.length)));
+    /* Dónde cree la guía que suena la voz AHORA. La página del lector se
+     * decide con este punto —no con el inicio de la marca—, que puede empezar
+     * una página antes de donde ya va la voz. */
+    guia.vozCaracter = punto;
     const rango = (guia.tramos && guia.tramos.length ? tramoEn(guia.tramos, punto) : null)
       || fraseEn(guia.frases, punto);
     if (!rango) return null;
 
-    /* Si seguimos dentro de la misma ventana de ~2 líneas, no tocamos el DOM.
-     * Mantiene una concentración visual relajada y sin parpadeos para el lector. */
+    /* Si seguimos dentro de la misma unidad (oración o cláusula), no tocamos
+     * el DOM: sin parpadeos para quien lee. */
     if (rango[0] === guia.desde) return el.realce.querySelector('mark');
 
     /* La guía no vuelve atrás sola.
@@ -5685,6 +5603,12 @@ export function inicializarLectorPdf(deps = {}) {
       return;
     }
     if (!datos.sonando) { limpiarGuia(); return; }
+    /* Primera señal de la lectura nueva tras un salto: se recupera desde dónde
+     * se lee (ver `leerDesdeCaracter`) antes de situar la cola. */
+    if (guia.arrancaEn >= 0) {
+      if (guia.desdeCaracter < 0 && Date.now() - guia.arrancaT < 10000) guia.desdeCaracter = guia.arrancaEn;
+      guia.arrancaEn = -1;
+    }
 
     /* El progreso del libro se anota siempre que suene, se siga el texto o no.
      * Cuando la guía pudo situar el bloque, se conoce el carácter EXACTO que
@@ -5700,6 +5624,10 @@ export function inicializarLectorPdf(deps = {}) {
     const largo = textoParaGuia().length;
     const empezadaMasAbajo = guia.desdeCaracter >= 0;
     const parcial = !empezadaMasAbajo && datos.caracteres > 0 && largo > 0 && datos.caracteres < largo * 0.7;
+    /* ¿La persona pidió un salto (barra, párrafo, cambio de capítulo…)? Solo
+     * entonces la página puede ir hacia atrás con la voz. `marcarFrase` consume
+     * la bandera, por eso se lee antes. */
+    const huboSalto = guia.saltar;
     const marca = parcial ? null : marcarFrase(datos);
     if (parcial) { limpiarGuia(); return; }
 
@@ -5709,17 +5637,19 @@ export function inicializarLectorPdf(deps = {}) {
      * modo edición, sobre el textarea y su capa gemela, como siempre. */
     if (enModoLectura()) {
       if (libroVista && libroVista.marcarRango && guia.desde >= 0) {
+        let pintada = null;
         if (guia.desde !== guia.ultimoMarcadoVista) {
           const rango = (guia.tramos && guia.tramos.length ? tramoEn(guia.tramos, guia.desde) : null)
             || fraseEn(guia.frases, guia.desde);
-          const pintada = rango
-            ? libroVista.marcarRango(rango[0], rango[1])
-            : null;
-          if (pintada) {
-            libroVista.desplazarA(pintada);
-            guia.ultimoMarcadoVista = guia.desde;
-          }
+          pintada = rango ? libroVista.marcarRango(rango[0], rango[1]) : null;
+          if (pintada) guia.ultimoMarcadoVista = guia.desde;
         }
+        /* La página sigue a la VOZ, no a la marca: se consulta en cada avance
+         * (no solo al cambiar de unidad) con el carácter que suena. */
+        libroVista.desplazarA(pintada, {
+          caracter: guia.vozCaracter >= 0 ? guia.vozCaracter : guia.desde,
+          retroceder: huboSalto,
+        });
       }
       return;
     }
@@ -6706,7 +6636,16 @@ export function inicializarLectorPdf(deps = {}) {
         onCambioPaginaUsuario: (caracter) => {
           try {
             if (ttsSonandoAqui()) {
-              leerDesdeCaracter(caracter, { forzarNuevo: false });
+              /* La voz sigue a la página que la persona eligió: arranca en la
+               * primera oración que EMPIEZA en ella. Si arrancara en el inicio
+               * de la oración que cruza el borde, la voz caería en la página
+               * anterior y la lectura arrastraría la vista hacia atrás. */
+              const frases = partirEnFrases(el.salida.value || '');
+              const dentro = frases.length ? fraseEn(frases, caracter) : null;
+              const siguiente = dentro && dentro[0] < caracter
+                ? frases.find(([desde]) => desde >= caracter)
+                : null;
+              leerDesdeCaracter(siguiente ? siguiente[0] : caracter, { forzarNuevo: false });
             }
           } catch (_) {}
         },
@@ -6949,6 +6888,16 @@ export function inicializarLectorPdf(deps = {}) {
       return;
     }
     guia.desdeCaracter = desde;
+    /* Si ya sonaba otra lectura, `ttsHablar` la para y esa parada llega a la
+     * guía como «ya no suena» (`limpiarGuia`), que olvida `desdeCaracter`; y
+     * llega más de una vez, algunas tras cargar el audio nuevo. Sin saber
+     * desde dónde se lee, la cola nueva se busca desde el principio del texto,
+     * no encaja y la guía cree que la voz está en otra página (medido: pasar
+     * página con la voz sonando llevaba la vista al inicio del capítulo).
+     * `arrancaEn` no lo borra ninguna parada: se recupera en el primer avance
+     * que suene (si llega dentro de 10 s). */
+    guia.arrancaEn = desde;
+    guia.arrancaT = Date.now();
     /* La guía sigue este texto aunque el cuadro cambie después (pulido que
      * llega, edición): la cola nueva suena esto, no lo que haya luego. */
     guia.textoFijado = texto;
@@ -7127,6 +7076,7 @@ export function inicializarLectorPdf(deps = {}) {
       try {
         guia.textoFijado = textoDeParte(nuevo);
         guia.desdeCaracter = -1;
+        guia.arrancaEn = -1;
         guia.saltar = true;
         guia.cola = null;
         guia.anclas = [];
