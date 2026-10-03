@@ -329,5 +329,62 @@ for (const [etiqueta, opciones] of [['YouTube/X', { esperarVoz: true, esperarFra
   comprobar(s.jugador.estado === 2, 'espera + pestaña: la voz lista NO reanuda un video que la persona dejó en pausa');
 }
 
+// ── 12b. Lo que pasaba antes en YouTube y X: sin espera, la voz llega tarde y se pierde ──
+{
+  const unidades = unidadesContinuas(30, { ventana: 3, voz: 2.4, estado: 'pendiente' });
+  const s = await crearEscenario(unidades, { esperarVoz: false, sintesis: { latenciaMs: 5000, porMinuto: 18 }, voz: 2.4 });
+  s.motor.activarYReproducir();
+  await s.correr(120);
+  const lat = s.latencias();
+  comprobar(s.motor.metricas().frasesSaltadas > 0 || percentil(lat, 0.95) > 0.5,
+    `sin espera (como estaba): ${s.motor.metricas().frasesSaltadas} frases saltadas y entrada tardía p95 ${ms(percentil(lat, 0.95))} ms: por eso ahora espera`);
+}
+
+// ── 12c. La persona le da play mientras el video espera la voz, o la voz no llega nunca ──
+{
+  const unidades = unidadesContinuas(10, { ventana: 3, voz: 2.4, estado: 'pendiente' });
+  const s = await crearEscenario(unidades, { esperarVoz: true, esperarFrase: false, sintesis: { latenciaMs: 20000, porMinuto: 18 }, voz: 2.4 });
+  s.motor.activarYReproducir();
+  await s.correr(3);
+  const parado = s.jugador.t;
+  comprobar(s.jugador.estado === 2 && parado < 0.5, `espera: el video se detuvo en ${parado.toFixed(2)} s para esperar la voz de la primera frase`);
+  s.jugador.playVideo();   // la persona insiste
+  await s.correr(2);
+  comprobar(s.jugador.estado === 1 && s.jugador.t > parado + 1.5, 'espera: si la persona le da play, el video sigue (no se le vuelve a detener por esa frase)');
+}
+{
+  const unidades = unidadesContinuas(10, { ventana: 3, voz: 2.4, estado: 'pendiente' });
+  const s = await crearEscenario(unidades, { esperarVoz: true, esperarFrase: false, sintesis: { latenciaMs: 10 * 60 * 1000, porMinuto: 18 }, voz: 2.4 });
+  s.motor.activarYReproducir();
+  await s.correr(33);
+  comprobar(s.jugador.estado === 1 && s.jugador.t > 0.5, `espera: una voz que no llega en 30 s no deja el video parado para siempre (avanza a ${s.jugador.t.toFixed(1)} s)`);
+}
+
+// ── 14. Retomar donde ibas: el salto pedido justo antes de «Ver con voz en español» ──
+{
+  const unidades = unidadesContinuas(30, { voz: 3 });
+  const s = await crearEscenario(unidades);
+  s.motor.activar();   // la voz queda lista con el video en pausa en 0 (como al terminar de preparar)
+  await s.correr(3);   // la persona tarda 3 s en tocar el botón; el reloj de pared coincide con el salto
+  s.jugador.seekTo(3);   // «Retomamos donde ibas (3 s)»
+  // YouTube real: playVideo() arranca ya, pero el evento «playing» llega ~250 ms después.
+  s.jugador.playVideo = function () { this.estado = 1; setTimeout(() => this.estados.forEach((f) => f('playing')), 0); };
+  s.motor.activarYReproducir();
+  await new Promise((r) => setTimeout(r, 5));
+  await s.correr(6);
+  const primera = s.registro.inicios[0];
+  comprobar(primera && indiceDe(primera.url) === 0 && primera.desde > 1, `retomar: la frase del punto retomado suena desde donde va, no desde su principio (${primera?.url} desde ${primera?.desde.toFixed(2)} s)`);
+}
+
+// ── 13. Cableado en la app: la espera cubre los tres orígenes y la vista despierta a la voz ──
+{
+  const { readFile } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const fuente = await readFile(fileURLToPath(new URL('../js/youtube/youtubeSyncController.js', import.meta.url)), 'utf8');
+  comprobar(/esperarVoz:\s*true/.test(fuente), 'app: el video espera a la voz lista en YouTube, X y archivo (esperarVoz: true para todos)');
+  comprobar(/esperarFrase:\s*esClaveArchivo\(/.test(fuente), 'app: la espera por frase completa sigue siendo solo del video del equipo');
+  comprobar(/visibilitychange[\s\S]{0,300}despertar\(\)/.test(fuente), 'app: al volver a la vista, la voz se resincroniza (despertar) sin esperar al reloj');
+}
+
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

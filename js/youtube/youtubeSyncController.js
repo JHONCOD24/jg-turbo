@@ -644,7 +644,10 @@ export function inicializarYoutubeSincronizado({
     guardarSesion(actual);
   };
   window.addEventListener('pagehide', guardarAlSalir);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarAlSalir(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') guardarAlSalir();
+    else sesion?.motorVoz?.despertar();   // volvió a la vista o se desbloqueó el teléfono: la voz se pone al punto del video ya
+  });
 
   // Al pasar a otra pestaña de la app, video y voz se PAUSAN (no suenan dos cosas a la vez);
   // al volver, el mismo video espera en el mismo segundo con un toque para seguir.
@@ -1010,7 +1013,11 @@ export function inicializarYoutubeSincronizado({
       },
       modoSilenciarOriginal: esIOS,
       ritmoAutomatico: ritmoAutomatico(),
-      esperarVoz: esClaveArchivo(actual.videoId),
+      // Si la voz de la frase que viene no está lista (cuota de Azure, red lenta), el
+      // video espera en vez de seguir sin voz y meterla tarde: igual en YouTube, X y archivo.
+      // Solo el video del equipo espera además a que cada frase termine (puede pausarse sin retraso).
+      esperarVoz: true,
+      esperarFrase: esClaveArchivo(actual.videoId),
       onStatus: (mensaje, tipo) => { ui.estado.textContent = mensaje; display.mostrarVoz(tipo); },
       onMetricas: (metricas) => { actual.metricas = metricas; },   // solo diagnóstico (H28)
       onFin: () => { ui.estado.textContent = 'El video terminó.'; display.mostrarVoz('fin'); },

@@ -211,7 +211,8 @@ export async function crearEscenario(unidades, {
   ritmoAutomatico = true, esperarVoz = false, esperarFrase, pasoMs = 20, latenciaPlayMs = 40,
   servicio = null, sintesis = null, voz = 3, DubbingEngine = null, motorExtra = {}, crearAudioCompartido = null,
 } = {}) {
-  const { DubbingEngine: Motor } = await modulo('dubbingEngine.js');
+  // JG_MOTOR=_motor_viejo.js corre las mismas pruebas contra otra versión del motor (comparar antes/después).
+  const { DubbingEngine: Motor } = await modulo(process.env.JG_MOTOR || 'dubbingEngine.js');
   const sim = {
     ahora: 0, pasoMs, latenciaPlayMs, congelado: false, diferidos: [], ticMs: 100, cortesPermitidosHasta: -1,
     duraciones: new Map(), finesVoz: new Map(),
