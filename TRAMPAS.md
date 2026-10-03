@@ -1732,3 +1732,26 @@ contenedor que se desplaza.
 (`body:has(#panelYt.active .yt-area.modo-doblaje)`) se ocultan; reaparecen al cerrar el
 video o al girar a vertical. Para medir «cabe en el alto visible» hay que contar también
 el margen superior de la página (20 px), o la última línea queda cortada.
+
+## Restaurar el video activo: cuatro trampas medidas (2026-10-03)
+
+**Síntoma 1:** al restaurar un video de YouTube tras recargar, «retomar en el segundo N»
+con `seekTo` lo ponía a reproducir solo (o el reloj quedaba en 0 hasta el primer toque).
+**Causa:** según la documentación de la IFrame API, `seekTo` desde el estado «cued» pide el
+flujo y reproduce; y el navegador bloquea el audio sin gesto, así que sonaría por sorpresa.
+**Regla:** posicionar al CREAR el reproductor (`playerVars.start`, `YouTubePlayer({ inicioS })`)
+y dejar el video en pausa con un botón «Ver con voz en español»; `seekTo` solo como respaldo.
+
+**Síntoma 2:** la restauración volvía a pedir traducción tras un F5 inmediato.
+**Causa:** las traducciones se guardaban 3 s después de la última; recargar antes perdía
+el tramo. **Regla:** el guardado de traducciones va con retardo corto (600 ms) y también en
+`pagehide`/`visibilitychange` (no `beforeunload`, poco fiable en móvil). Recargar a los
+pocos segundos puede repetir UNA petición de traducción pendiente; nunca la de texto.
+
+**Síntoma 3:** una prueba de «servidor caído» no lo estaba. **Causa:** `checkServer` cae a
+`/ping` si `/health` falla. **Regla:** simular la caída abortando `/health` Y `/ping`.
+
+**Síntoma 4:** una prueba de «0 peticiones tras recargar» daba falso rojo. **Causa:** el
+contador vive en el objeto de la página y NO se reinicia con `reload()`. **Regla:** comparar
+contra el valor justo antes de recargar, no contra 0. Y el controlador de Videos solo carga
+al entrar en esa pestaña: una prueba con `?tab=mic` no puede esperar `window.jgVideoLocal`.

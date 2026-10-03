@@ -35,8 +35,9 @@ const ESTADOS = {
 };
 
 export class YouTubePlayer {
-  constructor(elemento, videoId, { pantallaCompletaPropia = false } = {}) {
+  constructor(elemento, videoId, { pantallaCompletaPropia = false, inicioS = 0 } = {}) {
     this.elemento = elemento;
+    this.inicioS = Math.max(0, Math.floor(Number(inicioS) || 0));   // segundo donde queda cargado (sin reproducir)
     this.videoId = videoId;
     this.pantallaCompletaPropia = pantallaCompletaPropia;
     this.player = null;
@@ -59,6 +60,7 @@ export class YouTubePlayer {
           iv_load_policy: 3,                // sin anotaciones encima del video
           fs: this.pantallaCompletaPropia ? 0 : 1,
           origin: window.location.origin,   // recomendado por la documentación de la IFrame API
+          ...(this.inicioS > 0 ? { start: this.inicioS } : {}),   // retomar: queda en ese segundo, en pausa
         },
         events: {
           onReady: () => resolver(),

@@ -29,6 +29,7 @@ import {
   listarVideos, listarDoblajes, videosConVoz, actualizarVideo, quitarVideo, restaurarVideo, espacioYPersistencia,
 } from './cacheDoblaje.js';
 import { claveDeVoz } from './bibliotecaVideos.js';
+import { leerVideoActivo, guardarVideoActivo, olvidarVideoActivo, formatoReloj } from './videoActivo.js';
 import { medirHabla } from './hablaVoz.js';
 import { estimarBytesMp3, estimarBytesVideo, opcionesCalidadX, nombreArchivo, BITRATE_AUDIO_DOBLADO, formatearBytes } from './descargaDestino.js';
 import { crearDestino } from './destinoArchivo.js';
@@ -92,6 +93,9 @@ export function inicializarYoutubeSincronizado({
     avisoEquipo: $('ytEquipoAviso'),
     srt: $('ytSrt'), elegirSubtitulo: $('ytElegirSubtitulo'), subtitulo: $('ytSubtitulo'),
     srtFicha: $('ytSrtFicha'), srtNombre: $('ytSrtNombre'), srtDatos: $('ytSrtDatos'), srtQuitar: $('ytSrtQuitar'),
+    borrarUrl: $('ytUrlBorrar'), errorUrl: $('ytUrlError'), cambiar: $('ytCambiarVideo'),
+    reanudar: $('ytReanudar'), reanudarTitulo: $('ytReanudarTitulo'), reanudarMensaje: $('ytReanudarMensaje'),
+    reanudarAccion: $('ytReanudarAccion'), reanudarCerrar: $('ytReanudarCerrar'),
   };
   const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
   const transcripciones = new TranscriptionService({ fetchApi });
@@ -113,6 +117,8 @@ export function inicializarYoutubeSincronizado({
   // Biblioteca (bibliotecaVista.js): se monta sola si existe #vidBiblioteca.
   let biblioteca = null;
   let abrirEnPendiente = 0;
+  let aperturaPendiente = null;   // { mensaje, restaurando }: cómo se abre el video que viene (retomar tras recargar)
+  let generacion = 0;             // sube con cada sesión nueva: una restauración lenta no pisa lo que la persona abrió
   let vocesDesdePoda = 0;
   const avisarBiblioteca = () => { Promise.resolve(biblioteca?.refrescar?.()).catch(() => {}); };
   /** La voz guardada tiene tope (300 MB): se revisa cada 50 frases nuevas, no en cada una. */
@@ -425,6 +431,33 @@ export function inicializarYoutubeSincronizado({
   ui.url.addEventListener('input', pintarNotaUrl);
   pintarNotaUrl();
 
+  // ── Corregir el enlace sin esfuerzo: «Borrar», Escape, Enter y un error que se lee ──
+  const pintarUrl = () => {
+    const texto = ui.url.value.trim();
+    if (ui.borrarUrl) ui.borrarUrl.hidden = !ui.url.value;
+    // El formato se avisa mientras se escribe, pero no mientras el campo está vacío.
+    if (ui.errorUrl) ui.errorUrl.hidden = !texto || Boolean(detectarFuente(texto));
+  };
+  const vaciarUrl = () => {
+    ui.url.value = '';
+    pintarUrl();
+    pintarNotaUrl();
+    actualizarBoton();
+    ui.url.focus({ preventScroll: true });
+  };
+  ui.url.addEventListener('input', pintarUrl);
+  ui.borrarUrl?.addEventListener('click', vaciarUrl);
+  ui.url.addEventListener('keydown', (evento) => {
+    if (evento.key === 'Escape' && ui.url.value) { evento.preventDefault(); vaciarUrl(); return; }
+    if (evento.key === 'Enter') {
+      evento.preventDefault();
+      if (!ui.url.value.trim()) return;
+      if (!detectarFuente(ui.url.value)) { pintarUrl(); return; }   // el error ya está a la vista: no falla en silencio
+      if (!ui.boton.disabled) ui.boton.click();
+    }
+  });
+  pintarUrl();
+
   // ── Video del equipo: elegir, arrastrar, quitar ─────────────────────────
   const ACEPTA_VIDEO = 'video/*,.mp4,.m4v,.mov,.mkv,.webm';
   const avisarEquipo = (texto) => { if (ui.avisoEquipo) ui.avisoEquipo.textContent = texto || ''; };
@@ -442,7 +475,7 @@ export function inicializarYoutubeSincronizado({
     if (!valido.ok) { avisarEquipo(valido.motivo); quitarArchivo(); return false; }
     avisarEquipo('');
     archivoElegido = archivo;
-    if (ui.url.value) { ui.url.value = ''; pintarNotaUrl(); }
+    if (ui.url.value) { ui.url.value = ''; pintarNotaUrl(); pintarUrl(); }
     if (ui.ficha) {
       ui.fichaNombre.textContent = archivo.name || 'Video de tu equipo';   // nombre ajeno: textContent, nunca innerHTML
       ui.fichaDatos.textContent = `${formatearBytes(archivo.size)} · listo para doblar`;
@@ -579,10 +612,67 @@ export function inicializarYoutubeSincronizado({
     if (posicion > 0) registrarVideo({ clave: actual.videoId, posicionS: posicion, duracionS: actual.registro.duracionS });
   }
 
-  /** Detiene TODO lo de la sesión (H7) y, si se pide, devuelve el formulario (H8). */
-  function terminarSesion({ restaurarFormulario = true } = {}) {
+  // ── El video activo sobrevive a recargar, cerrar la app y cambiar de pestaña ──
+  /** Anota cuál video está abierto y en qué segundo va (solo un puntero: lo pesado está en la caché). */
+  function recordarActivo(actual, { preparando = false } = {}) {
+    if (!actual?.activo) return;
+    const titulo = ui.titulo.textContent;
+    guardarVideoActivo({
+      ...actual.activo,
+      titulo: titulo && titulo !== 'Video doblado al español' ? titulo : actual.activo.titulo,
+      // Mientras queda un salto pendiente (retomar tras recargar), ese es el segundo que vale.
+      segundo: actual.retomarEn || Number(actual.player?.getCurrentTime?.()) || 0,
+      preparando,
+    });
+  }
+  const ocultarReanudar = () => { if (ui.reanudar) ui.reanudar.hidden = true; };
+  /** El aviso de arriba: qué pasó con el video guardado y, si hace falta, el botón para seguir. */
+  function mostrarReanudar({ titulo, mensaje, accion = '', alAccion = null }) {
+    if (!ui.reanudar) return;
+    ui.reanudarTitulo.textContent = titulo;       // el título del video es ajeno: textContent, nunca innerHTML
+    ui.reanudarMensaje.textContent = mensaje;
+    ui.reanudarAccion.hidden = !accion;
+    ui.reanudarAccion.textContent = accion;
+    ui.reanudarAccion.onclick = alAccion;
+    ui.reanudar.hidden = false;
+  }
+  // Salir de la pestaña, cerrar o recargar: lo último que se vio queda anotado (pagehide, no beforeunload: en móvil no es fiable).
+  const guardarAlSalir = () => {
+    const actual = sesion;
+    if (!actual?.registro) return;
+    recordarActivo(actual);
+    guardarSesion(actual);
+  };
+  window.addEventListener('pagehide', guardarAlSalir);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarAlSalir(); });
+
+  // Al pasar a otra pestaña de la app, video y voz se PAUSAN (no suenan dos cosas a la vez);
+  // al volver, el mismo video espera en el mismo segundo con un toque para seguir.
+  window.addEventListener('jg:tab-cambio', (evento) => {
+    const actual = sesion;
+    if (!actual?.player) return;
+    if (evento?.detail?.tab !== 'yt') {
+      const estado = actual.player.getPlayerState?.();
+      const sonando = estado === 1 || estado === 3 || Boolean(actual.motorVoz?.pausaPorVoz);
+      if (!sonando) return;
+      if (actual.motorVoz) actual.motorVoz.pausarTodo(); else actual.player.pauseVideo();
+      actual.pausadaPorPestana = true;
+      return;
+    }
+    if (!actual.pausadaPorPestana) return;
+    actual.pausadaPorPestana = false;
+    if (!actual.motorVoz) return;
+    ui.reproducir.hidden = false;
+    ui.estado.textContent = `En pausa en ${formatoReloj(actual.player.getCurrentTime())}. Toca «${ui.reproducir.textContent.trim()}» para seguir.`;
+  });
+
+  /** Detiene TODO lo de la sesión (H7) y, si se pide, devuelve el formulario (H8). `olvidar`: la persona quitó el video. */
+  function terminarSesion({ restaurarFormulario = true, olvidar = false } = {}) {
     const actual = sesion;
     sesion = null;
+    generacion += 1;
+    if (olvidar) olvidarVideoActivo();
+    ocultarReanudar();
     if (actual) {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       const shell = ui.area.querySelector('.yt-player-shell');
@@ -591,6 +681,7 @@ export function inicializarYoutubeSincronizado({
       $('ytTextoProgreso').textContent = '';
       clearTimeout(actual.temporizadorCache);
       clearInterval(actual.relojCache);
+      clearInterval(actual.relojActivo);
       guardarSesion(actual);
       actual.controlador.abort();
       actual.motor?.detener();
@@ -611,11 +702,24 @@ export function inicializarYoutubeSincronizado({
       ui.url.focus({ preventScroll: true });
     }
   }
-  ui.cerrar.addEventListener('click', () => terminarSesion());
-  ui.cancelar.addEventListener('click', () => terminarSesion());
+  ui.cerrar.addEventListener('click', () => terminarSesion({ olvidar: true }));
+  ui.cancelar.addEventListener('click', () => terminarSesion({ olvidar: true }));
+  // «Cambiar video»: cierra limpio (voz callada, sin peticiones vivas) y deja el campo vacío, enfocado, listo para pegar.
+  ui.cambiar?.addEventListener('click', () => {
+    terminarSesion({ olvidar: true });
+    vaciarUrl();
+  });
   $('ytDesdeInicio').addEventListener('click', () => {
-    if (sesion) sesion.retomarEn = 0;
+    if (sesion) {
+      sesion.retomarEn = 0;
+      if (sesion.posicionado) sesion.player?.seekTo(0);   // al retomar tras recargar el video ya estaba en su segundo
+      sesion.posicionado = false;
+    }
     $('ytDesdeInicio').hidden = true;
+  });
+  ui.reanudarCerrar?.addEventListener('click', () => {
+    ocultarReanudar();
+    if (!sesion) olvidarVideoActivo();   // sin video abierto, descartar el aviso es olvidar lo guardado
   });
 
   ui.botonVoz.addEventListener('click', () => {
@@ -643,6 +747,7 @@ export function inicializarYoutubeSincronizado({
     ponerEstadoBotonVoz(true);
     display.mostrarVoz('activo');
     ui.reproducir.hidden = true;
+    ocultarReanudar();
   });
 
   /** Ante la duda se ofrece elegir el idioma; nunca un rechazo a ciegas (H2, H6). */
@@ -708,9 +813,9 @@ export function inicializarYoutubeSincronizado({
     desbloquearElemento(audioDoblaje2);
   }
 
-  async function crearReproductor(videoId, signal) {
+  async function crearReproductor(videoId, signal, inicioS = 0) {
     recrearDestino();
-    const player = new YouTubePlayer('ytPlayer', videoId, { pantallaCompletaPropia: true });
+    const player = new YouTubePlayer('ytPlayer', videoId, { pantallaCompletaPropia: true, inicioS });
     const listo = player.inicializar().then(() => true).catch(() => false);
     const tardo = new Promise((resolver) => setTimeout(() => resolver(false), ESPERA_REPRODUCTOR_MS));
     await Promise.race([listo, tardo]);
@@ -866,7 +971,7 @@ export function inicializarYoutubeSincronizado({
       onTraduccion: () => {
         display.refrescar();
         clearTimeout(actual.temporizadorCache);
-        actual.temporizadorCache = setTimeout(() => guardarSesion(actual), 3000);
+        actual.temporizadorCache = setTimeout(() => guardarSesion(actual), 600);
       },
     });
     actual.motor = motor;
@@ -946,12 +1051,19 @@ export function inicializarYoutubeSincronizado({
   }
 
   /** Lo común al abrir cualquier video (YouTube o X): corta la sesión anterior y prepara la vista. */
-  function abrirSesion(videoId) {
+  function abrirSesion(videoId, activo) {
     terminarSesion({ restaurarFormulario: false });
     const controlador = new AbortController();
-    const actual = { controlador, videoId, abrirEn: abrirEnPendiente };
+    const apertura = aperturaPendiente || {};
+    const actual = {
+      controlador, videoId, abrirEn: abrirEnPendiente, activo,
+      reanudando: Boolean(apertura.restaurando), mensajeAbrirEn: apertura.mensaje || '',
+    };
     abrirEnPendiente = 0;
+    aperturaPendiente = null;
     sesion = actual;
+    // Quien abre otro video reemplaza al anterior en la memoria; si recarga mientras se prepara, vuelve a este.
+    recordarActivo({ ...actual, retomarEn: actual.abrirEn }, { preparando: true });
     marcarOcupado(true);
     ui.area.hidden = false;
     document.querySelector('.yt-area')?.classList.add('has-results', 'modo-doblaje');
@@ -983,6 +1095,10 @@ export function inicializarYoutubeSincronizado({
       posicionS: sirve ? guardado.posicionS : 0,
     };
     guardarDoblaje(actual.registro);
+    // Con el doblaje ya en la caché, recargar lo restaura sin gastar nada: se anota el punto cada pocos segundos.
+    actual.tituloVideo = tituloVideo;
+    recordarActivo(actual);
+    actual.relojActivo = setInterval(() => recordarActivo(actual), 3000);
     registrarVideo({
       clave: actual.videoId, titulo: tituloVideo, duracionS, idiomaOrigen: decision.idioma,
       autor: meta.autor || '', portada: meta.portada || '', posicionS: actual.registro.posicionS, abierto: Date.now(),
@@ -995,8 +1111,23 @@ export function inicializarYoutubeSincronizado({
     const abrirEn = Number(actual.abrirEn) || 0;
     if (abrirEn > 0 && abrirEn < duracionS - 1) {
       actual.retomarEn = abrirEn;
-      ui.estado.textContent = `Abrimos en ${formatoTiempo(abrirEn)}, donde se dice lo que buscaste.`;
+      ui.estado.textContent = actual.mensajeAbrirEn || `Abrimos en ${formatoTiempo(abrirEn)}, donde se dice lo que buscaste.`;
       $('ytDesdeInicio').hidden = false;
+      if (actual.reanudando) {
+        // Recargó la página: el video queda EN PAUSA en su segundo (reproducir solo lo bloquea el navegador y sorprende).
+        const player = actual.player;
+        if (Math.abs((Number(player.getCurrentTime()) || 0) - abrirEn) > 1.5) {
+          player.seekTo(abrirEn);
+          setTimeout(() => { if (sesion === actual && player.getPlayerState?.() === 1 && actual.retomarEn) player.pauseVideo(); }, 250);
+        }
+        actual.posicionado = true;
+        mostrarReanudar({
+          titulo: `Seguimos donde ibas: ${formatoReloj(abrirEn)}`,
+          mensaje: 'Tu video está en pausa. Toca «Ver con voz en español» para seguir.',
+        });
+      }
+    } else if (actual.reanudando) {
+      mostrarReanudar({ titulo: 'Seguimos con tu video', mensaje: 'Está en pausa al comienzo. Toca «Ver con voz en español» para empezar.' });
     } else if (sirve && 15 < guardado.posicionS && guardado.posicionS < duracionS - 30) {
       actual.retomarEn = guardado.posicionS;
       ui.estado.textContent = `Retomamos donde ibas (${formatoTiempo(actual.retomarEn)}).`;
@@ -1021,12 +1152,12 @@ export function inicializarYoutubeSincronizado({
     if (!fuente || !estaServidorOnline()) return;
     if (fuente.plataforma === 'x') return iniciarSesionX(url, fuente);
     const videoId = fuente.id;
-    const actual = abrirSesion(videoId);
+    const actual = abrirSesion(videoId, { tipo: 'youtube', clave: videoId, url });
     const { signal } = actual.controlador;
     try {
       // El reproductor y el texto van EN PARALELO: antes el texto esperaba a que
       // el reproductor estuviera listo (hasta 8 s en un teléfono lento).
-      const promesaPlayer = crearReproductor(videoId, signal).then((player) => {
+      const promesaPlayer = crearReproductor(videoId, signal, actual.reanudando ? actual.abrirEn : 0).then((player) => {
         if (sesion === actual) actual.player = player; else player.destruir();
         const titulo = player.getVideoData()?.title || '';
         if (titulo && sesion === actual) ui.titulo.textContent = titulo;
@@ -1075,7 +1206,7 @@ export function inicializarYoutubeSincronizado({
         if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
           progreso.mensaje('Confirma el idioma del video para seguir.');
           const elegido = await elegirIdioma(decision, signal);
-          if (!elegido) { terminarSesion(); return; }
+          if (!elegido) { terminarSesion({ olvidar: true }); return; }
           if (elegido !== datos.idioma) {
             datos = await pedirTexto(url, { idiomaOrigen: elegido, tituloVideo, duracionS, signal });
           }
@@ -1103,12 +1234,16 @@ export function inicializarYoutubeSincronizado({
       mostrarIdioma('No se pudo preparar el doblaje', 'no');
       progreso.error(textoDeError(error));
     } finally {
-      if (sesion === actual) marcarOcupado(false);
+      if (sesion === actual) {
+        marcarOcupado(false);
+        // Un intento que no llegó a tener doblaje no deja nada que restaurar (salvo una restauración: ahí la persona decide con «Cerrar»).
+        if (!actual.registro && !actual.reanudando) olvidarVideoActivo();
+      }
     }
   }
 
   async function iniciarSesionX(url, fuente) {
-    const actual = abrirSesion(fuente.clave);
+    const actual = abrirSesion(fuente.clave, { tipo: 'x', clave: fuente.clave, url });
     const { signal } = actual.controlador;
     try {
       progreso.paso('leer', 'Buscando el video en X…');
@@ -1144,7 +1279,7 @@ export function inicializarYoutubeSincronizado({
         if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
           progreso.mensaje('Confirma el idioma del video para seguir.');
           const elegido = await elegirIdioma(decision, signal);
-          if (!elegido) { terminarSesion(); return; }
+          if (!elegido) { terminarSesion({ olvidar: true }); return; }
           if (elegido !== datos.idioma) datos = await transcribir(elegido);
           decision = { accion: 'doblar', idioma: elegido, mensaje: '' };
         }
@@ -1167,7 +1302,11 @@ export function inicializarYoutubeSincronizado({
       mostrarIdioma('No se pudo preparar el doblaje', 'no');
       progreso.error(textoDeError(error));
     } finally {
-      if (sesion === actual) marcarOcupado(false);
+      if (sesion === actual) {
+        marcarOcupado(false);
+        // Un intento que no llegó a tener doblaje no deja nada que restaurar (salvo una restauración: ahí la persona decide con «Cerrar»).
+        if (!actual.registro && !actual.reanudando) olvidarVideoActivo();
+      }
     }
   }
 
@@ -1178,7 +1317,7 @@ export function inicializarYoutubeSincronizado({
       avisarEquipo('No pudimos leer ese archivo. Elígelo otra vez.');
       return;
     }
-    const actual = abrirSesion(clave);
+    const actual = abrirSesion(clave, { tipo: 'archivo', clave, titulo: archivo.name || '', nombreArchivo: archivo.name || '', bytes: archivo.size });
     const { signal } = actual.controlador;
     try {
       progreso.paso('leer', 'Abriendo tu video…');
@@ -1239,7 +1378,7 @@ export function inicializarYoutubeSincronizado({
         if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
           progreso.mensaje('Confirma el idioma de los subtítulos para seguir.');
           const picked = await elegirIdioma(decision, signal);
-          if (!picked) { terminarSesion(); return; }
+          if (!picked) { terminarSesion({ olvidar: true }); return; }
           datos.idioma = picked;
           datos.confianza = 1;
           datos.fuente = 'usuario';
@@ -1253,7 +1392,7 @@ export function inicializarYoutubeSincronizado({
         if (decision.accion === 'preguntar' || decision.accion === 'no_soportado') {
           progreso.mensaje('Confirma el idioma del video para seguir.');
           const elegido = await elegirIdioma(decision, signal);
-          if (!elegido) { terminarSesion(); return; }
+          if (!elegido) { terminarSesion({ olvidar: true }); return; }
           if (elegido !== datos.idioma) datos = await transcribir(elegido, false);
           decision = { accion: 'doblar', idioma: elegido, mensaje: '' };
         }
@@ -1280,7 +1419,11 @@ export function inicializarYoutubeSincronizado({
       mostrarIdioma('No se pudo preparar el doblaje', 'no');
       progreso.error(textoDeError(error));
     } finally {
-      if (sesion === actual) marcarOcupado(false);
+      if (sesion === actual) {
+        marcarOcupado(false);
+        // Un intento que no llegó a tener doblaje no deja nada que restaurar (salvo una restauración: ahí la persona decide con «Cerrar»).
+        if (!actual.registro && !actual.reanudando) olvidarVideoActivo();
+      }
     }
   }
 
@@ -1291,8 +1434,8 @@ export function inicializarYoutubeSincronizado({
    * no se vuelva a pedir texto ni traducción, y la voz guardada suena al
    * instante. `segundo`: abrir donde se dijo lo que se buscó.
    */
-  function abrirDesdeBiblioteca(video, { segundo = 0 } = {}) {
-    if (video?.plataforma === 'archivo') return abrirArchivoDeBiblioteca(video, segundo);
+  function abrirDesdeBiblioteca(video, { segundo = 0, mensaje = '', restaurando = false } = {}) {
+    if (video?.plataforma === 'archivo') return abrirArchivoDeBiblioteca(video, segundo, { mensaje, restaurando });
     if (!video?.url) return { abierto: false, motivo: 'Este video no tiene enlace guardado.' };
     if (estaOcupado()) return { abierto: false, motivo: 'Espera a que termine de prepararse el video actual.' };
     if (!estaServidorOnline()) return { abierto: false, motivo: 'Conecta el servidor (indicador de arriba) para abrir el video.' };
@@ -1300,6 +1443,7 @@ export function inicializarYoutubeSincronizado({
     if (ui.idioma) ui.idioma.value = 'auto';   // con «auto» la caché del video sirve siempre
     ui.url.dispatchEvent(new Event('input'));
     abrirEnPendiente = Number(segundo) || 0;
+    aperturaPendiente = restaurando || mensaje ? { mensaje, restaurando } : null;
     iniciarSesion().catch((error) => {
       console.error('[jg-youtube]', error);
       progreso.error('Algo falló al abrir el video. Vuelve a intentarlo.');
@@ -1312,13 +1456,14 @@ export function inicializarYoutubeSincronizado({
    * o el navegador no abre el selector) y la huella confirma que es ese.
    * Devuelve `pendiente`: la vista avisa cuando se sepa si abrió.
    */
-  function abrirArchivoDeBiblioteca(video, segundo) {
+  function abrirArchivoDeBiblioteca(video, segundo, { mensaje = '', restaurando = false } = {}) {
     if (estaOcupado()) return { abierto: false, motivo: 'Espera a que termine de prepararse el video actual.' };
     if (!estaServidorOnline()) return { abierto: false, motivo: 'Conecta el servidor (indicador de arriba) para abrir el video.' };
     const empezar = (archivo) => {
       ponerArchivo(archivo);
       if (ui.idioma) ui.idioma.value = 'auto';   // con «auto» la caché del video sirve siempre
       abrirEnPendiente = Number(segundo) || 0;
+      aperturaPendiente = restaurando || mensaje ? { mensaje, restaurando } : null;
       iniciarSesion().catch((error) => {
         console.error('[jg-youtube]', error);
         progreso.error('Algo falló al abrir el video. Vuelve a intentarlo.');
@@ -1491,6 +1636,97 @@ export function inicializarYoutubeSincronizado({
       raizBiblioteca.hidden = true;   // sin biblioteca, el doblaje sigue igual
     });
   }
+
+  // ── Recargar o volver a abrir la app: el video que estaba abierto reaparece ─────
+  /** Espera (poco) a que el servidor responda: al arrancar, el primer chequeo todavía no llegó. */
+  function esperarServidor(ms) {
+    return new Promise((resolver) => {
+      if (estaServidorOnline()) { resolver(true); return; }
+      const alCambiar = () => {
+        if (!estaServidorOnline()) return;
+        clearTimeout(tope);
+        window.removeEventListener('jg:server-status', alCambiar);
+        resolver(true);
+      };
+      const tope = setTimeout(() => { window.removeEventListener('jg:server-status', alCambiar); resolver(false); }, ms);
+      window.addEventListener('jg:server-status', alCambiar);
+    });
+  }
+
+  /**
+   * Reabre el video guardado por el camino de siempre (la caché evita pedir texto,
+   * traducción y voz otra vez) y lo deja EN PAUSA en su segundo. Si algo falta,
+   * lo dice y deja el panel listo para doblarlo de nuevo.
+   */
+  async function restaurarVideoActivo() {
+    const guardado = leerVideoActivo();
+    if (!guardado) return;
+    const miGeneracion = generacion;
+    // Si la persona ya abrió, pegó o eligió algo, lo suyo manda: no se pisa.
+    const libre = () => miGeneracion === generacion && !sesion && !estaOcupado() && !archivoElegido && !ui.url.value.trim();
+    if (!libre()) return;
+    const reloj = formatoReloj(guardado.segundo);
+    const poner = guardado.tipo !== 'archivo' ? () => { ui.url.value = guardado.url; ui.url.dispatchEvent(new Event('input')); } : () => {};
+    let cache = null;
+    try { cache = await leerDoblaje(guardado.clave); } catch (error) { console.error('[jg-youtube]', error); }
+    if (!libre()) return;
+    const hayCache = Boolean(cache?.segmentos?.length);
+
+    if (guardado.tipo === 'archivo') {
+      const nombre = guardado.nombreArchivo || guardado.titulo || 'tu video';
+      if (!hayCache) {
+        mostrarReanudar({
+          titulo: 'Tu video del equipo ya no está preparado',
+          mensaje: `El doblaje de «${nombre}» no está guardado en esta app. Elígelo otra vez y pulsa Doblar para prepararlo.`,
+          accion: 'Elegir el video', alAccion: () => ui.elegirArchivo?.click(),
+        });
+        return;
+      }
+      const video = { plataforma: 'archivo', clave: guardado.clave, titulo: guardado.titulo, nombreArchivo: guardado.nombreArchivo };
+      const alAccion = () => {
+        const resultado = abrirArchivoDeBiblioteca(video, guardado.segundo, {
+          restaurando: true, mensaje: `Seguimos donde ibas: ${reloj}`,
+        });
+        const decir = (motivo) => { if (motivo) ui.reanudarMensaje.textContent = motivo; };
+        if (resultado.pendiente) resultado.pendiente.then((r) => { if (!r.abierto) decir(r.motivo); }).catch(() => {});
+        else if (!resultado.abierto) decir(resultado.motivo);
+      };
+      mostrarReanudar({
+        titulo: `Seguimos con «${nombre}»${guardado.segundo ? ` desde ${reloj}` : ''}`,
+        mensaje: 'Los videos de tu equipo no se copian a la app, así que no puede abrirse solo. Elige el mismo archivo y sigue donde ibas, sin volver a transcribir.',
+        accion: 'Vuelve a elegir el archivo para seguir', alAccion,
+      });
+      return;
+    }
+
+    if (!hayCache) {
+      poner();
+      mostrarReanudar({
+        titulo: 'Tu video no alcanzó a prepararse',
+        mensaje: 'Dejamos el enlace en el campo: pulsa Doblar al español para prepararlo de nuevo.',
+      });
+      return;
+    }
+    if (!(await esperarServidor(8000))) {
+      if (!libre()) return;
+      poner();
+      mostrarReanudar({
+        titulo: 'No hay conexión con el servidor',
+        mensaje: 'Tu video sigue guardado. Dejamos el enlace en el campo: cuando se conecte, pulsa Doblar al español y sigue donde ibas.',
+      });
+      return;
+    }
+    if (!libre()) return;
+    if (ui.idioma) ui.idioma.value = 'auto';   // con «auto» la caché del video sirve siempre
+    const resultado = abrirDesdeBiblioteca({ plataforma: guardado.tipo, url: guardado.url }, {
+      segundo: guardado.segundo, restaurando: true, mensaje: `Seguimos donde ibas: ${reloj}`,
+    });
+    if (!resultado.abierto) {
+      poner();
+      mostrarReanudar({ titulo: 'No pudimos reabrir tu video', mensaje: `${resultado.motivo || 'Algo falló.'} El enlace quedó en el campo para doblarlo de nuevo.` });
+    }
+  }
+  restaurarVideoActivo().catch((error) => console.error('[jg-youtube]', error));
 
   ui.boton.addEventListener('click', () => {
     if (estaOcupado()) return;

@@ -4098,6 +4098,35 @@
   .yt-ficha-texto span{font-size:13px;color:var(--muted)}
   .yt-ficha-archivo .mini-btn{min-height:48px;min-width:48px;flex:none}   /* 44 exactos dan 43,99 px en pantallas de densidad 2,625 */
   .yt-equipo-aviso{margin:0 0 12px;font-size:13px;line-height:1.45;color:var(--hot-1)}
+  /* Campo del enlace con «Borrar» dentro; solo se ve cuando hay texto. */
+  .yt-url-caja{position:relative;display:flex;align-items:center;min-width:0}
+  .ytrow .yt-url-caja input{width:100%;min-height:44px;box-sizing:border-box;padding-right:52px}
+  .yt-url-borrar{position:absolute;right:2px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:44px;padding:0;border:0;border-radius:10px;background:transparent;color:var(--muted);cursor:pointer;transition:.15s}
+  .yt-url-borrar[hidden]{display:none}
+  .yt-url-borrar svg{width:18px;height:18px}
+  .yt-url-borrar:hover{color:var(--text);background:rgba(255,255,255,.07)}
+  .yt-url-borrar:active{transform:translateY(-50%) scale(.94)}
+  .yt-url-borrar:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+  .yt-url-error{flex-basis:100%;margin:6px 0 0;font-size:13px;line-height:1.45;color:var(--hot-1)}
+  .yt-url-error[hidden]{display:none}
+  /* «Cambiar video» y «Cerrar» comparten fila en la cabecera del reproductor. */
+  .yt-sync-acciones{display:flex;gap:8px;flex:none}
+  .yt-sync-acciones .mini-btn{min-height:44px;min-width:44px;justify-content:center;font-size:13px;padding:6px 14px}
+  .yt-sync-acciones .yt-cambiar{border-color:var(--cyan-glow);color:var(--cyan)}
+  .yt-sync-acciones .yt-cambiar:hover{background:rgba(39,225,193,.08);border-color:var(--cyan)}
+  @media (max-width:480px){.yt-sync-head{flex-wrap:wrap}.yt-sync-acciones{width:100%}.yt-sync-acciones .mini-btn{flex:1}}
+  /* Aviso de «Seguimos donde ibas» / qué falta para retomar. */
+  .yt-reanudar{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;margin:0 0 12px;padding:10px 12px;flex:none;
+    background:var(--surface);border:1px solid var(--cyan-glow);border-radius:12px}
+  .yt-reanudar[hidden]{display:none}
+  .yt-reanudar > svg{width:22px;height:22px;flex:none;color:var(--cyan)}
+  .yt-reanudar-texto{display:flex;flex-direction:column;min-width:0;flex:1 1 200px}
+  .yt-reanudar-texto strong{font-size:var(--fs-sm);color:var(--text);overflow-wrap:anywhere}
+  .yt-reanudar-texto span{font-size:13px;line-height:1.45;color:var(--muted)}
+  .yt-reanudar .btn{min-height:var(--h-touch)}
+  .yt-reanudar .mini-btn{min-height:44px;min-width:44px;justify-content:center;flex:none}
+  @media (max-width:480px){.yt-reanudar .btn{flex:1 1 100%}}
   .yt-equipo-aviso:empty{display:none}
   .yt-area.yt-soltando{outline:2px dashed var(--cyan);outline-offset:-6px;border-radius:16px}
   /* Videos del equipo sin diálogo: cambio manual de voz («Aquí habla otra persona»). */
@@ -6644,11 +6673,25 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
           <div>Conecta el servidor (indicador de arriba) para doblar videos.</div>
         </div>
 
+        <!-- Video activo: «Seguimos donde ibas» tras recargar, o qué falta para retomar (el archivo del equipo nunca se copia). -->
+        <div class="yt-reanudar" id="ytReanudar" role="status" aria-live="polite" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <div class="yt-reanudar-texto"><strong id="ytReanudarTitulo"></strong><span id="ytReanudarMensaje"></span></div>
+          <button class="btn primary yt-reanudar-accion" id="ytReanudarAccion" type="button" hidden></button>
+          <button class="mini-btn yt-reanudar-cerrar" id="ytReanudarCerrar" type="button" aria-label="Descartar este aviso">Descartar</button>
+        </div>
+
         <div class="ytrow">
           <label class="task-field" for="ytUrl">
             <span class="task-field-label">Enlace del video</span>
-            <input type="url" id="ytUrl" name="enlace_video" inputmode="url" autocomplete="off" placeholder="https://youtube.com/watch?v=… o https://x.com/…/status/…">
+            <span class="yt-url-caja">
+              <input type="url" id="ytUrl" name="enlace_video" inputmode="url" autocomplete="off" placeholder="https://youtube.com/watch?v=… o https://x.com/…/status/…" aria-describedby="ytUrlError">
+              <button class="yt-url-borrar" id="ytUrlBorrar" type="button" aria-label="Borrar el enlace" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+              </button>
+            </span>
           </label>
+          <p class="yt-url-error" id="ytUrlError" role="alert" hidden>Ese enlace no parece de YouTube ni de X. Pega uno como <b>https://youtube.com/watch?v=…</b> o <b>https://x.com/usuario/status/…</b></p>
           <p class="yt-url-nota" id="ytUrlNota" hidden>Enlace de X: pulsa <b>Doblar al español</b>. El texto completo traducido sale después con el botón <b>Texto completo</b>.</p>
         </div>
 
@@ -6717,7 +6760,10 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <h3 id="ytSyncTitle">Video doblado al español</h3>
               <p class="yt-lang-badge" id="ytLangBadge" data-estado="analizando">Analizando el idioma del audio…</p>
             </div>
-            <button class="mini-btn" id="btnYtSyncClose" type="button" aria-label="Cerrar reproductor sincronizado">Cerrar</button>
+            <div class="yt-sync-acciones">
+              <button class="mini-btn yt-cambiar" id="ytCambiarVideo" type="button">Cambiar video</button>
+              <button class="mini-btn" id="btnYtSyncClose" type="button" aria-label="Cerrar reproductor sincronizado">Cerrar</button>
+            </div>
           </div>
 
             <div class="yt-confirm" id="ytIaConsentimiento" role="group" aria-labelledby="ytIaTexto" hidden>
@@ -9886,6 +9932,8 @@ function jgActivarPanel(tabActiva, enfocar = false){
     panel.hidden = !activa;
   });
   badge.textContent = badgeText[tabActiva.dataset.tab];
+  /* Quien tenga algo en marcha (el video doblado) se entera de a qué pestaña se pasó. */
+  try { window.dispatchEvent(new CustomEvent('jg:tab-cambio', { detail: { tab: tabActiva.dataset.tab } })); } catch (_) {}
   /* Fase A · Continuidad: actualizar URL con replaceState y persistir pestaña */
   try {
     const tabId = tabActiva.dataset.tab;

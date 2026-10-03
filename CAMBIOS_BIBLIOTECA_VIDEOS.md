@@ -158,6 +158,25 @@ el fallo que ya existía («< 1 MB»: 1 040 KB).
   volver a un video no decodifica ninguna frase. Campo aditivo, sin migración: las
   voces anteriores se completan al sonar. Ver `CAMBIOS_YOUTUBE.md` §v157.
 
+## El video activo (2026-10-03, sin desplegar)
+
+Antes, recargar o cerrar la app dejaba el panel de Videos vacío. Ahora:
+
+- **Clave nueva** `jg_yt_video_activo` (localStorage, `js/youtube/videoActivo.js`): puntero
+  `{tipo, clave, url, segundo}`. Se escribe al abrir (como «preparando»), se confirma al
+  tener el doblaje en la caché y se actualiza cada 3 s y en `pagehide`.
+- **Restaurar** (`restaurarVideoActivo`, al iniciar el controlador): reabre por
+  `abrirDesdeBiblioteca` con la caché, en pausa y en su segundo (`playerVars.start`), con el
+  aviso «Seguimos donde ibas: m:ss» (`#ytReanudar`). Sin caché o sin servidor deja el enlace en
+  el campo y lo dice. Un indicador de generación evita pisar lo que la persona abrió/pegó antes.
+- **Video del equipo**: nunca se copia. Tras recargar, la ficha pide «Vuelve a elegir el
+  archivo para seguir»; con la misma huella retoma en su segundo sin transcribir.
+- **Cambiar de pestaña**: evento `jg:tab-cambio` (en `jgActivarPanel`). Al salir, video y voz
+  se pausan (`DubbingEngine.pausarTodo`); al volver esperan en el mismo segundo.
+- **Corregir el enlace**: «Borrar» (×) dentro del campo, Escape, Enter y error de formato;
+  «Cambiar video» en la cabecera del reproductor.
+- Pruebas: `test_video_activo` 26 · `verificar_video_persistencia` (ver reporte).
+
 ## Si algo cambia
 
 - **edge-tts caído o lento:** cada frase reintenta 2 veces y a la tercera va por
