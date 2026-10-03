@@ -1756,6 +1756,8 @@ export function inicializarYoutubeSincronizado({
       hablando: motor.hablando,
       frase: unidad ? { desde: unidad.desde, hasta: unidad.hasta, inicio: unidad.startTime } : null,
       segmentoVoz: motor.indiceSegmentoVoz(),
+      // Estado de cada frase de voz (l = lista, p = pendiente, c = cargando, t = sin traducir, e = error, s = sin voz).
+      estados: (sesion.servicioVoz?.unidades || []).map((x) => ({ listo: 'l', pendiente: 'p', cargando: 'c', sin_traducir: 't', error: 'e', sin_voz: 's' }[x.estado] || '?')).join(''),
     };
   };
 
