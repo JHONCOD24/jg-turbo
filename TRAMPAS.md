@@ -1,5 +1,25 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## La página no puede seguir al inicio de la marca, y la marca no puede medir nada (2026-10-03)
+
+**Síntoma:** con la voz sonando en modo páginas, la página llegaba hasta ~6 s
+tarde y a veces volvía sola una página atrás; pasar página a mano con la voz
+sonando llevaba la vista al principio del capítulo. **Causas medidas:**
+(1) `desplazarA` decidía la página por el primer rectángulo de la `<mark>`, no
+por el carácter que suena; (2) la marca tenía `margin-inline:-0.2em`, borde,
+padding y negrita: una marca que empieza en la primera línea de una página
+caía (4 px) en la anterior y devolvía la lectura; además esas métricas mueven el
+borde de página; (3) `leerDesdeCaracter` fija `guia.desdeCaracter` y la parada
+de la lectura anterior lo borraba (`limpiarGuia`, varias veces, incluso tras
+cargar el audio nuevo): la cola nueva se anclaba desde el inicio del texto y la
+voz «estaba» en la página 0; (4) al pasar página a mano la voz arrancaba en el
+inicio de la oración que cruza el borde, o sea en la página anterior.
+**Reglas:** la página se decide con el carácter de la voz (`seguirVoz`), solo
+hacia delante salvo salto pedido (`guia.saltar`); el estilo de `mark` jamás
+cambia métricas (fondo + sombra interior); `arrancaEn` sobrevive a las paradas
+previas a un salto; la voz arranca en la primera oración que EMPIEZA en la
+página elegida. Prueba: `tests/verificar_pdf_voz_pagina.mjs` (serie temporal).
+
 ## Un acordeon oculto no se puede probar con un clic (2026-09-29)
 
 **Finales de linea:** en esta sesion se normalizo a CRLF un documento que
@@ -1564,11 +1584,14 @@ valiendo que el cromo no sale del flujo (solo opacity:0).
 
 **Síntoma:** tras pasar página en el teléfono con P-01, la lectura volvía a la
 página 1 (scroll 0) aunque el rango del ancla existía y tenía rect. **Causa:**
-medirPaginas medía angoDeCaracter con el scrollLeft del reparto
+medirPaginas medía 
+angoDeCaracter con el scrollLeft del reparto
 ANTERIOR aplicado al layout NUEVO (otro total y otro paso): la conversión
-.left - base.left + scrollViejo apuntaba a otro carácter y el
+
+.left - base.left + scrollViejo apuntaba a otro carácter y el
 desplazamiento salía 0. **Regla:** antes de medir el rect, llevar el scroll a
-0 y convertir solo con el layout nuevo (.left - base.left - 2). Medido:
+0 y convertir solo con el layout nuevo (
+.left - base.left - 2). Medido:
 el mismo caso pasó de scroll 0 a conservar el sitio en erificar_pdf_paginas.
 
 ## El cromo ixed no dispara el ResizeObserver: hay que observar la clase (2026-09-29)
