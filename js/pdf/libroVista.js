@@ -36,8 +36,13 @@ function guardarApariencia(cfg) {
 
 export function initLibroVista({ el, estado, api }) {
   if (!el || !estado) return;
-  const TELEFONO = '(max-width:640px)';
+  /* «Teléfono» es la pantalla pequeña en cualquier orientación: en horizontal
+   * mide 800-932 px de ancho, pero solo 360-430 de alto, y por ancho caía en
+   * las reglas de tablet (cabecera de escritorio, 2 renglones de texto). */
+  const HORIZONTAL_BAJO = '(orientation:landscape) and (max-height:500px)';
+  const TELEFONO = `(max-width:640px), ${HORIZONTAL_BAJO}`;
   const enTelefono = () => typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(TELEFONO).matches : false;
+  const enHorizontalBajo = () => typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(HORIZONTAL_BAJO).matches : false;
   const cfg = leerApariencia();
   let lugarAnterior = null;
 
@@ -452,6 +457,7 @@ export function initLibroVista({ el, estado, api }) {
       art.style.height = '';
       art.style.flex = '';
       art.style.columnWidth = '';
+      art.style.columnCount = '';
       art.style.setProperty('--lec-figura-alto', '68vh');
       if (col) col.removeAttribute('data-paginado');
       if (el.paginacion) el.paginacion.hidden = true;
@@ -506,7 +512,10 @@ export function initLibroVista({ el, estado, api }) {
          * caber más renglones). El cromo sigue en su sitio: solo se apaga. */
         const inmersivo = document.body.classList.contains('jg-inmersivo');
         col.style.setProperty('--pdf-reserva-arriba', inmersivo ? '0px' : `${cab}px`);
-        col.style.setProperty('--pdf-reserva-abajo', inmersivo ? '0px' : `${pagin + barra}px`);
+        /* En horizontal la paginación y la barra comparten fila (cada una a un
+         * lado): el hueco es el de la más alta, no la suma. */
+        const abajo = enHorizontalBajo() ? Math.max(pagin, barra) : pagin + barra;
+        col.style.setProperty('--pdf-reserva-abajo', inmersivo ? '0px' : `${abajo}px`);
       } catch (_) {}
     } else if (col) {
       try { col.style.removeProperty('--pdf-reserva-arriba'); col.style.removeProperty('--pdf-reserva-abajo'); } catch (_) {}
@@ -546,15 +555,31 @@ export function initLibroVista({ el, estado, api }) {
     const ancho = Math.floor(art.getBoundingClientRect().width * 64) / 64;
     if (alto < 80 || ancho < 80) { pag.activo = false; return; }
 
-    art.style.columnWidth = ancho + 'px';
     const hueco = parseFloat(getComputedStyle(art).columnGap) || (enTelefono() ? 28 : 44);
+    /* Teléfono horizontal: una columna de 800 px tiene 80 caracteres por renglón
+     * y el ojo se pierde. Se abre como un libro, con DOS columnas por página:
+     * el ancho de página, el paso y el resto de la cuenta no cambian (una página
+     * ocupa `ancho`, la siguiente empieza a `ancho + hueco`), así que cada
+     * toque o deslizamiento avanza las dos columnas a la vez. Con la hoja de
+     * Contenido abierta el texto se estrecha y vuelve a una sola columna. */
+    const dosColumnas = enHorizontalBajo() && ancho >= 640;
+    art.dataset.columnas = dosColumnas ? '2' : '1';
+    if (dosColumnas) {
+      art.style.columnWidth = '';
+      art.style.columnCount = '2';
+    } else {
+      art.style.columnCount = '';
+      art.style.columnWidth = ancho + 'px';
+    }
     pag.paso = ancho + hueco;
     /* Con qué caja se repartió: si cambia (giro, resize) hasta que se vuelva a
      * repartir, `paso` y `total` están viejos y no sirven para medir páginas. */
     pag.cajaAncho = ancho;
     pag.cajaAlto = alto;
     pag.activo = true;
-    pag.total = Math.max(1, Math.round((art.scrollWidth + hueco) / pag.paso));
+    /* `ceil` con 2 px de holgura: la última página puede traer solo la primera
+     * de sus dos columnas (media página de más con `round`). */
+    pag.total = Math.max(1, Math.ceil((art.scrollWidth + hueco - 2) / pag.paso));
 
     /* Se vuelve al sitio que se estaba leyendo, no a un número de página:
      * cambiar el tamaño de letra —o el alto con P-01— mueve los números. Si el
@@ -579,10 +604,14 @@ export function initLibroVista({ el, estado, api }) {
          * ella; si no, se pega a la izquierda como antes. */
         const x = r.left - base.left;
         const paginaAncla = Math.max(0, Math.min(pag.total - 1, Math.floor((x + 2) / pag.paso)));
-        const alBorde = Math.abs(x - paginaAncla * pag.paso) <= 4;
         /* Un salto en curso terminaría por pegar el scroll al borde de página
          * y pisaría este sitio. Se cancela: aquí manda el carácter. */
-        art.scrollLeft = alBorde ? paginaAncla * pag.paso : Math.max(0, Math.round(x - 2));
+        /* La vista SIEMPRE se alinea al borde de la página que contiene el
+         * carácter. Pegarla al carácter dejaba un trozo de la página vecina
+         * asomando por el borde derecho tras girar o cambiar la letra. El
+         * carácter ancla sigue siendo el mismo (`pag.ancla` no se toca): al
+         * volver al reparto anterior cae de nuevo en su página. */
+        art.scrollLeft = paginaAncla * pag.paso;
         pag.actual = paginaAncla;
       } else {
         pag.actual = Math.max(0, Math.min(pag.total - 1, paginaDe(destino)));

@@ -1871,7 +1871,7 @@
      acordeón — como el botón «Voz» del teléfono esconde la hoja, aquí el
      mismo interruptor esconde la consola y queda la cabecera con el
      toggle. Ocultar no detiene la lectura. */
-  @media (min-width:641px){
+  @media (min-width:641px) and (min-height:501px), (min-width:641px) and (orientation:portrait){
     #pdfDockNav[data-desplegado="no"] .tts-voice-select,
     #pdfDockNav[data-desplegado="no"] .tts-rate-control,
     #pdfDockNav[data-desplegado="no"] #pdfTtsMas,
@@ -1883,7 +1883,7 @@
        queda en una fila delgada. */
     #pdfDockNav[data-desplegado="no"] .pdf-voz-cab{padding-bottom:2px}
   }
-  @media (max-width:640px){
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
     /* Cabecera acordeón de una sola fila (44 px): la flecha con «Voz» a la
        izquierda es el único cierre de los ajustes; la hoja se cierra con el
        botón «Voz» de la barra del pulgar. */
@@ -2009,7 +2009,7 @@
      la hoja se abre desde la pestaña «Voz» de la barra y se cierra con ella,
      con Escape o tocando fuera. En móvil manda :has(open), no el dataset
      desplegado de tablet/escritorio. */
-  @media (max-width:640px){
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
     body.jg-leyendo #pdfDockNav .pdf-voz-cab,
     body.jg-leyendo #pdfDockNav .tts-console-head,
     body.jg-leyendo #pdfDockNav .tts-console .tts-field-label{display:none}
@@ -2856,7 +2856,7 @@
   }
   .pdf-doc-ref{white-space:nowrap;font-variant-numeric:tabular-nums}
   .pdf-doc-ref-corta{display:none}
-  @media (max-width:640px){
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
     .pdf-doc-linea{gap:6px}
     .pdf-doc-ref-larga{display:none}
     .pdf-doc-ref-corta{display:inline}
@@ -2924,7 +2924,7 @@
   .panel[hidden], [hidden]{display:none !important}
 
   .pdf-barra-movil,.pdf-voz-mini,.pdf-solo-telefono{display:none}
-  @media (max-width:640px){ .pdf-solo-telefono{display:block} }
+  @media (max-width:640px), (orientation:landscape) and (max-height:500px){ .pdf-solo-telefono{display:block} }
 
   /* Aviso de «Unir palabras»: discreto, abajo, y se va solo. Si no unió nada
      no aparece, que es lo que pidió el usuario: si el párrafo está bien, la
@@ -2942,7 +2942,7 @@
   }
   .pdf-unir-aviso[hidden]{display:none !important}
   .pdf-unir-aviso .mini-btn{min-height:36px;padding:7px 14px;border-radius:999px;flex:none}
-  @media (max-width:640px){
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
     /* Encima de la barra del pulgar, no debajo ni tapándola. */
     .pdf-unir-aviso{bottom:calc(var(--pdf-bm-alto, 64px) + 12px)}
     /* Leyendo, el dock (Anterior/Siguiente/Escuchar) ocupa ~150-160 px sobre
@@ -2958,7 +2958,7 @@
   #pdfUnirCuenta:empty{display:none}
   .pdf-accion-corta{display:none}
 
-  @media (max-width:640px){
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
     /* 1. Cabecera de una sola fila: volver · título · Opciones. */
     body.jg-leyendo .pdf-doc-cab{
       grid-template-columns:auto 1fr auto;gap:10px;min-height:48px;flex-wrap:nowrap;
@@ -3147,7 +3147,7 @@
      Tablet y escritorio NO entran aquí: conservan su tipografía y su
      composición actuales.
      ══════════════════════════════════════════════════════════════════════ */
-  @media (max-width:640px){
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
     /* 1. La página: serif editorial, medida de línea acotada por la pantalla.
           `min(--lec-tam, 5.6vw)` respeta el tamaño que elija la persona pero
           impide que en un teléfono estrecho la línea baje de ~32 caracteres,
@@ -3261,7 +3261,7 @@
     body.jg-leyendo #pdfPaginacion{transition:opacity .22s ease, transform .22s ease}
   }
 
-  @media (max-width:640px) and (prefers-reduced-motion:reduce){
+  @media (max-width:640px) and (prefers-reduced-motion:reduce), (orientation:landscape) and (max-height:500px) and (prefers-reduced-motion:reduce){
     body.jg-leyendo .pdf-doc-top,
     body.jg-leyendo .pdf-barra-movil,
     body.jg-leyendo #pdfDockNav{transition:none}
@@ -3319,7 +3319,7 @@
   }
   @keyframes pdfReanudarEntra{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion:reduce){.pdf-reanudar{animation:none}}
-  @media (max-width:640px){
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
     .pdf-reanudar{
       font-size:12px;padding:7px 10px;gap:8px;
       max-width:calc(100vw - 20px);
@@ -5859,7 +5859,7 @@ body.jg-leyendo .pdf-dock-nav .tts-voice-select{flex:1;min-width:0}
 /* «Contenido» va en la cabecera a partir de tablet. En el teléfono vive en la
    barra del pulgar, así que aquí NO puede forzarse: el `!important` le ganaba
    al `display:none` del bloque de teléfono y el botón se colaba en la fila. */
-@media(min-width:641px){
+@media (min-width:641px) and (min-height:501px), (min-width:641px) and (orientation:portrait){
   body.jg-leyendo .pdf-doc-acciones .pdf-btn-indice{display:inline-flex!important}
 }
 body.jg-leyendo #btnPdfCapPrev,body.jg-leyendo #btnPdfCapNext{display:none}
@@ -6054,8 +6054,8 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
 #pdfResultArea .pdf-doc-acciones > .mini-btn,
 #pdfResultArea .pdf-doc-acciones > details > summary{padding:6px 10px;border-radius:8px;font-size:13px}
 #pdfResultArea:has(#pdfHerramientasMenu[open], #pdfMasMenu[open]) .pdf-doc-top{z-index:111}
-@media(min-width:641px){body.jg-leyendo #pdfMasMenu > summary{display:flex}}
-@media(max-width:640px){
+@media (min-width:641px) and (min-height:501px), (min-width:641px) and (orientation:portrait){body.jg-leyendo #pdfMasMenu > summary{display:flex}}
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
   /* Esta regla debe ir después del ajuste general position:static. */
   body.jg-leyendo .pdf-doc-top{position:fixed;inset:0 0 auto;margin:0;
     padding:max(4px,env(safe-area-inset-top)) 10px 4px;z-index:22}
@@ -6094,6 +6094,101 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
   #pdfResultArea .pdf-apariencia-hoja{max-height:calc(var(--jg-viewport-alto,100dvh) - env(safe-area-inset-top) - 12px)}
   #pdfResultArea .pdf-doc-ident{overflow:hidden}
   #pdfResultArea .pdf-doc-linea{display:none}
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TELÉFONO HORIZONTAL (alto ≤ 500 px) · se lee como un libro abierto
+   ─────────────────────────────────────────────────────────────────────
+   Por ancho (800-932 px) el teléfono girado caía en las reglas de tablet:
+   cabecera de escritorio, paginación y dock EN el flujo (≈ 260 px de 390),
+   y al texto le quedaban 129 px: 2 renglones, 48 páginas en vez de 8.
+   Ahora hereda el diseño del teléfono (cromo flotante, inmersivo, hoja de
+   voz) y aquí solo se adelgaza el cromo y se reparte el ancho:
+     · una cabecera de 48 px y UNA fila inferior de 48 px, compartida entre
+       la barra de destinos (izquierda) y la paginación (derecha);
+     · dos columnas por página cuando hay ancho (lo decide libroVista.js);
+     · los avisos flotan sobre la franja del pie, nunca sobre el texto;
+     · la letra es la del vertical (4,5 % del lado corto), no más pequeña.
+   Zonas seguras: en horizontal la muesca queda a un lado (izq./der.).
+   ══════════════════════════════════════════════════════════════════════ */
+@media (orientation:landscape) and (max-height:500px){
+  body.jg-leyendo{
+    --pdf-bm-alto:calc(48px + env(safe-area-inset-bottom));
+    --pdf-cab-alto:48px;
+  }
+  /* Cabecera: una fila de 48 px, con la muesca respetada a ambos lados. */
+  body.jg-leyendo .pdf-doc-top{
+    padding:max(2px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 2px max(10px,env(safe-area-inset-left));
+  }
+  body.jg-leyendo .pdf-doc-cab{min-height:44px}
+  body.jg-leyendo .pdf-doc-ident h3{font-size:15px}
+  body.jg-leyendo .pdf-barra--doc{margin-top:2px}
+
+  /* Fila inferior: destinos a la izquierda, paginación a la derecha. */
+  body.jg-leyendo .pdf-barra-movil{
+    inset:auto auto 0 0;width:calc(100% - 232px);
+    height:var(--pdf-bm-alto);box-sizing:border-box;
+    padding:0 6px env(safe-area-inset-bottom) max(6px,env(safe-area-inset-left));
+    align-items:center;
+  }
+  body.jg-leyendo .pdf-bm-btn{flex-direction:row;gap:7px;min-height:44px;padding:0 6px;font-size:12.5px}
+  body.jg-leyendo #pdfPaginacion{
+    left:auto;right:0;bottom:0;width:232px;
+    height:var(--pdf-bm-alto);box-sizing:border-box;
+    padding:0 max(10px,env(safe-area-inset-right)) env(safe-area-inset-bottom) 6px;
+    gap:6px;align-items:center;
+    background:var(--lec-bg,var(--bg));
+    border-top:1px solid var(--lec-linea,var(--line));
+    box-shadow:0 -8px 24px -18px rgba(0,0,0,.7);
+  }
+  body.jg-leyendo .pdf-pag-pos{min-width:0;flex:1;font-size:12.5px}
+  body.jg-leyendo.jg-inmersivo #pdfPaginacion{transform:translateY(100%)}
+
+  /* El texto: letra del vertical, medida de libro y sin tope de tablet. */
+  body.jg-leyendo .pdf-lectura{font-size:clamp(15px, min(var(--lec-tam, 19px), 4.5vh), 24px)}
+  body.jg-leyendo .pdf-lectura[data-tam-auto="no"]{font-size:max(16px, var(--lec-tam, 19px))}
+  body.jg-leyendo .pdf-lectura[data-paginado="si"]{--pdf-pag-hueco:36px}
+  body.jg-leyendo .pdf-texto-col{max-width:none}
+  body.jg-leyendo .pdf-area{padding-inline:env(safe-area-inset-left) env(safe-area-inset-right)}
+  .pdf-pie-lectura{height:34px}
+
+  /* Avisos: sobre la franja del pie (a la altura del pie, nunca encima del
+     texto). Con el cromo a la vista el pie va encima de la fila inferior. */
+  body.jg-leyendo .pdf-aviso-lector,
+  body.jg-leyendo .pdf-unir-aviso{
+    bottom:var(--pdf-bm-alto);
+    max-width:min(76vw,620px);box-sizing:border-box;
+    display:flex;align-items:center;height:34px;margin:0;padding:0 14px;
+    border-radius:999px;font-size:12px;line-height:1.2;white-space:nowrap;
+  }
+  body.jg-leyendo .pdf-aviso-lector{display:block;line-height:34px;overflow:hidden;text-overflow:ellipsis}
+  body.jg-leyendo .pdf-unir-aviso{padding:0 4px 0 14px;gap:8px}
+  body.jg-leyendo .pdf-unir-aviso .mini-btn{min-height:30px;padding:0 12px}
+  body.jg-leyendo.jg-inmersivo .pdf-aviso-lector,
+  body.jg-leyendo.jg-inmersivo .pdf-unir-aviso{bottom:0}
+  /* «Retomar» trae botones: va en la franja de la cabecera, entre «Volver» y
+     el borde, sin tapar el texto. */
+  body.jg-leyendo .pdf-reanudar{
+    top:max(2px,env(safe-area-inset-top));max-width:calc(100vw - 2 * (max(10px,env(safe-area-inset-left)) + 120px));
+    min-height:44px;padding:0 10px;flex-wrap:nowrap;
+  }
+
+  /* Hoja de voz: sobre la fila inferior, sin pasarse de la pantalla baja. */
+  body.jg-leyendo #pdfDockNav{
+    max-height:calc(var(--jg-viewport-alto,100dvh) - var(--pdf-bm-alto) - 48px);
+    padding-inline:max(12px,env(safe-area-inset-left)) max(12px,env(safe-area-inset-right));
+  }
+  body.jg-leyendo.jg-voz-activa .pdf-voz-mini{right:max(12px,env(safe-area-inset-right))}
+
+  /* Contenido: cajón lateral derecho (en tablet es columna del flujo). */
+  body.jg-leyendo .pdf-lector-cuerpo:has(> .pdf-indice:not([hidden])){grid-template-columns:minmax(0,1fr)}
+  body.jg-leyendo .pdf-indice:not([hidden]){
+    position:fixed;top:0;bottom:0;right:0;left:auto;height:auto;
+    width:min(360px,48vw);max-height:none;margin:0;z-index:101;
+    border-radius:16px 0 0 16px;box-shadow:-12px 0 40px -18px rgba(0,0,0,.8);
+    background:var(--lec-superficie,var(--surface-2));
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
+  }
 }
 
   /* ── Figuras del libro (gráficos sacados del PDF) ──────────────────
@@ -8003,8 +8098,12 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                 <textarea id="pdfOutput" class="output pdf-output" placeholder="Aquí verás el texto del PDF. Puedes editarlo antes de copiarlo." spellcheck="true"></textarea>
               </div>
 
+              <!-- Fuera del dock a propósito: en el teléfono el dock cerrado es
+                   `visibility:hidden` + `transform`, y un aviso `fixed` dentro de él
+                   heredaba las dos cosas (invisible, y posicionado respecto al dock
+                   en vez de a la ventana). -->
+              <div id="pdfNoticeLector" class="notice warn pdf-aviso-lector" role="status" aria-live="polite" hidden></div>
               <div class="pdf-dock-nav" id="pdfDockNav">
-                <div id="pdfNoticeLector" class="notice warn pdf-aviso-lector" role="status" aria-live="polite" hidden></div>
 
                 <div class="pdf-navbar" id="pdfNavbar" hidden>
                   <button type="button" class="mini-btn pdf-nav-btn" id="btnPdfPrev" title="Capítulo anterior">
