@@ -2,6 +2,8 @@
 
 ## v168 (2026-10-04) · Subtítulo dinámico y pantalla completa
 
+Publicado en `dpl_ATGXEenmGPpQrT2it2kFE6tJZgU6` (verificado: 12/12 archivos idénticos al commit).
+
 - **Estilo «Dinámico (1-2 líneas)»** (por defecto) o «Completo», en los ajustes del doblaje
   (`#ytEstiloSubtitulo`, clave `jg_yt_subtitulo_estilo`). El segmento se parte en trozos de
   ≤ 2 renglones medidos con `canvas.measureText` y la fuente real (`TranscriptionDisplay.js`,

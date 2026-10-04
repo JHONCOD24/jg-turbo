@@ -715,7 +715,9 @@ sincronía 90 y E2E local 78. Las pruebas físicas y de escucha se reportan apar
 
 ## Reforma móvil PDF + Videos v168 (2026-10-04)
 
-Dirigida por un agente director con 6 ejecutores en ramas aisladas. Detalle en
+Dirigida por un agente director con 6 ejecutores en ramas aisladas. `JG_JS_V='v168'`,
+SW `jg-turbo-shell-v168`, prod `dpl_ATGXEenmGPpQrT2it2kFE6tJZgU6` (incluye la v167 de
+otra sesión: un despliegue v166 intermedio la había pisado; ver TRAMPAS.md). Detalle en
 `CAMBIOS_PDF.md` (PDF-1, PDF-2a, PDF-2b) y `CAMBIOS_YOUTUBE.md` /
 `CAMBIOS_BIBLIOTECA_VIDEOS.md` (subtítulo dinámico, video activo, voz robusta).
 
