@@ -709,3 +709,38 @@ que no cabe. `SyncEngine` sigue a la voz durante esa espera. SRT/VTT valida tiem
 y duración, conserva UTF-16 y descarta selecciones asíncronas de otro video.
 Informe: `docs/auditoria-video-local/INFORME.md`. Pruebas actuales: archivo 88,
 sincronía 90 y E2E local 78. Las pruebas físicas y de escucha se reportan aparte.
+
+## Reforma móvil PDF + Videos v166 (2026-10-04)
+
+Dirigida por un agente director con 6 ejecutores en ramas aisladas. Detalle en
+`CAMBIOS_PDF.md` (PDF-1, PDF-2a, PDF-2b) y `CAMBIOS_YOUTUBE.md` /
+`CAMBIOS_BIBLIOTECA_VIDEOS.md` (subtítulo dinámico, video activo, voz robusta).
+
+- **PDF:** la página sigue al carácter que suena (`seguirVoz`), nunca por el
+  inicio de la marca; ancho de columna con decimales (en 360 px el redondeo
+  adelantaba la página). Resaltado por oraciones (`js/pdf/unidadesLectura.js`,
+  cláusulas si > 240, tope 300); la marca no cambia métricas del texto.
+  Teléfono = `(max-width:640px), (orientation:landscape) and (max-height:500px)`:
+  en horizontal, dos columnas y cromo compacto. La reserva de cromo es constante
+  (alternar `jg-inmersivo` no reparte páginas). Gestos: solo un deslizamiento
+  claramente horizontal pasa página; `overscroll-behavior:none` solo leyendo
+  paginado. Paso de página «Libro» con hoja opaca `.lec-hoja`
+  (`jg_pdf_paso_pagina`: libro | deslizar | ninguna).
+- **Videos:** subtítulo dinámico de 1-2 renglones al ritmo de la voz
+  (`js/youtube/subtituloDinamico.js`, `jg_yt_subtitulo_estilo`), pegado bajo la
+  imagen en pantalla completa y superpuesto en el tercio inferior en el teléfono
+  horizontal. Video activo en `jg_yt_video_activo` (puntero; lo pesado sigue en
+  `jg_youtube` v2): sobrevive a F5, cerrar la app y cambiar de pestaña (pausa al
+  salir). Botón × y «Cambiar video». La voz espera en YouTube/X/archivo si la
+  síntesis no llegó («Preparando la voz…»), se resincroniza tras dormir la
+  página (`TIC_PERDIDO_MS`) y `destruir()` suelta sus oyentes.
+- **Pruebas nuevas:** `verificar_pdf_voz_pagina` 93 · `verificar_pdf_orientacion`
+  236 · `verificar_pdf_gestos` 67 · `verificar_pdf_animacion` 107 ·
+  `test_pdf_unidades_lectura` 61 · `test_subtitulo_dinamico` 51 ·
+  `verificar_subtitulos_video` 192 · `test_video_activo` 26 ·
+  `verificar_video_persistencia` 248 · `test_voz_robusta` 66 ·
+  `verificar_voz_doblaje_robusta` 92. `verificar_youtube_doblaje` pasa a 111.
+- **Fallos previos (idénticos en `09c35be`, no son de esta tanda):**
+  `verificar_pdf_navegador` 1 (aviso de OCR), `verificar_pdf_guia_tiempo` (5-13 de
+  75 muestras), `verificar_fase_a_recargar` (corta en 20: la tarjeta se repinta),
+  `verificar_arranque_ligero` (1087 KB > 1 MB; era 1070).
