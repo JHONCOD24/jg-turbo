@@ -2625,7 +2625,8 @@
      arrastre vivía aquí; desde PDF-05 reordenar solo existe dentro de
      «Organizar», con controles propios de 44×44. */
   .pdf-libro-menu summary{
-    width:44px;height:44px;border-radius:10px;
+    /* 44×44 de toque con la huella de 28: el margen negativo no mueve la tarjeta. */
+    width:44px;height:44px;margin:-8px;border-radius:10px;
     background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
     display:grid;place-items:center;color:var(--muted);
     cursor:pointer;user-select:none;-webkit-user-select:none;
@@ -6109,12 +6110,8 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
     padding-top:var(--pdf-reserva-arriba,0px);
     padding-bottom:var(--pdf-reserva-abajo,0px);
   }
-  /* P-01: el cromo apartado no deja hueco. `!important` pisa las variables
-     que `medirPaginas` fija en línea, también si solo se cambia la clase. */
-  body.jg-leyendo.jg-inmersivo .pdf-texto-col{
-    --pdf-reserva-arriba:0px !important;
-    --pdf-reserva-abajo:0px !important;
-  }
+  /* La reserva es IDÉNTICA con el cromo visible u oculto (TRAMPAS «Con páginas,
+     apartar el cromo remaqueta»): el hueco se queda vacío, la página no se mueve. */
   /* Vista limpia y completa: el cromo flota por encima y se aparta al leer */
   body.jg-leyendo #pdfResultArea{padding-top:0;padding-bottom:0}
   #pdfResultArea .pdf-apariencia-hoja{max-height:calc(var(--jg-viewport-alto,100dvh) - env(safe-area-inset-top) - 12px)}

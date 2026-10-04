@@ -688,12 +688,11 @@ export function initLibroVista({ el, estado, api }) {
          * página crece hasta llenar la pantalla. El sitio se conserva por el
          * carácter de `pag.ancla`, no por el número de página (que cambia al
          * caber más renglones). El cromo sigue en su sitio: solo se apaga. */
-        const inmersivo = document.body.classList.contains('jg-inmersivo');
-        col.style.setProperty('--pdf-reserva-arriba', inmersivo ? '0px' : `${cab}px`);
+        col.style.setProperty('--pdf-reserva-arriba', `${cab}px`);
         /* En horizontal la paginación y la barra comparten fila (cada una a un
          * lado): el hueco es el de la más alta, no la suma. */
         const abajo = enHorizontalBajo() ? Math.max(pagin, barra) : pagin + barra;
-        col.style.setProperty('--pdf-reserva-abajo', inmersivo ? '0px' : `${abajo}px`);
+        col.style.setProperty('--pdf-reserva-abajo', `${abajo}px`);
       } catch (_) {}
     } else if (col) {
       try { col.style.removeProperty('--pdf-reserva-arriba'); col.style.removeProperty('--pdf-reserva-abajo'); } catch (_) {}

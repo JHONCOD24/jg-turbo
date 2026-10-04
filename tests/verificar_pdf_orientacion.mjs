@@ -382,10 +382,10 @@ async function esperarEstable(p, ms = 400) {
   await p.waitForTimeout(ms);
 }
 
-async function abrirLibro(ancho, alto, paginasPdf, { almacen = {} } = {}) {
+async function abrirLibro(ancho, alto, paginasPdf, { almacen = {}, movil = false } = {}) {
   const ruta = join(temporal, `libro-${paginasPdf}.pdf`);
   crearLibro(ruta, paginasPdf);
-  const contexto = await navegador.newContext({ viewport: { width: ancho, height: alto } });
+  const contexto = await navegador.newContext({ viewport: { width: ancho, height: alto }, ...(movil ? { isMobile: true, hasTouch: true } : {}) });
   await contexto.addInitScript((extra) => {
     try {
       /* Solo en la primera carga de la sesión: una recarga conserva lo guardado. */
@@ -473,7 +473,7 @@ for (const esc of ESCENARIOS.filter((e) => !FILTRO || e.nombre.includes(FILTRO))
     comprobar(h.ancla === base.ancla, `${t}: el carácter ancla no cambia (${base.ancla} → ${h.ancla})`);
     comprobar(h.inmersivo === base.inmersivo, `${t}: el modo inmersivo se conserva (${base.inmersivo} → ${h.inmersivo})`);
     comprobar(h.renglonesPorAlto >= esc.minRenglones, `${t}: ≥ ${esc.minRenglones} renglones por alto (${h.renglonesPorAlto})`);
-    comprobar(h.renglonesVistos >= esc.minRenglones, `${t}: ≥ ${esc.minRenglones} renglones realmente dibujados (${h.renglonesVistos})`);
+    comprobar(h.renglonesVistos >= esc.minRenglones - 1, `${t}: ≥ ${esc.minRenglones - 1} renglones con letra dibujados (el espacio entre párrafos come uno) (${h.renglonesVistos})`);
     comprobar(h.letra >= base.letra - 0.01, `${t}: la letra no es menor que en vertical (${base.letra} → ${h.letra})`);
     comprobar(h.ajenoPx <= 1, `${t}: ningún texto de la página vecina dentro de la caja (${h.ajenoPx} px)`);
     comprobar(h.desborde <= 0, `${t}: sin desborde horizontal (${h.desborde} px)`);
@@ -619,6 +619,35 @@ for (const modo of ['paginas', 'scroll']) {
   }
   comprobar(s.errores.length === 0, `${nombre}: sin errores de JavaScript`, s.errores.join(' | '));
   await s.contexto.close();
+}
+
+/* ── Abrir DIRECTAMENTE en horizontal (también con emulación móvil/táctil) y
+ * P-01: la caja paginada mide igual con el cromo visible u oculto ── */
+for (const [w, h, minR] of [[844, 390, 8], [800, 360, 7]]) {
+  for (const movil of [false, true]) {
+    if (FILTRO && !`${w}${h}`.includes(FILTRO)) continue;
+    const nombre = `abrir en ${w}×${h}${movil ? ' (móvil táctil)' : ''}`;
+    console.log(`
+── ${nombre} ──`);
+    const s = await abrirLibro(w, h, 6, { movil });
+    const { p } = s;
+    const a = await p.evaluate(medirVista);
+    comprobar(a.activo && a.total >= 4 && a.alto > 100, `${nombre}: texto paginado (${a.total} páginas, caja ${a.ancho}×${a.alto})`);
+    comprobar(a.renglonesPorAlto >= minR, `${nombre}: ≥ ${minR} renglones por alto (${a.renglonesPorAlto})`);
+    comprobar(a.columnas === 2, `${nombre}: dos columnas (${a.columnas})`);
+    await irAPaginaN(p, 2);
+    const antes = await p.evaluate(medirVista);
+    const lista = [];
+    for (const ver of [true, false, true, false]) {
+      await p.evaluate((v) => document.body.classList.toggle('jg-inmersivo', !v), ver);
+      await p.waitForTimeout(450);
+      lista.push(await p.evaluate(medirVista));
+    }
+    const mismo = lista.every((m) => m.total === antes.total && m.actual === antes.actual && m.alto === antes.alto && m.ancho === antes.ancho && m.ancla === antes.ancla);
+    comprobar(mismo, `${nombre}: la caja paginada es igual con cromo visible u oculto (total ${antes.total}, página ${antes.actual + 1}, caja ${antes.ancho}×${antes.alto}; vistos ${lista.map((m) => `${m.total}/${m.actual + 1}/${m.alto}`).join(' ')})`);
+    comprobar(s.errores.length === 0, `${nombre}: sin errores de JavaScript`, s.errores.join(' | '));
+    await s.contexto.close();
+  }
 }
 
 /* ── Repaso responsive: biblioteca y lector en 7 tamaños ── */
