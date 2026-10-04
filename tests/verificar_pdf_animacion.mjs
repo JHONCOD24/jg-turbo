@@ -207,7 +207,7 @@ const p95 = (xs) => { const o = [...xs].sort((a, b) => a - b); return o.length ?
   await elegir('ninguno');
   await p.reload({ waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(500);
-  await p.locator('#tabPdf').click();
+  if (await p.locator('#tabPdf').isVisible()) await p.locator('#tabPdf').click();
   await p.locator('#pdfLectura p').first().waitFor({ timeout: 60000 }).catch(() => {});
   await p.waitForTimeout(1500);
   comprobar(await p.evaluate(() => document.getElementById('pdfAparPaso')?.value) === 'ninguno', 'tras recargar, «Sin animación» sigue elegida');
@@ -220,7 +220,7 @@ const p95 = (xs) => { const o = [...xs].sort((a, b) => a - b); return o.length ?
   await p.evaluate(() => localStorage.setItem('jg_pdf_paso_pagina', 'giro-3d'));
   await p.reload({ waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(800);
-  await p.locator('#tabPdf').click();
+  if (await p.locator('#tabPdf').isVisible()) await p.locator('#tabPdf').click();
   await p.waitForTimeout(1200);
   comprobar(await p.evaluate(() => document.getElementById('pdfAparPaso')?.value) === 'libro', 'un valor guardado inválido cae en «Libro»');
   comprobar(errores.length === 0, 'opciones: sin errores de JavaScript', errores.join(' | '));

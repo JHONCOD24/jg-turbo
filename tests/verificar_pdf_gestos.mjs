@@ -94,19 +94,29 @@ const sinRecarga = ({ html, body }) => (html === 'none' || html === 'contain') &
   /* El gesto no deja el puntero capturado: un toque real en un botón del cromo
    * sigue siendo un toque en ese botón (TRAMPAS: «Capturar el puntero al
    * tocar rompe los botones que hay debajo»). */
-  await p.evaluate(() => document.body.classList.remove('jg-inmersivo'));
-  await reposo(p, 500);
-  const antesToque = await paginaActual(p);
-  const bn = await p.evaluate(() => { const r = document.getElementById('btnPdfPagNext').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, ok: r.width > 0 && !document.getElementById('btnPdfPagNext').disabled }; });
+  comprobar(await p.evaluate(() => document.body.classList.contains('jg-inmersivo')), 'los deslizamientos no despiertan el cromo (la pantalla sigue limpia)');
+  const etiqueta = () => p.evaluate(() => Number(document.getElementById('pdfPagPos').textContent.replace(/^\D+/, '').split(' de ')[0]));
+  /* Un toque real en el texto trae los controles. */
+  await p.touchscreen.tap(cx, cy - 80);
+  await reposo(p, 700);
+  comprobar(!(await p.evaluate(() => document.body.classList.contains('jg-inmersivo'))), 'un toque en el texto devuelve los controles');
+  /* Se lee la etiqueta enseguida: a los ~400 ms pasar de página vuelve a
+   * apartar el cromo y el reparto cambia (P-01), que es otra prueba. */
+  const antesToque = await etiqueta();
+  const centro = (id) => p.evaluate((i) => { const r = document.getElementById(i).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, ok: r.width > 0 && !document.getElementById(i).disabled }; }, id);
+  const bn = await centro('btnPdfPagNext');
   if (bn.ok) {
     await p.touchscreen.tap(bn.x, bn.y);
-    await reposo(p);
-    comprobar(await paginaActual(p) === antesToque + 1, `un toque real en «página siguiente» tras deslizar pasa una página (${antesToque} → ${await paginaActual(p)})`);
-    const bp = await p.evaluate(() => { const r = document.getElementById('btnPdfPagPrev').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await p.waitForTimeout(200);
+    comprobar(await etiqueta() === antesToque + 1, `un toque real en «página siguiente» tras deslizar pasa una página (${antesToque} → ${await etiqueta()})`);
+    await reposo(p, 900);   // deja que el cromo se aparte solo antes de traerlo otra vez
     await p.evaluate(() => document.body.classList.remove('jg-inmersivo'));
+    await reposo(p, 600);
+    const antesPrev = await etiqueta();
+    const bp = await centro('btnPdfPagPrev');
     await p.touchscreen.tap(bp.x, bp.y);
-    await reposo(p);
-    comprobar(await paginaActual(p) === antesToque, `y un toque real en «página anterior» la devuelve (${await paginaActual(p)})`);
+    await p.waitForTimeout(200);
+    comprobar(await etiqueta() === antesPrev - 1, `y un toque real en «página anterior» la devuelve (${antesPrev} → ${await etiqueta()})`);
   } else comprobar(false, 'el botón «página siguiente» se puede tocar');
 
   /* ── «Tirar para recargar» ── */
