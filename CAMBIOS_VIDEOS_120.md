@@ -66,6 +66,21 @@ el de subtítulos/Supadata de YouTube.
 
 ## Publicación
 
-Pendiente de completar tras verificaciones locales. Se publica una sola copia
-limpia del commit y se verifican versión, módulos, salud y límite en el dominio
-real antes de sincronizar `origin/main`.
+Publicado en `https://jg-turbo.vercel.app` desde `git archive` del commit
+`73ea335`, enlazado al proyecto `jg-turbo`. Un solo despliegue:
+`dpl_8ionughivj1wmsSTPWZ9pE42Sin7`, estado READY, v167.
+
+Verificacion del dominio real:
+
+- SHA-256 identico al commit en HTML, service worker y los seis modulos JS
+  modificados/nuevos (ocho archivos).
+- `/api/health`: status ok. `/api/session-config`: max_youtube_minutes = 120.
+- POST `/api/youtube` con 7200.001 s: HTTP 413, "Maximo: 120 minutos".
+- Navegador con `JG_BASE=https://jg-turbo.vercel.app`: archivo 78, YouTube 110
+  (incluye 120 min y voz al minuto 118), X 24 y biblioteca 52. Total 264
+  comprobaciones correctas, cero fallos. API/YouTube simulados, sin creditos.
+
+Despliegue anterior registrado para reversion:
+`dpl_FotRxMbBhFA559XXYBuTSByo9rT4`,
+`https://jg-turbo-jbl5ld49p-jhoncod24s-projects.vercel.app`.
+Documentacion final guardada en Git; integracion por avance directo a main.
