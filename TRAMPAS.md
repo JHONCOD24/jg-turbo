@@ -1703,3 +1703,23 @@ interrumpidos o con timeout no cuentan como suites aprobadas.
 La misma espera aplica tras F5, antes de medir preferencias restauradas. Para
 geometría de biblioteca esperar también `link[data-vid-css].sheet`: el CSS
 diferido ya define 44 px, pero antes de cargar se mide el estilo general de 36 px.
+
+## Proteger tecnicismos con fichas opacas rompía la traducción (2026-10-02)
+
+**Síntoma:** con «Conservar términos de desarrollo web» encendido, el doblaje se
+quedaba mudo a ratos y Traducir/PDF fallaban con «La traducción cambió un
+marcador de término técnico». En la extensión de Udemy, donde viene encendida,
+la voz se apagaba y volvía sola más adelante.
+
+**Causa:** `terminosWeb.js` cambiaba cada tecnicismo por una ficha (`JGWEB0X`) y
+lanzaba si la traducción la perdía, la repetía o la movía de segmento. El mensaje
+decía «marcador», así que `translationService` lo tomaba por fallo de contenido y
+partía el lote hasta frase por frase. Medido en producción con 36 subtítulos: 12
+de 25 llamadas rechazadas, 3 subtítulos sin traducir y 29 s en vez de 11,6 s.
+Varios rechazos eran traducciones correctas («El hook más usado es useState»).
+
+**Regla:** una protección de texto nunca lanza. Los tecnicismos van marcados como
+código (`` `array` ``) y las marcas se quitan al recibir (app v166); lo peor que
+puede pasar es que un término salga traducido. Al quitarlas, cada comilla se va
+con sus espacios y deja uno: emparejar comillas y recortar pega palabras cuando
+el traductor pierde una («Usa React yhooks», comprobado en prueba).

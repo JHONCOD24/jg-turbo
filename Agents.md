@@ -6,9 +6,12 @@ PDF/videos ofrecen `neural:multi:female` (Ava) y `neural:multi:male` (Andrew).
 Solo la eleccion multilingue pide unified con idioma fijo; no volver a forzar
 voz regional sobre esa eleccion ni aplicar modo multilingue a un video regional.
 `jg_tts_terminos_web` es opcional y aditivo: solo nuevas traducciones en-es.
+**v166:** cada término viaja marcado como código (`` `array` ``) y `restaurar`
+(= `quitarMarcasDeTermino`) **nunca lanza**: no volver a fichas opacas ni a
+rechazar una traducción por una marca (rompía lotes del doblaje; `TRAMPAS.md`).
 `prepararTextoDeUnidad` une continuaciones antes de sintetizar sin reindexar
 el motor. Pruebas nuevas: `test_voz_frases_continuas` 14,
-`test_voz_multilingue` 11, `verificar_voz_multilingue` 13. Detalle/publicacion:
+`test_voz_multilingue` 17, `verificar_voz_multilingue` 17. Detalle/publicacion:
 `CAMBIOS_TTS.md`. No cambia permisos ni acceso de la extension Udemy.
 
 ## Context7 (docs de librerías)
@@ -522,7 +525,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v157`** (voz centrada y medida guardada, 2026-09-28). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v166`** (tecnicismos como código, 2026-10-02). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 
