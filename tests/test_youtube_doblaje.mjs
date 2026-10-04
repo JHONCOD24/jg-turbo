@@ -530,6 +530,61 @@ const se = await modulo('syncEngine.js');
   comprobar(servicio.unidades[0].duracionVoz === 0, 'al cambiar de voz, la duración se vuelve a medir');
 }
 
+// ── Un `null` guardado no es «ya traducido» (v167) ──────────────────────
+// Un segmento que no se pudo traducir se guardaba como `null` y, al reabrir el
+// video, contaba como hecho: ese tramo sonaba en inglés para siempre (medido el
+// 2026-10-02: 3 de 36 subtítulos, por la protección de tecnicismos de v165).
+{
+  const segmentos = ts.normalizarSegmentos(fixture.segments);
+  const crearMotor = (pedidos, respuesta = (i) => `ES ${i}`) => {
+    const traductor = { traducirLote: async (indices) => { pedidos.push(...indices); return new Map(indices.map((i) => [i, respuesta(i)])); } };
+    const servicioVoz = new ds.DubbingService({ generarAudio: async () => ({ blob: new Blob(['x']) }) });
+    servicioVoz.definirUnidades(ds.agruparPorTiempo(segmentos));
+    return new MotorPreparacion({ segmentos, servicioVoz, traductor, posicion: () => 0, reloj: { iniciar() {}, detener() {} }, ahora: () => 0 });
+  };
+  const guardadas = segmentos.map((_, i) => [i, i === 2 ? null : `ES ${i}`]);
+
+  const pedidos = [];
+  const motor = crearMotor(pedidos);
+  motor.sembrar(guardadas);
+  motor.paso();
+  await new Promise((r) => setTimeout(r, 0));
+  comprobar(pedidos.includes(2), `un null guardado (de una versión anterior) se vuelve a pedir al reabrir (pedidos: ${pedidos.join(',') || 'ninguno'})`);
+  comprobar(!pedidos.includes(0) && !pedidos.includes(5), 'lo que sí estaba traducido no se vuelve a pagar');
+  comprobar(motor.traducciones.get(2) === 'ES 2', 'y el tramo queda traducido');
+  comprobar(!motor.intentosFallidos.has(2), 'al traducirse, se olvidan sus intentos fallidos');
+
+  const pedidosTope = [];
+  const motorTope = crearMotor(pedidosTope);
+  motorTope.sembrar(guardadas, [[2, tr.MAX_INTENTOS_TRADUCCION]]);
+  motorTope.paso();
+  await new Promise((r) => setTimeout(r, 0));
+  comprobar(!pedidosTope.includes(2) && motorTope.traducciones.get(2) === null, `tras ${tr.MAX_INTENTOS_TRADUCCION} aperturas fallidas no se insiste (no se quema cuota)`);
+
+  const pedidosFallo = [];
+  const motorFallo = crearMotor(pedidosFallo, (i) => (i === 2 ? null : `ES ${i}`));
+  motorFallo.sembrar(guardadas, [[2, 1]]);
+  motorFallo.paso();
+  await new Promise((r) => setTimeout(r, 0));
+  comprobar(motorFallo.intentosFallidos.get(2) === 2, 'si vuelve a fallar, se anota un intento más');
+  motorFallo.paso();
+  await new Promise((r) => setTimeout(r, 0));
+  comprobar(pedidosFallo.filter((i) => i === 2).length === 1, 'y dentro de la misma sesión no se repite (un intento por apertura)');
+
+  const ya = tr.traduccionesReutilizables([[0, 'a'], [1, null], [2, null]], [[2, tr.MAX_INTENTOS_TRADUCCION]]);
+  comprobar(ya.get(0) === 'a' && !ya.has(1) && ya.get(2) === null, 'traduccionesReutilizables: deja fuera los null con intentos por delante');
+  comprobar(tr.traduccionesReutilizables(undefined, undefined).size === 0, 'traduccionesReutilizables: un registro viejo sin datos no rompe');
+  const intentos = tr.anotarIntentos([[1, 1], [4, 2]], [[1, null], [4, 'ok'], [7, null]]);
+  comprobar(JSON.stringify(intentos) === '[[1,2],[7,1]]', `anotarIntentos: suma al que falló y olvida al que se tradujo (${JSON.stringify(intentos)})`);
+
+  // Descargas: traducirTodo con lo guardado vuelve a pedir el null.
+  const pedidosTodo = [];
+  const servicio = new tr.TranslationService({ traducirTexto: async (texto) => { pedidosTodo.push(texto); return texto.replace(/(\]\]\n)/g, '$1ES '); } });
+  const pocos = segmentos.slice(0, 3);
+  await servicio.traducirTodo(pocos, { ya: tr.traduccionesReutilizables([[0, 'ES 0'], [1, 'ES 1'], [2, null]], []) });
+  comprobar(pedidosTodo.length === 1 && pedidosTodo[0].includes('JG_SEG_000002') && !pedidosTodo[0].includes('JG_SEG_000000'), 'la descarga también vuelve a pedir el tramo que quedó sin traducir');
+}
+
 // ── Voz constante (v152) ────────────────────────────────────────────────
 // Al cambiar de voz, una frase que se estaba generando con la voz vieja sonaba
 // intercalada con la nueva. Ahora ese audio se descarta y se rehace.
@@ -554,5 +609,24 @@ const se = await modulo('syncEngine.js');
 }
 
 // ── Resumen ─────────────────────────────────────────────────────────────
+{
+  let llamadas = 0;
+  const servicio = new ts.TranscriptionService({ fetchApi: async () => {
+    llamadas += 1;
+    return Response.json({ language: 'en', duration_s: 7200, segments: [
+      { start: 0, end: 3, text: 'Use React hooks.' },
+      { start: 7197, end: 7200, text: 'The final array.' },
+    ] });
+  } });
+  const r = await servicio.obtenerParaDoblaje('https://youtu.be/abc123xyz00', { duracionS: 7200 });
+  comprobar(llamadas === 1 && r.duracionS === 7200 && r.segmentos.at(-1).endTime === 7200, 'YouTube: 120:00 admite texto con tiempos hasta la última frase');
+  let error = null;
+  try { await servicio.obtenerParaDoblaje('https://youtu.be/abc123xyz00', { duracionS: 7200.001 }); } catch (e) { error = e; }
+  comprobar(error?.codigo === 'video_largo' && llamadas === 1, 'YouTube: más de 120 min se rechaza antes de pedir transcripción');
+  const largo = new ts.TranscriptionService({ fetchApi: async () => Response.json({ duration_s: 7201, segments: fixture.segments }) });
+  error = null;
+  try { await largo.obtenerParaDoblaje('https://youtu.be/abc123xyz00'); } catch (e) { error = e; }
+  comprobar(error?.codigo === 'video_largo', 'YouTube: valida también la duración recibida del servidor');
+}
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

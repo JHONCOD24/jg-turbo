@@ -6,7 +6,7 @@
  * ventanas alrededor de lo que se ve → voz encendida por defecto. Una sola sesión viva;
  * «Cancelar» y «Cerrar» la detienen entera.
  */
-import { TranscriptionService, ErrorYoutube } from './transcriptionService.js';
+import { TranscriptionService, ErrorYoutube, validarDuracionVideo } from './transcriptionService.js';
 import { detectarFuente } from './fuenteVideo.js';
 import { ServicioX, tituloX } from './servicioX.js';
 import { ServicioArchivo } from './servicioArchivo.js';
@@ -14,7 +14,7 @@ import { validarArchivo, huellaArchivo, resumenAntesDeEmpezar, esClaveArchivo } 
 import { leerTextoSubtitulo, segmentosDesdeSubtitulos, validarSubtitulosParaVideo } from './subtitulosArchivo.js';
 import { elegirMp4 } from './audioX.js';
 import { XVideoPlayer } from './XVideoPlayer.js';
-import { TranslationService } from './translationService.js';
+import { TranslationService, traduccionesReutilizables, anotarIntentos } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
 import { SyncEngine, normalizarTasa } from './syncEngine.js';
 import { TranscriptionDisplay } from './TranscriptionDisplay.js';
@@ -606,6 +606,7 @@ export function inicializarYoutubeSincronizado({
   function guardarSesion(actual) {
     if (!actual?.registro) return;
     actual.registro.traducciones = [...(actual.motor?.traducciones || [])];
+    actual.registro.intentosFallidos = [...(actual.motor?.intentosFallidos || [])];
     const posicion = actual.player?.getCurrentTime?.() || 0;
     if (posicion > 0) actual.registro.posicionS = posicion;
     guardarDoblaje(actual.registro);
@@ -913,7 +914,7 @@ export function inicializarYoutubeSincronizado({
   }
 
   /** Preparación por ventanas (H3): lo de ahora primero; el resto, mientras se ve. */
-  async function prepararDoblaje(actual, { datos, origen, tituloVideo, signal, traduccionesGuardadas = [] }) {
+  async function prepararDoblaje(actual, { datos, origen, tituloVideo, signal, traduccionesGuardadas = [], intentosFallidos = [] }) {
     const { player } = actual;
     actual.segmentos = datos.segmentos;
     actual.origen = origen;
@@ -978,7 +979,7 @@ export function inicializarYoutubeSincronizado({
       },
     });
     actual.motor = motor;
-    motor.sembrar(traduccionesGuardadas);
+    motor.sembrar(traduccionesGuardadas, intentosFallidos);
     display.definirSegmentos(datos.segmentos, (i) => {
       if (!motor.traducciones.has(i)) return null;
       return motor.traducciones.get(i) ?? datos.segmentos[i].text;   // sin traducción: se lee el original
@@ -1099,6 +1100,7 @@ export function inicializarYoutubeSincronizado({
       duracionS,
       segmentos: datos.segmentos,
       traducciones: sirve ? guardado.traducciones : [],
+      intentosFallidos: sirve ? guardado.intentosFallidos || [] : [],
       posicionS: sirve ? guardado.posicionS : 0,
     };
     guardarDoblaje(actual.registro);
@@ -1143,6 +1145,7 @@ export function inicializarYoutubeSincronizado({
     await prepararDoblaje(actual, {
       datos, origen: decision.idioma, tituloVideo, signal,
       traduccionesGuardadas: actual.registro.traducciones,
+      intentosFallidos: actual.registro.intentosFallidos,
     });
     // Las voces ya resueltas («auto» → la neural del video): las usan las
     // descargas, para que el archivo suene como sonó el video.
@@ -1231,6 +1234,7 @@ export function inicializarYoutubeSincronizado({
       if (signal.aborted) throw cancelado();
       tituloVideo = actual.player.getVideoData()?.title || tituloVideo || datos.titulo || guardado?.titulo || '';
       duracionS = actual.player.getDuration() || duracionS || datos.duracionS || guardado?.duracionS || 0;
+      validarDuracionVideo(duracionS);
       if (tituloVideo) ui.titulo.textContent = tituloVideo;
       await completarSesion(actual, {
         decision, datos, tituloVideo, duracionS, guardado, sirve,
@@ -1548,12 +1552,14 @@ export function inicializarYoutubeSincronizado({
   async function frasesParaArchivo(video, { signal = null, onProgreso = () => {} } = {}) {
     const registro = await leerDoblaje(video.clave);
     if (!registro?.segmentos?.length) throw new Error('Este video todavía no tiene texto guardado. Ábrelo una vez para doblarlo.');
+    // Un null guardado se vuelve a pedir (con tope): ver traduccionesReutilizables.
+    const ya = traduccionesReutilizables(registro.traducciones, registro.intentosFallidos);
     const mapa = await traductor.traducirTodo(registro.segmentos, {
-      origen: registro.idiomaOrigen, tituloVideo: registro.titulo, signal,
-      ya: new Map(registro.traducciones || []),
+      origen: registro.idiomaOrigen, tituloVideo: registro.titulo, signal, ya,
       onProgress: (hechas, total) => onProgreso({ fase: 'traduccion', hechas, total }),
     });
     registro.traducciones = [...mapa];
+    registro.intentosFallidos = anotarIntentos(registro.intentosFallidos, [...mapa].filter(([indice]) => !ya.has(indice)));
     guardarDoblaje(registro);
     const unidades = agruparPorTiempo(registro.segmentos);
     return unidades.map((unidad) => ({

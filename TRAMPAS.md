@@ -607,6 +607,14 @@ falta una de estas dos:
   primera vez que se abre, o
 - una acción explícita para el usuario.
 
+**Volvió a pasar** (2026-10-02, doblaje de videos): un segmento que no se pudo
+traducir se guardaba como `null` en la caché del video y, al reabrir, `sembrar`
+lo daba por traducido: ese tramo sonaba en inglés para siempre aunque el traductor
+ya estuviera arreglado. **Regla extra:** un valor que significa «falló» no se
+guarda como si fuera un resultado; si se guarda, quien lo vuelve a leer debe
+reintentarlo, con un tope para no gastar cuota (`traduccionesReutilizables`,
+`CAMBIOS_YOUTUBE.md` §v166).
+
 ### 1.5 Un diálogo nativo puede bloquear una prueba visible sin lanzar error
 
 **Ocurrió** (2026-09-03, v2.33.0): `verificar_pdf_navegador` quedó vivo más de 15 minutos al
@@ -1866,3 +1874,44 @@ verticales.
 **Síntoma 4 (pruebas):** un gesto sintético `pointerdown`→`pointerup` sin `pointermove`
 dejaba el gesto en «espera» y no pasaba página. **Regla:** al soltar, si no hubo
 movimiento intermedio se juzga con el punto de partida y el de llegada.
+
+## Proteger tecnicismos con fichas opacas rompía la traducción (2026-10-02)
+
+**Síntoma:** con «Conservar términos de desarrollo web» encendido, el doblaje se
+quedaba mudo a ratos y Traducir/PDF fallaban con «La traducción cambió un
+marcador de término técnico». En la extensión de Udemy, donde viene encendida,
+la voz se apagaba y volvía sola más adelante.
+
+**Causa:** `terminosWeb.js` cambiaba cada tecnicismo por una ficha (`JGWEB0X`) y
+lanzaba si la traducción la perdía, la repetía o la movía de segmento. El mensaje
+decía «marcador», así que `translationService` lo tomaba por fallo de contenido y
+partía el lote hasta frase por frase. Medido en producción con 36 subtítulos: 12
+de 25 llamadas rechazadas, 3 subtítulos sin traducir y 29 s en vez de 11,6 s.
+Varios rechazos eran traducciones correctas («El hook más usado es useState»).
+
+**Regla:** una protección de texto nunca lanza. Los tecnicismos van marcados como
+código (`` `array` ``) y las marcas se quitan al recibir (app v166); lo peor que
+puede pasar es que un término salga traducido. Al quitarlas, cada comilla se va
+con sus espacios y deja uno: emparejar comillas y recortar pega palabras cuando
+el traductor pierde una («Usa React yhooks», comprobado en prueba).
+
+
+## La frase de prueba puede caer en el solape descartado (2026-10-04)
+
+**Sintoma:** el caso nuevo de 120 min subia las 21 partes pero solo conservaba
+la primera frase simulada. **Causa:** la prueba ponia todas las frases a 1 s
+del inicio de cada parte; desde la segunda, ese punto esta antes de `limiteS`
+y pertenece al solape descartado por el ensamblador. **Regla:** situar las
+frases de prueba dentro del tramo que cada parte conserva (a 10 s en este caso),
+y comprobar tanto los tiempos globales como el texto exacto hasta la ultima parte.
+
+
+## Medir play() sin activar el doblaje no prueba la voz (2026-10-04)
+
+**Sintoma:** al ampliar el caso de YouTube de 45 a 120 min, la voz no
+volvia a sonar en el minuto 118 aunque la traduccion llegaba. **Causa:**
+la prueba solo llamaba a `playVideo()`; no pulsaba Ver con voz en espanol
+y el motor permanecia inactivo. Contar cualquier `HTMLMediaElement.play()`
+podia confundir una medicion de audio con la reproduccion doblada. **Regla:**
+activar el doblaje por su boton visible y comprobar que la frase que realmente
+suena tiene el tiempo del destino, ademas de que aumenta el contador de play.

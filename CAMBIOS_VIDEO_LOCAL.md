@@ -9,7 +9,7 @@ Documento maestro del doblaje de videos guardados en el teléfono o el computado
 ## Qué hace
 
 - En **Videos**, debajo del campo del enlace: «o» + botón **«Elegir un video de tu equipo»**
-  (MP4, MOV, MKV o WebM, hasta 3 horas). También se puede soltar el video encima
+  (MP4, MOV, MKV o WebM, hasta 120 minutos (2 horas)). También se puede soltar el video encima
   (escritorio) o mandarlo desde la pestaña **Archivo** («Doblar este video al español»,
   incluso desde Compartir del celular).
 - Al elegir se ve una ficha con el nombre y el peso («412 MB · listo para doblar») y
@@ -31,7 +31,7 @@ Documento maestro del doblaje de videos guardados en el teléfono o el computado
    verlo se elige otra vez el archivo y la huella confirma que es el mismo.
 2. **Descargas: MP3 doblado y MP4 doblado.** Nunca «video original» (ya está en su equipo).
 
-Del director (el dueño puede cambiarlas): vive en Videos; hasta 3 horas; retomar lo ya
+Del director (el dueño puede cambiarlas): vive en Videos; hasta 120 minutos (2 horas); retomar lo ya
 transcrito si Groq corta; formatos MP4/M4V/MOV/MKV/WebM; arrastrar y soltar; puente
 desde Archivo (y Compartir del celular).
 
@@ -92,7 +92,7 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 | `archivo_no_es_video` | audio, PDF… | «Eso no parece un video (MP4, MOV, MKV o WebM). Para un audio usa la pestaña Archivo.» |
 | `archivo_formato` | Mediabunny no lo lee (AVI…) | «No reconocemos este formato de video. Prueba con un MP4, MOV, MKV o WebM.» |
 | `archivo_sin_audio` | sin pista de audio | «Este video no tiene sonido: no hay nada que doblar.» |
-| `archivo_largo` | > 3 h | «Este video dura N min. Por ahora se doblan videos de hasta 3 horas.» |
+| `archivo_largo` | > 2 h | «Este video dura N min. Por ahora se doblan videos de hasta 2 horas.» |
 | `archivo_audio` | ni decodifica ni se puede copiar | «Este navegador no puede leer el audio de este video (…). Prueba en Chrome de computador o conviértelo a MP4.» |
 | `archivo_parte_grande` | parte copiada > 4,2 MB | «…Conviértelo a MP4 (AAC) e inténtalo otra vez.» |
 | `archivo_transcripcion` | Whisper rechaza | el `detail` del servidor tal cual |
@@ -100,13 +100,13 @@ Detalle y respuestas crudas: `docs/video-local/MEDICIONES.md`.
 | reproductor | el `<video>` no lo reproduce | «Este navegador no puede reproducir este video (formato o códec). Ábrelo en Chrome de computador o conviértelo a MP4 (H.264 + AAC).» |
 | biblioteca | eligió otro archivo | «Ese archivo no es «x.mp4». Elige el mismo video que doblaste.» |
 | MP4 | códec que MP4 no lleva | «El video de este archivo no se puede guardar como MP4 sin recodificarlo. Descarga el audio en español (MP3).» |
-| `srt_vacio` / `srt_no_es` / `srt_formato` / `srt_grande` / `srt_largo` | subtítulos vacíos, con otra extensión, sin tiempos, de más de 2 MB o de más de 3 h | el motivo tal cual; el video sigue y va por Whisper |
+| `srt_vacio` / `srt_no_es` / `srt_formato` / `srt_grande` / `srt_largo` | subtítulos vacíos, con otra extensión, sin tiempos, de más de 2 MB o de más de 2 h | el motivo tal cual; el video sigue y va por Whisper |
 
 ## Límites
 
-- Video de hasta 3 horas; partes de 6 min con 12 s de solape (copia: según tasa real).
+- Video de hasta 120 minutos (2 horas); partes de 6 min con 12 s de solape (copia: según tasa real).
 - Cada parte ≤ 3,2 MB (tope duro 4,2 MB; Vercel rechaza ~4,5 MB y corta a 60 s).
-- Groq gratis ≈ 2 h de audio por hora: con «retomar», 3 h caben en dos tandas.
+- Groq gratis ≈ 2 h de audio por hora: el solape consume audio adicional; «retomar» conserva las partes si se alcanza la cuota.
 - Sin dependencias nuevas, sin cambios en `api/`, sin nada que cueste dinero.
 
 ## Pruebas
@@ -163,7 +163,7 @@ Si la persona tiene los subtítulos del curso, los agrega con
 **«Agregar subtítulos (.srt o .vtt, opcional)»** al lado del video elegido: el
 doblaje usa ese texto exacto sin transcribir (0 partes a Whisper, gratis) y
 pregunta el idioma si el formulario dice «auto». Se validan al elegirlos (vacío,
-extensión, formato, 3 h); un error se dice en el aviso y el video sigue por
+extensión, formato, 2 h); un error se dice en el aviso y el video sigue por
 Whisper. Latin-1 (tildes de Windows) se lee bien. Si marcan quién habla (`>>`,
 «Nombre:»), la 2.ª voz entra sola. Pruebas T6 (12) y e2e (11 nuevas).
 
@@ -215,3 +215,10 @@ Cierre publicado: v164, commit de app `5c76660`,
 health `ok`, archivo 78, YouTube 110, X 24 y móvil 60 sin fallos. Móvil tuvo
 dos casos de scroll no aplicables. Detalle de servicios simulados y límites:
 `docs/auditoria-video-local/produccion.json`.
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

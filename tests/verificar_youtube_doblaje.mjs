@@ -39,7 +39,7 @@ function segmentosRepetidos(veces) {
 }
 
 /** Respuesta de /youtube con los campos nuevos (los viejos siguen presentes). */
-function respuestaYoutube({ segmentos = fixture.segments, idioma = 'en', fuente = 'titulo', confianza = 0.8, disponibles = ['en'], conflicto = false } = {}) {
+function respuestaYoutube({ segmentos = fixture.segments, idioma = 'en', fuente = 'titulo', confianza = 0.8, disponibles = ['en'], conflicto = false, duracionS = 5314 } = {}) {
   return {
     status: 200,
     json: {
@@ -48,7 +48,7 @@ function respuestaYoutube({ segmentos = fixture.segments, idioma = 'en', fuente 
       audio_language_evidence: [{ fuente: 'proveedor', idioma, confianza: 0.62, detalle: 'prueba' }],
       audio_language_thresholds: { aceptar: 0.85, preguntar: 0.6 },
       language_source: fuente, language_resolution_confidence: confianza, requested_lang: idioma,
-      available_langs: disponibles, duration_s: 5314,
+      available_langs: disponibles, duration_s: duracionS,
     },
   };
 }
@@ -388,8 +388,9 @@ try {
 
   console.log('\n── T2.5: video largo — suena sin traducirlo entero ─────────────');
   {
-    const largo = segmentosRepetidos(30);   // ≈45 min, 1320 segmentos
-    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ segmentos: largo, fuente: 'usuario', confianza: 1 }) });
+    const largo = segmentosRepetidos(80);   // 120 min, 3520 segmentos
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ segmentos: largo, fuente: 'usuario', confianza: 1, duracionS: 7200 }) });
+    await pagina.evaluate(() => { window.__ytDuracion = 7200; });
     await pegarEnlace(pagina);
     const inicio = Date.now();
     await pagina.click('#ytSyncBtn');
@@ -402,16 +403,18 @@ try {
     const maximo = Math.max(...reg.translate.flatMap((t) => t.indices));
     comprobar('en pausa, la traducción se detiene en el horizonte de 3 minutos', largo[maximo].startTime <= 230, `${largo[maximo].startTime.toFixed(0)} s`);
     comprobar('y la voz también (≤ 18 síntesis)', reg.tts.length <= 18, `${reg.tts.length}`);
+    await reproducirConVoz(pagina);
     const playsAntes = await pagina.evaluate(() => window.__plays);
     const lotesAntes = reg.translate.length;
-    await pagina.evaluate(() => { window.__yt.seekTo(1800); window.__yt.playVideo(); });
+    await pagina.evaluate(() => { window.__yt.seekTo(7080); window.__yt.playVideo(); });
     const t0 = Date.now();
     while (reg.translate.length === lotesAntes && Date.now() - t0 < 6000) await esperar(100);
     const primero = reg.translate[lotesAntes]?.indices?.[0];
-    comprobar('tras saltar al minuto 30, lo primero que se traduce es ese tramo', primero !== undefined && largo[primero].startTime >= 1790,
+    comprobar('tras saltar al minuto 118 de 120, lo primero que se traduce es ese tramo', primero !== undefined && largo[primero].startTime >= 7070,
       primero === undefined ? 'sin petición' : `${largo[primero].startTime.toFixed(0)} s`);
-    await esperar(5000);
-    comprobar('y la voz en español vuelve a sonar allí', (await pagina.evaluate(() => window.__plays)) > playsAntes);
+    await pagina.waitForFunction((antes) => window.__plays > antes && window.jgDoblajeDiagnostico?.()?.frase?.inicio >= 7070, playsAntes, { timeout: 15000, polling: 100 }).catch(() => {});
+    comprobar('y la voz en español vuelve a sonar allí', (await pagina.evaluate((antes) => window.__plays > antes && window.jgDoblajeDiagnostico?.()?.frase?.inicio >= 7070, playsAntes)),
+      JSON.stringify(await pagina.evaluate(() => window.jgDoblajeDiagnostico?.())));
     comprobar('no aparece una transcripción vacía bajo el video', !(await pagina.isVisible('#ytResultArea')));
     comprobar('sin errores de JavaScript', reg.errores.length === 0, reg.errores.join(' | '));
     await contexto.close();

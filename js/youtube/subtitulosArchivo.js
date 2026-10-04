@@ -12,7 +12,6 @@ import { MAX_DURACION_S } from './archivoLocal.js';
 
 /** Un .srt de 3 h pesa ~200 KB: con 2 MB sobra y no se lee basura infinita. */
 export const MAX_BYTES_SRT = 2 * 1024 * 1024;
-const MARGEN_FIN_S = 120;
 
 const esNombreSubtitulo = (nombre) => /\.(srt|vtt)$/i.test(String(nombre || ''));
 
@@ -138,7 +137,7 @@ export function segmentosDesdeSubtitulos(texto, nombre) {
     throw new ErrorYoutube('No encontramos frases en esos subtítulos. Revisa que sea un .srt o .vtt válido.', 'srt_formato');
   }
   const fin = segmentos[segmentos.length - 1].endTime;
-  if (fin > MAX_DURACION_S + MARGEN_FIN_S) {
+  if (fin > MAX_DURACION_S) {
     throw new ErrorYoutube(`Esos subtítulos duran ${Math.round(fin / 60)} min. Por ahora se doblan videos de hasta ${MAX_DURACION_S / 3600} horas.`, 'srt_largo');
   }
   return { segmentos, formato };

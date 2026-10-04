@@ -198,8 +198,22 @@ const sx = await modulo('servicioX.js');
     const { registro, fetchApi, pedirTwimg } = escenario();
     const servicio = new sx.ServicioX({ fetchApi, pedirTwimg });
     let error = null;
-    try { await servicio.obtenerParaDoblaje({ ...info, duracion_s: 2 * 3600 }); } catch (e) { error = e; }
-    comprobar(error?.codigo === 'x_largo' && registro.twimg.length === 0, 'un video de 2 h se rechaza sin descargar nada');
+    try { await servicio.obtenerParaDoblaje({ ...info, duracion_s: 7200.001 }); } catch (e) { error = e; }
+    comprobar(error?.codigo === 'x_largo' && /120 min/.test(error.message) && registro.twimg.length === 0, 'más de 120 min se rechaza sin descargar nada');
+  }
+  {
+    const { registro, fetchApi, pedirTwimg } = escenario({ trozos: 2400 });
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg, esperar: async () => {} });
+    const r = await servicio.obtenerParaDoblaje({ ...info, duracion_s: 7200 }, { idiomaOrigen: 'en' });
+    comprobar(r.duracionS === 7200 && r.segmentos.at(-1).startTime > 6800, 'X: 120:00 llega a la última parte con tiempos después de la primera hora');
+    comprobar(registro.subidas.length > 20 && registro.subidas.every((s) => s.bytes <= 3200000 && s.idioma === 'en'), 'X: 120 min se transcribe por partes pequeñas con inglés fijo');
+  }
+  {
+    const { registro, fetchApi, pedirTwimg } = escenario({ trozos: 2401 });
+    const servicio = new sx.ServicioX({ fetchApi, pedirTwimg });
+    let error = null;
+    try { await servicio.obtenerParaDoblaje({ ...info, duracion_s: 0 }); } catch (e) { error = e; }
+    comprobar(error?.codigo === 'x_largo' && registro.subidas.length === 0 && registro.twimg.length === 2, 'X: una pista mayor de 120 min sin metadatos se rechaza antes de bajar audio o transcribir');
   }
   {
     const servicio = new sx.ServicioX({

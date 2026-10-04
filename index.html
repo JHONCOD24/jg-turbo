@@ -6781,7 +6781,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
       <div class="yt-area">
         <div class="panel-lead">
           <h2>Mira videos en español: de YouTube, de X o de tu equipo</h2>
-          <p>Pega el enlace de YouTube o de X (Twitter), o elige un video que tengas guardado, y pulsa <b>Doblar al español</b>: la voz empieza en segundos y el resto se prepara mientras ves. Funciona con videos en inglés, portugués, francés, alemán o italiano.</p>
+          <p>Pega el enlace de YouTube o de X (Twitter), o elige un video que tengas guardado, y pulsa <b>Doblar al español</b>: la voz empieza en segundos y el resto se prepara mientras ves. Máximo 120 minutos (2 horas). Funciona con videos en inglés, portugués, francés, alemán o italiano.</p>
         </div>
 
         <div id="ytServerWarn" class="notice warn" style="margin:0 0 12px">
@@ -6819,7 +6819,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
             Elegir un video de tu equipo
           </button>
           <input type="file" id="ytArchivo" class="sr-only" tabindex="-1" aria-hidden="true" accept="video/*,.mp4,.m4v,.mov,.mkv,.webm">
-          <p class="yt-equipo-ayuda" id="ytEquipoAyuda">MP4, MOV, MKV o WebM, de hasta 3 horas. El video no sale de tu equipo: solo viaja su audio para transcribirlo.</p>
+          <p class="yt-equipo-ayuda" id="ytEquipoAyuda">MP4, MOV, MKV o WebM, de hasta 120 minutos (2 horas). El video no sale de tu equipo: solo viaja su audio para transcribirlo.</p>
         </div>
         <div class="yt-ficha-archivo" id="ytFichaArchivo" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
@@ -19395,7 +19395,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v166';
+const JG_JS_V = 'v168';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

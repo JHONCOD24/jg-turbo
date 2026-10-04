@@ -12,9 +12,10 @@
  *  - Whisper de producción aceptó MP3, Ogg/Opus, AAC (.m4a) y AC-3 copiado en MP4.
  */
 import { BYTES_MAX_PARTE } from './transcripcionPartes.js';
+import { MAX_VIDEO_DURACION_S } from './limitesVideo.js';
 
 export const PREFIJO_CLAVE = 'archivo:';
-export const MAX_DURACION_S = 3 * 60 * 60;
+export const MAX_DURACION_S = MAX_VIDEO_DURACION_S;
 export const TROZO_MAX_S = 360;          // MP3 32 kbps: 1,44 MB por parte (medido)
 export const SOLAPE_S = 12;              // como X: ~4 trozos HLS de 3 s
 export const TROZO_MIN_COPIA_S = 30;

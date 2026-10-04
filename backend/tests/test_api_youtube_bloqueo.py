@@ -16,6 +16,26 @@ if str(APP_ROOT) not in sys.path:
 from api import index as api_module  # noqa: E402
 
 
+@pytest.mark.parametrize("duracion,estado", [(7200, 200), (7200.001, 413)])
+def test_limite_120_minutos_antes_de_pedir_subtitulos(monkeypatch, duracion, estado):
+    llamadas = []
+    monkeypatch.setattr(api_module.youtube_datos, "configurado", lambda: False)
+
+    def subtitulos(video_id, idioma):
+        llamadas.append(video_id)
+        return "Use React hooks.", "en"
+
+    monkeypatch.setattr(api_module, "_subtitulos_via_transcript_api", subtitulos)
+    respuesta = TestClient(api_module.app).post("/api/youtube", json={
+        "url": "https://www.youtube.com/watch?v=abc123xyz00",
+        "language": "en", "prefer_subtitles": True, "duration_hint_s": duracion,
+    })
+    assert respuesta.status_code == estado
+    assert len(llamadas) == (1 if estado == 200 else 0)
+    if estado == 413:
+        assert "120 minutos" in respuesta.json()["detail"]
+
+
 def test_transcript_api_propaga_bloqueo_ip(monkeypatch):
     sesiones = []
 

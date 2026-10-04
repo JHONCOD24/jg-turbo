@@ -39,6 +39,32 @@ export function piezaDeLote(indice, texto) {
   return `${marcador(indice)}\n${texto}`;
 }
 
+/* Un `null` guardado («no se pudo traducir») no es una traducción: al reabrir
+   el video se vuelve a pedir. Antes contaba como hecho y ese tramo sonaba en el
+   idioma original para siempre (v167). Tope: tras estas aperturas fallidas se
+   deja como está, para no gastar cuota en un segmento que la IA no acepta. */
+export const MAX_INTENTOS_TRADUCCION = 3;
+
+/** Lo guardado que cuenta como ya traducido: índice → texto (o `null` si agotó sus intentos). */
+export function traduccionesReutilizables(entradas, intentosFallidos) {
+  const intentos = new Map(intentosFallidos || []);
+  const salida = new Map();
+  for (const [indice, texto] of entradas || []) {
+    if (texto !== null || (intentos.get(Number(indice)) || 0) >= MAX_INTENTOS_TRADUCCION) salida.set(Number(indice), texto);
+  }
+  return salida;
+}
+
+/** Intentos fallidos tras una tanda: +1 a lo que volvió `null`, se olvida lo traducido. */
+export function anotarIntentos(intentosFallidos, resultados) {
+  const intentos = new Map(intentosFallidos || []);
+  for (const [indice, texto] of resultados || []) {
+    if (texto === null) intentos.set(indice, (intentos.get(indice) || 0) + 1);
+    else intentos.delete(indice);
+  }
+  return [...intentos];
+}
+
 /** Un 429 o «límite de uso»: el motor hace una pausa y reintenta; no es culpa del texto. */
 export function esLimiteDeUso(error) {
   return /\b429\b|l[ií]mite de uso|rate.?limit|too many requests/i.test(String(error?.message || error || ''));

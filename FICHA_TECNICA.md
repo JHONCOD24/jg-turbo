@@ -2,6 +2,12 @@
 
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
+**Voz v166:** con «Conservar términos de desarrollo web» encendido, los términos
+viajan al traductor marcados como código y ninguna traducción se descarta por
+ellos (antes se rechazaban lotes enteros y el doblaje quedaba mudo a ratos). Si
+el texto en inglés ya traía comillas invertidas, también se quitan. Ver
+`CAMBIOS_TTS.md` §v166.
+
 **Voz v159:** PDF y videos ofrecen Ava y Andrew multilingues. En el telefono,
 PDF > Voz > Mas ajustes abre el selector. Configuracion > Voz permite conservar
 terminos de desarrollo web en nuevas traducciones ingles-español; activar y
@@ -358,3 +364,10 @@ pantalla.**
 - **Persistencia**: preferencias `jg_tts_*` en el navegador (un deploy no las borra). El valor antiguo `auto` migra a `regional`.
 
 Consulta el documento maestro [Lectura en voz alta (TTS)](CAMBIOS_TTS.md) para: arquitectura, flujo paso a paso, historial 2.6→2.9.0, UI de consola, decisiones, API, guías de pronunciación, proceso de deploy, IDs de producción, pruebas y límites. UX reciente: [CAMBIOS_UX.md](CAMBIOS_UX.md). Config: [CONFIG_PERSISTENTE.md](CONFIG_PERSISTENTE.md). Deploy: [DOCUMENTACION_DESPLIEGUE.md](DOCUMENTACION_DESPLIEGUE.md).
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

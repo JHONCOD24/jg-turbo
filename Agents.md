@@ -6,9 +6,12 @@ PDF/videos ofrecen `neural:multi:female` (Ava) y `neural:multi:male` (Andrew).
 Solo la eleccion multilingue pide unified con idioma fijo; no volver a forzar
 voz regional sobre esa eleccion ni aplicar modo multilingue a un video regional.
 `jg_tts_terminos_web` es opcional y aditivo: solo nuevas traducciones en-es.
+**v166:** cada término viaja marcado como código (`` `array` ``) y `restaurar`
+(= `quitarMarcasDeTermino`) **nunca lanza**: no volver a fichas opacas ni a
+rechazar una traducción por una marca (rompía lotes del doblaje; `TRAMPAS.md`).
 `prepararTextoDeUnidad` une continuaciones antes de sintetizar sin reindexar
 el motor. Pruebas nuevas: `test_voz_frases_continuas` 14,
-`test_voz_multilingue` 11, `verificar_voz_multilingue` 13. Detalle/publicacion:
+`test_voz_multilingue` 17, `verificar_voz_multilingue` 17. Detalle/publicacion:
 `CAMBIOS_TTS.md`. No cambia permisos ni acceso de la extension Udemy.
 
 ## Context7 (docs de librerías)
@@ -522,7 +525,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v157`** (voz centrada y medida guardada, 2026-09-28). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v166`** (tecnicismos como código, 2026-10-02). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 
@@ -710,7 +713,7 @@ y duración, conserva UTF-16 y descarta selecciones asíncronas de otro video.
 Informe: `docs/auditoria-video-local/INFORME.md`. Pruebas actuales: archivo 88,
 sincronía 90 y E2E local 78. Las pruebas físicas y de escucha se reportan aparte.
 
-## Reforma móvil PDF + Videos v166 (2026-10-04)
+## Reforma móvil PDF + Videos v168 (2026-10-04)
 
 Dirigida por un agente director con 6 ejecutores en ramas aisladas. Detalle en
 `CAMBIOS_PDF.md` (PDF-1, PDF-2a, PDF-2b) y `CAMBIOS_YOUTUBE.md` /
@@ -744,3 +747,10 @@ Dirigida por un agente director con 6 ejecutores en ramas aisladas. Detalle en
   `verificar_pdf_navegador` 1 (aviso de OCR), `verificar_pdf_guia_tiempo` (5-13 de
   75 muestras), `verificar_fase_a_recargar` (corta en 20: la tarjeta se repinta),
   `verificar_arranque_ligero` (1087 KB > 1 MB; era 1070).
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

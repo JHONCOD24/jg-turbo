@@ -123,7 +123,7 @@ respondió por ninguna vía). Solo se entregan URLs `https` de
 
 ## Límites
 
-- Videos de X de hasta **60 min** (`MAX_DURACION_X_S`): más largo se rechaza
+- Videos de X de hasta **120 min** (`MAX_DURACION_X_S`): más largo se rechaza
   sin descargar nada, con el motivo a la vista.
 - Partes de **≤ 3,2 MB** a 64 kbps = 360 s por parte (límite de cuerpo de
   Vercel ~4,5 MB; no subir sin volver a medir).
@@ -221,3 +221,10 @@ problemas por la API de producción. Queda pendiente la prueba de doblaje
 completa en el navegador del dueño (Chrome e iPhone físico): la API entrega
 el video y las suites de navegador pasan (24 OK), pero la experiencia real
 de transcribir 26 min y escuchar la voz se mide ahí.
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

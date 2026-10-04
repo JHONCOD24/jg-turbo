@@ -1,5 +1,6 @@
 import { codigoCorto } from './idiomaOrigen.js';
 import { esCambioHablante } from './vocesDoblaje.js';
+import { MAX_VIDEO_DURACION_S, MAX_VIDEO_MINUTOS } from './limitesVideo.js';
 
 /**
  * @typedef {Object} SegmentoTranscripcion
@@ -139,6 +140,12 @@ export class ErrorYoutube extends Error {
   }
 }
 
+export function validarDuracionVideo(duracionS) {
+  if (Number(duracionS) > MAX_VIDEO_DURACION_S) {
+    throw new ErrorYoutube(`Este video supera el máximo de ${MAX_VIDEO_MINUTOS} minutos (2 horas).`, 'video_largo');
+  }
+}
+
 /** Idioma tal como lo decidió el servidor: una sola fuente de verdad. */
 function leerIdioma(datos) {
   const idioma = codigoCorto(datos?.language);
@@ -177,6 +184,7 @@ export class TranscriptionService {
     apiKey = '', context = '', signal = null, onProgress = () => {},
   } = {}) {
     if (!extraerVideoId(url)) throw new ErrorYoutube('El enlace de YouTube no es válido.', 'enlace');
+    validarDuracionVideo(duracionS);
     onProgress('Leyendo el video…');
     const respuesta = await this.fetchApi('/youtube', {
       method: 'POST',
@@ -210,6 +218,7 @@ export class TranscriptionService {
       datos = { ...datos, ...(await this.#esperarTrabajo(datos.job_id, { signal, onProgress })) };
     }
     const segmentos = normalizarSegmentos(datos.segments);
+    validarDuracionVideo(datos.duration_s);
     if (!segmentos.length) {
       throw new ErrorYoutube('El video no trae frases con tiempos que se puedan doblar.', 'sin_segmentos', datos);
     }
