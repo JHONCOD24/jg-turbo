@@ -114,10 +114,12 @@ export class DubbingEngine {
       el.addEventListener('ended', alTerminar);
       el.addEventListener('loadedmetadata', alTenerDuracion);
       el.addEventListener('error', alFallar);
+      // Con `?.`: la fábrica de audio puede ser un doble mínimo (pruebas) y
+      // limpiar nunca debe tumbar el cierre de la sesión.
       this.quitarOyentes.push(() => {
-        el.removeEventListener('ended', alTerminar);
-        el.removeEventListener('loadedmetadata', alTenerDuracion);
-        el.removeEventListener('error', alFallar);
+        el.removeEventListener?.('ended', alTerminar);
+        el.removeEventListener?.('loadedmetadata', alTenerDuracion);
+        el.removeEventListener?.('error', alFallar);
       });
     }
     this.cual = 0;

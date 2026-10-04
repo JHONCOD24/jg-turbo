@@ -1915,3 +1915,18 @@ y el motor permanecia inactivo. Contar cualquier `HTMLMediaElement.play()`
 podia confundir una medicion de audio con la reproduccion doblada. **Regla:**
 activar el doblaje por su boton visible y comprobar que la frase que realmente
 suena tiene el tiempo del destino, ademas de que aumenta el contador de play.
+
+## Desplegar sin mirar `origin/main` pisa la producción de otra sesión (2026-10-04)
+
+**Síntoma:** el director desplegó v166 (reforma móvil de PDF y videos) y al ir a
+empujar vio que `origin/main` ya tenía una v166 y una v167 de OTRA sesión (reintento
+de traducciones, tecnicismos, máximo de 120 minutos). Producción quedó sin ese
+trabajo durante unos minutos, aunque Git lo conservaba.
+**Causa:** la comprobación de `origin/main` se hizo al empujar, después de
+desplegar. El CLI publica el disco local, no lo que hay en GitHub, y dos sesiones
+pueden estar desplegando el mismo proyecto el mismo día.
+**Regla:** ANTES de subir versión y desplegar: `git fetch origin` y
+`git log --oneline HEAD..origin/main` debe salir vacío; si no, fusionar
+`origin/main`, volver a correr la batería y usar un número de versión mayor que el
+último publicado (aquí v168). Comparar también `JG_JS_V` del dominio con el de la
+rama antes de publicar.
