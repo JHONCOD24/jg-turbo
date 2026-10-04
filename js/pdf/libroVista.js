@@ -1981,7 +1981,20 @@ export function initLibroVista({ el, estado, api }) {
       /* Un toque (sin deslizar) trae de vuelta los controles. Se decide al
        * SOLTAR, no al tocar: despertar el cromo al primer contacto remaqueta
        * las páginas (P-01) en cada deslizamiento y se comía el paso. */
-      if (g.estado === 'espera') { devolverCromo(); return; }
+      if (g.estado === 'espera') {
+        /* Sin `pointermove` de por medio (un gesto muy rápido, o eventos
+         * sintéticos) el recorrido se juzga con el punto de partida y el de
+         * llegada: si es claramente horizontal, es un deslizamiento sin hoja. */
+        const dx0 = ev.clientX - g.x;
+        const dy0 = ev.clientY - g.y;
+        if (Math.abs(dx0) >= ARRANQUE_PX && Math.abs(dx0) >= Math.abs(dy0) * DOMINIO_HORIZONTAL) {
+          g.estado = 'horizontal';
+          g.dir = dx0 < 0 ? 1 : -1;
+        } else {
+          if (Math.abs(dx0) < ARRANQUE_PX && Math.abs(dy0) < ARRANQUE_PX) devolverCromo();
+          return;
+        }
+      }
       if (g.estado !== 'horizontal') return;
       const dx = ev.clientX - g.x;
       const dy = ev.clientY - g.y;
@@ -1991,7 +2004,15 @@ export function initLibroVista({ el, estado, api }) {
       const sel = document.getSelection();
       const seleccionando = !!(sel && String(sel).trim().length > 1 && Date.now() - ultimaSeleccion < 800);
       const hojaViva = !!g.h && hoja === g.h;
-      if (!suficiente || seleccionando || dir !== g.dir || (g.h && !hojaViva)) { devolverHoja(g.h); return; }
+      if (!suficiente || seleccionando || dir !== g.dir) {
+        devolverHoja(g.h);
+        /* Un recorrido corto es un toque tembloroso, no un deslizamiento: trae
+         * los controles igual que un toque limpio. */
+        if (Math.abs(dx) < DESLIZ_MINIMO() && Math.abs(dy) < DESLIZ_MINIMO()) devolverCromo();
+        return;
+      }
+      /* Si la hoja ya no está (un reparto nuevo o la voz la retiraron a mitad
+       * del gesto), el deslizamiento vale igual: pasa página sin hoja. */
       /* Este gesto no es «lee desde aquí»: se consume el click que viene. */
       marcarToqueConsumido();
       irAPagina(pag.actual + dir, { deUsuario: true, conHoja: hojaViva ? g.h : null });
