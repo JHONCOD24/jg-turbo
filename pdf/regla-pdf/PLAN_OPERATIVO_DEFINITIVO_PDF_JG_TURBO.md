@@ -166,6 +166,28 @@ Los cuatro archivos de auditoría son obligatorios y deben regenerarse para el
 hash actual. Copiar los de una revisión anterior, cambiarles la fecha o declarar
 que “siguen vigentes” no satisface la regla de reinicio.
 
+### 4.1 Estado real del disco (medido el 2026-10-04)
+
+La estructura de arriba es la meta; el disco todavía no coincide. Antes de leer
+o escribir, resuelve las rutas reales y regístralas en `registro.json`:
+
+| En el plan | En el disco hoy | Uso |
+|---|---|---|
+| `Libros PDF/Nuevos/`, `Libros PDF/Optimizados/` | `pdf/Libros o PDFs pendientes/` | Fuentes por procesar (muchas ya son derivados: aplica la sección 3) |
+| `Libros listos para JG Turbo/Candidatas/` | La fija `CANDIDATAS_DIR` en `lote_adaptador.py` (hoy `pdf/Libros listos para JG Turbo/Candidatas/`; se crea al publicar) | Candidatas `pendiente_escucha` |
+| `Libros listos para JG Turbo/Lectura/` | `pdf/PDFs Listos/` contiene los libros terminados y sus anexos; `pdf/anexos/Lectura/` está vacía | Aprobados tras escucha |
+| `Libros listos para JG Turbo/Anexos/`, `CATALOGO.csv` | `pdf/anexos/Anexos/` (vacía) y `pdf/anexos/CATALOGO.csv` | Restos de un ordenamiento anterior |
+
+Reglas:
+
+- **No muevas ni renombres** estas carpetas para «arreglar» la estructura: es
+  una decisión del dueño y hay rutas en scripts que dependen de ellas.
+- `pdf/_adaptacion_v2/` y todas las carpetas de libros están en `.gitignore`:
+  existen solo en el checkout principal, no en un worktree. Desde un worktree,
+  usa rutas absolutas del checkout principal (`git worktree list`).
+- Si una ruta del plan no existe, no inventes otra: usa la de esta tabla y
+  anota el conflicto en el informe del libro.
+
 ## 5. Datos obligatorios por libro
 
 Añade una entrada a `pdf/_adaptacion_v2/inventario.json`. No ejecutes el lote hasta completar estos campos:

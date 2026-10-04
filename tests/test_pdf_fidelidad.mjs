@@ -53,6 +53,23 @@ console.log('--- omisiones explícitas y cobertura completa ---');
   comprobar(r.estadoFidelidad.estado === 'pendiente_revision', 'una omisión queda pendiente de revisión humana');
 }
 
+console.log('--- átomos vacíos: no son contenido omitido ---');
+{
+  /* El texto justificado deja TextItems sin letras (cadena vacía o solo
+   * espacios). Descartarlos no quita nada del libro: no pueden dejar el estado
+   * en revisión, o ningún PDF real llegaría nunca a «sin alteraciones». */
+  const atomos = [
+    atomo(0, 'Primera frase del libro.'),
+    atomo(1, '', { x: 200 }),
+    atomo(2, ' ', { x: 260, y: 680 }),
+    atomo(3, 'Segunda frase.', { y: 660 }),
+  ];
+  const r = reconstruirDesdeAtomos(atomos);
+  comprobar(r.omisiones.length > 0 && r.omisiones.every((o) => o.motivo === 'vacio'), 'los átomos vacíos se registran como omisión «vacio»');
+  comprobar(r.estadoFidelidad.integridad.valido, 'con átomos vacíos la cobertura sigue completa');
+  comprobar(r.estadoFidelidad.estado === 'extraido_sin_alteraciones', 'solo átomos vacíos omitidos → extraído sin alteraciones');
+}
+
 console.log('--- OCR conserva palabra, caja y confianza ---');
 {
   const atomos = atomosDesdePaginas([{ numero: 2, source: 'ocr', confianza: 81, lineas: [{

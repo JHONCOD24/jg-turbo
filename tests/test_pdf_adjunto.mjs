@@ -103,6 +103,14 @@ const vozDosVeces = voz.prepararParaVoz(vozTitulo, 'es', { neural: true });
 /* ── Candidata real ── */
 const ruta = RUTAS.find((r) => r && existsSync(resolve(AQUI, '..', r)));
 if (!ruta) {
+  /* En modo estricto (adaptación de un libro) una prueba sin candidata no
+   * probó nada: antes salía «12 comprobaciones OK» con código 0 y pasaba por
+   * aprobada. Igual que test_pdf_reales.mjs, eso es un FALLO. */
+  if (process.env.JG_STRICT === '1' || process.env.JG_LOTE === '1' || process.argv.includes('--strict')) {
+    console.error('FALLO: modo estricto sin candidata real (define JG_PDF_ADJUNTO con la ruta del PDF): la prueba no se realizó.');
+    console.log(`\n${ok} comprobaciones OK`);
+    process.exit(1);
+  }
   console.log('omitido: sin candidata real (define JG_PDF_ADJUNTO)');
   console.log(`\n${ok} comprobaciones OK`);
   process.exit(process.exitCode || 0);

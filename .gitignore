@@ -81,6 +81,10 @@ pdf/_adaptacion/
 pdf/_adaptacion_v2/
 pdf/Libros PDF/
 pdf/Libros listos para JG Turbo/
+# Carpetas reales de libros (privados, con derechos de autor): nunca a Git.
+pdf/PDFs Listos/
+pdf/Libros o PDFs pendientes/
+pdf/anexos/
 pdf/regla-pdf/c3-trabajo/
 pdf/regla-pdf/aprendiz-trabajo/
 pdf/regla-pdf/seduccion-trabajo/

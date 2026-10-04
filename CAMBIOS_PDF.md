@@ -3,6 +3,42 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-10-04 · FIG-1 · Las imágenes del libro no se pierden al pasar a otro aparato
+
+**Medido antes de tocar nada.** En el mismo aparato las figuras funcionaban:
+los 8 PDF de `pdf/PDFs Listos/` colocan 263 de 263 figuras
+(`tests/diag_figuras_libro.mjs`) y *Esto es marketing* muestra 15 de 15 en sus
+9 capítulos, escuchando y tras F5, en teléfono y escritorio
+(`tests/verificar_pdf_figuras.mjs`). Se perdían por estas vías:
+
+- **Sincronización (la principal).** `importarDeSincronizacion` copiaba del
+  otro aparato `figurasEstado: 'listas'`, `figurasCuenta` y `tieneArchivo: true`.
+  El PDF y las imágenes no viajan: el teléfono creía tenerlas, no encontraba
+  ninguna y el libro se leía sin imágenes para siempre, sin aviso. Ahora
+  `metaSinCamposDelAparato` (`sincronizacion.js`) quita esos campos al importar
+  y guarda `figurasEnOrigen`. Al abrir el libro sin su PDF, el lector avisa:
+  «Este libro tiene N imágenes, pero su PDF no está en este equipo…». Abrir allí
+  el mismo PDF se une al libro por su huella, conserva el avance y recorta las
+  figuras.
+- **Estados que se quedaban pegados.** «Listas» sin imágenes guardadas y
+  «ninguna» de un barrido anterior se vuelven a buscar (`figurasPorRehacer`,
+  `VERSION_FIGURAS = 2`). Un aparato que ya recibió la marca falsa se cura solo
+  al abrir el libro.
+- **Un PDF nuevo con figuras viejas.** Guardar otro PDF en el mismo registro
+  borra la marca de figuras: se recortan del archivo nuevo.
+- **Figura un párrafo antes de su sitio.** `situarFiguras` la ponía 24 letras
+  dentro del ancla; con un ancla de dos párrafos quedaba un párrafo antes. Ahora
+  va al final del ancla.
+
+Además: `fidelidad.js` ya no deja `pendiente_revision` por omisiones `vacio`
+(átomos sin letras del texto justificado; *El placebo eres tú* pasa a
+`extraido_sin_alteraciones`), y `test_pdf_adjunto.mjs` con `JG_STRICT=1` falla
+si no recibe candidata.
+
+Pruebas: `test_pdf_figuras` 20 · `test_pdf_fidelidad` 25 ·
+`verificar_pdf_figuras` (libro sintético, dos aparatos incluidos; con
+`JG_PDF_FIGURAS=<pdf>` usa un libro real) · `diag_figuras_libro.mjs <pdf>`.
+
 ## 2026-10-03 · PDF-2a · El teléfono horizontal se lee como un libro; el giro conserva el sitio
 
 **Medido en la base** (390×844 → 844×390, capítulo de 8 páginas): 68 páginas, 2

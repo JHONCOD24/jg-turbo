@@ -193,6 +193,7 @@ se cortó.
 | `node tests/verificar_pdf_movil.mjs` | **Obligatoria al tocar el lector en móvil**: reparto real de la pantalla, alcance del pulgar hoja por hoja, y que tablet y escritorio NO cambien | 46 |
 | `node tests/verificar_pdf_voz_acordeon.mjs` | **Obligatoria al tocar el dock/acordeón de voz**: paleta plegable en tablet/escritorio, lectura sin saltos al plegar, estado tras F5 y hoja del teléfono intacta | 18 |
 | `node tests/verificar_pdf_mini_flotante.mjs` | **Obligatoria al tocar el mini reproductor**: círculo comprimido, expandir, Ajustes sin apagar la voz, arrastre táctil sin robar toques y punto recordado tras recargar | 7 |
+| `node tests/verificar_pdf_figuras.mjs` | **Obligatoria al tocar figuras, biblioteca o sincronización del PDF**: las figuras se ven en todos los capítulos, escuchando y tras F5, y un libro llegado por la nube sin su PDF avisa y las recupera al abrir el mismo PDF (con `JG_PDF_FIGURAS=<pdf>` usa un libro real) | 18 |
 | `node tests/verificar_pdf_unir_palabras.mjs` | «Unir palabras» sobre una palabra partida de verdad, con su Deshacer | 18 |
 | `node tests/verificar_arranque_ligero.mjs` | **Obligatoria al tocar lo que se carga al arrancar**: que el lector de PDF no viaje con quien solo abre la app | 7 |
 | `node tests/verificar_movil_pantalla.mjs` | **Obligatoria al tocar alturas, scroll o zona segura**: quién desplaza, que se llegue al final del contenido y que no sobre hueco, en 5 pestañas × 4 teléfonos | 62 |

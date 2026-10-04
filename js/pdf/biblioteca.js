@@ -14,7 +14,7 @@
  *   traducciones → el español de cada capítulo, para no pagarlo dos veces.
  */
 import { progresoInicial, calcularPorcentaje, estadoDeLectura } from './progreso.js';
-import { esSincronizable, estaBorrado, agruparDuplicados, elegirCanonico, normalizarHuella } from './sincronizacion.js';
+import { esSincronizable, estaBorrado, agruparDuplicados, elegirCanonico, normalizarHuella, metaSinCamposDelAparato } from './sincronizacion.js';
 import { paqueteCorreccionSync, correccionSyncValida } from './manifiesto.js';
 import { origenTextoRegistro } from './procedencia.js';
 
@@ -221,6 +221,13 @@ export function componerRegistroDocumento(previo, meta, {
   };
   if (datos.borrado) registro.borrado = datos.borrado;
   else delete registro.borrado;
+  /* Las figuras se recortan de UN PDF concreto: si llega otro, las anteriores
+   * ya no valen y hay que volver a buscarlas en el nuevo. */
+  if (pdf) {
+    delete registro.figurasEstado;
+    delete registro.figurasCuenta;
+    delete registro.figurasVersion;
+  }
   /* Procedencia del texto (píldora Adaptado/Original, auditoría 2026-09-10):
    * con contenido nuevo se detecta de nuevo (manda la evidencia del texto);
    * sin contenido nuevo se conserva la anterior; los libros viejos quedan
@@ -416,14 +423,18 @@ export async function cargarContenido(id) {
  *   'ninguna' → se buscaron y este libro no tiene
  *   'sinpdf'  → no se pudieron buscar porque el original no está guardado
  */
-export async function guardarFiguras(id, figuras, estado = 'listas') {
+export async function guardarFiguras(id, figuras, estado = 'listas', version = 0) {
   if (!id) return false;
   try {
     return await conAlmacenes([ARCHIVOS, DOCUMENTOS], 'readwrite', async (archivos, docs) => {
       const previo = (await esperar(archivos.get(id))) || { id };
       await esperar(archivos.put({ ...previo, id, figuras: figuras || [] }));
       const doc = await esperar(docs.get(id));
-      if (doc) await esperar(docs.put({ ...doc, figurasEstado: estado, figurasCuenta: (figuras || []).length }));
+      if (doc) {
+        await esperar(docs.put({
+          ...doc, figurasEstado: estado, figurasCuenta: (figuras || []).length, figurasVersion: version,
+        }));
+      }
       return true;
     });
   } catch (error) {
@@ -1149,7 +1160,9 @@ export async function importarDeSincronizacion(documento) {
     return true;
   }
 
-  const meta = { ...(datos?.meta || {}) };
+  /* Sin los campos del otro aparato (PDF guardado, figuras recortadas): aquí
+   * los decide este aparato. Ver metaSinCamposDelAparato. */
+  const meta = metaSinCamposDelAparato(datos?.meta);
   /* Un paquete vivo no puede reaplicar una lápida que viajara pegada al meta. */
   delete meta.borrado;
   /* Si el otro aparato ya no pide la fuente, aquí tampoco: si no, el aviso

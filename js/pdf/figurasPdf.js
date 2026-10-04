@@ -44,6 +44,23 @@ if (typeof Map !== 'undefined' && typeof Map.prototype.getOrInsert !== 'function
   });
 }
 
+/* Versión del barrido. Un «este libro no tiene figuras» de una versión
+ * anterior se vuelve a comprobar: un fallo viejo no puede dejar un libro sin
+ * imágenes para siempre. Súbela si cambia lo que el barrido encuentra. */
+export const VERSION_FIGURAS = 2;
+
+/**
+ * ¿Hay que (volver a) buscar las figuras de este libro en este aparato?
+ * @param {object} registro el documento de la biblioteca
+ * @param {number} guardadas cuántas figuras hay de verdad en este aparato
+ */
+export function figurasPorRehacer(registro, guardadas) {
+  const estado = registro?.figurasEstado;
+  if (estado === 'listas') return !(guardadas > 0);
+  if (estado === 'ninguna') return (Number(registro?.figurasVersion) || 0) < VERSION_FIGURAS;
+  return true;
+}
+
 /* Una figura más pequeña que esto es un adorno, un filete o un bullet. */
 const MIN_LADO = 18;          /* puntos */
 const MIN_AREA = 500;         /* puntos cuadrados */
@@ -484,14 +501,19 @@ export function situarFiguras(texto, figuras) {
     const aguja = String(f?.ancla || '');
     if (aguja.length < 10) continue;
     const buscar = (s) => (s.length < 10 ? -1 : compacto.texto.indexOf(s, desde));
+    /* `fin`: dónde acaba el ancla en el texto. La figura va ahí, no 24 letras
+     * dentro: con un ancla que abarca dos párrafos, eso la adelantaba uno. */
     let donde = buscar(aguja);
-    if (donde === -1 && aguja.length > 24) donde = buscar(aguja.slice(-24));
-    if (donde === -1 && aguja.length > 16) donde = buscar(aguja.slice(0, 16));
+    let fin = donde + aguja.length;
+    if (donde === -1 && aguja.length > 24) { donde = buscar(aguja.slice(-24)); fin = donde + 24; }
+    if (donde === -1 && aguja.length > 16) { donde = buscar(aguja.slice(0, 16)); fin = donde + aguja.length; }
     if (donde === -1) continue;
     desde = donde + 1;
     /* Si el ancla venía de ABAJO, la figura va antes de ese texto. */
-    const letra = f.anclaDespues ? donde : donde + Math.min(aguja.length, 24);
-    salida.push({ ...f, indice: i, posicion: compacto.mapa[Math.min(letra, compacto.mapa.length - 1)] ?? 0 });
+    const letra = f.anclaDespues ? donde : fin - 1;
+    const base = compacto.mapa[Math.min(letra, compacto.mapa.length - 1)] ?? 0;
+    /* Tras el ancla: justo después de su última letra. */
+    salida.push({ ...f, indice: i, posicion: f.anclaDespues ? base : base + 1 });
   }
   return salida.sort((a, b) => a.posicion - b.posicion);
 }

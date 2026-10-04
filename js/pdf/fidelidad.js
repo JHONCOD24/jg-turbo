@@ -206,9 +206,15 @@ export function crearInformeFidelidad(resultado = {}, { origen = 'texto', pagina
     omisiones, texto: resultado.texto,
   });
   const pendientes = Number(resultado.pendientes) || 0;
+  /* Un TextItem sin letras (cadena vacía o solo espacios, típico del texto
+   * justificado) no es contenido: omitirlo no quita nada del libro. Contarlo
+   * dejaba TODO PDF real en revisión para siempre (medido: 298 en «El placebo
+   * eres tú»). Cabeceras, números de página o cualquier omisión con texto
+   * siguen pidiendo revisión humana. */
+  const omisionesConTexto = omisiones.filter((o) => o.motivo !== 'vacio' || String(o.texto || '').trim());
   let estado = 'extraido_sin_alteraciones';
   if (!integridad.valido) estado = 'inconsistente';
-  else if (origen === 'ocr' || pendientes > 0 || omisiones.length > 0) estado = 'pendiente_revision';
+  else if (origen === 'ocr' || pendientes > 0 || omisionesConTexto.length > 0) estado = 'pendiente_revision';
   return {
     versionFidelidad: VERSION_FIDELIDAD,
     fragmentosFuente,

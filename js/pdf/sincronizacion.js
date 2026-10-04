@@ -162,6 +162,27 @@ export function esSincronizable(documento) {
   return Boolean(documento) && documento.sincronizar !== false;
 }
 
+/* Campos que describen ESTE aparato, no el libro: si el PDF original está
+ * guardado aquí y si ya se recortaron sus figuras. El PDF y las imágenes no
+ * viajan por la nube, así que copiarlos desde otro aparato mentía: el teléfono
+ * creía tener las figuras «listas», no encontraba ninguna y el libro se leía
+ * sin imágenes para siempre (2026-10-04). */
+const CAMPOS_DEL_APARATO = ['tieneArchivo', 'figurasEstado', 'figurasCuenta', 'figurasVersion'];
+
+/**
+ * El registro que llegó de otro aparato, sin sus campos locales. Conserva en
+ * `figurasEnOrigen` cuántas figuras tiene el libro allá, para poder avisar
+ * aquí de que existen y de cómo verlas. Pura: no muta lo recibido.
+ */
+export function metaSinCamposDelAparato(meta) {
+  const limpia = { ...(meta || {}) };
+  const enOrigen = Number(limpia.figurasCuenta) || Number(limpia.figurasEnOrigen) || 0;
+  for (const campo of CAMPOS_DEL_APARATO) delete limpia[campo];
+  if (enOrigen > 0) limpia.figurasEnOrigen = enOrigen;
+  else delete limpia.figurasEnOrigen;
+  return limpia;
+}
+
 /* ── Duplicados: un PDF, un solo registro ────────────────────────────
  *
  * La identidad de un libro era nombre+tamaño. El mismo archivo con otro

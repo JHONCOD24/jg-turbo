@@ -12,7 +12,7 @@
  *    en capítulos y se muestra uno, sin perder el resto.
  */
 import { procesarPdf, abrirPdf, ErrorPdf, cargarMotor, renderizarPortada } from './extractorPdf.js';
-import { extraerFiguras } from './figurasPdf.js';
+import { extraerFiguras, figurasPorRehacer, VERSION_FIGURAS } from './figurasPdf.js';
 import { componerTexto, pulirParaLectura, prepararCapitulosLectura } from './limpiezaTexto.js';
 import { partirTextoCanonico, mejorCorte as mejorCorteCanonico, LIMITE_PARTE as LIMITE_PARTE_CANONICO } from './particion.js';
 import {
@@ -2710,11 +2710,13 @@ export function inicializarLectorPdf(deps = {}) {
     soltarFiguras();
     const registro = doc || await almacen.cargarDocumento(id).catch(() => null);
     if (estado.id !== id) return;          /* se abrió otro libro entretanto */
-    const yaHechas = registro?.figurasEstado;
+    const guardadas = registro?.figurasEstado === 'listas' ? await almacen.cargarFiguras(id) : [];
+    if (estado.id !== id) return;
 
-    /* Ya se buscaron alguna vez: se pintan y no se vuelve a barrer. */
-    if (yaHechas === 'listas' || yaHechas === 'ninguna') {
-      const guardadas = yaHechas === 'listas' ? await almacen.cargarFiguras(id) : [];
+    /* Ya se buscaron en ESTE aparato: se pintan y no se vuelve a barrer.
+     * «Listas» sin imágenes guardadas (marca copiada de otro aparato por una
+     * versión anterior) o «ninguna» de un barrido viejo se vuelven a buscar. */
+    if (!figurasPorRehacer(registro, guardadas.length)) {
       if (guardadas.length) {
         estado.figuras = prepararFiguras(guardadas);
         if (libroVista) libroVista.renderLectura({ conservar: true });
@@ -2722,10 +2724,18 @@ export function inicializarLectorPdf(deps = {}) {
       return;
     }
 
-    /* Primera vez (o libro de antes de esta versión): barrido en diferido. */
+    /* Primera vez en este aparato: barrido en diferido. */
     const pdf = await almacen.cargarArchivo(id);
     if (!pdf) {
-      await almacen.guardarFiguras(id, [], 'sinpdf');
+      await almacen.guardarFiguras(id, [], 'sinpdf', VERSION_FIGURAS);
+      /* El PDF y sus imágenes no viajan por la nube. Si el libro las tiene
+       * en el aparato donde se subió, se dice aquí cómo recuperarlas en vez
+       * de dejar el libro sin imágenes en silencio. */
+      const enOrigen = Number(registro?.figurasEnOrigen) || Number(registro?.figurasCuenta) || 0;
+      if (enOrigen > 0 && estado.id === id) {
+        avisar(`Este libro tiene ${enOrigen === 1 ? '1 imagen' : `${enOrigen} imágenes`}, pero su PDF no está en este equipo. `
+          + 'Para verlas, abre aquí el mismo PDF: se une a este libro y conserva tu avance.', 'warn');
+      }
       return;
     }
 
@@ -2744,7 +2754,7 @@ export function inicializarLectorPdf(deps = {}) {
           anchoObjetivo: 1000,
         });
         if (cancelado || estado.id !== id) return;
-        await almacen.guardarFiguras(id, figuras, figuras.length ? 'listas' : 'ninguna');
+        await almacen.guardarFiguras(id, figuras, figuras.length ? 'listas' : 'ninguna', VERSION_FIGURAS);
         if (figuras.length) {
           estado.figuras = prepararFiguras(figuras);
           if (libroVista) libroVista.renderLectura({ conservar: true });

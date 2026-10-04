@@ -1,5 +1,30 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Un registro sincronizado no puede traer lo que solo vale en el otro aparato (2026-10-04)
+
+**Síntoma:** un libro subido en el PC se leía en el teléfono sin ninguna
+imagen, sin aviso, y volver a abrirlo no lo arreglaba. **Causa medida:** el
+paquete de nube lleva el registro entero (`datos.meta`) y al importarlo se
+copiaban `figurasEstado: 'listas'`, `figurasCuenta` y `tieneArchivo: true`. El
+PDF y las figuras no viajan; el teléfono daba las figuras por hechas, no
+encontraba ninguna y no volvía a buscarlas. **Regla:** todo campo que describa
+el aparato (qué archivo hay guardado, qué se calculó aquí) se quita al importar
+(`metaSinCamposDelAparato`). Un estado «hecho» se comprueba contra lo que hay
+de verdad en este aparato, no contra la marca. Y si falta algo que no puede
+viajar, se dice cómo recuperarlo en vez de callar. Prueba:
+`tests/test_pdf_figuras.mjs` y la fase «segundo aparato» de
+`tests/verificar_pdf_figuras.mjs`.
+
+## `waitForFunction` con una función `async` no espera nada (2026-10-04)
+
+**Síntoma:** una prueba de navegador leía el registro «antes de tiempo» y
+parecía que la app borraba datos. **Causa:** Playwright evalúa el valor que
+devuelve la función; una `async` devuelve una promesa, que siempre es
+«verdadera», así que la espera terminaba al instante. **Regla:** para esperar
+algo asíncrono (IndexedDB), usa un bucle con `page.evaluate` y
+`waitForTimeout`, o una función síncrona. Antes de culpar a la app, mira el
+dato con un vigía en vivo.
+
 ## «Teléfono» por ancho no es teléfono: el horizontal cae en las reglas de tablet (2026-10-03)
 
 **Síntoma:** girar el teléfono (844×390) dejaba 2 renglones y 68 páginas, y al
