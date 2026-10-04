@@ -364,3 +364,10 @@ pantalla.**
 - **Persistencia**: preferencias `jg_tts_*` en el navegador (un deploy no las borra). El valor antiguo `auto` migra a `regional`.
 
 Consulta el documento maestro [Lectura en voz alta (TTS)](CAMBIOS_TTS.md) para: arquitectura, flujo paso a paso, historial 2.6→2.9.0, UI de consola, decisiones, API, guías de pronunciación, proceso de deploy, IDs de producción, pruebas y límites. UX reciente: [CAMBIOS_UX.md](CAMBIOS_UX.md). Config: [CONFIG_PERSISTENTE.md](CONFIG_PERSISTENTE.md). Deploy: [DOCUMENTACION_DESPLIEGUE.md](DOCUMENTACION_DESPLIEGUE.md).
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

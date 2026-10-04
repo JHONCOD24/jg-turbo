@@ -938,3 +938,10 @@ Publicado desde `git archive` de `5c76660`, proyecto `jg-turbo`:
 `jg-turbo-shell-v164`. Ocho hashes coinciden en el dominio real y health
 responde `ok`; detalle y resultados en `produccion.json` del informe.
 El informe distingue checks locales, dominio real y pruebas humanas pendientes.
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

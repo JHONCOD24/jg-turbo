@@ -1670,3 +1670,10 @@ va a rehacer la decisión, **volver a consultarlas**: cambian rápido.
 | Fallo de proxy residencial con esta librería | <https://github.com/jdepoix/youtube-transcript-api/issues/504> |
 | Estado real del PO Token | <https://github.com/Brainicism/bgutil-ytdlp-pot-provider> |
 | Librería de subtítulos usada en el paso gratuito | <https://github.com/jdepoix/youtube-transcript-api> |
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

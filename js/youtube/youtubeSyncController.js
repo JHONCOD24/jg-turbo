@@ -6,7 +6,7 @@
  * ventanas alrededor de lo que se ve → voz encendida por defecto. Una sola sesión viva;
  * «Cancelar» y «Cerrar» la detienen entera.
  */
-import { TranscriptionService, ErrorYoutube } from './transcriptionService.js';
+import { TranscriptionService, ErrorYoutube, validarDuracionVideo } from './transcriptionService.js';
 import { detectarFuente } from './fuenteVideo.js';
 import { ServicioX, tituloX } from './servicioX.js';
 import { ServicioArchivo } from './servicioArchivo.js';
@@ -1076,6 +1076,7 @@ export function inicializarYoutubeSincronizado({
       if (signal.aborted) throw cancelado();
       tituloVideo = actual.player.getVideoData()?.title || tituloVideo || datos.titulo || guardado?.titulo || '';
       duracionS = actual.player.getDuration() || duracionS || datos.duracionS || guardado?.duracionS || 0;
+      validarDuracionVideo(duracionS);
       if (tituloVideo) ui.titulo.textContent = tituloVideo;
       await completarSesion(actual, {
         decision, datos, tituloVideo, duracionS, guardado, sirve,

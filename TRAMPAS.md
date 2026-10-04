@@ -1723,3 +1723,24 @@ código (`` `array` ``) y las marcas se quitan al recibir (app v166); lo peor qu
 puede pasar es que un término salga traducido. Al quitarlas, cada comilla se va
 con sus espacios y deja uno: emparejar comillas y recortar pega palabras cuando
 el traductor pierde una («Usa React yhooks», comprobado en prueba).
+
+
+## La frase de prueba puede caer en el solape descartado (2026-10-04)
+
+**Sintoma:** el caso nuevo de 120 min subia las 21 partes pero solo conservaba
+la primera frase simulada. **Causa:** la prueba ponia todas las frases a 1 s
+del inicio de cada parte; desde la segunda, ese punto esta antes de `limiteS`
+y pertenece al solape descartado por el ensamblador. **Regla:** situar las
+frases de prueba dentro del tramo que cada parte conserva (a 10 s en este caso),
+y comprobar tanto los tiempos globales como el texto exacto hasta la ultima parte.
+
+
+## Medir play() sin activar el doblaje no prueba la voz (2026-10-04)
+
+**Sintoma:** al ampliar el caso de YouTube de 45 a 120 min, la voz no
+volvia a sonar en el minuto 118 aunque la traduccion llegaba. **Causa:**
+la prueba solo llamaba a `playVideo()`; no pulsaba Ver con voz en espanol
+y el motor permanecia inactivo. Contar cualquier `HTMLMediaElement.play()`
+podia confundir una medicion de audio con la reproduccion doblada. **Regla:**
+activar el doblaje por su boton visible y comprobar que la frase que realmente
+suena tiene el tiempo del destino, ademas de que aumenta el contador de play.

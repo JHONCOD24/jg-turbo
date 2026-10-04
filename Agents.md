@@ -712,3 +712,10 @@ que no cabe. `SyncEngine` sigue a la voz durante esa espera. SRT/VTT valida tiem
 y duración, conserva UTF-16 y descarta selecciones asíncronas de otro video.
 Informe: `docs/auditoria-video-local/INFORME.md`. Pruebas actuales: archivo 88,
 sincronía 90 y E2E local 78. Las pruebas físicas y de escucha se reportan aparte.
+
+
+## Videos v167 (2026-10-04): maximo de 120 minutos
+
+YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
+sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
+`CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.

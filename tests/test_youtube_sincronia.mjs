@@ -511,5 +511,15 @@ comprobar(RETRASO_MAXIMO_S === 5, 'la voz solo se rinde con más de 5 s de atras
   globalThis.requestAnimationFrame = previo;
 }
 
+{
+  const unidades = unidadesContinuas(1800, { ventana: 4, voz: 5.6 });
+  const s = escenario(unidades, { pasoMs: 100 });
+  s.motor.activarYReproducir();
+  await s.correr(11000);
+  comprobar(s.registro.completas.length === 1800 && enOrdenSinHuecos(s.registro.completas), '120 min virtuales: las 1800 frases suenan completas y en orden hasta el final');
+  comprobar(s.registro.cortes.length === 0 && s.registro.saltosDentro.length === 0, '120 min virtuales: sin cortes ni saltos dentro de las frases con español 1,4 veces más largo');
+  comprobar(s.indicesVoz.filter((p) => p.hablando).every((p) => p.indice >= 0 && p.indice < 1800), '120 min virtuales: el índice del subtítulo hablado sigue siendo válido después de la primera hora');
+  s.motor.destruir();
+}
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

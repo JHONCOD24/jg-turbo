@@ -176,10 +176,26 @@ const sa = await modulo('servicioArchivo.js');
   }
   {
     const estado = {};
-    const servicio = new sa.ServicioArchivo({ fetchApi: async () => {}, abrir: abrirDoble({ datos: { duracionS: 4 * 3600 }, ...estado }), fabricar });
+    const servicio = new sa.ServicioArchivo({ fetchApi: async () => {}, abrir: abrirDoble({ datos: { duracionS: 7200.001 }, ...estado }), fabricar });
     let error = null;
     try { await servicio.inspeccionar(video); } catch (e) { error = e; }
-    comprobar(error?.codigo === 'archivo_largo' && /3 horas/.test(error.message), 'un video de 4 h se rechaza antes de gastar nada');
+    comprobar(error?.codigo === 'archivo_largo' && /2 horas/.test(error.message), 'un video que supera 120 min se rechaza antes de gastar nada');
+  }
+  {
+    const subidas = [];
+    const servicio = new sa.ServicioArchivo({
+      abrir: abrirDoble({ datos: { duracionS: 7200 } }), fabricar, esperar: async () => {},
+      fetchApi: async (_ruta, opciones) => {
+        subidas.push({ bytes: opciones.body.get('file').size, idioma: opciones.body.get('language') });
+        return Response.json({ language: 'en', segments: [{ start: 10, end: 13, text: `Lesson ${subidas.length}: Use React hooks and arrays.` }] });
+      },
+    });
+    const ficha = await servicio.inspeccionar(video);
+    comprobar(ficha.trozos.length === 21 && ficha.trozos.at(-1).finS === 7200, '120:00 se admite completo: 21 partes, hasta el final');
+    const r = await servicio.obtenerParaDoblaje(ficha, { idiomaOrigen: 'en' });
+    comprobar(subidas.length === 21 && subidas.every((s) => s.bytes <= tp.BYTES_MAX_PARTE && s.idioma === 'en'), '120 min: todas las partes respetan el tamaño y el idioma inglés');
+    comprobar(r.segmentos.length === 21 && r.segmentos.at(-1).startTime > 6900, '120 min: la transcripción incluye la última parte después de la primera hora');
+    comprobar(r.segmentos.every((s, i) => s.text === `Lesson ${i + 1}: Use React hooks and arrays.`), '120 min: conserva exactamente las palabras inglesas de cada respuesta');
   }
   {
     const servicio = new sa.ServicioArchivo({
@@ -304,5 +320,15 @@ const st = await modulo('subtitulosArchivo.js');
 }
 
 // ── Resumen ──────────────────────────────────────────────────────────────
+{
+  for (const nombre of ['limite.srt', 'limite.vtt']) {
+    const prefijo = nombre.endsWith('.vtt') ? 'WEBVTT\n\n' : '1\n';
+    const { segmentos } = st.segmentosDesdeSubtitulos(prefijo + '01:59:58.000 --> 02:00:00.000\nUse React hooks.', nombre);
+    comprobar(segmentos.at(-1).endTime === 7200 && segmentos.at(-1).text === 'Use React hooks.', `${nombre}: conserva texto y tiempos hasta 120:00`);
+    let error = null;
+    try { st.segmentosDesdeSubtitulos(prefijo + '01:59:59.000 --> 02:00:00.001\nToo long.', nombre); } catch (e) { error = e; }
+    comprobar(error?.codigo === 'srt_largo' && /2 horas/.test(error.message), `${nombre}: rechaza subtítulos fuera del máximo`);
+  }
+}
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 if (fallos) process.exit(1);

@@ -609,5 +609,24 @@ const se = await modulo('syncEngine.js');
 }
 
 // ── Resumen ─────────────────────────────────────────────────────────────
+{
+  let llamadas = 0;
+  const servicio = new ts.TranscriptionService({ fetchApi: async () => {
+    llamadas += 1;
+    return Response.json({ language: 'en', duration_s: 7200, segments: [
+      { start: 0, end: 3, text: 'Use React hooks.' },
+      { start: 7197, end: 7200, text: 'The final array.' },
+    ] });
+  } });
+  const r = await servicio.obtenerParaDoblaje('https://youtu.be/abc123xyz00', { duracionS: 7200 });
+  comprobar(llamadas === 1 && r.duracionS === 7200 && r.segmentos.at(-1).endTime === 7200, 'YouTube: 120:00 admite texto con tiempos hasta la última frase');
+  let error = null;
+  try { await servicio.obtenerParaDoblaje('https://youtu.be/abc123xyz00', { duracionS: 7200.001 }); } catch (e) { error = e; }
+  comprobar(error?.codigo === 'video_largo' && llamadas === 1, 'YouTube: más de 120 min se rechaza antes de pedir transcripción');
+  const largo = new ts.TranscriptionService({ fetchApi: async () => Response.json({ duration_s: 7201, segments: fixture.segments }) });
+  error = null;
+  try { await largo.obtenerParaDoblaje('https://youtu.be/abc123xyz00'); } catch (e) { error = e; }
+  comprobar(error?.codigo === 'video_largo', 'YouTube: valida también la duración recibida del servidor');
+}
 console.log(`\n${ok} comprobaciones OK · ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);

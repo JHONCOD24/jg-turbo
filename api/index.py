@@ -91,7 +91,7 @@ MIME_POR_EXT = {
 # Groq free/dev: ~25 MB. Dejamos margen de seguridad.
 MAX_AUDIO_MB = int(os.environ.get("MAX_AUDIO_MB", "25"))
 MAX_AUDIO_BYTES = MAX_AUDIO_MB * 1024 * 1024
-MAX_YOUTUBE_MINUTES = int(os.environ.get("MAX_YOUTUBE_MINUTES", "180"))
+MAX_YOUTUBE_MINUTES = min(120, int(os.environ.get("MAX_YOUTUBE_MINUTES", "120")))
 MAX_YOUTUBE_AUDIO_MINUTES = int(os.environ.get("MAX_YOUTUBE_AUDIO_MINUTES", "30"))
 YOUTUBE_HTTP_TIMEOUT_S = float(os.environ.get("YOUTUBE_HTTP_TIMEOUT_S", "8"))
 YOUTUBE_GROQ_TIMEOUT_S = float(os.environ.get("YOUTUBE_GROQ_TIMEOUT_S", "25"))
@@ -2334,6 +2334,8 @@ async def transcribe_youtube(req: YouTubeRequest):
     idioma_corto = resolucion["idioma"] if resolucion["confianza"] >= 0.5 else None
     titulo = datos_yt.get("titulo") or req.title_hint or ""
     duracion_s = float(datos_yt.get("duracion_s") or req.duration_hint_s or 0)
+    if duracion_s > MAX_YOUTUBE_MINUTES * 60:
+        raise HTTPException(status_code=413, detail=f"El video es demasiado largo. Máximo: {MAX_YOUTUBE_MINUTES} minutos.")
     bloqueo_subtitulos = None
     _log_youtube(
         "inicio", video_id or "",

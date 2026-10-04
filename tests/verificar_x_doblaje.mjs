@@ -256,11 +256,11 @@ try {
       comprobar(`${nombre}: el motivo se lee y se ofrece «Volver»`, patron.test(texto) && (await pagina.textContent('#ytDubCancelar')).includes('Volver'), texto);
       await contexto.close();
     }
-    const { contexto, pagina, reg } = await abrir(navegador, { info: { status: 200, json: infoX({ duracion_s: 7200 }) } });
+    const { contexto, pagina, reg } = await abrir(navegador, { info: { status: 200, json: infoX({ duracion_s: 7201 }) } });
     await pegarEnlace(pagina);
     await pagina.click('#ytSyncBtn');
-    const texto = await esperarMensaje(pagina, /hasta 60 min/);
-    comprobar('un video de 2 h se rechaza con el límite a la vista y sin bajar audio', /hasta 60 min/.test(texto) && reg.listas === 0, `${texto} · listas ${reg.listas}`);
+    const texto = await esperarMensaje(pagina, /hasta 120 min/);
+    comprobar('más de 2 h se rechaza con el límite a la vista y sin bajar audio', /hasta 120 min/.test(texto) && reg.listas === 0, `${texto} · listas ${reg.listas}`);
     await contexto.close();
   }
 

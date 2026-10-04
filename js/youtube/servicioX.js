@@ -12,7 +12,9 @@ import {
   elegirPistaAudio, leerListaAudio, planearTrozos, unirTranscripciones, urlTwimg, duracionMaximaTrozo,
 } from './audioX.js';
 
-export const MAX_DURACION_X_S = 60 * 60;
+import { MAX_VIDEO_DURACION_S } from './limitesVideo.js';
+
+export const MAX_DURACION_X_S = MAX_VIDEO_DURACION_S;
 const ESPERA_INFO_MS = 20000;            // /api/x-video: ≤ 2 consultas de 8 s
 const DESCARGAS_EN_PARALELO = 8;
 
@@ -62,6 +64,9 @@ export class ServicioX {
     if (!pista) throw new ErrorYoutube('Este video de X no trae una pista de audio separada.', 'x_sin_audio');
     const lista = leerListaAudio(await this.#texto(urlTwimg(pista.uri, info.hls), signal));
     if (!lista.init || !lista.segmentos.length) throw new ErrorYoutube('La pista de audio del video llegó vacía.', 'x_sin_audio');
+    if (lista.duracionS > MAX_DURACION_X_S) {
+      throw new ErrorYoutube(`La pista de audio supera el máximo de ${MAX_DURACION_X_S / 60} min (2 horas).`, 'x_largo');
+    }
     const inicial = await this.#bytes(urlTwimg(lista.init, info.hls), signal);
     const trozos = planearTrozos(lista.segmentos, { maxS: duracionMaximaTrozo(pista.kbps) });
 
