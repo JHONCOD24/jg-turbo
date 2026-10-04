@@ -186,8 +186,10 @@ try {
     anclaAntes = await ancla();
     await deslizar(200, 400, 185, 402); await p.waitForTimeout(700);
     assert((await ancla()) === anclaAntes && await anclaEnPantalla(), 'un roce corto no pasa página');
+    /* PDF-2b: el eje del libro es el horizontal. Un arrastre vertical es del
+     * navegador (desplazar, tirar para recargar) y NUNCA pasa página. */
     await deslizar(200, 520, 195, 380); await p.waitForTimeout(700);
-    assert((await ancla()) > anclaAntes, 'deslizar hacia arriba también avanza');
+    assert((await ancla()) === anclaAntes, 'deslizar hacia arriba NO pasa página (el gesto es horizontal)');
     /* Una selección vieja no puede bloquear los gestos para siempre. */
     await p.evaluate(() => {
       const par = document.querySelector('#pdfLectura p');

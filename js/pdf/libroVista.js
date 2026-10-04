@@ -376,6 +376,175 @@ export function initLibroVista({ el, estado, api }) {
    * durante ese rato deja la lectura en un sitio que no eligió nadie. */
   let tempoSalto = null;
 
+  /* ── Paso de página: Libro | Deslizar | Sin animación ──────────────────
+   *
+   * «Libro» (por defecto) dibuja una HOJA temporal (`.lec-hoja`) encima del
+   * texto: un clon visual de la página que se va. El texto real salta de una
+   * vez a la página destino —así `pag.actual`, el ancla y la voz no se enteran
+   * de la animación ni esperan por ella— y la hoja se desplaza con una leve
+   * inclinación y una sombra que la recorre, y desaparece. Solo `transform` y
+   * `opacity`: nada remaqueta ni cambia el tamaño del área de texto.
+   *
+   * «Deslizar» es el desplazamiento suave de siempre; «Sin animación» salta.
+   * Con `prefers-reduced-motion` manda «Sin animación». Clave: jg_pdf_paso_pagina. */
+  const CLAVE_PASO = 'jg_pdf_paso_pagina';
+  const PASOS = ['libro', 'deslizar', 'ninguno'];
+  const DURACION_HOJA = 340;
+  const GIRO_HOJA = 20;        // grados de inclinación con los que se va la hoja
+  const COSTE_MAX_CLON = 90;   // ms: si clonar la página cuesta más DOS veces seguidas, el capítulo usa «Deslizar»
+  let clonesLentos = 0;        // la primera vez va en frío (compilación): una sola no condena al capítulo
+  const selPaso = document.getElementById('pdfAparPaso');
+  let pasoElegido = 'libro';
+  try { const g = localStorage.getItem(CLAVE_PASO); if (PASOS.includes(g)) pasoElegido = g; } catch (_) { /* sin almacenamiento: «Libro» */ }
+  let hojaLentaEn = '';
+  const claveCapitulo = () => `${estado.id || ''}#${estado.parteActual}`;
+  function modoPaso() {
+    if (prefiereMenosMovimiento()) return 'ninguno';
+    if (pasoElegido === 'libro' && hojaLentaEn === claveCapitulo()) return 'deslizar';
+    return pasoElegido;
+  }
+  function pintarPaso() {
+    if (!selPaso) return;
+    const reducido = prefiereMenosMovimiento();
+    selPaso.value = reducido ? 'ninguno' : pasoElegido;
+    selPaso.disabled = reducido;
+    selPaso.title = reducido ? 'Tu dispositivo pide menos movimiento: las páginas cambian sin animación.' : '';
+  }
+  pintarPaso();
+  try { window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', pintarPaso); } catch (_) { /* navegador viejo */ }
+  if (selPaso) selPaso.addEventListener('change', () => {
+    pasoElegido = PASOS.includes(selPaso.value) ? selPaso.value : 'libro';
+    try { localStorage.setItem(CLAVE_PASO, pasoElegido); } catch (_) { /* no se guarda, sigue valiendo hoy */ }
+    if (pasoElegido !== 'libro') quitarHoja();
+  });
+
+  /* La hoja viva (solo una a la vez): { nodo, pagina, sombra, dir, ancho,
+   * anims, limite, vigia, progreso, pendiente }. `pendiente` = el texto real
+   * ya se movió a la página destino para dejarla a la vista bajo el dedo, pero
+   * el paso aún no se confirmó: si la hoja se retira sin confirmar, el texto
+   * vuelve a su página. */
+  let hoja = null;
+  function quitarHoja() {
+    const h = hoja;
+    if (!h) return;
+    hoja = null;
+    clearTimeout(h.limite);
+    if (h.vigia) h.vigia.disconnect();
+    for (const a of h.anims) { try { a.cancel(); } catch (_) { /* ya terminó */ } }
+    h.nodo.remove();
+    if (h.pendiente && el.lectura && pag.paso) el.lectura.scrollLeft = pag.actual * pag.paso;
+  }
+  /** El fondo real bajo el texto: la hoja tiene que ser opaca o dejaría ver la de debajo. */
+  function fondoDeLectura() {
+    for (let n = el.lectura; n; n = n.parentElement) {
+      const c = getComputedStyle(n).backgroundColor;
+      if (c && c !== 'transparent' && !/,\s*0\)$/.test(c)) return c;
+    }
+    return '#fff';
+  }
+  /** Clona la página visible en una hoja temporal. `null` si no se pudo. */
+  function crearHoja(dir) {
+    quitarHoja();
+    const art = el.lectura;
+    if (!art || !pag.activo || !pag.paso || !art.getClientRects().length) return null;
+    try {
+      const t0 = performance.now();
+      const caja = art.getBoundingClientRect();
+      const copia = art.cloneNode(true);
+      copia.removeAttribute('id');
+      copia.removeAttribute('tabindex');
+      copia.removeAttribute('aria-label');
+      for (const n of copia.querySelectorAll('[id]')) n.removeAttribute('id');
+      copia.classList.add('lec-hoja-pagina');
+      const sombra = document.createElement('div');
+      sombra.className = 'lec-hoja-sombra';
+      const nodo = document.createElement('div');
+      nodo.className = 'lec-hoja';
+      nodo.dataset.dir = String(dir);
+      nodo.setAttribute('aria-hidden', 'true');
+      nodo.inert = true;
+      nodo.style.cssText = `left:0;top:0;width:${caja.width}px;height:${caja.height}px;--hoja-fondo:${fondoDeLectura()}`;
+      nodo.append(copia, sombra);
+      art.after(nodo);
+      /* Se coloca sobre el texto sin suponer quién es su bloque contenedor:
+       * se mide dónde cayó con left/top a 0 y se corrige la diferencia. */
+      const o = nodo.getBoundingClientRect();
+      nodo.style.left = `${caja.left - o.left}px`;
+      nodo.style.top = `${caja.top - o.top}px`;
+      copia.scrollLeft = art.scrollLeft;
+      void copia.scrollWidth;   // fuerza el reparto aquí, antes de pintar
+      clonesLentos = performance.now() - t0 > COSTE_MAX_CLON ? clonesLentos + 1 : 0;
+      if (clonesLentos >= 2) hojaLentaEn = claveCapitulo();
+      const vigia = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
+        const c = art.getBoundingClientRect();
+        if (Math.abs(c.width - caja.width) > 0.5 || Math.abs(c.height - caja.height) > 0.5) quitarHoja();
+      }) : null;
+      if (vigia) vigia.observe(art);
+      hoja = { nodo, pagina: copia, sombra, dir, ancho: caja.width, anims: [], limite: 0, vigia, progreso: 0, pendiente: false };
+      return hoja;
+    } catch (_) {
+      for (const n of document.querySelectorAll('.lec-hoja')) n.remove();
+      hoja = null;
+      return null;
+    }
+  }
+  /* Cómo está la hoja cuando se ha ido `p` (0 = en su sitio, 1 = fuera). */
+  function estiloHoja(h, p) {
+    return { transform: `translate3d(${-h.dir * p * 100}%,0,0) rotateY(${h.dir * GIRO_HOJA * p}deg)`, opacity: 1 - 0.12 * p };
+  }
+  function estiloSombra(h, p) {
+    const aparece = Math.min(1, p / 0.08);
+    const seVa = p > 0.85 ? (1 - p) / 0.15 : 1;
+    return { transform: `translate3d(${-h.dir * p * h.ancho}px,0,0)`, opacity: Math.max(0, aparece * seVa) };
+  }
+  /** Sigue al dedo: coloca la hoja a `p` sin animaciones. */
+  function moverHoja(h, p) {
+    h.progreso = p;
+    const a = estiloHoja(h, p);
+    const b = estiloSombra(h, p);
+    h.pagina.style.transform = a.transform;
+    h.pagina.style.opacity = String(a.opacity);
+    h.sombra.style.transform = b.transform;
+    h.sombra.style.opacity = String(b.opacity);
+  }
+  /** Lleva la hoja de donde esté hasta `hasta` (1 = se va, 0 = vuelve) y la retira. */
+  function animarHoja(h, hasta, duracion) {
+    const desde = h.progreso;
+    const opciones = { duration: duracion, easing: 'cubic-bezier(.3,.62,.2,1)', fill: 'forwards' };
+    const medio = (desde + hasta) / 2;
+    try {
+      h.anims = [
+        h.pagina.animate([estiloHoja(h, desde), estiloHoja(h, hasta)], opciones),
+        h.sombra.animate([estiloSombra(h, desde), estiloSombra(h, medio), estiloSombra(h, hasta)], opciones),
+      ];
+    } catch (_) {
+      /* Sin la API de animaciones no hay hoja: el texto ya está en su sitio. */
+      quitarHoja();
+      return;
+    }
+    let hecho = false;
+    const fin = () => {
+      if (hecho || hoja !== h) return;
+      hecho = true;
+      quitarHoja();
+    };
+    Promise.all(h.anims.map((a) => a.finished)).then(fin).catch(() => {});
+    /* Una pestaña en segundo plano no avanza las animaciones: la hoja no puede
+     * quedarse colgada encima del texto. */
+    h.limite = setTimeout(fin, duracion + 160);
+  }
+  /** La hoja termina de irse; si ya iba de camino (el dedo), le queda menos. */
+  function lanzarHoja(h) {
+    const resto = 1 - h.progreso;
+    animarHoja(h, 1, Math.max(150, Math.round(DURACION_HOJA * (0.4 + 0.6 * resto))));
+  }
+  /** El dedo soltó sin llegar al umbral: la hoja vuelve a su sitio y el texto también. */
+  function devolverHoja(h) {
+    if (!h || hoja !== h) return;
+    if (h.progreso < 0.01) { quitarHoja(); return; }
+    animarHoja(h, 0, Math.max(120, Math.round(180 * h.progreso + 100)));
+  }
+
   function hayPaginado() { return cfg.modoPagina !== 'scroll'; }
 
   function pintarPaginacion() {
@@ -388,16 +557,25 @@ export function initLibroVista({ el, estado, api }) {
     if (el.pagNext) el.pagNext.disabled = pag.actual >= pag.total - 1;
   }
 
-  function irAPagina(n, { suave = true, guardar = true, deUsuario = false } = {}) {
+  function irAPagina(n, { suave = true, guardar = true, deUsuario = false, conHoja = null } = {}) {
     const art = el.lectura;
     if (!art || !pag.activo || !pag.paso) return;
     const destinoPag = Math.max(0, Math.min(pag.total - 1, Math.round(Number(n) || 0)));
     const cambioPag = destinoPag !== pag.actual;
+    const modo = suave ? modoPaso() : 'ninguno';
+    /* La hoja se clona ANTES de mover el texto: es la página que se va. Si el
+     * dedo ya la trae, se sigue con esa. */
+    let h = null;
+    if (conHoja && hoja === conHoja) h = conHoja;
+    else if (cambioPag && modo === 'libro') h = crearHoja(destinoPag > pag.actual ? 1 : -1);
+    else quitarHoja();
+    if (h) h.pendiente = false;
     pag.actual = destinoPag;
     art.scrollTo({
       left: pag.actual * pag.paso,
-      behavior: suave && !prefiereMenosMovimiento() ? 'smooth' : 'auto',
+      behavior: modo === 'deslizar' ? 'smooth' : 'auto',
     });
+    if (h) lanzarHoja(h);
     pintarPaginacion();
     pintarPieLectura();
     pintarIrAbajo();
@@ -412,7 +590,7 @@ export function initLibroVista({ el, estado, api }) {
       if (art && Math.abs(art.scrollLeft - targetLeft) > 1) {
         art.scrollLeft = targetLeft;
       }
-    }, 360);
+    }, h ? DURACION_HOJA + 60 : 360);
     if (guardar) {
       pag.ancla = caracterVisible();
       if (api.anotarPagina) api.anotarPagina(pag.ancla);
@@ -1731,7 +1909,12 @@ export function initLibroVista({ el, estado, api }) {
      Así que el deslizamiento se atiende a mano. Con Pointer Events, que
      cubren dedo, lápiz y ratón por igual. */
   const DESLIZ_MINIMO = () => Math.max(28, Math.min(56, (el.lectura?.clientWidth || 390) * .10));
-  const DESLIZ_VERTICAL = 1.4;  // la diagonal moderada también pasa página
+  /* Un gesto solo cuenta si es CLARAMENTE horizontal (el eje del libro):
+   * hasta 10 px de recorrido se espera; si el dedo ya va más de lado que
+   * arriba/abajo (1,2 veces) es un deslizamiento, y si no, el gesto no es
+   * nuestro (lo atiende el navegador: nunca pasa página). */
+  const ARRANQUE_PX = 10;
+  const DOMINIO_HORIZONTAL = 1.2;
   /* Cuándo se hizo la última selección dentro de la lectura. Una selección
    * VIEJA no puede bloquear los gestos para siempre: solo se respeta la que
    * se está haciendo ahora mismo (menos de un segundo). */
@@ -1742,33 +1925,114 @@ export function initLibroVista({ el, estado, api }) {
       ultimaSeleccion = Date.now();
     }
   });
+  /* Un solo modelo de eventos (Pointer Events; un teléfono real emite también
+   * Touch Events por el mismo gesto, así que no se escucha `touch*`).
+   *
+   * Estados de `gesto`: 'espera' (aún no se sabe), 'horizontal' (es un
+   * deslizamiento: la hoja sigue al dedo) y 'anulado' (vertical, diagonal,
+   * pellizco o dos dedos: no pasa página). La captura del puntero se toma SOLO
+   * al confirmarse el deslizamiento: tomarla al primer contacto se comía el
+   * `click` de los botones y de «leer desde aquí» (TRAMPAS.md). */
+  const dedos = new Set();
   let gesto = null;
+  function cerrarGesto(g, { devolver = false } = {}) {
+    if (!g) return;
+    if (g.id != null) { try { el.lectura.releasePointerCapture(g.id); } catch (_) { /* ya soltado */ } }
+    if (devolver && g.h) devolverHoja(g.h);
+  }
   if (el.lectura) {
     el.lectura.addEventListener('pointerdown', (ev) => {
-      if (!pag.activo || ev.pointerType === 'mouse') { gesto = null; return; }
-      gesto = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
-      try { el.lectura.setPointerCapture(ev.pointerId); } catch (_) {}
+      if (ev.pointerType === 'mouse') { gesto = null; return; }
+      dedos.add(ev.pointerId);
+      if (dedos.size > 1) {            // segundo dedo: pellizco o dos dedos, nunca página
+        if (gesto) { gesto.estado = 'anulado'; cerrarGesto(gesto, { devolver: true }); }
+        else gesto = { id: null, estado: 'anulado', h: null };
+        return;
+      }
+      if (!pag.activo) { gesto = null; return; }
+      gesto = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, estado: 'espera', dir: 0, h: null };
+    }, { passive: true });
+    el.lectura.addEventListener('pointermove', (ev) => {
+      const g = gesto;
+      if (!g || g.estado === 'anulado' || ev.pointerId !== g.id) return;
+      const dx = ev.clientX - g.x;
+      const dy = ev.clientY - g.y;
+      if (g.estado === 'espera') {
+        if (Math.abs(dx) < ARRANQUE_PX && Math.abs(dy) < ARRANQUE_PX) return;
+        if (Math.abs(dx) < Math.abs(dy) * DOMINIO_HORIZONTAL) { g.estado = 'anulado'; return; }
+        g.estado = 'horizontal';
+        g.dir = dx < 0 ? 1 : -1;
+        try { el.lectura.setPointerCapture(ev.pointerId); } catch (_) { /* sin captura también funciona */ }
+        /* Con «Libro», la hoja se despega ya y sigue al dedo; el texto real se
+         * adelanta a la página destino para que se vea debajo. */
+        const destino = pag.actual + g.dir;
+        if (modoPaso() === 'libro' && destino >= 0 && destino < pag.total) {
+          const h = crearHoja(g.dir);
+          if (h) {
+            h.pendiente = true;
+            el.lectura.scrollLeft = destino * pag.paso;
+            g.h = h;
+          }
+        }
+      }
+      if (g.estado === 'horizontal' && g.h && hoja === g.h) {
+        moverHoja(g.h, Math.max(0, Math.min(1, (-g.dir * dx) / g.h.ancho)));
+      }
     }, { passive: true });
     el.lectura.addEventListener('pointerup', (ev) => {
-      if (!gesto || ev.pointerId !== gesto.id) return;
-      const dx = ev.clientX - gesto.x;
-      const dy = ev.clientY - gesto.y;
+      dedos.delete(ev.pointerId);
+      const g = gesto;
+      if (!dedos.size && (!g || g.id == null)) gesto = null;
+      if (!g || g.id == null || ev.pointerId !== g.id) return;
       gesto = null;
-      try { el.lectura.releasePointerCapture(ev.pointerId); } catch (_) {}
-      /* En paginado no hay scroll vertical que pelear: si el dedo sube o
-       * baja con decisión, también pasa página (subir avanza). */
-      const horizontal = Math.abs(dx) >= Math.abs(dy);
-      const avance = horizontal ? dx : dy;
-      if (Math.abs(horizontal ? dx : dy) < DESLIZ_MINIMO()) return;
-      if (horizontal && Math.abs(dy) > Math.abs(dx) * DESLIZ_VERTICAL) return;
+      cerrarGesto(g);
+      /* Un toque (sin deslizar) trae de vuelta los controles. Se decide al
+       * SOLTAR, no al tocar: despertar el cromo al primer contacto remaqueta
+       * las páginas (P-01) en cada deslizamiento y se comía el paso. */
+      if (g.estado === 'espera') {
+        /* Sin `pointermove` de por medio (un gesto muy rápido, o eventos
+         * sintéticos) el recorrido se juzga con el punto de partida y el de
+         * llegada: si es claramente horizontal, es un deslizamiento sin hoja. */
+        const dx0 = ev.clientX - g.x;
+        const dy0 = ev.clientY - g.y;
+        if (Math.abs(dx0) >= ARRANQUE_PX && Math.abs(dx0) >= Math.abs(dy0) * DOMINIO_HORIZONTAL) {
+          g.estado = 'horizontal';
+          g.dir = dx0 < 0 ? 1 : -1;
+        } else {
+          if (Math.abs(dx0) < ARRANQUE_PX && Math.abs(dy0) < ARRANQUE_PX) devolverCromo();
+          return;
+        }
+      }
+      if (g.estado !== 'horizontal') return;
+      const dx = ev.clientX - g.x;
+      const dy = ev.clientY - g.y;
+      const dir = dx < 0 ? 1 : -1;
+      const suficiente = Math.abs(dx) >= DESLIZ_MINIMO() && Math.abs(dy) <= Math.abs(dx);
       /* Si está seleccionando texto AHORA, el deslizamiento es suyo. */
       const sel = document.getSelection();
-      if (sel && String(sel).trim().length > 1 && Date.now() - ultimaSeleccion < 800) return;
+      const seleccionando = !!(sel && String(sel).trim().length > 1 && Date.now() - ultimaSeleccion < 800);
+      const hojaViva = !!g.h && hoja === g.h;
+      if (!suficiente || seleccionando || dir !== g.dir) {
+        devolverHoja(g.h);
+        /* Un recorrido corto es un toque tembloroso, no un deslizamiento: trae
+         * los controles igual que un toque limpio. */
+        if (Math.abs(dx) < DESLIZ_MINIMO() && Math.abs(dy) < DESLIZ_MINIMO()) devolverCromo();
+        return;
+      }
+      /* Si la hoja ya no está (un reparto nuevo o la voz la retiraron a mitad
+       * del gesto), el deslizamiento vale igual: pasa página sin hoja. */
       /* Este gesto no es «lee desde aquí»: se consume el click que viene. */
       marcarToqueConsumido();
-      irAPagina(pag.actual + (avance < 0 ? 1 : -1), { deUsuario: true });
+      irAPagina(pag.actual + dir, { deUsuario: true, conHoja: hojaViva ? g.h : null });
     }, { passive: true });
-    el.lectura.addEventListener('pointercancel', () => { gesto = null; }, { passive: true });
+    /* El navegador se llevó el gesto (p. ej. un arrastre vertical): no pasa
+     * página y la hoja, si ya se despegó, vuelve a su sitio. */
+    el.lectura.addEventListener('pointercancel', (ev) => {
+      dedos.delete(ev.pointerId);
+      const g = gesto;
+      if (!dedos.size) gesto = null;
+      if (g && g.id === ev.pointerId) { cerrarGesto(g, { devolver: true }); gesto = null; }
+    }, { passive: true });
   }
 
   /* `100dvh` todavía queda desfasado en algunos WebView/iOS al cambiar la
@@ -1782,7 +2046,10 @@ export function initLibroVista({ el, estado, api }) {
     }
     cancelAnimationFrame(rafViewport);
     rafViewport = requestAnimationFrame(() => {
-      const alto = Math.round(window.visualViewport?.height || window.innerHeight || 0);
+      /* Con el zoom del dedo `visualViewport.height` se encoge (con ×5 queda en
+       * 169 px) aunque la pantalla siga midiendo lo mismo: sin multiplicar por
+       * la escala, el lector se aplastaba al pellizcar. */
+      const alto = Math.round((window.visualViewport?.height || window.innerHeight || 0) * (window.visualViewport?.scale || 1));
       if (alto > 0) document.documentElement.style.setProperty('--jg-viewport-alto', `${alto}px`);
     });
   }
@@ -1812,9 +2079,11 @@ export function initLibroVista({ el, estado, api }) {
     return true;
   }
   if (el.lectura) {
-    el.lectura.addEventListener('pointerdown', () => {
+    el.lectura.addEventListener('pointerdown', (ev) => {
       if (document.body.classList.contains('jg-inmersivo')) marcarToqueConsumido();
-      devolverCromo();
+      /* Con el dedo, el cromo vuelve al SOLTAR si fue un toque: un deslizamiento
+       * no lo despierta (despertarlo remaqueta las páginas, ver `pointerup`). */
+      if (ev.pointerType === 'mouse') devolverCromo();
     }, { capture: true, passive: true });
   }
   document.addEventListener('keydown', (e) => {
