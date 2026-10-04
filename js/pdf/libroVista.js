@@ -368,7 +368,7 @@ export function initLibroVista({ el, estado, api }) {
    * Lo importante es que el DOM no cambia: son los mismos bloques con sus
    * mismos `data-ini`, así que las posiciones guardadas, el resaltado de la
    * voz y «leer desde aquí» siguen funcionando sin enterarse. */
-  const pag = { total: 1, actual: 0, paso: 0, activo: false, ancla: 0, saltando: false };
+  const pag = { total: 1, actual: 0, paso: 0, activo: false, ancla: 0, saltando: false, cajaAncho: 0, cajaAlto: 0 };
   /* Dónde cree el lector que suena la voz (ver `seguirVoz`). */
   const vozSeguida = { caracter: -1, t: 0 };
   const REANUDA_MS = 1500;
@@ -539,12 +539,20 @@ export function initLibroVista({ el, estado, api }) {
     art.style.flex = 'none';
 
     /* Medir ancho exacto con la altura ya fijada para evitar discrepancias */
-    const ancho = Math.floor(art.clientWidth);
+    /* El ancho REAL, con decimales. `clientWidth` redondea (327,6 → 328) y el
+     * navegador recorta la columna al ancho real: cada página quedaba 0,4 px
+     * antes de donde decía `paso`, y en 360 px a la página 6 el primer renglón
+     * ya caía 2,3 px a la izquierda y se medía en la página anterior. */
+    const ancho = Math.floor(art.getBoundingClientRect().width * 64) / 64;
     if (alto < 80 || ancho < 80) { pag.activo = false; return; }
 
     art.style.columnWidth = ancho + 'px';
     const hueco = parseFloat(getComputedStyle(art).columnGap) || (enTelefono() ? 28 : 44);
     pag.paso = ancho + hueco;
+    /* Con qué caja se repartió: si cambia (giro, resize) hasta que se vuelva a
+     * repartir, `paso` y `total` están viejos y no sirven para medir páginas. */
+    pag.cajaAncho = ancho;
+    pag.cajaAlto = alto;
     pag.activo = true;
     pag.total = Math.max(1, Math.round((art.scrollWidth + hueco) / pag.paso));
 
@@ -564,11 +572,18 @@ export function initLibroVista({ el, estado, api }) {
       const r = destino.getClientRects()[0];
       const base = art.getBoundingClientRect();
       if (r) {
-        const desplazamiento = Math.max(0, Math.round(r.left - base.left - 2));
+        /* La página se saca de la posición del carácter, no del desplazamiento
+         * ya restado: con `paso` fraccionario (360 px) un carácter al inicio
+         * de página caía 0,4 px antes y se contaba en la anterior. Si el
+         * carácter está pegado al borde de una página, la vista se alinea a
+         * ella; si no, se pega a la izquierda como antes. */
+        const x = r.left - base.left;
+        const paginaAncla = Math.max(0, Math.min(pag.total - 1, Math.floor((x + 2) / pag.paso)));
+        const alBorde = Math.abs(x - paginaAncla * pag.paso) <= 4;
         /* Un salto en curso terminaría por pegar el scroll al borde de página
          * y pisaría este sitio. Se cancela: aquí manda el carácter. */
-        art.scrollLeft = desplazamiento;
-        pag.actual = Math.max(0, Math.min(pag.total - 1, Math.floor((desplazamiento + 2) / pag.paso)));
+        art.scrollLeft = alBorde ? paginaAncla * pag.paso : Math.max(0, Math.round(x - 2));
+        pag.actual = paginaAncla;
       } else {
         pag.actual = Math.max(0, Math.min(pag.total - 1, paginaDe(destino)));
         art.scrollLeft = pag.actual * pag.paso;
@@ -678,15 +693,40 @@ export function initLibroVista({ el, estado, api }) {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
   }
 
-  /* Página en la que cae un carácter del texto, o -1 si no se puede medir. */
+  /* Página en la que cae un carácter del texto, o -1 si no se puede medir.
+   *
+   * Un espacio NO sirve de referencia: el blanco que queda al final de un
+   * renglón justificado cuelga fuera de la columna y su rectángulo cae en la
+   * página SIGUIENTE (medido en 360 px: la vista pasaba ~0,3 s antes de que la
+   * voz llegara, siempre que el punto estimado caía en un blanco). La voz que
+   * está en un blanco acaba de decir la palabra anterior: se mide esa letra. */
   function paginaDeCaracter(caracter) {
     if (!pag.activo || !pag.paso) return -1;
-    /* Un espacio al final de renglón no tiene caja: se prueba con los
-     * siguientes hasta dar con una letra que sí se pueda medir. */
-    for (let k = 0; k < 4; k += 1) {
-      const destino = rangoDeCaracter(Math.max(0, Math.floor(Number(caracter) || 0) + k));
-      const rect = destino && destino.getClientRects ? destino.getClientRects()[0] : null;
-      if (rect && (rect.width > 0 || rect.height > 0)) return Math.min(pag.total - 1, paginaDeRect(rect));
+    let base = Math.max(0, Math.floor(Number(caracter) || 0));
+    /* Un punto en el hueco entre dos bloques (el «
+
+» del texto) sigue
+     * siendo el final del bloque anterior: la voz acaba de decir su última
+     * palabra. */
+    const hojas = [...el.lectura.querySelectorAll('[data-ini]')].filter((b) => !b.querySelector('[data-ini]'));
+    if (hojas.length && !hojas.some((b) => Number(b.dataset.ini) <= base && Number(b.dataset.fin) > base)) {
+      const previos = hojas.filter((b) => Number(b.dataset.fin) <= base);
+      if (previos.length) base = Number(previos[previos.length - 1].dataset.fin) - 1;
+    }
+    const probar = (c) => {
+      const destino = rangoDeCaracter(c);
+      if (!destino || !destino.getClientRects) return null;
+      if (destino.toString && /^\s*$/.test(destino.toString())) return null;
+      const rect = destino.getClientRects()[0];
+      return rect && (rect.width > 0 || rect.height > 0) ? rect : null;
+    };
+    for (let k = 0; k <= 6; k += 1) {
+      const rect = base - k >= 0 ? probar(base - k) : null;
+      if (rect) return Math.min(pag.total - 1, paginaDeRect(rect));
+    }
+    for (let k = 1; k <= 4; k += 1) {
+      const rect = probar(base + k);
+      if (rect) return Math.min(pag.total - 1, paginaDeRect(rect));
     }
     return -1;
   }
@@ -712,6 +752,14 @@ export function initLibroVista({ el, estado, api }) {
    *    situar la vista en la página de la voz, sin animación (`forzar`). */
   function seguirVoz(caracter, { retroceder = false, forzar = false, instantaneo = false } = {}) {
     if (!pag.activo || !pag.paso || !seguimiento) return false;
+    /* Entre un giro/resize y el reparto nuevo, medir con el `paso` viejo da
+     * páginas inventadas (medido: la vista saltó dos páginas por delante de la
+     * voz y el reparto posterior la dejó ahí). Se espera al reparto. */
+    const caja = el.lectura.getBoundingClientRect();
+    if (Math.abs(caja.width - pag.cajaAncho) > 0.75 || Math.abs(caja.height - pag.cajaAlto) > 1.5) {
+      programarMedicion(40);
+      return false;
+    }
     const destino = paginaDeCaracter(caracter);
     if (destino < 0) return false;
     const ahora = Date.now();
@@ -824,6 +872,7 @@ export function initLibroVista({ el, estado, api }) {
   if (typeof window !== 'undefined') window.__jgPaginas = () => ({ ...pag, visible: caracterVisible() });
   /* Ventana de medición para pruebas de navegador (precedente: __jgPaginas). */
   if (typeof window !== 'undefined') window.__jgMarcarRango = (ini, fin) => marcarRango(ini, fin);
+  if (typeof window !== 'undefined') window.__jgPaginaDeCaracter = (c) => paginaDeCaracter(c);
 
   if (el.irAbajo) {
     el.irAbajo.addEventListener('click', () => {
