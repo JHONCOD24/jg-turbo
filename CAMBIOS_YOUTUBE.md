@@ -30,7 +30,7 @@ lo ya guardado (TRAMPAS.md §1.4).
 **Pruebas.** `test_youtube_doblaje` 139 → **150 OK** (11 nuevas: el `null` sembrado
 se vuelve a pedir y queda traducido, lo traducido no se repaga, el tope, un intento
 por apertura, registros viejos sin datos y la descarga). La prueba falló antes del
-arreglo («pedidos: ninguno»). Batería y despliegue: `CAMBIOS_TTS.md` §v166.
+arreglo («pedidos: ninguno»). Batería y despliegue (`dpl_FotRxMbBhFA559XXYBuTSByo9rT4`): `CAMBIOS_TTS.md` §v166.
 
 ## v159 (2026-09-29): continuaciones completas antes de la voz
 

@@ -77,6 +77,23 @@ con esta lista: el borde de palabra ya obliga a probar «hooks» antes que «hoo
   `node tests/verificar_voz_produccion.mjs --dominio-real` (ahora lee la versión
   del commit), `JG_BASE=https://jg-turbo.vercel.app node tests/verificar_voz_multilingue.mjs`
   y, con el traductor real (unas 10 llamadas), `node tests/medir_terminos_web.mjs --red-real`.
+- **Desplegado** el 2026-10-03 desde `git archive` del commit de la fusión
+  (este v166 + el reintento de traducciones guardadas): prod
+  `dpl_FotRxMbBhFA559XXYBuTSByo9rT4`. Batería sobre lo fusionado antes de
+  desplegar: unitarias **2189 OK** (todas con código 0, incluido
+  `test_pdf_musica_crossfade` con el enlace a `node_modules`);
+  `verificar_youtube_doblaje` 110, `verificar_biblioteca_videos` 52,
+  `verificar_archivo_doblaje` 78, `verificar_biblioteca_datos` 48,
+  `verificar_x_doblaje` 24, `verificar_archivo_audio` 26,
+  `verificar_voz_multilingue` 17, `verificar_pdf_navegador` 158 (dos corridas;
+  una primera dio 155 + 2 fallos de tiempos que no se repitieron).
+  `verificar_arranque_ligero` sigue en 1070 KB, igual que la base.
+  Contra `https://jg-turbo.vercel.app`: HTML `JG_JS_V='v166'`, `sw.js`
+  `jg-turbo-shell-v166`, sha256 de `index.html`, `sw.js` y los cuatro módulos
+  tocados iguales a `git show HEAD:`; `/api/health` ok;
+  `verificar_voz_produccion --dominio-real` 9, `verificar_voz_multilingue` 17,
+  `verificar_youtube_doblaje` 110, `verificar_biblioteca_videos` 52 (0 fallos).
+  `medir_terminos_web --red-real` no se corrió (opcional, gasta ~10 llamadas).
 
 ## v165 (2026-10-02): voz Harold en el selector
 
