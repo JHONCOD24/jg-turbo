@@ -5815,6 +5815,30 @@ body.jg-voz-activa .pdf-lectura li{cursor:pointer}
    lateral llega a nuestro manejador en vez de perderse. */
 .pdf-lectura[data-paginado="si"]{touch-action:pan-y pinch-zoom}
 #pdfVolverLectura{position:sticky;bottom:12px}
+/* ── Deslizar sin querer no rompe nada ──
+   Mientras se lee paginado el documento no encadena el arrastre: un dedo que
+   baja sin querer no activa «tirar para recargar» (que tiraría el lector y el
+   sitio donde ibas). Solo en ese estado: la biblioteca, las demás pestañas y
+   el modo desplazamiento conservan el comportamiento normal del navegador. */
+html:has(body.jg-leyendo #pdfLectura[data-paginado="si"]),
+body.jg-leyendo:has(#pdfLectura[data-paginado="si"]){overscroll-behavior:none}
+/* ── Paso de página tipo libro ──
+   `.lec-hoja` es una hoja TEMPORAL encima del texto: un clon visual de la
+   página que se va. El texto real ya está en la página destino, debajo. Solo
+   se animan `transform` y `opacity`, así que no remaqueta nada. */
+.lec-hoja{position:absolute;z-index:3;overflow:hidden;pointer-events:none;perspective:1500px;contain:layout paint;
+  isolation:isolate}
+.lec-hoja > .lec-hoja-pagina{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;
+  margin:0!important;max-width:none!important;background:var(--hoja-fondo,#fff);will-change:transform,opacity;
+  backface-visibility:hidden;transform-origin:100% 50%;overflow:hidden}
+.lec-hoja[data-dir="-1"] > .lec-hoja-pagina{transform-origin:0 50%}
+/* La sombra viaja pegada al borde de la hoja y cae sobre la página de debajo. */
+.lec-hoja > .lec-hoja-sombra{position:absolute;top:0;bottom:0;width:56px;left:100%;will-change:transform,opacity;
+  background:linear-gradient(to right,rgba(0,0,0,.30),rgba(0,0,0,.10) 45%,transparent)}
+.lec-hoja[data-dir="-1"] > .lec-hoja-sombra{left:auto;right:100%;
+  background:linear-gradient(to left,rgba(0,0,0,.30),rgba(0,0,0,.10) 45%,transparent)}
+@media (prefers-reduced-motion:reduce){.lec-hoja{display:none}}
+
 /* ── Paso de páginas ──────────────────────────────────────────────────
    El texto fluye en columnas del ancho exacto del lector: cada columna es
    una página y se avanza moviendo el contenedor de lado. El DOM no cambia,
@@ -7961,6 +7985,13 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                     <select id="pdfAparModo">
                       <option value="paginas" selected>Pasando páginas (como un libro)</option>
                       <option value="scroll">Desplazando hacia abajo</option>
+                    </select>
+                  </label>
+                  <label for="pdfAparPaso">Paso de página
+                    <select id="pdfAparPaso">
+                      <option value="libro" selected>Libro (la hoja se levanta)</option>
+                      <option value="deslizar">Deslizar</option>
+                      <option value="ninguno">Sin animación</option>
                     </select>
                   </label>
                   <label for="pdfAparFuente">Letra

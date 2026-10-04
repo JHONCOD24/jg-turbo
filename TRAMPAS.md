@@ -1840,3 +1840,29 @@ rinde a los 30 s y respeta el play de la persona.
 (no invoca la función). **Regla:** `evaluate(\`(${codigo})()\`)` o pasar una función real.
 Un video de prueba con segmentos sin punto final se FUNDE en frases largas
 (`prepararTextoDeUnidad`): las absorbidas quedan `sin_voz` y parecen frases perdidas.
+
+## Deslizar: el cromo, el pellizco y el eje (PDF-2b, 2026-10-03)
+
+**Síntoma 1:** en el teléfono, un deslizamiento «no hacía nada» o avanzaba la mitad
+(la prueba veía `+0` páginas). **Causa:** `pointerdown` despertaba el cromo en CADA
+toque (incluido el que empieza un deslizamiento); despertarlo remaqueta el reparto de
+páginas (P-01) y volver a apartarlo tras pasar página lo remaqueta otra vez, así que el
+índice de página cambiaba de significado entre el inicio y el final del gesto.
+**Regla:** el dedo despierta el cromo al SOLTAR y solo si fue un toque (o un roce corto);
+un deslizamiento no lo toca. Y una prueba de «+1 exacto» se mide con el cromo en el mismo
+estado antes y después, o leyendo la etiqueta enseguida (antes de los ~400 ms en que el
+cromo se aparta solo).
+
+**Síntoma 2:** pellizcar el lector lo dejaba en 0 px de alto. **Causa:**
+`sincronizarViewportMovil` usaba `visualViewport.height`, que con el zoom del dedo se
+encoge (×5 → 169 px). **Regla:** alto = `visualViewport.height × visualViewport.scale`.
+
+**Síntoma 3:** un arrastre vertical largo pasaba página («subir avanza»). **Causa:** el
+manejador juzgaba solo por distancia, vertical u horizontal. **Regla:** el eje del libro
+es el horizontal; el vertical es del navegador (desplazar, tirar para recargar) y nunca
+pasa página. Con `touch-action:pan-y` el navegador cancela el puntero en los gestos
+verticales.
+
+**Síntoma 4 (pruebas):** un gesto sintético `pointerdown`→`pointerup` sin `pointermove`
+dejaba el gesto en «espera» y no pasaba página. **Regla:** al soltar, si no hubo
+movimiento intermedio se juzga con el punto de partida y el de llegada.

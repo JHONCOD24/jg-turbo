@@ -40,6 +40,34 @@ se posicionaba respecto al dock (también en vertical).
 - Prueba: `tests/verificar_pdf_orientacion.mjs` (216 comprobaciones; en la base
   fallan 29 de 97 con el mismo filtro).
 
+## 2026-10-03 · PDF-2b · Deslizar sin querer no rompe nada y el paso de página se siente como un libro
+
+- **Gestos (`libroVista.js`)**: un solo modelo de eventos (Pointer). Solo un
+  deslizamiento CLARAMENTE horizontal pasa página (≥ 10 % del ancho, mín. 28 px,
+  máx. 56 px); un arrastre vertical, una diagonal, un pellizco o dos dedos nunca
+  la pasan. La captura del puntero se toma al confirmarse el deslizamiento, no al
+  tocar. Un deslizamiento NO despierta el cromo (despertarlo remaqueta las
+  páginas, P-01, y se comía el paso); un toque, o un roce corto, sí, al soltar.
+- **Sin «tirar para recargar» leyendo**: `overscroll-behavior:none` en `html` y
+  `body` SOLO con `body.jg-leyendo` y `#pdfLectura[data-paginado="si"]`.
+- **«Atrás»**: ya funcionaba con `jgCapas` (una entrada al abrir el lector, una
+  sola capa, sin entradas colgando); ahora lo vigila la prueba.
+- **Paso tipo libro**: `.lec-hoja` es una hoja temporal con un clon visual de la
+  página que se va; el texto real salta ya a la página destino y la hoja se
+  desplaza con inclinación y sombra (340 ms, solo `transform`/`opacity`). Sigue
+  al dedo y al soltar termina; si no se llega al umbral, vuelve. Dos pasos
+  seguidos: el segundo retira la hoja del primero. Opción «Paso de página»
+  (Libro | Deslizar | Sin animación) en Apariencia, clave `jg_pdf_paso_pagina`
+  (por defecto `libro`); con `prefers-reduced-motion` manda «Sin animación». Si
+  clonar la página cuesta más de 90 ms DOS veces seguidas (la primera va en frío),
+  ese capítulo usa «Deslizar». Medido: capítulo de 90 000 caracteres, clon ≈ 24 ms
+  (CPU ×4: 50-80 ms).
+- **Pellizco**: `--jg-viewport-alto` usa `visualViewport.height × scale`; con el
+  zoom del dedo el alto del lector se aplastaba (×5 → 169 px).
+- Pruebas nuevas: `tests/verificar_pdf_gestos.mjs` (67) y
+  `tests/verificar_pdf_animacion.mjs` (81); ayudante `tests/_paso.mjs`.
+  `verificar_pdf_paginas` ya no espera que deslizar hacia arriba pase página.
+
 ## 2026-10-03 · PDF-1 · La voz y la página van a la par; el resaltado marca oraciones
 
 - `js/pdf/unidadesLectura.js` (nuevo, puro): la unidad marcada es la oración;
