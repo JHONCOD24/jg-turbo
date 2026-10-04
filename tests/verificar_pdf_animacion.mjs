@@ -180,6 +180,52 @@ const p95 = (xs) => { const o = [...xs].sort((a, b) => a - b); return o.length ?
   await contexto.close();
 }
 
+/* ══════════ La hoja es OPACA y del color del papel ══════════
+ * Una hoja translúcida deja ver dos textos superpuestos (el que se va sobre el
+ * nuevo). A mitad del paso, en cada tema, el fondo computado de la hoja es
+ * opaco y es el del papel, y su opacidad es ≥ 0,85. */
+{
+  console.log('\n── hoja opaca por tema ──');
+  const { mkdir } = await import('node:fs/promises');
+  const { APP } = await import('./_paso.mjs');
+  const dirCap = join(APP, '.playwright-cli');
+  await mkdir(dirCap, { recursive: true });
+  for (const [ancho, alto] of [[390, 844], [1440, 900]]) {
+    const { p, contexto, errores } = await abrirLector(navegador, base, rutaLarga, { ancho, alto });
+    for (const tema of ['papel', 'sepia', 'noche']) {
+      await p.evaluate((t) => document.querySelector(`[data-tema="${t}"]`).click(), tema);
+      await p.waitForTimeout(500);
+      await p.evaluate(() => document.body.classList.add('jg-inmersivo'));
+      await p.waitForTimeout(400);
+      await p.evaluate(() => document.getElementById('btnPdfPagNext').click());
+      await p.waitForTimeout(110);
+      await p.evaluate(() => document.getAnimations().forEach((a) => a.pause()));
+      const m = await p.evaluate(() => {
+        const h = document.querySelector('.lec-hoja');
+        if (!h) return null;
+        const cs = getComputedStyle(h.firstElementChild);
+        let fondo = 'rgba(0, 0, 0, 0)';
+        for (let n = document.getElementById('pdfLectura'); n; n = n.parentElement) {
+          const c = getComputedStyle(n).backgroundColor;
+          if (c && !/,\s*0\)$/.test(c)) { fondo = c; break; }
+        }
+        return { bg: cs.backgroundColor, op: Number(cs.opacity), fondo, tema: document.getElementById('pdfResultArea')?.dataset.tema || document.body.dataset.lecturaTema };
+      });
+      comprobar(!!m, `${ancho}px · ${tema}: hay hoja a mitad del paso`);
+      if (m) {
+        comprobar(/^rgb\(/.test(m.bg) || /,\s*1\)$/.test(m.bg), `${ancho}px · ${tema}: el fondo de la hoja es opaco (${m.bg})`);
+        comprobar(m.bg === m.fondo, `${ancho}px · ${tema}: y es el del papel de ese tema (${m.bg} = ${m.fondo})`);
+        comprobar(m.op >= 0.85, `${ancho}px · ${tema}: opacidad ≥ 0,85 a mitad del paso (${m.op.toFixed(3)})`);
+      }
+      await p.screenshot({ path: join(dirCap, `animacion-hoja-${tema}-${ancho}.png`) });
+      await p.evaluate(() => document.getAnimations().forEach((a) => a.finish()));
+      await p.waitForTimeout(500);
+    }
+    comprobar(errores.length === 0, `${ancho}px: hoja opaca sin errores de JavaScript`, errores.join(' | '));
+    await contexto.close();
+  }
+}
+
 /* ══════════ Las otras opciones, y que se guardan ══════════ */
 {
   console.log('\n── Deslizar y Sin animación ──');

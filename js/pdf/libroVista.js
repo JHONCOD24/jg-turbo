@@ -490,7 +490,7 @@ export function initLibroVista({ el, estado, api }) {
   }
   /* Cómo está la hoja cuando se ha ido `p` (0 = en su sitio, 1 = fuera). */
   function estiloHoja(h, p) {
-    return { transform: `translate3d(${-h.dir * p * 100}%,0,0) rotateY(${h.dir * GIRO_HOJA * p}deg)`, opacity: 1 - 0.12 * p };
+    return { transform: `translate3d(${-h.dir * p * 100}%,0,0) rotateY(${h.dir * GIRO_HOJA * p}deg)`, opacity: 1 };   // opaca: una hoja translúcida deja ver dos textos a la vez
   }
   function estiloSombra(h, p) {
     const aparece = Math.min(1, p / 0.08);
