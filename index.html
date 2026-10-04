@@ -2625,7 +2625,7 @@
      arrastre vivía aquí; desde PDF-05 reordenar solo existe dentro de
      «Organizar», con controles propios de 44×44. */
   .pdf-libro-menu summary{
-    width:28px;height:28px;border-radius:6px;
+    width:44px;height:44px;border-radius:10px;
     background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
     display:grid;place-items:center;color:var(--muted);
     cursor:pointer;user-select:none;-webkit-user-select:none;
@@ -3213,7 +3213,9 @@
       flex:none;margin:0;height:26px;padding-inline:clamp(16px, 5vw, 28px);
       font-family:'Literata', Georgia, serif;
       font-size:12.5px;color:var(--lec-suave, var(--muted));
-      opacity:.75;pointer-events:none;
+      /* Sin atenuar: a .75 de opacidad el gris suave bajaba de 4,5:1 en los
+         tres temas (4,07 · 3,64 · 2,94) y es un texto de 12,5 px. */
+      opacity:1;pointer-events:none;
       overflow:hidden;white-space:nowrap;
     }
     .pdf-pie-lectura span{overflow:hidden;text-overflow:ellipsis}
@@ -6149,6 +6151,8 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
   body.jg-leyendo .pdf-lectura[data-tam-auto="no"]{font-size:max(16px, var(--lec-tam, 19px))}
   body.jg-leyendo .pdf-lectura[data-paginado="si"]{--pdf-pag-hueco:36px}
   body.jg-leyendo .pdf-texto-col{max-width:none}
+  /* Desplazando (sin páginas) una línea de 800 px pasa de 100 caracteres: se acota. */
+  body.jg-leyendo .pdf-lectura:not([data-paginado="si"]){width:min(100%,66ch) !important;margin-inline:auto !important}
   body.jg-leyendo .pdf-area{padding-inline:env(safe-area-inset-left) env(safe-area-inset-right)}
   .pdf-pie-lectura{height:34px}
 
