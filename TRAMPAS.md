@@ -1,5 +1,42 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## «Teléfono» por ancho no es teléfono: el horizontal cae en las reglas de tablet (2026-10-03)
+
+**Síntoma:** girar el teléfono (844×390) dejaba 2 renglones y 68 páginas, y al
+volver a vertical el capítulo pasaba de 8 a 11 páginas. **Causas medidas:**
+(1) todas las reglas del teléfono eran `max-width:640px`; en horizontal el ancho
+es 800-932 px y entraba la cabecera, la paginación y el dock de tablet EN el
+flujo (261 de 390 px); (2) `enTelefono()` tampoco valía en horizontal, y
+`inmersivo()` quita la clase `jg-inmersivo` cuando no es teléfono: el giro
+quitaba el modo inmersivo y la reserva del cromo cambiaba el reparto;
+(3) con la vista «pegada» al carácter (no al borde de página) asomaba la
+página vecina. **Reglas:** el teléfono es `(max-width:640px), (orientation:
+landscape) and (max-height:500px)` en CSS y en JS; mide el alto, no el ancho;
+las reglas `min-width:641px` que no deban aplicar en el horizontal bajo llevan
+`(min-height:501px)` o `(orientation:portrait)`; la vista paginada se alinea
+siempre al borde de página. Prueba: `tests/verificar_pdf_orientacion.mjs`.
+
+## Un aviso `fixed` dentro de un cajón cerrado no se ve ni cae donde dice (2026-10-03)
+
+**Síntoma:** en el teléfono el aviso del lector no aparecía nunca. **Causa:**
+`#pdfNoticeLector` era hijo de `#pdfDockNav`, que cerrado es `visibility:hidden`
+y lleva `transform`: el hijo hereda la visibilidad y su `position:fixed` pasa a
+ser relativo al dock. Mi prueba pasaba midiendo solo el rectángulo (`visibility`
+no lo anula). **Reglas:** los avisos flotantes cuelgan de un ancestro sin
+`transform` ni `visibility`; las pruebas de «se ve» miran `visibility`,
+`opacity` y `elementFromPoint`, no solo `getBoundingClientRect`.
+
+## Recargar en modo desplazamiento volvía al principio (2026-10-03)
+
+**Síntoma:** en modo `scroll` el libro reabría pero en el inicio del capítulo.
+**Causa:** el avance se anotaba al desplazar solo en el `<textarea>` (oculto en
+lectura); la columna del texto no tenía listener y el único guardado era el de
+`pagehide`, asíncrono, que una recarga puede cortar. **Regla:** todo modo de
+lectura anota su avance al cambiar de sitio; `pagehide` es red de seguridad,
+no el mecanismo. La voz tras recargar no puede «quedar en pausa» (el audio ya
+no existe): se recuerda que sonaba y el primer toque en Escuchar arranca en la
+página visible.
+
 ## La página no puede seguir al inicio de la marca, y la marca no puede medir nada (2026-10-03)
 
 **Síntoma:** con la voz sonando en modo páginas, la página llegaba hasta ~6 s

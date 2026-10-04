@@ -2487,6 +2487,7 @@ export function inicializarLectorPdf(deps = {}) {
     }
     /* Los gráficos llegan después, sin `await`: el libro ya se puede leer. */
     asegurarFiguras(id);
+    prepararRetomaDeVoz(id);
   }
 
   /**
@@ -6924,6 +6925,87 @@ export function inicializarLectorPdf(deps = {}) {
       else avisar('Pulsa Escuchar para leer desde aquí.', 'info', { efimero: true });
     }
   }
+
+  /* ── La voz sobrevive a recargar la pestaña ─────────────────────────────
+   *
+   * Recargar (F5, cerrar y volver) corta el audio: no se puede dejar «en
+   * pausa» una cola que ya no existe. Lo que sí se conserva es el sitio: el
+   * libro, el capítulo y la página vuelven solos. Para que la voz parezca en
+   * pausa, se recuerda que SONABA (`jg_pdf_voz_punto`, con la hora) y el primer
+   * toque en «Escuchar» arranca en la primera oración de la página que se ve,
+   * en vez de en el principio del capítulo, que es lo que haría sin esto. Si
+   * antes de ese toque la persona pasa de página, se respeta su gesto y vale
+   * el comportamiento de siempre. */
+  const CLAVE_VOZ_PUNTO = 'jg_pdf_voz_punto';
+  const VOZ_PUNTO_VIGENCIA_MS = 24 * 60 * 60 * 1000;
+  let vozPuntoAnotado = '';
+  function anotarVozPunto(activa) {
+    try {
+      const marca = activa && estado.id ? estado.id : '';
+      if (marca === vozPuntoAnotado) return;
+      vozPuntoAnotado = marca;
+      if (marca) localStorage.setItem(CLAVE_VOZ_PUNTO, JSON.stringify({ id: marca, t: Date.now() }));
+      else localStorage.removeItem(CLAVE_VOZ_PUNTO);
+    } catch (_) { /* sin almacenamiento: solo se pierde la retoma */ }
+  }
+  function prepararRetomaDeVoz(id) {
+    estado.retomaVoz = null;
+    try {
+      const crudo = localStorage.getItem(CLAVE_VOZ_PUNTO);
+      if (!crudo) return;
+      const marca = JSON.parse(crudo);
+      localStorage.removeItem(CLAVE_VOZ_PUNTO);
+      if (!marca || marca.id !== id || Date.now() - Number(marca.t) > VOZ_PUNTO_VIGENCIA_MS) return;
+      /* El punto es el CARÁCTER guardado, no una página: al abrir, el reparto en
+       * páginas aún no terminó de asentarse. */
+      estado.retomaVoz = { id, caracter: Number(estado.progreso?.caracter) || 0 };
+      avisar('La lectura quedó en pausa. Pulsa Escuchar para seguir desde aquí.', 'info', { efimero: true });
+    } catch (_) { estado.retomaVoz = null; }
+  }
+  document.addEventListener('jg-tts-avance', (evento) => {
+    const d = evento.detail || {};
+    if (d.sourceId !== 'pdf') return;
+    if (d.estado === 'playing' || d.estado === 'paused' || d.sonando) anotarVozPunto(true);
+  });
+  document.addEventListener('jg-tts-detener', () => anotarVozPunto(false));
+
+  /* Modo desplazamiento: el avance se anota al dejar de desplazar. Con páginas
+   * se anota al pasarlas; aquí nadie lo hacía, y recargar solo contaba con el
+   * guardado asíncrono de `pagehide` (que la recarga puede cortar): el libro
+   * volvía al principio del capítulo. En captura, porque `scroll` no burbujea
+   * y el que se desplaza es la columna del texto, no el textarea. */
+  let temporizadorScrollLector = null;
+  document.addEventListener('scroll', (evento) => {
+    if (!hayDocumento() || !libroVista || !libroVista.esModoScroll || !libroVista.esModoScroll()) return;
+    const origen = evento.target;
+    if (origen instanceof Element && !origen.closest('#pdfResultArea')) return;
+    if (origen === el.salida || voz.desplazando) return;
+    clearTimeout(temporizadorScrollLector);
+    temporizadorScrollLector = setTimeout(() => { if (hayDocumento()) anotarPosicion(); }, 350);
+  }, { passive: true, capture: true });
+  document.addEventListener('jg-tts-fin', (evento) => { if (evento?.detail?.sourceId === 'pdf') anotarVozPunto(false); });
+  document.addEventListener('click', (evento) => {
+    const retoma = estado.retomaVoz;
+    if (!retoma || !hayDocumento() || retoma.id !== estado.id) return;
+    const boton = evento.target instanceof Element ? evento.target.closest('[data-tts-console="pdf"] [data-tts-action="toggle"]') : null;
+    if (!boton) return;
+    estado.retomaVoz = null;
+    const s = window.ttsState;
+    if (s && s.sourceId === 'pdf' && ['playing', 'buffering', 'paused', 'loading'].includes(s.status)) return;
+    const pag = typeof window.__jgPaginas === 'function' ? window.__jgPaginas() : null;
+    const paginaDelPunto = typeof window.__jgPaginaDeCaracter === 'function' ? window.__jgPaginaDeCaracter(retoma.caracter) : -1;
+    if (!pag || !pag.activo || paginaDelPunto !== pag.actual) return; /* se movió a mano: manda su gesto */
+    const texto = el.salida.value || '';
+    if (!texto || (el.salida.selectionEnd - el.salida.selectionStart) > 0) return;
+    /* Primera oración que EMPIEZA en la página visible (como al pasar página). */
+    const frases = partirEnFrases(texto);
+    const inicio = Number(pag.visible) || 0;
+    const dentro = frases.length ? fraseEn(frases, inicio) : null;
+    const siguiente = dentro && dentro[0] < inicio ? frases.find(([desde]) => desde >= inicio) : null;
+    evento.stopImmediatePropagation();
+    evento.preventDefault();
+    leerDesdeCaracter(siguiente ? siguiente[0] : inicio, { forzarNuevo: true });
+  }, true);
 
   function precargarSiguienteCapitulo() {
     let cfg = {};

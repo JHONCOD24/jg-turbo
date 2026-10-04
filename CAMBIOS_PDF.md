@@ -3,6 +3,43 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-10-03 · PDF-2a · El teléfono horizontal se lee como un libro; el giro conserva el sitio
+
+**Medido en la base** (390×844 → 844×390, capítulo de 8 páginas): 68 páginas, 2
+renglones, aviso del lector encima del texto, cabecera de escritorio. Causas:
+(1) el horizontal mide 800-932 px de ancho y por ancho caía en las reglas de
+tablet (cabecera + paginación + dock EN el flujo: 261 px de 390); (2) girar
+quitaba `jg-inmersivo` (`enTelefono()` era falso en horizontal), así que al
+volver el cromo ya no estaba apartado y el capítulo pasaba de 8 a 11 páginas;
+(3) `#pdfNoticeLector` vivía DENTRO de `#pdfDockNav`: en el teléfono el dock
+cerrado es `visibility:hidden` + `transform`, así que el aviso era invisible y
+se posicionaba respecto al dock (también en vertical).
+
+- «Teléfono» = `(max-width:640px), (orientation:landscape) and (max-height:500px)`
+  en `libroVista.js` y en los bloques CSS del lector (cromo flotante, inmersivo,
+  hoja de voz, tipografía editorial). Los bloques de tablet `min-width:641px`
+  que chocaban (acordeón del dock, botón Contenido, «Opciones») excluyen el
+  horizontal bajo.
+- Bloque «TELÉFONO HORIZONTAL» al final del lector: cabecera de 48 px, UNA fila
+  inferior de 48 px (destinos a la izquierda, paginación a la derecha), letra
+  idéntica a la del vertical (4,5 % del lado corto), zonas seguras a ambos
+  lados, aviso del lector sobre la franja del pie, Contenido como cajón lateral.
+- Dos columnas por página cuando la caja mide ≥ 640 px (`medirPaginas`): el
+  ancho de página y el paso no cambian, un paso avanza las dos columnas y la
+  voz-página de PDF-1 sigue igual. `pag.total` usa `ceil` (la última página
+  puede traer una sola columna).
+- La vista se alinea SIEMPRE al borde de la página que contiene el ancla (antes
+  se «pegaba» al carácter y dejaba asomar la página vecina); `pag.ancla` no se
+  toca, así que el giro de ida y vuelta devuelve la misma página.
+- Recargar: modo desplazamiento anota el avance al dejar de desplazar (antes
+  solo contaba con `pagehide`); la voz recuerda que sonaba (`jg_pdf_voz_punto`)
+  y el primer toque en Escuchar tras recargar arranca en la primera oración de
+  la página visible (si se pasó de página antes, vale lo de siempre).
+- AA/toques: el pie del lector ya no va al 75 % de opacidad (4,07/3,64/2,94 →
+  6,27/6,46/4,67) y el menú ⋮ de la tarjeta mide 44×44.
+- Prueba: `tests/verificar_pdf_orientacion.mjs` (216 comprobaciones; en la base
+  fallan 29 de 97 con el mismo filtro).
+
 ## 2026-10-03 · PDF-2b · Deslizar sin querer no rompe nada y el paso de página se siente como un libro
 
 - **Gestos (`libroVista.js`)**: un solo modelo de eventos (Pointer). Solo un
