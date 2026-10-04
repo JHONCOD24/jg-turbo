@@ -22,7 +22,9 @@
   seguidos: el segundo retira la hoja del primero. Opción «Paso de página»
   (Libro | Deslizar | Sin animación) en Apariencia, clave `jg_pdf_paso_pagina`
   (por defecto `libro`); con `prefers-reduced-motion` manda «Sin animación». Si
-  clonar la página cuesta más de 90 ms, ese capítulo usa «Deslizar».
+  clonar la página cuesta más de 90 ms DOS veces seguidas (la primera va en frío),
+  ese capítulo usa «Deslizar». Medido: capítulo de 90 000 caracteres, clon ≈ 24 ms
+  (CPU ×4: 50-80 ms).
 - **Pellizco**: `--jg-viewport-alto` usa `visualViewport.height × scale`; con el
   zoom del dedo el alto del lector se aplastaba (×5 → 169 px).
 - Pruebas nuevas: `tests/verificar_pdf_gestos.mjs` (67) y
