@@ -86,7 +86,7 @@ const ACCIONES = [
   (l, n, m) => `reunió a ${m} personas en ${l} para decidir si el camino real pasaría por la ladera o por el río`,
 ];
 const REMATES = ['Nadie preguntó nada más.', 'Era suficiente.', '¿Quién podía asegurarlo?', 'Así empezó todo.', 'El resto es historia.', '¡Qué tarde se había hecho!', 'Fue la última vez que lo vieron.', 'La puerta quedó abierta.', 'Nadie lo olvidó.', '¿Y después?'];
-const aleatorio = azar(20261003);
+let aleatorio = azar(Number(process.env.JG_SEMILLA || 20261003));
 const elegir = (lista) => lista[Math.floor(aleatorio() * lista.length)];
 const usadas = new Set();
 function oracion() {
@@ -119,6 +119,9 @@ function renglones(texto, ancho = 78) {
   return salida;
 }
 function crearLibroNarrativo(ruta, paginas) {
+  /* Mismo texto en cada apertura del mismo escenario: reproducible por semilla. */
+  aleatorio = azar(Number(process.env.JG_SEMILLA || 20261003) + paginas);
+  usadas.clear();
   const flujos = [];
   for (let n = 1; n <= paginas; n += 1) {
     const lineas = [['HISTORIA DE PRUEBA', 70, 800, 9]];
@@ -181,7 +184,16 @@ function instalarMuestreador() {
   window.__serie = salida;
   window.__marcaDe = (c) => c;
   /* Página donde cae el carácter `c` del capítulo (Range sobre el DOM). */
+  /* Verdad de referencia: la página de la letra que se está diciendo. Un
+   * blanco de fin de renglón cuelga fuera de la columna y su caja cae en la
+   * página siguiente, así que se mide la última letra anterior. */
   function paginaDeCaracter(c) {
+    const txt = document.getElementById('pdfOutput').value;
+    let k = c;
+    while (k > 0 && /\s/.test(txt[k] || ' ')) k -= 1;
+    return paginaExacta(k);
+  }
+  function paginaExacta(c) {
     const p = window.__jgPaginas && window.__jgPaginas();
     if (!p || !p.activo || !p.paso || c < 0) return -1;
     const bloques = [...art.querySelectorAll('[data-ini]')]
@@ -221,6 +233,9 @@ function instalarMuestreador() {
       total: p.total ?? -1,
       paso: p.paso ?? 0,
       activo: !!p.activo,
+      /* ¿El reparto en páginas corresponde a la caja actual? Tras un giro o resize
+       * hay un rato (debounce + carga de la máquina) con `paso` y `total` viejos. */
+      estable: !!p.activo && Math.abs(art.getBoundingClientRect().width - p.cajaAncho) <= 0.75 && Math.abs(art.getBoundingClientRect().height - p.cajaAlto) <= 1.5,
       fisica: p.paso ? art.scrollLeft / p.paso : -1,
       pagVoz: paginaDeCaracter(dbg.voz ?? -1),
     });
@@ -297,7 +312,7 @@ function analizar(nombre, serie, texto, { marcas = {} } = {}) {
    * se rehace con un debounce de ~180 ms: esas muestras mezclan dos repartos
    * y no miden nada. Se descartan durante la misma tolerancia de 450 ms. */
   const enTransicion = (m) => Object.values(marcas).some((t) => m.t >= t && m.t < t + TOLERANCIA_MS);
-  const sonando = serie.filter((m) => m.estado === 'playing' && m.voz >= 0 && m.activo && m.pagVoz >= 0 && !enTransicion(m));
+  const sonando = serie.filter((m) => m.estado === 'playing' && m.voz >= 0 && m.activo && m.estable && m.pagVoz >= 0 && !enTransicion(m));
   comprobar(sonando.length > 60, `${nombre}: hay serie temporal suficiente (${sonando.length} muestras con voz y páginas)`);
   const paginasVistas = new Set(sonando.map((m) => m.pagVoz));
   comprobar(paginasVistas.size >= 6, `${nombre}: la voz recorre ≥ 6 páginas (${paginasVistas.size})`);
@@ -369,6 +384,8 @@ async function comprobarMarca(nombre, p, serie, texto) {
 const ESCENARIOS = [
   { nombre: 'teléfono 390×844', ancho: 390, alto: 844, paginasPdf: 5 },
   { nombre: 'escritorio 1440×900', ancho: 1440, alto: 900, paginasPdf: 7 },
+  { nombre: 'android 360×800', ancho: 360, alto: 800, paginasPdf: 5 },
+  { nombre: 'tablet 768×1024', ancho: 768, alto: 1024, paginasPdf: 6 },
 ];
 
 for (const esc of ESCENARIOS.filter((e) => !process.env.JG_ESC || e.nombre.includes(process.env.JG_ESC))) {
@@ -393,6 +410,26 @@ for (const esc of ESCENARIOS.filter((e) => !process.env.JG_ESC || e.nombre.inclu
   if (VERBOSO) console.log(JSON.stringify(limpia.serie.filter((_, i) => i % 5 === 0).map((m) => [Math.round(m.t), m.voz, m.actual, m.pagVoz, m.marca.slice(0, 25)])));
   const sonando = analizar(`${esc.nombre} · limpia`, limpia.serie, limpia.texto);
   await comprobarMarca(`${esc.nombre} · limpia`, sesion.p, limpia.serie, limpia.texto);
+  /* Estático y determinista: para CADA carácter del capítulo, la página que
+   * calcula el lector es la de la última letra (los blancos de fin de renglón
+   * caen medidos en la página siguiente). Con el cálculo antiguo, en 360 px la
+   * vista pasaba ~0,3 s antes que la voz cuando esta caía en un blanco. */
+  const discrepancias = await sesion.p.evaluate(() => {
+    const txt = document.getElementById('pdfOutput').value;
+    const malas = [];
+    let comprobados = 0;
+    for (let c = 0; c < txt.length; c += 1) {
+      if (/\s/.test(txt[c]) && !/\S/.test(txt.slice(Math.max(0, c - 6), c + 1))) continue;
+      const esperado = window.__paginaDeCaracter(c);
+      const app = window.__jgPaginaDeCaracter(c);
+      if (esperado < 0) continue;
+      comprobados += 1;
+      if (app !== esperado && malas.length < 5) malas.push(`c=${c} app=${app} esperado=${esperado}`);
+      else if (app !== esperado) malas.push('…');
+    }
+    return { total: comprobados, malas };
+  });
+  comprobar(discrepancias.malas.length === 0, `${esc.nombre}: la página de cada carácter (${discrepancias.total}) coincide con la de su última letra`, discrepancias.malas.join(' | '));
   /* La marca pinta la unidad ENTERA aunque el bloque tenga varios nodos de
    * texto o un elemento en línea, y aunque cruce de un bloque a otro. */
   const multinodo = await sesion.p.evaluate(() => {
