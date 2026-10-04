@@ -166,13 +166,16 @@ const p95 = (xs) => { const o = [...xs].sort((a, b) => a - b); return o.length ?
   comprobar(await paginaActual(p) === antesDedo + 1, `al soltar con distancia suficiente avanza una página (${antesDedo} → ${await paginaActual(p)})`);
   comprobar(await p.evaluate(() => document.querySelectorAll('.lec-hoja').length) === 0, 'y la hoja termina de irse');
   /* Soltar sin llegar al umbral: la hoja vuelve y la página es la misma. */
-  const antesCorto = await paginaActual(p);
+  await dormirCromo(p);
+  const anclaCorto = await p.evaluate(() => window.__jgPaginas().ancla);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: c.x + 20, y: c.y, id: 1 }] });
   for (let i = 1; i <= 5; i += 1) { await new Promise((r) => setTimeout(r, 25)); await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: c.x + 20 - i * 6, y: c.y, id: 1 }] }); }
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await p.waitForTimeout(700);
-  const corto = await p.evaluate(() => ({ hojas: document.querySelectorAll('.lec-hoja').length, f: document.getElementById('pdfLectura').scrollLeft / window.__jgPaginas().paso, a: window.__jgPaginas().actual }));
-  comprobar(corto.a === antesCorto && corto.hojas === 0 && Math.abs(corto.f - antesCorto) < 0.02, `un arrastre corto devuelve la hoja y no cambia nada (página ${antesCorto} → ${corto.a}, hojas ${corto.hojas}, vista ${corto.f.toFixed(3)})`);
+  /* Un recorrido corto es un toque tembloroso: trae el cromo y eso remaqueta
+   * (P-01), así que «no cambia de página» se mide por el ancla. */
+  const corto = await p.evaluate(() => ({ hojas: document.querySelectorAll('.lec-hoja').length, f: document.getElementById('pdfLectura').scrollLeft / window.__jgPaginas().paso, a: window.__jgPaginas().actual, ancla: window.__jgPaginas().ancla }));
+  comprobar(corto.ancla === anclaCorto && corto.hojas === 0 && Math.abs(corto.f - corto.a) < 0.02, `un arrastre corto devuelve la hoja y no cambia nada (ancla ${anclaCorto} → ${corto.ancla}, hojas ${corto.hojas}, vista ${corto.f.toFixed(3)} ≈ ${corto.a})`);
   comprobar(errores.length === 0, 'modo Libro: sin errores de JavaScript', errores.join(' | '));
   await contexto.close();
 }

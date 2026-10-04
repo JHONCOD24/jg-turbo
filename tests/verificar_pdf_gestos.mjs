@@ -50,12 +50,23 @@ const sinRecarga = ({ html, body }) => (html === 'none' || html === 'contain') &
   const cx = c.x + c.w / 2;
   const cy = c.y + c.h / 2;
   const tras = async (nombre, gesto, esperado) => {
+    /* Cada gesto parte con el cromo apartado (el estado en el que se lee): así
+     * el reparto de páginas es el mismo antes y después y «+1» significa +1
+     * (TRAMPAS.md, PDF-2b). Un roce corto trae el cromo, y eso sí remaqueta:
+     * en ese caso «misma página» se mide por el ancla (el carácter con el que
+     * empieza la página), que no depende del reparto. */
+    await p.evaluate(() => document.body.classList.add('jg-inmersivo'));
+    await reposo(p, 500);
     const antes = await paginaActual(p);
+    const anclaAntes = await p.evaluate(() => window.__jgPaginas().ancla);
     await gesto();
     await reposo(p);
     const ahora = await paginaActual(p);
+    const anclaAhora = await p.evaluate(() => window.__jgPaginas().ancla);
     const fisica = await p.evaluate(() => { const a = document.getElementById('pdfLectura'); return a.scrollLeft / window.__jgPaginas().paso; });
-    comprobar(ahora === antes + esperado, `${nombre}: ${esperado === 0 ? 'misma página' : `${esperado > 0 ? '+' : ''}${esperado} exacto`} (${antes} → ${ahora})`);
+    const mismoCromo = await p.evaluate(() => document.body.classList.contains('jg-inmersivo'));
+    if (esperado === 0 && !mismoCromo) comprobar(anclaAhora === anclaAntes, `${nombre}: misma página (el ancla no se movió: ${anclaAntes} → ${anclaAhora}; trajo el cromo)`);
+    else comprobar(ahora === antes + esperado, `${nombre}: ${esperado === 0 ? 'misma página' : `${esperado > 0 ? '+' : ''}${esperado} exacto`} (${antes} → ${ahora})`);
     comprobar(Math.abs(fisica - ahora) < 0.03, `${nombre}: la vista queda alineada con la página (${fisica.toFixed(3)} ≈ ${ahora})`);
   };
 
@@ -85,6 +96,8 @@ const sinRecarga = ({ html, body }) => (html === 'none' || html === 'contain') &
   }, 0);
 
   /* Dos gestos seguidos son dos páginas, no una ni tres. */
+  await p.evaluate(() => document.body.classList.add('jg-inmersivo'));
+  await reposo(p, 500);
   const previa = await paginaActual(p);
   await arrastrar(cdp, { x: cx + 60, y: cy, dx: -120 });
   await arrastrar(cdp, { x: cx + 60, y: cy, dx: -120 });

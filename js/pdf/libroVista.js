@@ -391,7 +391,8 @@ export function initLibroVista({ el, estado, api }) {
   const PASOS = ['libro', 'deslizar', 'ninguno'];
   const DURACION_HOJA = 340;
   const GIRO_HOJA = 20;        // grados de inclinación con los que se va la hoja
-  const COSTE_MAX_CLON = 90;   // ms: si clonar la página cuesta más, el capítulo usa «Deslizar»
+  const COSTE_MAX_CLON = 90;   // ms: si clonar la página cuesta más DOS veces seguidas, el capítulo usa «Deslizar»
+  let clonesLentos = 0;        // la primera vez va en frío (compilación): una sola no condena al capítulo
   const selPaso = document.getElementById('pdfAparPaso');
   let pasoElegido = 'libro';
   try { const g = localStorage.getItem(CLAVE_PASO); if (PASOS.includes(g)) pasoElegido = g; } catch (_) { /* sin almacenamiento: «Libro» */ }
@@ -472,7 +473,8 @@ export function initLibroVista({ el, estado, api }) {
       nodo.style.top = `${caja.top - o.top}px`;
       copia.scrollLeft = art.scrollLeft;
       void copia.scrollWidth;   // fuerza el reparto aquí, antes de pintar
-      if (performance.now() - t0 > COSTE_MAX_CLON) hojaLentaEn = claveCapitulo();
+      clonesLentos = performance.now() - t0 > COSTE_MAX_CLON ? clonesLentos + 1 : 0;
+      if (clonesLentos >= 2) hojaLentaEn = claveCapitulo();
       const vigia = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
         const c = art.getBoundingClientRect();
         if (Math.abs(c.width - caja.width) > 0.5 || Math.abs(c.height - caja.height) > 0.5) quitarHoja();
@@ -510,10 +512,16 @@ export function initLibroVista({ el, estado, api }) {
     const desde = h.progreso;
     const opciones = { duration: duracion, easing: 'cubic-bezier(.3,.62,.2,1)', fill: 'forwards' };
     const medio = (desde + hasta) / 2;
-    h.anims = [
-      h.pagina.animate([estiloHoja(h, desde), estiloHoja(h, hasta)], opciones),
-      h.sombra.animate([estiloSombra(h, desde), estiloSombra(h, medio), estiloSombra(h, hasta)], opciones),
-    ];
+    try {
+      h.anims = [
+        h.pagina.animate([estiloHoja(h, desde), estiloHoja(h, hasta)], opciones),
+        h.sombra.animate([estiloSombra(h, desde), estiloSombra(h, medio), estiloSombra(h, hasta)], opciones),
+      ];
+    } catch (_) {
+      /* Sin la API de animaciones no hay hoja: el texto ya está en su sitio. */
+      quitarHoja();
+      return;
+    }
     let hecho = false;
     const fin = () => {
       if (hecho || hoja !== h) return;
