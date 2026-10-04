@@ -556,7 +556,7 @@ lo daba por traducido: ese tramo sonaba en inglés para siempre aunque el traduc
 ya estuviera arreglado. **Regla extra:** un valor que significa «falló» no se
 guarda como si fuera un resultado; si se guarda, quien lo vuelve a leer debe
 reintentarlo, con un tope para no gastar cuota (`traduccionesReutilizables`,
-`CAMBIOS_YOUTUBE.md` §2026-10-02).
+`CAMBIOS_YOUTUBE.md` §v166).
 
 ### 1.5 Un diálogo nativo puede bloquear una prueba visible sin lanzar error
 

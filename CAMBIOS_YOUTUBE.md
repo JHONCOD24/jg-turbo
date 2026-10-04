@@ -1,11 +1,11 @@
 # Transcripción de YouTube · historial de cambios y operación
 
-## 2026-10-02 · Un tramo que no se pudo traducir se vuelve a pedir al reabrir
+## v166 (2026-10-02) · Un tramo que no se pudo traducir se vuelve a pedir al reabrir
 
 **Síntoma.** En un video ya doblado, uno o varios tramos sonaban en el idioma
 original **siempre**, por más que se volviera a abrir. Medido el 2026-10-02:
 3 de 36 subtítulos, causados por la protección de tecnicismos de v165 (arreglada
-aparte en `terminosWeb.js`, rama `claude/sleepy-hamilton-46aa68`).
+en el mismo v166: `terminosWeb.js`, `CAMBIOS_TTS.md` §v166).
 
 **Causa.** Un segmento que no se pudo traducir queda `null` en
 `motor.traducciones` (correcto dentro de la sesión: evita reintentar en bucle),
@@ -30,7 +30,7 @@ lo ya guardado (TRAMPAS.md §1.4).
 **Pruebas.** `test_youtube_doblaje` 139 → **150 OK** (11 nuevas: el `null` sembrado
 se vuelve a pedir y queda traducido, lo traducido no se repaga, el tope, un intento
 por apertura, registros viejos sin datos y la descarga). La prueba falló antes del
-arreglo («pedidos: ninguno»). Resto en la sección del despliegue de esta tanda.
+arreglo («pedidos: ninguno»). Batería y despliegue: `CAMBIOS_TTS.md` §v166.
 
 ## v159 (2026-09-29): continuaciones completas antes de la voz
 
