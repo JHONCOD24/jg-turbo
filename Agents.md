@@ -526,7 +526,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v166`** (tecnicismos como código, 2026-10-02). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v169`** (imágenes entre aparatos, 2026-10-04). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 
