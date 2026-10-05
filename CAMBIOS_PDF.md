@@ -5,6 +5,11 @@
 
 ## 2026-10-04 · FIG-1 · Las imágenes del libro no se pierden al pasar a otro aparato
 
+Publicado como **v169** (`JG_JS_V`, SW `jg-turbo-shell-v169`), prod
+`dpl_EH24PYGu5WkqoYxgo6KA8s7igVuu`, desplegado desde `git archive` de `03e57f1`.
+Verificado en el dominio: marcador v169, `/api/health` ok y los módulos
+tocados idénticos (sha256) al commit.
+
 **Medido antes de tocar nada.** En el mismo aparato las figuras funcionaban:
 los 8 PDF de `pdf/PDFs Listos/` colocan 263 de 263 figuras
 (`tests/diag_figuras_libro.mjs`) y *Esto es marketing* muestra 15 de 15 en sus
