@@ -328,7 +328,8 @@ el proveedor vuelve, colchón de 300 s, traducción completa de fondo con reinte
 los `null`, y sin síntesis con la voz apagada. **Obligatoria al tocar `motorPreparacion`,
 `dubbingService`, `dubbingEngine` o `planificador`:** `test_doblaje_video_largo` (30).
 **La colección de videos no se pierde:** `tests/test_biblioteca_persistente.mjs` (11)
-vigila la base `jg_youtube`; no la «arregles» para que pase. Detalle: `CAMBIOS_YOUTUBE.md` §v171.
+vigila la base `jg_youtube`; no la «arregles» para que pase. `JG_JS_V='v171'`, prod
+`dpl_4LsYDw5nwBPZWDdpaSbKQXi8JkZ9`. Detalle: `CAMBIOS_YOUTUBE.md` §v171.
 
 ## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
 

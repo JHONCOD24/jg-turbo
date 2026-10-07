@@ -1802,5 +1802,8 @@ previo (1087 KB documentado en v168); esta tanda no toca el arranque.
 `test_youtube_doblaje` tiene una comprobación de temporizador que a veces falla
 en Windows (48 ms vs 55, resolución del reloj); previa, no se tocó.
 
-`JG_JS_V='v171'`, SW `jg-turbo-shell-v171`.
+`JG_JS_V='v171'`, SW `jg-turbo-shell-v171`. Prod `dpl_4LsYDw5nwBPZWDdpaSbKQXi8JkZ9`
+(desde `git archive` del commit; marcador, SW y los 5 módulos con el mismo
+sha256 que el commit). Contra `https://jg-turbo.vercel.app`: youtube 123 · voz
+robusta 92 · subtítulos 192 · persistencia 248 · X 24, 0 fallos.
 
