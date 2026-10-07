@@ -771,10 +771,13 @@ export function inicializarYoutubeSincronizado({
     if (!motorVoz || ui.botonVoz.disabled) return;
     if (motorVoz.activo) {
       motorVoz.desactivar();
+      // Audio original + subtítulos: la traducción sigue entera, la voz no se sintetiza para nadie.
+      if (sesion.motor) sesion.motor.vozEnPausa = true;
       ponerEstadoBotonVoz(false);
       display.mostrarVoz('inactivo');
       return;
     }
+    if (sesion.motor) { sesion.motor.vozEnPausa = false; sesion.motor.paso(); }
     motorVoz.activar();
     ponerEstadoBotonVoz(true);
     display.mostrarVoz('activo');

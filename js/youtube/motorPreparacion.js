@@ -71,6 +71,9 @@ export class MotorPreparacion {
     this.rachasLimite = 0;   // 429 seguidos (espera creciente)
     this.rachasFallo = 0;    // otros fallos seguidos (espera corta y creciente)
     this.errores = { traduccion: 0, voz: 0 };
+    // Con la voz apagada (audio original + subtítulos) no se sintetiza nada:
+    // la cuota de voz gratuita es limitada y nadie la oiría.
+    this.vozEnPausa = false;
     this.reloj = reloj || crearReloj(() => this.paso(), { intervaloMs: 300 });
   }
 
@@ -99,7 +102,7 @@ export class MotorPreparacion {
       const lote = this.#siguienteLote(t);
       if (lote) this.#traducir(lote.indices, { fondo: lote.fondo });
     }
-    while (this.vozActiva < this.concurrenciaVoz && (!this.limitadorVoz || this.limitadorVoz.disponible())) {
+    while (!this.vozEnPausa && this.vozActiva < this.concurrenciaVoz && (!this.limitadorVoz || this.limitadorVoz.disponible())) {
       const [indice] = unidadesAGenerar(this.servicioVoz.unidades, t, { horizonteS: this.horizonteVozS, limite: 1, ahoraMs: this.ahora() });
       if (indice === undefined) break;
       this.#generarVoz(indice);

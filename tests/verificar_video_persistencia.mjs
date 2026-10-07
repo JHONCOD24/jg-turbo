@@ -143,10 +143,15 @@ async function contextoNuevo(navegador, vp, { carpeta = null } = {}) {
   return carpeta ? chromium.launchPersistentContext(carpeta, { ...opciones, headless: !process.argv.includes('--headed') }) : navegador.newContext(opciones);
 }
 
-async function abrir(navegador, vp, { contexto = null, ignorarStart = false, tab = 'yt', servidorCaido = false } = {}) {
+async function abrir(navegador, vp, { contexto = null, ignorarStart = false, tab = 'yt', servidorCaido = false, traducidosPrevios = null } = {}) {
   const ctx = contexto || await contextoNuevo(navegador, vp);
   const pagina = await ctx.newPage();
-  const reg = { youtube: 0, translate: 0, transcribe: 0, tts: 0, errores: [], consola: [], servidorCaido };
+  // `traducidos`: segmentos ya pedidos al traductor; `repetidos`: los que se pidieron OTRA vez.
+  // Desde v171 la traducción sigue de fondo hasta cubrir el video entero, así que
+  // tras recargar puede haber llamadas nuevas; lo que nunca debe haber es repetidos.
+  const reg = { youtube: 0, translate: 0, transcribe: 0, tts: 0, errores: [], consola: [], servidorCaido, traducidos: traducidosPrevios || new Set(), repetidos: 0, repetidosLista: [], respondidos: new Map() };
+  /** Lo traducido con tiempo de guardarse (respondido hace más de 1,5 s): eso nunca se repite. */
+  reg.fijar = () => { const ya = Date.now() - 1500; for (const [seg, t] of reg.respondidos) if (t <= ya) reg.traducidos.add(seg); };
   pagina.on('pageerror', (e) => reg.errores.push(String(e).slice(0, 200)));
   pagina.on('console', (m) => { if (m.type() === 'error') reg.consola.push(m.text().slice(0, 200)); });
   await pagina.addInitScript(({ ignorar }) => {
@@ -178,7 +183,9 @@ async function abrir(navegador, vp, { contexto = null, ignorarStart = false, tab
     reg.translate += 1;
     const cuerpo = JSON.parse(r.request().postData() || '{}');
     const piezas = [...String(cuerpo.text || '').matchAll(/\[\[JG_SEG_(\d{6})\]\]\n([^\[]*)/g)];
+    for (const m of piezas) { if (reg.traducidos.has(m[1])) { reg.repetidos += 1; reg.repetidosLista.push(m[1]); } }
     await esperar(100);
+    for (const m of piezas) reg.respondidos.set(m[1], Date.now() + 100);
     const text = piezas.length ? piezas.map((m) => `[[JG_SEG_${m[1]}]]\nES ${m[2].trim()}`).join('\n\n') : `ES ${cuerpo.text}`;
     await responder(r, { json: { text, ia_used: true, provider: 'mistral', validation: { status: 'ok', integrity_score: 100 } } });
   });
@@ -387,6 +394,7 @@ try {
       await esperar(4200);
       const tReal = await tiempoYt(pagina);
       const antes = llamadas(reg);
+      reg.fijar();
       await pagina.reload({ waitUntil: 'domcontentloaded' });
       await esperarPanel(pagina);
       comprobar(`${etiqueta}: la app abre en la pestaña de video`, await pagina.evaluate(() => document.getElementById('panelYt').classList.contains('active')));
@@ -397,7 +405,9 @@ try {
       comprobar(`${etiqueta}: queda en pausa, sin reproducir solo`, (await estadoYt(pagina)) !== 1 && (await sonando(pagina)) === 0);
       await captura(pagina, `${vp.movil ? 'movil' : 'escritorio'}_restaurado${ignorarStart ? '_b' : ''}`);
       comprobar(`${etiqueta}: avisa «Seguimos donde ibas: 5:0x»`, (await visible(pagina, '#ytReanudar')) && /Seguimos donde ibas: 5:\d\d/.test(await pagina.textContent('#ytReanudarTitulo')), await pagina.textContent('#ytReanudarTitulo'));
-      comprobar(`${etiqueta}: 0 llamadas a texto, transcripción y traducción (todo salió de la caché)`, llamadas(reg) === antes, `antes ${antes} · ahora ${llamadas(reg)}`);
+      const [yAntes, tAntes] = antes.split('/');
+      comprobar(`${etiqueta}: 0 llamadas a texto y transcripción, y ningún segmento ya traducido se vuelve a pedir (todo lo hecho salió de la caché)`,
+        `${reg.youtube}` === yAntes && `${reg.transcribe}` === tAntes && reg.repetidos === 0, `antes ${antes} · ahora ${llamadas(reg)} · repetidos ${reg.repetidosLista.join(',') || 0}`);
       comprobar(`${etiqueta}: el campo del enlace sigue conectado al video`, JSON.parse(await llave(pagina) || '{}').clave === 'dNWkwrqAkcM');
       const visibleReproducir = await visible(pagina, '#ytDubReproducir');
       comprobar(`${etiqueta}: hay un botón para reproducir`, visibleReproducir);
@@ -419,14 +429,15 @@ try {
       await a.pagina.evaluate(() => window.__yt.seekTo(420));
       await esperar(4200);
       const tReal = await tiempoYt(a.pagina);
+      a.reg.fijar();
       await ctx1.close();
       const ctx2 = await contextoNuevo(navegador, vp, { carpeta });
-      const b = await abrir(navegador, vp, { contexto: ctx2 });
+      const b = await abrir(navegador, vp, { contexto: ctx2, traducidosPrevios: a.reg.traducidos });
       comprobar('cerrar y abrir: el panel del video reaparece', await hastaQue(() => visible(b.pagina, '#ytSyncArea'), 15000));
       comprobar('cerrar y abrir: listo para seguir', await esperarListo(b.pagina));
       const t = await tiempoYt(b.pagina);
       comprobar('cerrar y abrir: en su segundo (±3 s) y en pausa', Math.abs(t - tReal) <= 3 && (await estadoYt(b.pagina)) !== 1, `${tReal} → ${t}`);
-      comprobar('cerrar y abrir: 0 llamadas a texto/transcripción/traducción', b.reg.youtube === 0 && b.reg.transcribe === 0 && b.reg.translate === 0, llamadas(b.reg));
+      comprobar('cerrar y abrir: 0 llamadas a texto/transcripción y ningún segmento ya traducido se vuelve a pedir', b.reg.youtube === 0 && b.reg.transcribe === 0 && b.reg.repetidos === 0, `${llamadas(b.reg)} · repetidos ${b.reg.repetidosLista.join(',') || 0}`);
       comprobar('cerrar y abrir: avisa dónde iba', /Seguimos donde ibas: 7:\d\d/.test(await b.pagina.textContent('#ytReanudarTitulo')));
       await verErrores(b.reg, 'cerrar y abrir');
       await ctx2.close();
@@ -465,6 +476,7 @@ try {
       await pegarYDoblar(pagina);
       await esperarListo(pagina);
       const antes = llamadas(reg);
+      reg.fijar();
       await pagina.reload({ waitUntil: 'domcontentloaded' });
       await esperarPanel(pagina);
       comprobar('recarga inmediata: el video reaparece y queda listo', await hastaQue(() => visible(pagina, '#ytSyncArea'), 15000) && await esperarListo(pagina));

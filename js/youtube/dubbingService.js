@@ -7,8 +7,11 @@ import { proximoReintentoVoz } from './planificador.js';
  * colgadas ocupaban los dos turnos de preparación 1-2 minutos y el video seguía
  * en inglés. Pasado este tope se aborta y se reintenta más tarde (una síntesis
  * sana tarda 0,4-3 s; edge-tts a veces 15-40 s, y ahí repetir suele ganar).
+ * No baja de 30 s: con una voz Fish el servidor puede gastar 22 s en Fish
+ * (FISH_PRESUPUESTO_SEG) antes de responder con la neural; cortar antes
+ * desperdiciaría justo esa respuesta.
  */
-export const TIEMPO_MAX_VOZ_MS = 20000;
+export const TIEMPO_MAX_VOZ_MS = 30000;
 
 // Unidades de voz: trozos cortos y con sentido, no bloques largos.
 //

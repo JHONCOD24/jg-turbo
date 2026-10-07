@@ -169,7 +169,8 @@ node tests/test_pdf_continuidad.mjs      node tests/test_pdf_caratula.mjs
 node tests/test_tts_voz_estable.mjs      node tests/test_tts_voces_biblioteca.mjs
 node tests/test_tts_pausas.mjs           node tests/test_youtube_doblaje.mjs
 node tests/test_youtube_sincronia.mjs   node tests/test_x_doblaje.mjs
-node tests/test_biblioteca_videos.mjs
+node tests/test_biblioteca_videos.mjs   node tests/test_doblaje_video_largo.mjs
+node tests/test_biblioteca_persistente.mjs
 ```
 
 Referencia al 2026-09-26 (v150): los 19 archivos de PDF/TTS suman **1.192 OK**;
@@ -234,8 +235,9 @@ obliga a repartir las páginas otra vez y deshace el salto de página. Ver `TRAM
 título del video → pistas) y se le pide a Supadata explícito: con doblaje automático
 de YouTube «la primera pista» puede ser árabe en un video en inglés. La traducción y la
 voz se preparan por ventanas alrededor de la posición (`js/youtube/motorPreparacion.js`:
-traducción 180 s, voz 90 s, ≤ 18 síntesis/min por la cuota de Azure F0). Nunca volver a
-traducir el video entero antes de reproducir, ni a mover el reloj a `requestAnimationFrame`.
+traducción 180 s con prisa y **luego el video entero de fondo** (v171), voz 300 s,
+≤ 18 síntesis/min por la cuota de Azure F0). Nunca volver a traducir el video entero
+ANTES de reproducir, ni a mover el reloj a `requestAnimationFrame`.
 Sin subtítulos: `409 sin_subtitulos` y permiso con créditos estimados. Pruebas:
 `tests/test_youtube_doblaje.mjs`, `tests/verificar_youtube_doblaje.mjs`,
 `backend/tests/test_youtube_idioma_origen.py`. Detalle: `CAMBIOS_YOUTUBE.md`.
@@ -313,6 +315,20 @@ arquitectura, validación y guía de activación).
   ~40 ms tarde) y la voz guardada trae su tramo hablado ya medido (al volver a un
   video no se decodifica nada). `CAMBIOS_YOUTUBE.md` §v157. `JG_JS_V='v157'`,
   prod `dpl_EafotrCk2sVosZAvGLqRJPaFNFXa`.
+
+## Videos largos v171 (2026-10-06): el doblaje no se frena
+
+Pedido del dueño: en videos de +1 h la voz se cortaba 1-2 min (inglés) y el
+subtítulo se quedaba atrás. Causas medidas con **`tests/test_doblaje_video_largo.mjs`**
+(piezas reales + reloj virtual, 70 min en segundos): bucle infinito del motor con
+frases `sin_voz` (congelaba la página), síntesis colgadas 90 s ocupando los 2 turnos,
+2 reintentos inmediatos, colchón de 90 s y traducción solo 3 min por delante. Ahora:
+tope de 30 s por síntesis, 3 turnos, 6 reintentos espaciados que se renuevan cuando
+el proveedor vuelve, colchón de 300 s, traducción completa de fondo con reintento de
+los `null`, y sin síntesis con la voz apagada. **Obligatoria al tocar `motorPreparacion`,
+`dubbingService`, `dubbingEngine` o `planificador`:** `test_doblaje_video_largo` (30).
+**La colección de videos no se pierde:** `tests/test_biblioteca_persistente.mjs` (11)
+vigila la base `jg_youtube`; no la «arregles» para que pase. Detalle: `CAMBIOS_YOUTUBE.md` §v171.
 
 ## Biblioteca de videos (leer antes de tocar `cacheDoblaje.js` o `bibliotecaVista.js`)
 
@@ -528,7 +544,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v170`** (velocidad exacta del video, 2026-10-06). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v171`** (videos largos sin cortes, 2026-10-06). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

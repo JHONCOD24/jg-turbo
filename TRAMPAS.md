@@ -1748,7 +1748,7 @@ volvía a pedir esas voces. Además `segundosCubiertos` cuenta `error` como
 cubierto, así que el «Listo» salió como si todo estuviera bien.
 
 **Regla:** una voz en `error` se repite en segundo plano con tope
-(`MAX_REINTENTOS_VOZ = 2` en `planificador.js`, contador `reintentosVoz` en la
+(`MAX_REINTENTOS_VOZ` en `planificador.js`, 6 espaciados desde v171, contador `reintentosVoz` en la
 unidad) para no quemar cuota; y si al dar «Listo» hubo fallos de voz, el mensaje
 lo dice en vez de prometer un arranque perfecto.
 
@@ -1955,3 +1955,35 @@ pueden estar desplegando el mismo proyecto el mismo día.
 `origin/main`, volver a correr la batería y usar un número de versión mayor que el
 último publicado (aquí v168). Comparar también `JG_JS_V` del dominio con el de la
 rama antes de publicar.
+
+## Un `finally` que vuelve a llamar al tic puede congelar la página (2026-10-06)
+
+**Síntoma:** en videos largos el doblaje «se frenaba» y la persona seguía en
+inglés; el video de YouTube corría (otro proceso) pero la app no respondía.
+
+**Causa:** `#pedirFrase` del motor de voz pedía `asegurar()` de una frase sin
+voz (`sin_voz`), que falla al instante; su `.finally()` llama a `#tic()`, que
+volvía a elegir la misma frase porque el salto de frases sin voz usaba un
+umbral (+0,03 s) distinto del de arranque (+0,08 s). Bucle de microtareas sin
+fin: ni temporizadores ni eventos vuelven a correr. Ninguna prueba lo vio porque
+todas usaban frases ya listas; salió al juntar las piezas reales en un video de
+70 min (`test_doblaje_video_largo`).
+
+**Regla:** un callback que re-entra en el tic solo puede dispararse tras trabajo
+asíncrono REAL; nunca pedir algo que se sabe que falla al instante. Los umbrales
+de «ya le toca» deben ser el mismo número en todos los caminos.
+
+## Probar piezas sueltas no prueba un video de una hora (2026-10-06)
+
+**Síntoma:** todas las suites en verde y, en producción, el doblaje de videos
+largos se cortaba 1-2 min.
+
+**Causa:** las pruebas medían el motor con todas las voces ya listas y el
+planificador sin red. Lo que fallaba era la combinación con la red real:
+síntesis colgadas 90 s ocupando los 2 turnos, 2 reintentos inmediatos que una
+caída agotaba en segundos, colchón de 90 s y traducción solo 3 min por delante.
+
+**Regla:** al tocar la preparación o el motor de voz, correr
+`tests/test_doblaje_video_largo.mjs` (piezas reales + reloj virtual + red con
+latencias, caídas y 429). Si un escenario empeora, no se entrega.
+

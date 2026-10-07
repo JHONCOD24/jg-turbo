@@ -1726,3 +1726,81 @@ v4 de dejar la velocidad solo en el engranaje, también a pedido del dueño).
 - **Producción:** `dpl_3eVpKjeZXzpHFEheUtqPeqs7pf5i` (2026-10-06), desde `git archive`.
   Dominio: marcador `v170`, módulos con sha256 igual al commit, `/api/health` ok y
   `verificar_youtube_doblaje` con `JG_BASE` del dominio: 123 OK · 0 fallos.
+
+
+## v171 (2026-10-06): videos largos sin cortes de doblaje ni subtítulos vacíos
+
+**Pedido del dueño:** en videos de más de una hora el doblaje «se frena», la
+persona sigue hablando en inglés 1-2 minutos y luego vuelve la voz; el
+subtítulo también se queda atrás. Además: la colección de videos guardados no
+puede perderse por ninguna actualización.
+
+**Cómo se midió:** `tests/test_doblaje_video_largo.mjs` junta las piezas
+REALES (`MotorPreparacion` + `TranslationService` + `DubbingService` +
+`DubbingEngine`) contra una red simulada y un reloj virtual: 70 min de video se
+simulan en segundos. Antes de los arreglos (mismo simulador):
+
+| Escenario (70 min) | Antes | v171 |
+|---|---|---|
+| Red sana | 0 s en inglés | 0 s en inglés · todo traducido a los 7,5 min |
+| Voz lenta a ratos (4 % se cuelga 90 s, 10 % tarda 15-40 s) | 27 s en inglés (racha 12 s) + 128 s de video detenido | 7 s (racha 4 s) · 0 s detenido |
+| Voz caída 2 min | **101 s en inglés** (rachas de 21 s) | 0 s |
+| Traductor en 429 4 min | 16 s sin subtítulo + 90 s detenido | 0 s · 0 s |
+| Voz caída 6 min | (frases de la caída en inglés para siempre) | vuelve sola: 0 s en inglés 1 min después |
+| Página congelada | **bucle infinito** (ver abajo) | 0 |
+
+**Causas y arreglos:**
+
+1. **Bucle infinito que congelaba la página** (`dubbingEngine.js`). Una frase
+   sin voz (`sin_voz`, p. ej. absorbida por `prepararTextoDeUnidad`) que
+   empezaba entre +0,03 y +0,08 s no se saltaba (umbral 0,03) ni esperaba
+   (anticipo 0,08): se «pedía» su voz, `asegurar` fallaba al instante y el
+   `finally` volvía a llamar al tic → bucle de microtareas sin fin. La página
+   se congelaba y el video de YouTube (otro proceso) seguía en inglés. Ahora el
+   salto usa el mismo umbral que el arranque y `#pedirFrase` solo pide frases
+   `pendiente`/`cargando`.
+2. **Síntesis colgadas ocupaban la preparación 1-2 min.** El navegador daba 90 s
+   al GET y otros 90 al POST; con 2 turnos, dos frases colgadas paraban toda la
+   voz. Ahora `DubbingService` corta cada síntesis a los **30 s** (no menos: Fish puede gastar 22 s antes del respaldo neural)
+   (`TIEMPO_MAX_VOZ_MS`, aborta la petición) y hay **3 turnos** de voz (el
+   límite de 18/min lo sigue poniendo el limitador).
+3. **Reintentos de voz espaciados** (`planificador.js`): 6 intentos a
+   3 → 8 → 15 → 30 → 45 → 60 s (`reintentarEn`). Antes eran 2 inmediatos: una
+   caída de un minuto los agotaba en segundos. Si varias frases fallan seguidas
+   (caída del proveedor) y luego una sale bien, las de la caída **recuperan sus
+   intentos** (`fallaGeneral`); una frase que falla sola (su texto) conserva su
+   cuenta para no quemar cuota.
+4. **Colchón de voz de 300 s** (antes 90): una caída de 2-3 min ya no se oye.
+5. **Traducción del video ENTERO de fondo** (`motorPreparacion.js`): primero los
+   próximos 3 min a ritmo normal (1,1 s); luego el resto hasta el final y lo que
+   quedó antes de la posición a ritmo de fondo (`INTERVALO_FONDO_TRADUCCION_MS`
+   = 1,5 s). Sigue sin traducirse todo **antes** de reproducir (regla v3): el
+   arranque no cambia. Una pausa de 429 de la traducción de fondo no se anuncia.
+6. **Lo que la IA no devolvió (`null`) se vuelve a pedir en la misma sesión**
+   (con el tope `MAX_INTENTOS_TRADUCCION`) y su frase recupera la voz. Antes
+   quedaba en inglés hasta reabrir el video.
+7. **Voz apagada = no se sintetiza** (`motor.vozEnPausa`): quien deja el audio
+   original y lee los subtítulos no gasta la cuota de voz; la traducción sigue.
+8. **Persistencia de la colección:** se pide `navigator.storage.persist()`
+   también al abrir la app con videos guardados (no solo al guardar uno), y
+   `tests/test_biblioteca_persistente.mjs` falla si alguien borra o renombra la
+   base `jg_youtube`, baja su versión, borra almacenes en la migración, borra
+   fichas/doblajes fuera de `quitarVideo` o hace que el service worker toque
+   IndexedDB. Un despliegue nunca toca IndexedDB.
+
+**Pruebas:** `test_doblaje_video_largo` 30 · `test_biblioteca_persistente` 11 ·
+`test_youtube_sincronia` 95 · `test_youtube_doblaje` 159 (actualizadas: 6
+reintentos espaciados y horizonte de voz de 300 s). Navegador: `verificar_youtube_doblaje` 123 ·
+`verificar_x_doblaje` 24 · `verificar_voz_doblaje_robusta` 92 ·
+`verificar_subtitulos_video` 192 · `verificar_archivo_doblaje` 78 ·
+`verificar_biblioteca_videos` 52 · `verificar_video_persistencia` 248 (+2). Esta
+última ya no exige «0 llamadas de traducción» tras recargar (la traducción de
+fondo sigue con lo que faltaba); exige que **ningún segmento ya guardado se pida
+otra vez** (respondido hace > 1,5 s). Solo puede repetirse el lote que estaba en
+vuelo justo al recargar. `verificar_arranque_ligero`: 1088 KB > 1 MB, fallo
+previo (1087 KB documentado en v168); esta tanda no toca el arranque.
+`test_youtube_doblaje` tiene una comprobación de temporizador que a veces falla
+en Windows (48 ms vs 55, resolución del reloj); previa, no se tocó.
+
+`JG_JS_V='v171'`, SW `jg-turbo-shell-v171`.
+
