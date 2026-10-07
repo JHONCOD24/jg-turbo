@@ -1723,3 +1723,6 @@ v4 de dejar la velocidad solo en el engranaje, también a pedido del dueño).
   control refleja el engranaje) · `verificar_x_doblaje` 24 ·
   `verificar_archivo_doblaje` 78 · `verificar_voz_doblaje_robusta` 92 ·
   `verificar_subtitulos_video` 192 · `test_youtube_sincronia` 93 · 0 fallos.
+- **Producción:** `dpl_3eVpKjeZXzpHFEheUtqPeqs7pf5i` (2026-10-06), desde `git archive`.
+  Dominio: marcador `v170`, módulos con sha256 igual al commit, `/api/health` ok y
+  `verificar_youtube_doblaje` con `JG_BASE` del dominio: 123 OK · 0 fallos.

@@ -256,7 +256,8 @@ pasos de 0,05 (medido: la IFrame API los acepta), mínimo 0,75×, con histéresi
 interruptor «Ritmo automático» (`jg_yt_ritmo_auto`, encendido). **v170:** vuelve
 un control propio «Velocidad del video» (0,5×–2× en pasos de 0,05, lo que acepta
 YouTube) a pedido del dueño; es la base del ritmo automático y se guarda en
-`jg_yt_rate`. No ofrecer pasos de 0,01: YouTube los redondea (`CAMBIOS_YOUTUBE.md` §v170). El subtítulo muestra la línea
+`jg_yt_rate`. No ofrecer pasos de 0,01: YouTube los redondea (`CAMBIOS_YOUTUBE.md` §v170).
+Prod `dpl_3eVpKjeZXzpHFEheUtqPeqs7pf5i`. El subtítulo muestra la línea
 que dice la voz (`indiceSegmentoVoz`). Arranque: texto en paralelo con el
 reproductor, voz precalentada, primer lote de 4, 2 lotes en vuelo, arranca con la
 primera frase (`VOZ_INICIAL_S = 6`). Traducción: zona gris 0,6–0,85 = un solo
