@@ -419,15 +419,20 @@ comprobar(RETRASO_MAXIMO_S === 5, 'la voz solo se rinde con más de 5 s de atras
 {
   const plan = await modulo('planificador.js');
   const servicio = await modulo('dubbingService.js');
-  comprobar(plan.MAX_REINTENTOS_VOZ === 2, 'la voz fallida se reintenta 2 veces, no para siempre (cuota)');
+  comprobar(plan.MAX_REINTENTOS_VOZ === 6, 'la voz fallida se reintenta 6 veces, espaciadas, no para siempre (cuota)');
   const base = [
     { startTime: 0, endTime: 4, estado: 'pendiente', text: 'a' },
     { startTime: 5, endTime: 9, estado: 'error', reintentosVoz: 0, text: 'b' },
-    { startTime: 10, endTime: 14, estado: 'error', reintentosVoz: 2, text: 'c' },
+    { startTime: 10, endTime: 14, estado: 'error', reintentosVoz: 6, text: 'c' },
     { startTime: 15, endTime: 19, estado: 'listo', text: 'd' },
+    { startTime: 20, endTime: 24, estado: 'error', reintentosVoz: 1, reintentarEn: 5000, text: 'e' },
   ];
-  comprobar(JSON.stringify(plan.unidadesAGenerar(base, 0, { horizonteS: 90, limite: 10 })) === '[0,1]',
-    'se piden las pendientes y las fallidas con reintentos; las agotadas y las listas, no');
+  comprobar(JSON.stringify(plan.unidadesAGenerar(base, 0, { horizonteS: 90, limite: 10, ahoraMs: 1000 })) === '[0,1]',
+    'se piden las pendientes y las fallidas con reintentos; las agotadas, las listas y las que aún esperan su pausa, no');
+  comprobar(JSON.stringify(plan.unidadesAGenerar(base, 0, { horizonteS: 90, limite: 10, ahoraMs: 6000 })) === '[0,1,4]',
+    'pasada su pausa, la fallida vuelve a pedirse');
+  comprobar(plan.proximoReintentoVoz(1, 0) === 3000 && plan.proximoReintentoVoz(4, 0) === 30000 && plan.proximoReintentoVoz(99, 0) === 60000,
+    'los reintentos se espacian 3 s → 8 → 15 → 30 → 45 → 60 s');
 
   let llamadas = 0;
   const voz = new servicio.DubbingService({ generarAudio: async () => { llamadas += 1; if (llamadas === 1) throw new Error('TTS caído'); return new Blob(['x']); } });

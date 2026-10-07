@@ -187,7 +187,7 @@ const pl = await modulo('planificador.js');
   comprobar(fuera === null, 'no se traduce más allá del horizonte');
   const unidades = [
     { startTime: 0, endTime: 5, estado: 'listo' }, { startTime: 5, endTime: 11, estado: 'pendiente' },
-    { startTime: 11, endTime: 15, estado: 'sin_traducir' }, { startTime: 200, endTime: 205, estado: 'pendiente' },
+    { startTime: 11, endTime: 15, estado: 'sin_traducir' }, { startTime: 400, endTime: 405, estado: 'pendiente' },
   ];
   comprobar(JSON.stringify(pl.unidadesAGenerar(unidades, 0, { limite: 3 })) === '[1]', 'solo se sintetizan frases con texto y dentro del horizonte de voz');
   comprobar(pl.segundosCubiertos(unidades, 0) === 5, 'la voz cubre hasta la primera frase sin voz');

@@ -10,10 +10,12 @@
  */
 import {
   siguienteLoteTraduccion, unidadesAGenerar, segundosCubiertos, segundosTraducidos,
-  HORIZONTE_TRADUCCION_S, HORIZONTE_VOZ_S, VOZ_INICIAL_S, LOTE_ARRANQUE,
+  HORIZONTE_TRADUCCION_S, HORIZONTE_VOZ_S, VOZ_INICIAL_S, LOTE_ARRANQUE, vozReintentable,
 } from './planificador.js';
 import { prepararTextoDeUnidad } from './dubbingService.js';
-import { esLimiteDeUso, traduccionesReutilizables, anotarIntentos } from './translationService.js';
+import {
+  esLimiteDeUso, traduccionesReutilizables, anotarIntentos, MAX_INTENTOS_TRADUCCION, MAX_SEGMENTOS_POR_LOTE,
+} from './translationService.js';
 import { fraccionesDeUnidad } from './ritmoDoblaje.js';
 import { crearReloj } from './reloj.js';
 
@@ -34,21 +36,29 @@ const PAUSAS_LIMITE_MS = [15000, 30000, 60000];
  * propia app se auto-limita (429) en videos de habla rápida.
  */
 export const INTERVALO_MIN_TRADUCCION_MS = 1100;
+/**
+ * Ritmo de la traducción de FONDO (más allá de los 3 min de prisa): sin apuro,
+ * para no gastar el cupo que necesita lo que se está viendo.
+ */
+export const INTERVALO_FONDO_TRADUCCION_MS = 1500;
 
 export class MotorPreparacion {
   constructor({
     segmentos, servicioVoz, traductor, posicion,
     origen = 'en', tituloVideo = '',
     limitadorVoz = null, reloj = null, ahora = () => Date.now(),
-    concurrenciaTraduccion = 2, concurrenciaVoz = 2,
+    // 3 turnos de voz: una síntesis lenta ya no frena a las demás (el límite de
+    // 18 por minuto lo sigue poniendo `limitadorVoz`).
+    concurrenciaTraduccion = 2, concurrenciaVoz = 3,
     horizonteTraduccionS = HORIZONTE_TRADUCCION_S, horizonteVozS = HORIZONTE_VOZ_S,
     intervaloTraduccionMs = INTERVALO_MIN_TRADUCCION_MS,
+    intervaloFondoMs = INTERVALO_FONDO_TRADUCCION_MS,
     onCambio = () => {}, onTraduccion = () => {}, signal = null,
   }) {
     Object.assign(this, {
       segmentos, servicioVoz, traductor, posicion, origen, tituloVideo, limitadorVoz, ahora,
       concurrenciaTraduccion, concurrenciaVoz, horizonteTraduccionS, horizonteVozS,
-      intervaloTraduccionMs,
+      intervaloTraduccionMs, intervaloFondoMs,
       onCambio, onTraduccion, signal,
     });
     this.traducciones = new Map();   // índice de segmento → texto | null (no se pudo)
@@ -85,30 +95,67 @@ export class MotorPreparacion {
     // (uno por paso, aunque quepan dos en vuelo). Sin esto, los lotes cortos
     // (habla rápida) salen a >1/s y Mistral gratis responde 429: la app se
     // limitaba a sí misma.
-    if (
-      this.ahora() >= this.pausaHasta
-      && this.ahora() - this.ultimoLoteMs >= this.intervaloTraduccionMs
-      && this.lotesActivos < this.concurrenciaTraduccion
-    ) {
-      const traducido = (i) => this.traducciones.has(i);
-      const cerca = segundosTraducidos(this.segmentos, traducido, t) < CERCA_DE_ARRANQUE_S;
-      const lote = siguienteLoteTraduccion(
-        this.segmentos,
-        { traducido, enCurso: (i) => this.enCurso.has(i) },
-        t,
-        { horizonteS: this.horizonteTraduccionS, ...(cerca ? { maxSegmentos: LOTE_ARRANQUE } : {}) },
-      );
-      if (lote) this.#traducir(lote);
+    if (this.ahora() >= this.pausaHasta && this.lotesActivos < this.concurrenciaTraduccion) {
+      const lote = this.#siguienteLote(t);
+      if (lote) this.#traducir(lote.indices, { fondo: lote.fondo });
     }
     while (this.vozActiva < this.concurrenciaVoz && (!this.limitadorVoz || this.limitadorVoz.disponible())) {
-      const [indice] = unidadesAGenerar(this.servicioVoz.unidades, t, { horizonteS: this.horizonteVozS, limite: 1 });
+      const [indice] = unidadesAGenerar(this.servicioVoz.unidades, t, { horizonteS: this.horizonteVozS, limite: 1, ahoraMs: this.ahora() });
       if (indice === undefined) break;
       this.#generarVoz(indice);
     }
     this.servicioVoz.liberarAntesDe(t - LIBERAR_ATRAS_S);
   }
 
-  async #traducir(indices) {
+  /**
+   * Qué traducir ahora. Primero lo de los próximos 3 min, a ritmo normal; luego
+   * el resto del video hasta el final y, después, lo que quedó ANTES de la
+   * posición (si se empezó a mitad), a ritmo de fondo. Así el subtítulo nunca
+   * espera a la IA: al rato de empezar, el video entero ya está traducido.
+   */
+  #siguienteLote(t) {
+    const desde = this.ahora() - this.ultimoLoteMs;
+    if (desde < this.intervaloTraduccionMs) return null;
+    const traducido = (i) => this.traducciones.has(i);
+    const estado = { traducido, enCurso: (i) => this.enCurso.has(i) };
+    const cerca = segundosTraducidos(this.segmentos, traducido, t) < CERCA_DE_ARRANQUE_S;
+    const urgente = siguienteLoteTraduccion(this.segmentos, estado, t, {
+      horizonteS: this.horizonteTraduccionS, ...(cerca ? { maxSegmentos: LOTE_ARRANQUE } : {}),
+    });
+    if (urgente) return { indices: urgente, fondo: false };
+    if (desde < this.intervaloFondoMs) return null;
+    const fondo = siguienteLoteTraduccion(this.segmentos, estado, t, { horizonteS: Number.POSITIVE_INFINITY })
+      || siguienteLoteTraduccion(this.segmentos, estado, 0, { horizonteS: Number.POSITIVE_INFINITY })
+      || this.#loteParaRepetir();
+    return fondo ? { indices: fondo, fondo: true } : null;
+  }
+
+  /**
+   * Con todo lo demás traducido, se vuelve a pedir lo que la IA no devolvió
+   * (`null`), con su tope de intentos. Antes ese tramo quedaba en inglés (voz y
+   * subtítulo) hasta volver a abrir el video.
+   */
+  #loteParaRepetir() {
+    const pendientes = [...this.traducciones]
+      .filter(([indice, texto]) => texto === null && !this.enCurso.has(indice)
+        && (this.intentosFallidos.get(indice) || 0) < MAX_INTENTOS_TRADUCCION)
+      .map(([indice]) => indice)
+      .sort((x, y) => x - y);
+    const lote = [];
+    for (const indice of pendientes) {
+      if (lote.length && (indice !== lote[lote.length - 1] + 1 || lote.length >= MAX_SEGMENTOS_POR_LOTE)) break;
+      lote.push(indice);
+    }
+    return lote.length ? lote : null;
+  }
+
+  /** Un tramo que se oía en el original porque faltaba su traducción vuelve a esperar texto. */
+  #reabrirUnidad(indiceSegmento) {
+    const unidad = this.servicioVoz.unidades.find((u) => u.desde <= indiceSegmento && indiceSegmento <= u.hasta && u.duration > 0);
+    if (unidad && unidad.estado === 'sin_voz' && !unidad.text) unidad.estado = 'sin_traducir';
+  }
+
+  async #traducir(indices, { fondo = false } = {}) {
     indices.forEach((i) => this.enCurso.add(i));
     this.lotesActivos += 1;
     this.ultimoLoteMs = this.ahora();
@@ -120,8 +167,10 @@ export class MotorPreparacion {
       this.rachasFallo = 0;
       this.intentosFallidos = new Map(anotarIntentos(this.intentosFallidos, mapa));
       for (const [indice, texto] of mapa) {
+        if (texto !== null && this.traducciones.get(indice) === null) this.#reabrirUnidad(indice);
         this.traducciones.set(indice, texto);
-        if (texto === null) this.errores.traduccion += 1;
+        // Solo cuenta lo que ya no se volverá a pedir: eso sonará en el original.
+        if (texto === null && (this.intentosFallidos.get(indice) || 0) >= MAX_INTENTOS_TRADUCCION) this.errores.traduccion += 1;
         this.onTraduccion(indice, texto);
       }
       this.#rellenarUnidades();
@@ -131,7 +180,9 @@ export class MotorPreparacion {
         this.rachasLimite += 1;
         const espera = PAUSAS_LIMITE_MS[Math.min(this.rachasLimite, PAUSAS_LIMITE_MS.length) - 1];
         this.pausaHasta = this.ahora() + espera;
-        this.onCambio({
+        // La traducción de fondo va minutos por delante: su pausa no afecta a
+        // lo que se ve y anunciarla solo alarmaría.
+        if (!fondo) this.onCambio({
           tipo: 'pausa',
           mensaje: `El traductor pidió una pausa por límite de uso (van ${this.rachasLimite}): seguimos en unos ${Math.round(espera / 1000)} s…`,
         });
@@ -142,7 +193,7 @@ export class MotorPreparacion {
       this.rachasFallo += 1;
       const espera = PAUSAS_FALLO_MS[Math.min(this.rachasFallo, PAUSAS_FALLO_MS.length) - 1];
       this.pausaHasta = this.ahora() + espera;
-      this.onCambio({
+      if (!fondo) this.onCambio({
         tipo: 'pausa',
         mensaje: `La traducción falló un momento; reintentamos en unos ${Math.round(espera / 1000)} s.`,
       });
@@ -168,7 +219,9 @@ export class MotorPreparacion {
     try {
       await this.servicioVoz.asegurar(indice);
     } catch (_) {
-      if (!this.signal?.aborted) this.errores.voz += 1;   // esa frase sonará en su idioma original
+      // Solo cuenta cuando ya no habrá otro intento: esa frase sonará en su idioma original.
+      const unidad = this.servicioVoz.unidades[indice];
+      if (!this.signal?.aborted && unidad && !vozReintentable(unidad)) this.errores.voz += 1;
     } finally {
       this.vozActiva -= 1;
       this.onCambio({ tipo: 'progreso' });

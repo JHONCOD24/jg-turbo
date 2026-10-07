@@ -512,7 +512,11 @@ export class DubbingEngine {
     }
     let j = this.ultima + 1;
     // Frases sin voz posible: ahí suena el original y la voz sigue con la próxima.
-    while (j < unidades.length && ESTADOS_SIN_VOZ.has(unidades[j].estado) && unidades[j].startTime <= t + 0.03) {
+    // Mismo umbral que el arranque: con 0,03 una frase sin voz que empezaba
+    // entre +0,03 y +0,08 s no se saltaba ni esperaba, se «pedía» su voz, que
+    // falla al instante, y el `finally` volvía a llamar al tic: bucle sin fin
+    // que congelaba la página (simulado en test_doblaje_video_largo).
+    while (j < unidades.length && ESTADOS_SIN_VOZ.has(unidades[j].estado) && unidades[j].startTime <= t + ANTICIPO_ARRANQUE_S) {
       this.#avisarSinVoz(j);
       this.ultima = j;
       j += 1;
@@ -625,6 +629,10 @@ export class DubbingEngine {
       }
       return;   // el motor de preparación ya va por él: prioriza la posición actual
     }
+    // Solo se pide lo que de verdad puede generarse. Una frase sin voz ya
+    // decidida ('sin_voz', o 'error' agotada) la gestiona el motor de
+    // preparación: pedirla aquí fallaba al instante y re-entraba en el tic.
+    if (!['pendiente', 'cargando'].includes(unidad.estado)) return;
     if (this.cargaPendiente === indice) return;
     this.cargaPendiente = indice;
     this.onStatus('Preparando la voz…', 'cargando');

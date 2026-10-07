@@ -66,6 +66,19 @@ function leerNumero(clave, porDefecto) {
 const formatoTiempo = (s) => (s < 60 ? `${Math.floor(s)} s` : `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, '0')} s`);
 const cancelado = () => new DOMException('Cancelado', 'AbortError');
 
+/** Una señal que se aborta cuando lo hace cualquiera de las dadas. */
+function unirSenales(...senales) {
+  const activas = senales.filter(Boolean);
+  if (activas.length <= 1) return activas[0] || null;
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(activas);
+  const control = new AbortController();
+  for (const s of activas) {
+    if (s.aborted) { control.abort(); break; }
+    s.addEventListener('abort', () => control.abort(), { once: true });
+  }
+  return control.signal;
+}
+
 export function inicializarYoutubeSincronizado({
   fetchApi,
   traducirTexto,
@@ -973,9 +986,10 @@ export function inicializarYoutubeSincronizado({
         }
         return { blob: guardada.blob, engineHdr: guardada.motor, habla };
       },
-      generarAudio: async (texto, unidad) => {
+      generarAudio: async (texto, unidad, { signal: tope = null } = {}) => {
         const voz = vozParaUnidad(unidad, { vozPrincipal: actual.voz, vozSecundaria: actual.vozSecundaria });
-        const resultado = await generarAudioEspanol(texto, { voz, signal });
+        // Se corta al cerrar el video O al pasar el tope de una síntesis (DubbingService).
+        const resultado = await generarAudioEspanol(texto, { voz, signal: unirSenales(signal, tope) });
         const blob = resultado instanceof Blob ? resultado : resultado?.blob;
         if (!blob?.size) return resultado;
         const habla = await medirHabla(blob);
@@ -1664,6 +1678,12 @@ export function inicializarYoutubeSincronizado({
       throw error;
     }
   }
+
+  // Con videos ya guardados, se vuelve a pedir el almacenamiento persistente en
+  // cada apertura (no solo al guardar uno nuevo): si el navegador lo negó la
+  // primera vez, puede concederlo después (PWA instalada, más uso), y sin él
+  // puede borrar la colección entera cuando le falta espacio.
+  listarVideos().then((videos) => { if (videos.length) pedirPersistencia(); }).catch(() => {});
 
   // La vista vive en su propio módulo: se carga solo si el panel trae la sección.
   const raizBiblioteca = $('vidBiblioteca');

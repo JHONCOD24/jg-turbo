@@ -1,4 +1,14 @@
 import { medirHabla as medirHablaAudio } from './hablaVoz.js';
+import { proximoReintentoVoz } from './planificador.js';
+
+/**
+ * Tope de espera de UNA síntesis (v171). El navegador concedía 90 s por GET y
+ * otros 90 por POST, y el servidor contesta como mucho a los ~45 s: dos frases
+ * colgadas ocupaban los dos turnos de preparación 1-2 minutos y el video seguía
+ * en inglés. Pasado este tope se aborta y se reintenta más tarde (una síntesis
+ * sana tarda 0,4-3 s; edge-tts a veces 15-40 s, y ahí repetir suele ganar).
+ */
+export const TIEMPO_MAX_VOZ_MS = 20000;
 
 // Unidades de voz: trozos cortos y con sentido, no bloques largos.
 //
@@ -191,7 +201,7 @@ export async function medirDuracionAudio(url, {
 }
 
 export class DubbingService {
-  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null, medirDuracion = medirDuracionAudio, buscarGuardada = null, medirHabla = medirHablaAudio }) {
+  constructor({ generarAudio, onProgress = () => {}, limitador = null, onRespaldo = null, medirDuracion = medirDuracionAudio, buscarGuardada = null, medirHabla = medirHablaAudio, tiempoMaxMs = TIEMPO_MAX_VOZ_MS }) {
     if (typeof generarAudio !== 'function') {
       throw new Error('No está disponible el generador de voz en español.');
     }
@@ -202,6 +212,7 @@ export class DubbingService {
     this.medirDuracion = medirDuracion;
     this.buscarGuardada = buscarGuardada;
     this.medirHabla = medirHabla;
+    this.tiempoMaxMs = tiempoMaxMs;
     this.unidades = [];
     this.completadas = 0;
     this.destruido = false;
@@ -209,6 +220,9 @@ export class DubbingService {
     // anterior se descarta al llegar (antes sonaba intercalado con la nueva).
     this.versionVoz = 0;
     this.invalidadoDesde = Number.POSITIVE_INFINITY;
+    // Fallos seguidos de CUALQUIER frase: si fallan varias a la vez, es el
+    // proveedor (caído o saturado), no el texto de una frase concreta.
+    this.fallosSeguidos = 0;
   }
 
   /** Frases ya armadas con `agruparPorTiempo` (sin texto todavía). */
@@ -293,7 +307,7 @@ export class DubbingService {
         // Se pasa la unidad completa: el controlador elige la voz según el
         // hablante (diálogos con 2 voces). Las funciones viejas que solo
         // reciben el texto siguen funcionando: el 2.º argumento se ignora.
-        const resultado = guardada || await this.generarAudio(unidad.text, unidad);
+        const resultado = guardada || await this.#generarConTope(unidad);
         const blob = resultado instanceof Blob ? resultado : resultado?.blob;
         if (!blob?.size) throw new Error('El servicio no devolvió audio.');
         if (this.destruido) throw new Error('La preparación de voz fue cancelada.');
@@ -322,12 +336,16 @@ export class DubbingService {
         if (this.destruido) throw new Error('La preparación de voz fue cancelada.');
         unidad.estado = 'listo';
         unidad.error = '';
+        if (!guardada) this.#proveedorVolvio();
         this.completadas += 1;
         this.onProgress(this.completadas, this.unidades.length);
         return unidad;
       } catch (error) {
         unidad.estado = 'error';
         unidad.reintentosVoz = (Number(unidad.reintentosVoz) || 0) + 1;
+        unidad.reintentarEn = proximoReintentoVoz(unidad.reintentosVoz);
+        if (!this.destruido) this.fallosSeguidos += 1;
+        unidad.fallaGeneral = this.fallosSeguidos >= 2;
         unidad.error = String(error?.message || error || 'No se pudo generar la voz.');
         throw error;
       } finally {
@@ -338,6 +356,43 @@ export class DubbingService {
   }
 
 
+
+  /**
+   * Una síntesis nueva salió bien tras una racha de fallos: el proveedor
+   * volvió. Las frases que fallaron DURANTE esa caída recuperan sus intentos
+   * (si no, una caída larga las dejaba en inglés para siempre aunque la voz ya
+   * funcionara). Las que fallan solas (su texto) conservan su cuenta.
+   */
+  #proveedorVolvio() {
+    if (this.fallosSeguidos === 0) return;
+    this.fallosSeguidos = 0;
+    for (const otra of this.unidades) {
+      if (otra.estado !== 'error' || !otra.fallaGeneral) continue;
+      otra.reintentosVoz = 0;
+      otra.reintentarEn = 0;
+      otra.fallaGeneral = false;
+    }
+  }
+
+  /**
+   * Genera la voz con un tope de tiempo. El tercer argumento lleva una señal
+   * que se aborta al pasar el tope: quien la respete libera la petición; quien
+   * no, igual deja de bloquear (la promesa se rechaza a tiempo).
+   */
+  #generarConTope(unidad) {
+    if (!(this.tiempoMaxMs > 0)) return this.generarAudio(unidad.text, unidad);
+    const control = typeof AbortController === 'function' ? new AbortController() : null;
+    let temporizador = null;
+    const tope = new Promise((_, rechazar) => {
+      temporizador = setTimeout(() => {
+        try { control?.abort(); } catch (_) { /* nada que abortar */ }
+        rechazar(new Error('La voz tardó demasiado; se reintenta en unos segundos.'));
+      }, this.tiempoMaxMs);
+    });
+    const pedido = Promise.resolve().then(() => this.generarAudio(unidad.text, unidad, { signal: control?.signal }));
+    pedido.catch(() => {});   // si ganó el tope, su rechazo tardío no queda suelto
+    return Promise.race([pedido, tope]).finally(() => clearTimeout(temporizador));
+  }
 
   liberar() {
     this.destruido = true;
