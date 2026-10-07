@@ -18,12 +18,30 @@ export function buscarIndiceSegmento(segmentos, tiempo) {
 }
 
 /*
- * Velocidad del video (2026-09-26, v4): ya no hay selector propio. La persona
- * elige la suya en el engranaje de YouTube (lo pidió así) y el motor de voz
- * frena el video solo cuando el español necesita más tiempo (ritmoDoblaje.js).
+ * Velocidad del video (v170, 2026-10-06): vuelve un control propio, a pedido del
+ * dueño, porque el engranaje de YouTube solo da 0,5 · 0,75 · 1… y X o los videos
+ * del equipo no tienen uno. Va en pasos de 0,05 porque es lo que acepta la IFrame
+ * API (medido: 0,97 lo deja en 0,95), así la cifra que se ve es la que suena. El
+ * engranaje sigue valiendo, y el ritmo automático frena a partir de la elegida.
  */
 export const TASA_MINIMA = 0.25;
 export const TASA_MAXIMA = 2;
+/** Rango y paso del control propio (debajo de 0,5× el doblaje no tiene sentido). */
+export const CONTROL_TASA_MIN = 0.5;
+export const CONTROL_TASA_MAX = 2;
+export const CONTROL_TASA_PASO = 0.05;
+
+/** Velocidad elegible en el control: en la rejilla de 0,05 y dentro del rango. */
+export function ajustarTasaControl(valor) {
+  const tasa = normalizarTasa(valor);
+  const enRejilla = Math.round(tasa / CONTROL_TASA_PASO) * CONTROL_TASA_PASO;
+  return Math.round(Math.min(CONTROL_TASA_MAX, Math.max(CONTROL_TASA_MIN, enRejilla)) * 100) / 100;
+}
+
+/** «0,8×», «1×», «1,25×»: coma decimal y sin ceros sobrantes. */
+export function formatoTasa(valor) {
+  return `${String(normalizarTasa(valor)).replace('.', ',')}×`;
+}
 
 /** Limpia una velocidad guardada: número entre 0.25 y 2, con 2 decimales. */
 export function normalizarTasa(valor) {

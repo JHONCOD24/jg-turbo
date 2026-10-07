@@ -667,7 +667,7 @@ try {
     const normalizados = normalizarSegmentos(segmentos);
     const { contexto, pagina, reg } = await abrir(navegador, { vozCps: 14, youtube: () => respuestaYoutube({ segmentos, fuente: 'usuario', confianza: 1 }) });
     await pagina.waitForSelector('#ytRitmoAuto', { state: 'attached' });
-    comprobar('el selector de velocidad propio ya no está (la velocidad a mano va en el engranaje de YouTube)', (await pagina.locator('#ytSyncRate, #ytRateCustom').count()) === 0);
+    comprobar('el selector viejo de presets no volvió (el control vigente es #ytVelocidad)', (await pagina.locator('#ytSyncRate, #ytRateCustom').count()) === 0);
     comprobar('«Ritmo automático» viene encendido', await pagina.isChecked('#ytRitmoAuto'));
     await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
     await pagina.check('#ytToggleCaption');
@@ -711,6 +711,43 @@ try {
     await esperar(800);
     comprobar('la velocidad del engranaje se recuerda para el próximo video', (await pagina.evaluate(() => localStorage.getItem('jg_yt_rate'))) === '1.25');
     comprobar('y la voz la acompaña', (await pagina.evaluate(() => window.jgDoblajeDiagnostico().tasaBase)) === 1.25);
+    comprobar('el control de la app refleja la del engranaje', (await pagina.textContent('#ytVelocidadVal')).trim() === '1,25×');
+    await contexto.close();
+  }
+  {
+    // v170: velocidad exacta desde la app (0,80 · 0,85 · 0,90…), no solo los saltos del engranaje.
+    const { contexto, pagina, reg } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await reproducirConVoz(pagina);
+    await esperar(600);
+    await pagina.locator('#ytVelocidad').fill('0.8');
+    await esperar(500);
+    comprobar('el deslizador pone el video a 0,80×', (await pagina.evaluate(() => window.__yt.tasa)) === 0.8);
+    comprobar('y se ve la cifra', (await pagina.textContent('#ytVelocidadVal')).trim() === '0,8×');
+    comprobar('la voz toma 0,80× como su base', (await pagina.evaluate(() => window.jgDoblajeDiagnostico().tasaBase)) === 0.8);
+    comprobar('se recuerda para el próximo video', (await pagina.evaluate(() => localStorage.getItem('jg_yt_rate'))) === '0.8');
+    await pagina.click('#ytVelocidadMas');
+    await esperar(500);
+    comprobar('«+ 0,05» sube a 0,85×', (await pagina.evaluate(() => window.__yt.tasa)) === 0.85);
+    await pagina.click('#ytVelocidadMenos'); await pagina.click('#ytVelocidadMenos');
+    await esperar(500);
+    comprobar('«− 0,05» dos veces baja a 0,75×', (await pagina.evaluate(() => window.__yt.tasa)) === 0.75);
+    await pagina.click('#ytVelocidadNormal');
+    await esperar(500);
+    comprobar('«Normal» vuelve a 1×', (await pagina.evaluate(() => window.__yt.tasa)) === 1 && (await pagina.textContent('#ytVelocidadVal')).trim() === '1×');
+    const toque = await pagina.locator('#ytVelocidadMenos').boundingBox();
+    comprobar('los botones de velocidad se tocan cómodo (≥ 44 px)', toque && toque.height >= 44, `${toque?.height}px`);
+    comprobar('sin errores de JavaScript', reg.errores.length === 0, reg.errores.join(' | '));
+    await contexto.close();
+  }
+  {
+    // La velocidad elegida (también por debajo de 1) se aplica al abrir el siguiente video.
+    const { contexto, pagina } = await abrir(navegador, { youtube: () => respuestaYoutube({ fuente: 'usuario', confianza: 1 }) });
+    await pagina.evaluate(() => localStorage.setItem('jg_yt_rate', '0.9'));
+    await pegarEnlace(pagina); await pagina.click('#ytSyncBtn'); await esperarListo(pagina);
+    await esperar(400);
+    comprobar('0,90× guardada se aplica al abrir otro video (con ritmo automático encendido)', (await pagina.evaluate(() => window.__yt.tasa)) === 0.9);
+    comprobar('y el control la muestra', (await pagina.textContent('#ytVelocidadVal')).trim() === '0,9×');
     await contexto.close();
   }
 

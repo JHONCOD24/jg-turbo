@@ -16,7 +16,9 @@ import { elegirMp4 } from './audioX.js';
 import { XVideoPlayer } from './XVideoPlayer.js';
 import { TranslationService, traduccionesReutilizables, anotarIntentos } from './translationService.js';
 import { YouTubePlayer } from './YouTubePlayer.js';
-import { SyncEngine, normalizarTasa } from './syncEngine.js';
+import {
+  SyncEngine, normalizarTasa, ajustarTasaControl, formatoTasa, CONTROL_TASA_MIN, CONTROL_TASA_MAX, CONTROL_TASA_PASO,
+} from './syncEngine.js';
 import { TranscriptionDisplay } from './TranscriptionDisplay.js';
 import { DubbingService, agruparPorTiempo, prepararTextoDeUnidad } from './dubbingService.js';
 import { DubbingEngine } from './dubbingEngine.js';
@@ -96,6 +98,8 @@ export function inicializarYoutubeSincronizado({
     borrarUrl: $('ytUrlBorrar'), errorUrl: $('ytUrlError'), cambiar: $('ytCambiarVideo'),
     reanudar: $('ytReanudar'), reanudarTitulo: $('ytReanudarTitulo'), reanudarMensaje: $('ytReanudarMensaje'),
     reanudarAccion: $('ytReanudarAccion'), reanudarCerrar: $('ytReanudarCerrar'),
+    velocidad: $('ytVelocidad'), velocidadVal: $('ytVelocidadVal'),
+    velocidadMenos: $('ytVelocidadMenos'), velocidadMas: $('ytVelocidadMas'), velocidadNormal: $('ytVelocidadNormal'),
   };
   const display = new TranscriptionDisplay($('ytSyncDisplay'), ui.caption);
   const transcripciones = new TranscriptionService({ fetchApi });
@@ -146,6 +150,29 @@ export function inicializarYoutubeSincronizado({
     guardar(CLAVE_VOL_ORIGINAL, ui.volOriginal.value);
     sesion?.motorVoz?.definirVolumenFondo(Number(ui.volOriginal.value));
   });
+
+  // ── Velocidad del video (exacta, en pasos de 0,05; se recuerda) ─────────
+  // El control muestra la velocidad ELEGIDA; si el ritmo automático frena un
+  // tramo, la transcripción cuenta la real («0,7x · ritmo automático»).
+  const pintarVelocidad = (tasa) => {
+    if (!ui.velocidad) return;
+    ui.velocidad.value = String(tasa);
+    ui.velocidadVal.textContent = formatoTasa(tasa);
+    ui.velocidadMenos.disabled = tasa <= CONTROL_TASA_MIN;
+    ui.velocidadMas.disabled = tasa >= CONTROL_TASA_MAX;
+  };
+  const elegirVelocidad = (valor) => {
+    const tasa = ajustarTasaControl(valor);
+    pintarVelocidad(tasa);
+    guardar(CLAVE_TASA, String(tasa));
+    if (sesion?.motorVoz) sesion.motorVoz.definirTasaBase(tasa);
+    else sesion?.player?.setPlaybackRate?.(tasa);
+  };
+  pintarVelocidad(ajustarTasaControl(leer(CLAVE_TASA)));
+  ui.velocidad?.addEventListener('input', () => elegirVelocidad(ui.velocidad.value));
+  ui.velocidadMenos?.addEventListener('click', () => elegirVelocidad(Number(ui.velocidad.value) - CONTROL_TASA_PASO));
+  ui.velocidadMas?.addEventListener('click', () => elegirVelocidad(Number(ui.velocidad.value) + CONTROL_TASA_PASO));
+  ui.velocidadNormal?.addEventListener('click', () => elegirVelocidad(1));
     ui.toggleCaption.checked = leer('jg_yt_subtitulos') === '1';
     ui.caption.hidden = !ui.toggleCaption.checked;
     ui.toggleCaption.addEventListener('change', () => {
@@ -850,14 +877,13 @@ export function inicializarYoutubeSincronizado({
   }
 
   /**
-   * Velocidad de partida del video: la que la persona eligió en el engranaje de
-   * YouTube en videos anteriores. Con el ritmo automático no se reaplica una
-   * velocidad menor que 1: frenar ya lo hace el motor solo, y una 0.85 vieja
-   * (del selector manual que existía antes) dejaría el video lento sin motivo.
+   * Velocidad de partida del video: la última elegida (control propio o engranaje
+   * de YouTube). Ahora se respeta también por debajo de 1: está a la vista en
+   * «Velocidad del video», así que ya no puede dejar el video lento sin que se note.
    */
   function aplicarTasaGuardada(player) {
-    let base = normalizarTasa(leer(CLAVE_TASA));
-    if (ritmoAutomatico() && base < 1) base = 1;
+    const base = ajustarTasaControl(leer(CLAVE_TASA));
+    pintarVelocidad(base);
     if (Math.abs(base - (Number(player.getPlaybackRate?.()) || 1)) > 0.001) player.setPlaybackRate(base);
     display.mostrarVelocidad(Number(player.getPlaybackRate?.()) || base, false);
   }
@@ -1023,9 +1049,13 @@ export function inicializarYoutubeSincronizado({
       onMetricas: (metricas) => { actual.metricas = metricas; },   // solo diagnóstico (H28)
       onFin: () => { ui.estado.textContent = 'El video terminó.'; display.mostrarVoz('fin'); },
       onRitmo: (tasa, detalle) => mostrarRitmo(actual, tasa, detalle),
-      // La persona cambió la velocidad en el engranaje de YouTube: se recuerda
-      // para el próximo video (lo que baja el ritmo automático, no).
-      onTasaBase: (tasa) => guardar(CLAVE_TASA, String(normalizarTasa(tasa))),
+      // La persona cambió la velocidad (control propio o engranaje de YouTube): se
+      // recuerda para el próximo video y el control la refleja (lo que baja el
+      // ritmo automático, no).
+      onTasaBase: (tasa) => {
+        guardar(CLAVE_TASA, String(normalizarTasa(tasa)));
+        pintarVelocidad(ajustarTasaControl(tasa));
+      },
     });
     actual.motorVoz.definirVolumenVoz(Number(ui.volVoz.value) / 100);
     actual.motorVoz.definirVolumenFondo(Number(ui.volOriginal.value));

@@ -253,9 +253,10 @@ cortar/reposicionar la voz para alcanzarlo**: eso era lo que saltaba líneas
 (simulado: 0 de 38 frases completas cuando el español necesita 1,4×). La voz va
 de 1× a 1,25× (cómoda 1,12×) y, si no alcanza, el **video se frena solo** en
 pasos de 0,05 (medido: la IFrame API los acepta), mínimo 0,75×, con histéresis;
-interruptor «Ritmo automático» (`jg_yt_ritmo_auto`, encendido). El selector de
-velocidad propio se retiró a pedido del dueño: la velocidad a mano va en el
-engranaje de YouTube (`jg_yt_rate` guarda solo esa). El subtítulo muestra la línea
+interruptor «Ritmo automático» (`jg_yt_ritmo_auto`, encendido). **v170:** vuelve
+un control propio «Velocidad del video» (0,5×–2× en pasos de 0,05, lo que acepta
+YouTube) a pedido del dueño; es la base del ritmo automático y se guarda en
+`jg_yt_rate`. No ofrecer pasos de 0,01: YouTube los redondea (`CAMBIOS_YOUTUBE.md` §v170). El subtítulo muestra la línea
 que dice la voz (`indiceSegmentoVoz`). Arranque: texto en paralelo con el
 reproductor, voz precalentada, primer lote de 4, 2 lotes en vuelo, arranca con la
 primera frase (`VOZ_INICIAL_S = 6`). Traducción: zona gris 0,6–0,85 = un solo
@@ -526,7 +527,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v169`** (imágenes entre aparatos, 2026-10-04). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v170`** (velocidad exacta del video, 2026-10-06). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

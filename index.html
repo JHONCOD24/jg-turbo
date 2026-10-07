@@ -3960,6 +3960,9 @@
   }
   .yt-mixer-fila input[type=range]{width:100%;min-width:90px;accent-color:var(--cyan);height:48px}
   .yt-mixer-fila output{font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+  .yt-velocidad-pasos{display:flex;gap:8px;flex-wrap:wrap}
+  .yt-velocidad-pasos .mini-btn{min-height:44px;flex:1 1 auto;font-variant-numeric:tabular-nums}
+  .yt-mixer .yt-nota{margin:0;font-size:var(--fs-xs);color:var(--muted)}
   .yt-sync-extras{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .yt-opcion{display:flex;align-items:center;gap:7px;font-size:var(--fs-sm);color:var(--muted)}
   .yt-opcion-check{cursor:pointer;min-height:44px}
@@ -6947,6 +6950,17 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
                 <input type="range" id="ytVolOriginal" min="0" max="60" step="2" value="12" aria-describedby="ytVolOriginalVal">
                 <output id="ytVolOriginalVal" for="ytVolOriginal">12&nbsp;%</output>
               </label>
+              <label class="yt-mixer-fila" for="ytVelocidad">
+                <span>Velocidad del video</span>
+                <input type="range" id="ytVelocidad" min="0.5" max="2" step="0.05" value="1" aria-describedby="ytVelocidadVal ytVelocidadAyuda">
+                <output id="ytVelocidadVal" for="ytVelocidad">1×</output>
+              </label>
+              <div class="yt-velocidad-pasos" role="group" aria-label="Ajustar la velocidad del video">
+                <button class="mini-btn" id="ytVelocidadMenos" type="button" aria-label="Más lento (−0,05)">−&nbsp;0,05</button>
+                <button class="mini-btn" id="ytVelocidadNormal" type="button">Normal (1×)</button>
+                <button class="mini-btn" id="ytVelocidadMas" type="button" aria-label="Más rápido (+0,05)">+&nbsp;0,05</button>
+              </div>
+              <p class="yt-nota" id="ytVelocidadAyuda">De 0,5× a 2× en pasos de 0,05 (los que acepta YouTube). El ritmo automático puede frenar un poco más cuando la voz lo necesita.</p>
             </div>
             <p class="yt-nota" id="ytNotaIOS" hidden>En iPhone el volumen se controla con los botones del teléfono: mientras suena la voz en español, el audio original se silencia.</p>
             <div class="yt-sync-extras">
@@ -6959,7 +6973,7 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
               <label class="yt-opcion" for="ytVoz2Select" id="ytVoz2Wrap" hidden>Segunda voz (diálogos)
                 <select id="ytVoz2Select" class="tts-voice-select" aria-label="Segunda voz del doblaje para diálogos"></select>
               </label>
-              <label class="yt-opcion yt-opcion-check" for="ytRitmoAuto" title="Frena el video un poco cuando el español necesita más tiempo, para que la voz diga todo sin saltarse líneas. La velocidad a mano se elige en el engranaje de YouTube.">
+              <label class="yt-opcion yt-opcion-check" for="ytRitmoAuto" title="Frena el video un poco cuando el español necesita más tiempo, para que la voz diga todo sin saltarse líneas. La velocidad a mano se elige en «Velocidad del video».">
                 <input type="checkbox" id="ytRitmoAuto" checked>
                 Ritmo automático (frena el video si la voz lo necesita)
               </label>
@@ -19395,7 +19409,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v169';
+const JG_JS_V = 'v170';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

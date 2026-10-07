@@ -1698,3 +1698,28 @@ va a rehacer la decisión, **volver a consultarlas**: cambian rápido.
 YouTube, X y archivos del equipo adoptan 120 minutos como maximo de nuevas
 sesiones. SRT/VTT tienen el mismo techo. Detalle, pruebas y publicacion:
 `CAMBIOS_VIDEOS_120.md`. El troceo, las cuotas y las bibliotecas se conservan.
+
+
+## v170 (2026-10-06): velocidad exacta del video desde la app
+
+**Pedido del dueño:** el engranaje de YouTube solo da 0,5 · 0,75 · 1…; hacía falta
+poder elegir 0,80, 0,85, 0,90. Vuelve un control propio (revierte la decisión de
+v4 de dejar la velocidad solo en el engranaje, también a pedido del dueño).
+
+- **Dónde:** bajo los volúmenes, «Velocidad del video»: deslizador 0,5×–2× +
+  botones «− 0,05» · «Normal (1×)» · «+ 0,05» (≥ 44 px). Sirve en YouTube, X y
+  videos del equipo (los dos últimos no tenían selector fino).
+- **Pasos de 0,05**, no de 0,01: es lo que acepta la IFrame API (medido en v4:
+  0,97 → 0,95). 0,82 no existe en YouTube; el control lo lleva a 0,80 y la
+  cifra que se ve es la que suena (`ajustarTasaControl` en `syncEngine.js`).
+- **Ritmo automático:** la velocidad elegida es su base (`DubbingEngine.definirTasaBase`);
+  sigue frenando hasta 0,75× de ella cuando la voz lo necesita. Lo que frena el
+  motor no se guarda ni mueve el control.
+- **Se recuerda** en `jg_yt_rate` (misma clave). Ya no se fuerza 1× al abrir un
+  video si la guardada es < 1: ahora está a la vista y se cambia con un toque.
+- El engranaje de YouTube sigue valiendo y el control lo refleja.
+- **Pruebas:** `test_youtube_doblaje` 159 · `verificar_youtube_doblaje` 123
+  (+12: deslizador a 0,80, ±0,05, Normal, toque ≥ 44 px, 0,90 guardada al abrir,
+  control refleja el engranaje) · `verificar_x_doblaje` 24 ·
+  `verificar_archivo_doblaje` 78 · `verificar_voz_doblaje_robusta` 92 ·
+  `verificar_subtitulos_video` 192 · `test_youtube_sincronia` 93 · 0 fallos.

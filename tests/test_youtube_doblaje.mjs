@@ -401,11 +401,20 @@ const vd = await modulo('vocesDoblaje.js');
 // automático. Queda `normalizarTasa` para leer la velocidad recordada.
 const se = await modulo('syncEngine.js');
 {
-  comprobar(typeof se.tasasParaSelector === 'undefined' && typeof se.presetDeTasa === 'undefined', 'el selector de velocidad propio ya no existe');
+  comprobar(typeof se.tasasParaSelector === 'undefined' && typeof se.presetDeTasa === 'undefined', 'el selector viejo de presets no volvió');
   comprobar(se.normalizarTasa('0,97') === 0.97, 'acepta coma decimal (0,97)');
   comprobar(se.normalizarTasa('0.85') === 0.85, 'acepta 0.85 tal cual');
   comprobar(se.normalizarTasa('5') === 2 && se.normalizarTasa('0.1') === 0.25, 'recorta a 0.25–2');
   comprobar(se.normalizarTasa('hola') === 1 && se.normalizarTasa('') === 1, 'sin número vuelve a 1x');
+}
+// ── Control propio de velocidad (v170, 2026-10-06): vuelve a pedido del dueño ──
+{
+  comprobar(se.ajustarTasaControl('0.8') === 0.8 && se.ajustarTasaControl('0,9') === 0.9, 'acepta 0,80 y 0,90 exactas');
+  comprobar(se.ajustarTasaControl(0.82) === 0.8 && se.ajustarTasaControl(0.83) === 0.85, 'lleva 0,82 / 0,83 al paso de 0,05 que acepta YouTube');
+  comprobar(se.ajustarTasaControl(0.8 - 0.05) === 0.75 && se.ajustarTasaControl(0.75 + 0.05) === 0.8, 'sumar o restar 0,05 no arrastra decimales flotantes');
+  comprobar(se.ajustarTasaControl(0.25) === 0.5 && se.ajustarTasaControl(3) === 2, 'recorta a 0,5–2');
+  comprobar(se.ajustarTasaControl(null) === 1 && se.ajustarTasaControl('hola') === 1, 'sin dato guardado vuelve a 1×');
+  comprobar(se.formatoTasa(0.8) === '0,8×' && se.formatoTasa(1) === '1×' && se.formatoTasa(1.25) === '1,25×', 'se muestra con coma y sin ceros sobrantes');
 }
 
 // ── Arranque rápido y traducción robusta (v4, 2026-09-26) ─────────────────

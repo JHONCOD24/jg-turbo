@@ -247,6 +247,18 @@ export class DubbingEngine {
     this.onStatus('Audio original activo.', 'inactivo');
   }
 
+  /**
+   * Velocidad elegida en el control propio de la app: pasa a ser la base desde la
+   * que frena el ritmo automático. Se olvida cualquier frenado en curso para que
+   * el evento de cambio de velocidad no se confunda con uno del motor.
+   */
+  definirTasaBase(tasa) {
+    this.tasaBase = tasa;
+    this.tasaSolicitada = null;
+    this.ultimoCambioTasa = this.ahora();
+    this.player.setPlaybackRate?.(tasa);
+  }
+
   /** Ritmo automático: frenar el video cuando el español necesita más tiempo. */
   definirRitmoAutomatico(activo) {
     this.ritmoAutomatico = Boolean(activo);
