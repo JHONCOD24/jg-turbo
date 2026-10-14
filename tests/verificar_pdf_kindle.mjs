@@ -10,6 +10,7 @@
  *   · la voz se elige entre las voces fijas de Fish sin cambiar el catálogo.
  *
  *   node tests/verificar_pdf_kindle.mjs
+ *   JG_BASE=https://jg-turbo.vercel.app node tests/verificar_pdf_kindle.mjs
  */
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -45,7 +46,7 @@ const servidor = createServer(async (q, r) => {
   } catch { r.writeHead(404).end(); }
 });
 await new Promise((r) => servidor.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${servidor.address().port}`;
+const base = process.env.JG_BASE || `http://127.0.0.1:${servidor.address().port}`;
 
 let ok = 0;
 const fallos = [];

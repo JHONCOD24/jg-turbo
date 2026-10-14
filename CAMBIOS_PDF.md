@@ -5,6 +5,11 @@
 
 ## 2026-10-13 · v172 · Lector estilo Kindle: hoja «Aa», bordes, pie y capítulos de corrido
 
+Publicado como **v172** (`JG_JS_V`, SW `jg-turbo-shell-v172`), prod
+`dpl_AWE85qtuwPBVjUMEzuBEEBZ3DPjJ`, desplegado desde `git archive` de `4ad7718`.
+Verificado en el dominio: marcador v172, `/api/health` ok, módulos tocados
+idénticos (sha256) al commit y `verificar_pdf_kindle` 41/41 contra producción.
+
 Pedido del dueño: modelar Kindle con el MCP **REA** y llevarlo al lector PDF,
 cómodo en teléfono y tablet, con todo configurable y **las voces de Fish
 Audio intactas**. Modelo, evidencias y límites: `docs/kindle/MODELO_KINDLE.md`.
@@ -39,7 +44,7 @@ Audio intactas**. Modelo, evidencias y límites: `docs/kindle/MODELO_KINDLE.md`.
   (CONFIG_PERSISTENTE.md).
 
 Pruebas: `test_pdf_ajustes_lectura` 65 · `test_voces_fish_intactas` 29 ·
-`verificar_pdf_kindle` 42.
+`verificar_pdf_kindle` 41.
 
 ## 2026-10-04 · FIG-1 · Las imágenes del libro no se pierden al pasar a otro aparato
 
