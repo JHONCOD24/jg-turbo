@@ -13,10 +13,11 @@ lastUpdated: 2026-08-02
 
 ## Hoja curva 3D v174
 
-Publicación pendiente al preparar el commit. Marcador v174 y shell-v174.
+Publicado desde `git archive` de `831ab4c`, marcador v174 y shell-v174.
+Despliegue `dpl_45QSAnqF4C9mYhF3mugWUfqCW2TY` READY y alias del dominio real.
+HTML/SW y los dos módulos coinciden por SHA-256; health 200/ok.
 Se añade `js/pdf/hoja3d.js`, diferido con el lector; no viaja al arrancar.
-Comprobar el módulo nuevo y `libroVista.js` con hashes contra el dominio,
-además de HTML/SW, geometría 3D y las suites móviles.
+Evidencia: `docs/kindle/PRODUCCION_V174.json`; pruebas en `CAMBIOS_PDF.md`.
 
 ## PDF móvil v173 (2026-10-13)
 

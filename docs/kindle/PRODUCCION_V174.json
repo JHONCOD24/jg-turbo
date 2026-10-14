@@ -1,0 +1,71 @@
+{
+  "commit": "831ab4c6952b540a0bf5568d62e586d4f49118de",
+  "deployment": "dpl_45QSAnqF4C9mYhF3mugWUfqCW2TY",
+  "readyState": "READY",
+  "domain": "https://jg-turbo.vercel.app",
+  "verifiedAt": "2026-10-14T13:47:59.146Z",
+  "files": [
+    {
+      "path": "index.html",
+      "status": 200,
+      "localSha256": "7f9a7f3127749d789704eaa228bc97c8b9fefa76c156f6d856fa111f1248d90e",
+      "remoteSha256": "7f9a7f3127749d789704eaa228bc97c8b9fefa76c156f6d856fa111f1248d90e",
+      "same": true
+    },
+    {
+      "path": "sw.js",
+      "status": 200,
+      "localSha256": "3c2d006afaed8fb6a0feeea0b59cb90b7be3a92c0d0ec26d9ed286c9678f6d39",
+      "remoteSha256": "3c2d006afaed8fb6a0feeea0b59cb90b7be3a92c0d0ec26d9ed286c9678f6d39",
+      "same": true
+    },
+    {
+      "path": "js/pdf/libroVista.js",
+      "status": 200,
+      "localSha256": "7d5c4166adf03d07f75b33262d10a156691afb1907d5e2e97589276a3f24c2ff",
+      "remoteSha256": "7d5c4166adf03d07f75b33262d10a156691afb1907d5e2e97589276a3f24c2ff",
+      "same": true
+    },
+    {
+      "path": "js/pdf/hoja3d.js",
+      "status": 200,
+      "localSha256": "2999ed04dbc7b455a5993d2775c497479fa697e9157bda36e63ec42a893b455a",
+      "remoteSha256": "2999ed04dbc7b455a5993d2775c497479fa697e9157bda36e63ec42a893b455a",
+      "same": true
+    }
+  ],
+  "health": {
+    "status": 200,
+    "body": {
+      "status": "ok",
+      "server": "vercel",
+      "model": "whisper-large-v3",
+      "model_state": "listo",
+      "model_ready": true,
+      "ai_configured": true,
+      "groq_configured": true,
+      "ia_configured": true,
+      "ai_provider_server": "gemini",
+      "youtube_transcript_api": true,
+      "youtube_auto": true,
+      "youtube_data_api": true,
+      "x_video": true,
+      "tts_fish": true,
+      "tts_azure": true
+    }
+  },
+  "testsOnDomain": {
+    "hoja3dChromium": 48,
+    "hoja3dWebKitTextFixture": 32,
+    "kindle": 41,
+    "estabilidad": 24,
+    "movil": 60,
+    "total": 205,
+    "failures": 0
+  },
+  "limits": [
+    "Sin comparación grabada con Kindle nativo ni teléfono físico",
+    "WebKit Windows usa capítulos de texto: importación Blob a IndexedDB falló",
+    "Arranque local 9/10: presupuesto de 1 MB ya fallaba en v173"
+  ]
+}

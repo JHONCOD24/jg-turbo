@@ -2,6 +2,8 @@
 
 ## Hoja 3D v174
 
+Prod `dpl_45QSAnqF4C9mYhF3mugWUfqCW2TY`, `JG_JS_V='v174'`, shell-v174.
+
 `js/pdf/hoja3d.js` calcula diez franjas con frente/reverso y copia solo el
 área visible. No volver a trasladar todo el texto como efecto Libro ni a
 clonar el capítulo entero por franja. El respaldo lento es un giro rígido,

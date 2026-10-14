@@ -2,7 +2,14 @@
 
 ## v174 · Hoja curva 3D con reverso
 
-Publicación pendiente al preparar el commit. `JG_JS_V='v174'`, shell-v174.
+Publicado desde `git archive` de `831ab4c`: `JG_JS_V='v174'`, shell-v174.
+Despliegue `dpl_45QSAnqF4C9mYhF3mugWUfqCW2TY` READY, alias
+`https://jg-turbo.vercel.app`. HTML, SW, `libroVista.js` y `hoja3d.js`
+tienen SHA-256 idénticos al commit; `/api/health` responde 200 y `ok`.
+Evidencia: `docs/kindle/PRODUCCION_V174.json`.
+Contra el dominio real: hoja 3D Chromium 48 y WebKit 32, Kindle 41,
+estabilidad 24 y móvil 60: 205 comprobaciones aprobadas. WebKit usa texto,
+no acredita importación PDF en iPhone; las demás abren PDF de prueba.
 Diseño, decisiones y límites: [`docs/kindle/HOJA_3D_V174.md`](docs/kindle/HOJA_3D_V174.md).
 
 Diez franjas conectadas giran 180 grados con perspectiva, anverso, reverso,

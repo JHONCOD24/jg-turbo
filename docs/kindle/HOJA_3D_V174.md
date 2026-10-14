@@ -75,6 +75,10 @@ Las pruebas con voz usan audio simulado; falta aceptación en un teléfono real.
 Vista previa local: `.playwright-cli/hoja3d/hoja-3d.gif` y fotogramas en la
 misma carpeta. Es un gesto renderizado por el lector con un libro de prueba,
 no una grabación de Kindle. Publicación: `CAMBIOS_PDF.md`, entrada v174.
+Dominio público: v174, despliegue `dpl_45QSAnqF4C9mYhF3mugWUfqCW2TY` READY,
+desde `831ab4c`. Cuatro hashes coinciden y health responde 200/ok.
+En producción pasaron 205 comprobaciones: curva Chromium 48 / WebKit 32,
+Kindle 41, estabilidad 24 y móvil 60. Evidencia en `PRODUCCION_V174.json`.
 
 ## 7. Criterio de cierre
 

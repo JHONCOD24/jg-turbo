@@ -1,5 +1,13 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## El CLI rechazó el deploy tras cambiar la carpeta en PowerShell (v174)
+
+**Síntoma:** `Set-Location` seguido de Vercel devolvió `Not authorized`;
+`whoami` y la inspección del proyecto sí funcionaban. **Causa:** no determinada.
+**Regla observada:** el mismo comando con el directorio de trabajo explícito
+del proceso completó la publicación. No rotar credenciales por este mensaje
+sin comprobar primero la sesión, el proyecto y el directorio del proceso.
+
 ## La preparación también consume el tiempo del toque (v174)
 
 **Síntoma:** dos pasos tardaron 514 y 544 ms aunque el giro duraba 420 ms.
