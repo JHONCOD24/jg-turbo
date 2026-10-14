@@ -14,6 +14,21 @@ el motor. Pruebas nuevas: `test_voz_frases_continuas` 14,
 `test_voz_multilingue` 17, `verificar_voz_multilingue` 17. Detalle/publicacion:
 `CAMBIOS_TTS.md`. No cambia permisos ni acceso de la extension Udemy.
 
+## Lector estilo Kindle v172 (2026-10-13)
+
+Modelado con el MCP REA sobre la muestra pública del lector web de Kindle
+(`docs/kindle/MODELO_KINDLE.md`: qué se observó, qué se adaptó y por qué no se
+copió código ni marca). Hoja «Aa» con estilos rápidos, 5 colores de página,
+A−/A+, grosor, letra Legible, alineación, brillo, bordes que pasan página,
+pie que cambia al tocarlo y voz. Reglas puras en `js/pdf/ajustesLectura.js`.
+Pasar de la última página entra al capítulo siguiente; volver desde la
+primera cae en la última del anterior. **Las voces Fish no se tocan:** el
+selector de «Aa» solo filtra el catálogo (`data-tts-voice-solo-fish`) y
+`tests/test_voces_fish_intactas.mjs` congela sus huellas; si falla, alguien
+cambió una voz. Pruebas: `test_pdf_ajustes_lectura` 65 ·
+`test_voces_fish_intactas` 29 · `verificar_pdf_kindle` 42 (obligatoria al
+tocar la hoja «Aa», los bordes o el pie).
+
 ## Context7 (docs de librerías)
 
 Este repo tiene el MCP Context7 (`.grok/config.toml`, `.mcp.json`, `.cursor/mcp.json`).
@@ -545,7 +560,7 @@ en este panel. Detalle: `tests/verificar_pdf_geometria.mjs` vigila
 overflow y táctil; los clics automatizados dentro de `.pdf-area` (scroll
 anidado) van por DOM, no por coordenadas.
 
-SW vigente: **`jg-turbo-shell-v171`** (videos largos sin cortes, 2026-10-06). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
+SW vigente: **`jg-turbo-shell-v172`** (lector estilo Kindle, 2026-10-13). PWA instalable en escritorio (Chrome/Edge) y móvil: ver `INSTALAR_ESCRITORIO.md`.
 
 ## Traducir (leer antes de tocar `/api/translate`)
 

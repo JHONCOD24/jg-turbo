@@ -26,6 +26,7 @@ import { VERSION_RECONSTRUCCION, VERSION_TROCEO as VERSION_TROCEO_MOTOR, reconst
 import { contarPendientes, aceptarDecisionesIA, aplicarDecisionUsuario, expandirManifiesto } from './limites.js';
 import { planMigracionV7 as planMigracionV6, serializarReconstruccion, marcarNeedsSource, confiarEnCorreccionSync, estadoRevisionCortes } from './manifiesto.js';
 import { partirEnUnidades, unidadEn } from './unidadesLectura.js';
+import { temaValido, minutosRestantesLibro } from './ajustesLectura.js';
 import { compactarTexto, situarBloquesTexto, situarBloquesDetallado, rellenarAnclas, construirCostos, acumularCostos, posicionPorTiempo, tiempoPorPosicion, dentroDeHabla } from './guiaAnclas.js';
 import { limitarAnchoIndice, modoAnchoIndice, leerAnchoIndice, guardarAnchoIndice, ANCHO_INDICE_DEF } from './panelIndice.js';
 import { componerAtomosFiel } from './fidelidad.js';
@@ -5803,14 +5804,18 @@ export function inicializarLectorPdf(deps = {}) {
   /* ── Temas y opciones de lectura ─────────────────────────────────── */
 
   function aplicarTema(tema) {
-    const elegido = tema === 'papel' ? 'papel' : 'noche';
+    /* Los cinco colores de la hoja «Aa». Antes solo valían papel y noche
+     * aquí: al recargar, un «sepia» guardado se convertía en «noche». */
+    const elegido = temaValido(tema);
     if (el.resultArea) el.resultArea.dataset.tema = elegido;
     /* En lectura a pantalla completa, el tema tiñe TODA la pantalla, no solo
      * el recuadro del texto: sin esto quedaba un marco oscuro alrededor del
      * papel. Lo lee el CSS desde <body>, que es quien envuelve la tarjeta. */
     document.body.dataset.lecturaTema = elegido;
-    if (el.temaPapel) el.temaPapel.classList.toggle('is-on', elegido === 'papel');
-    if (el.temaNoche) el.temaNoche.classList.toggle('is-on', elegido === 'noche');
+    document.querySelectorAll('#pdfAparienciaHoja [data-tema]').forEach((b) => {
+      b.classList.toggle('is-on', b.dataset.tema === elegido);
+      b.setAttribute('aria-pressed', String(b.dataset.tema === elegido));
+    });
     try { localStorage.setItem('jg_pdf_tema', elegido); } catch (_) {}
   }
 
@@ -6002,8 +6007,9 @@ export function inicializarLectorPdf(deps = {}) {
   estado.pulidoActivo = pulidoInicial !== '0';
   actualizarSwitchPulido();
 
-  if (el.temaPapel) el.temaPapel.addEventListener('click', () => aplicarTema('papel'));
-  if (el.temaNoche) el.temaNoche.addEventListener('click', () => aplicarTema('noche'));
+  document.querySelectorAll('#pdfAparienciaHoja [data-tema]').forEach((b) => {
+    b.addEventListener('click', () => aplicarTema(b.dataset.tema));
+  });
   if (el.verSinPulir) el.verSinPulir.addEventListener('click', desactivarPulido);
   if (el.verPulido) el.verPulido.addEventListener('click', activarPulido);
 
@@ -6634,6 +6640,23 @@ export function inicializarLectorPdf(deps = {}) {
         /* PDF-03: el pie muestra el % del LIBRO, no el de las páginas
          * visibles de la sección. */
         porcentajeLibro: () => { try { return calcularPorcentaje(estado.progreso, estado.partes); } catch (_) { return null; } },
+        /* Pie «Aa» → tiempo para terminar el libro, a la misma media de
+         * palabras por minuto que el tiempo del capítulo. */
+        minutosRestantesLibro: () => {
+          try {
+            const textos = estado.partes.map((_, i) => textoDeParte(i));
+            return minutosRestantesLibro(textos, estado.progreso, PALABRAS_POR_MINUTO);
+          } catch (_) { return null; }
+        },
+        /* Pasar página más allá del borde del capítulo (Kindle: se lee de
+         * corrido). Devuelve si hubo adónde ir. */
+        cambiarCapitulo: (dir) => {
+          if (!hayDocumento()) return false;
+          const destino = estado.parteActual + (dir < 0 ? -1 : 1);
+          if (destino < 0 || destino >= estado.partes.length) return false;
+          mostrarParte(destino);
+          return true;
+        },
         guardarEdicion: (forzar) => { if (forzar) guardarEdicionActual(); },
         avisar,
         pausar: () => { try { pausarCorreccionLibro(); } catch (_) {} },

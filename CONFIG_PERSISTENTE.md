@@ -130,6 +130,15 @@ la reconstrucción local (átomos, decisiones y posiciones). No se cambian clave
 de configuración ni almacenes. La preferencia de páginas se guarda dentro de
 `jg_pdf_lectura`; las decisiones se recuperan al reabrir el documento.
 
+**v172 (hoja «Aa» estilo Kindle):** `jg_pdf_lectura` gana campos sin renombrar
+nada: `grosor` (normal|medio|negrita), `alinear` (auto|justificado|izquierda),
+`bordes` (true por defecto), `progreso` (libro|tiempo-capitulo|tiempo-libro|
+pagina|nada), `brillo` (40–100) y `fuente: 'legible'`. Lo guardado por versiones
+anteriores pasa por `normalizarAjustes` (`js/pdf/ajustesLectura.js`): conserva
+todo y completa lo que falta. `jg_pdf_tema` acepta además `verde` y `negro`.
+La voz elegida en «Aa» se guarda donde siempre (preferencias de voz): no hay
+clave nueva.
+
 Los libros viven en `jg-turbo-pdf` (versión de base **5**, sin subirla en v2.37). Desde
 `VERSION_RECONSTRUCCION = 6` cada documento puede guardar en los almacenes **ya existentes**:
 

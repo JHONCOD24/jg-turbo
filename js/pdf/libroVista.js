@@ -7,6 +7,10 @@
  */
 import { aplicarDecisionUsuario } from './limites.js';
 import { construirLectura } from './mapaLectura.js';
+import {
+  normalizarAjustes, temaValido, aplicarEstiloRapido, estiloRapidoActual, pasoTamano,
+  siguienteModoProgreso, textoProgreso, zonaDeToque, AJUSTES_BASE,
+} from './ajustesLectura.js';
 
 /* Se reexporta para que las pruebas y quien ya usaba la vista
  * sigan encontrando el constructor del HTML en este módulo. */
@@ -21,12 +25,16 @@ function leerApariencia() {
    * haga, en el teléfono manda un tamaño fluido que mantiene la línea en
    * 32-46 caracteres. En cuanto lo mueve, manda ella: alguien con poca
    * vista tiene que poder agrandar aunque la línea quede corta. */
-  let cfg = { tam: 19, inter: 1.7, ancho: 64, fuente: 'sans', tema: null, modo: 'lectura', modoPagina: 'paginas', tamElegido: false, vozDesplegado: false };
+  /* Lo guardado pasa siempre por `normalizarAjustes`: un valor de otra
+   * versión, roto o fuera de rango no deja el lector en un estado imposible
+   * (ajustesLectura.js). Los campos nuevos de la hoja «Aa» llegan con su
+   * valor base y lo de antes se conserva tal cual. */
+  let crudo = null;
   try {
-    const crudo = localStorage.getItem('jg_pdf_lectura');
-    if (crudo) cfg = { ...cfg, ...JSON.parse(crudo) };
+    const texto = localStorage.getItem('jg_pdf_lectura');
+    if (texto) crudo = JSON.parse(texto);
   } catch (_) {}
-  return cfg;
+  return normalizarAjustes(crudo);
 }
 function guardarApariencia(cfg) {
   try { localStorage.setItem('jg_pdf_lectura', JSON.stringify(cfg)); } catch (_) {}
@@ -56,12 +64,22 @@ export function initLibroVista({ el, estado, api }) {
       area.style.setProperty('--lec-tam', cfg.tam + 'px');
       area.style.setProperty('--lec-inter', String(cfg.inter));
     }
+    /* Atenuar: un velo que no recibe toques (la web no puede bajar el brillo
+     * de la pantalla). Vive en <body> porque cubre también los controles,
+     * como el brillo de Kindle; solo se ve leyendo (CSS `jg-leyendo`). El
+     * mínimo es 40 % para no dejar a nadie frente a una pantalla negra. */
+    try {
+      document.body.style.setProperty('--lec-velo', String(((100 - cfg.brillo) / 100) * 0.75));
+      document.body.dataset.lecturaAtenuada = cfg.brillo < 100 ? 'si' : 'no';
+    } catch (_) { /* sin DOM (pruebas en Node) */ }
     const art = el.lectura;
     if (art) {
       art.dataset.ancho = String(cfg.ancho);
       art.dataset.fuente = cfg.fuente;
       art.dataset.tamAuto = cfg.tamElegido ? 'no' : 'si';
+      art.dataset.grosor = cfg.grosor;
     }
+    pintarControlesAa();
     if (el.aparTam) el.aparTam.value = String(cfg.tam);
     if (el.aparInter) el.aparInter.value = String(cfg.inter);
     /* Valor visible junto a la etiqueta y en el control accesible: lo que
@@ -94,15 +112,18 @@ export function initLibroVista({ el, estado, api }) {
       el.textoCol.style.setProperty('--pdf-col-ancho', cfg.ancho + 'ch');
     }
     if (el.resultArea) el.resultArea.dataset.ancho = String(cfg.ancho);
+    ajustarComposicion();
+    pintarPieLectura();
     /* Cambiar el tamaño o el ancho cambia cuántas palabras caben: hay que
      * repartir las páginas otra vez, conservando el sitio. */
     programarMedicion(100);
   }
 
   function fijarTema(tema) {
-    // Papel y Noche ya existían; se añade Sepia y se respeta el guardado.
+    /* Cinco colores de página, como Kindle: papel, sepia, verde, noche y
+     * negro (este último apaga los píxeles en pantallas OLED). */
     const area = el.resultArea;
-    const valido = tema === 'papel' || tema === 'noche' || tema === 'sepia' ? tema : 'noche';
+    const valido = temaValido(tema);
     if (area) area.dataset.tema = valido;
     try {
       document.body.dataset.lecturaTema = valido;
@@ -111,7 +132,7 @@ export function initLibroVista({ el, estado, api }) {
   }
   try {
     const guardado = localStorage.getItem('jg_pdf_tema');
-    if (guardado === 'papel' || guardado === 'noche' || guardado === 'sepia') fijarTema(guardado);
+    if (guardado && temaValido(guardado) === guardado) fijarTema(guardado);
   } catch (_) {}
 
   function fijarModo(modo) {
@@ -163,6 +184,8 @@ export function initLibroVista({ el, estado, api }) {
       medirCabecera();
       medirPaginas({ conservar: false });
       if (ancla) irACaracter(ancla);
+      else if (irAlFinalAlAbrir && pag.activo && pag.total > 1) irAPagina(pag.total - 1, { suave: false });
+      irAlFinalAlAbrir = false;
       pintarPieLectura();
       pintarIrAbajo();
       limpiarAlAbrir();
@@ -374,6 +397,9 @@ export function initLibroVista({ el, estado, api }) {
    * mismos `data-ini`, así que las posiciones guardadas, el resaltado de la
    * voz y «leer desde aquí» siguen funcionando sin enterarse. */
   const pag = { total: 1, actual: 0, paso: 0, activo: false, ancla: 0, saltando: false, cajaAncho: 0, cajaAlto: 0 };
+  /* Se volvió al capítulo anterior pasando página hacia atrás: al abrirlo,
+   * se entra por su última página (irAPagina). */
+  let irAlFinalAlAbrir = false;
   /* Dónde cree el lector que suena la voz (ver `seguirVoz`). */
   const vozSeguida = { caracter: -1, t: 0 };
   const REANUDA_MS = 1500;
@@ -565,7 +591,19 @@ export function initLibroVista({ el, estado, api }) {
   function irAPagina(n, { suave = true, guardar = true, deUsuario = false, conHoja = null } = {}) {
     const art = el.lectura;
     if (!art || !pag.activo || !pag.paso) return;
-    const destinoPag = Math.max(0, Math.min(pag.total - 1, Math.round(Number(n) || 0)));
+    /* Pasar de la última página entra al capítulo siguiente, y retroceder
+     * desde la primera vuelve a la ÚLTIMA página del anterior: se lee de
+     * corrido, como en un libro (Kindle). Solo por un gesto de la persona;
+     * la voz y los repartos internos nunca saltan de capítulo por aquí. */
+    const pedido = Math.round(Number(n) || 0);
+    if (deUsuario && (pedido >= pag.total || pedido < 0) && typeof api.cambiarCapitulo === 'function') {
+      const dir = pedido < 0 ? -1 : 1;
+      if (api.cambiarCapitulo(dir)) {
+        irAlFinalAlAbrir = dir < 0;
+        return;
+      }
+    }
+    const destinoPag = Math.max(0, Math.min(pag.total - 1, pedido));
     const cambioPag = destinoPag !== pag.actual;
     const modo = suave ? modoPaso() : 'ninguno';
     /* La hoja se clona ANTES de mover el texto: es la página que se va. Si el
@@ -1171,7 +1209,76 @@ export function initLibroVista({ el, estado, api }) {
   });
   if (el.aparInter) el.aparInter.addEventListener('input', () => { cfg.inter = Number(el.aparInter.value) || 1.7; aplicarApariencia(); });
   if (el.aparAncho) el.aparAncho.addEventListener('change', () => { cfg.ancho = Number(el.aparAncho.value) || 64; aplicarApariencia(); });
-  if (el.aparFuente) el.aparFuente.addEventListener('change', () => { cfg.fuente = el.aparFuente.value === 'serif' ? 'serif' : 'sans'; aplicarApariencia(); });
+  if (el.aparFuente) el.aparFuente.addEventListener('change', () => { cfg.fuente = normalizarAjustes({ fuente: el.aparFuente.value }).fuente; aplicarApariencia(); });
+
+  /* ── Hoja «Aa» al estilo Kindle ────────────────────────────────────
+   * Estilos rápidos, A−/A+, grosor, alineación, bordes que pasan página,
+   * qué dice el pie, atenuar y restablecer. Cada control escribe en `cfg`
+   * (una sola fuente de verdad) y `aplicarApariencia` lo pinta todo. */
+  const aa = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
+  const aaCtl = {
+    estilos: aa('pdfAparEstilos'), menos: aa('btnPdfAparMenos'), mas: aa('btnPdfAparMas'),
+    grosor: aa('pdfAparGrosor'), alinear: aa('pdfAparAlinear'), bordes: aa('pdfAparBordes'),
+    progreso: aa('pdfAparProgreso'), brillo: aa('pdfAparBrillo'), brilloVal: aa('pdfAparBrilloVal'),
+    restablecer: aa('btnPdfAparRestablecer'),
+  };
+  function pintarControlesAa() {
+    if (aaCtl.estilos) {
+      const activo = estiloRapidoActual(cfg);
+      for (const b of aaCtl.estilos.querySelectorAll('[data-estilo]')) {
+        const on = b.dataset.estilo === activo;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    }
+    if (aaCtl.menos) aaCtl.menos.disabled = cfg.tam <= Number(el.aparTam?.min || 14);
+    if (aaCtl.mas) aaCtl.mas.disabled = cfg.tam >= Number(el.aparTam?.max || 34);
+    if (aaCtl.grosor) aaCtl.grosor.value = cfg.grosor;
+    if (aaCtl.alinear) aaCtl.alinear.value = cfg.alinear;
+    if (aaCtl.bordes) aaCtl.bordes.checked = cfg.bordes;
+    if (aaCtl.progreso) aaCtl.progreso.value = cfg.progreso;
+    if (aaCtl.brillo) {
+      aaCtl.brillo.value = String(cfg.brillo);
+      aaCtl.brillo.setAttribute('aria-valuetext', `${cfg.brillo} por ciento`);
+    }
+    if (aaCtl.brilloVal) aaCtl.brilloVal.textContent = `${cfg.brillo} %`;
+  }
+  /* Reemplaza `cfg` por una versión nueva sin perder la referencia: el resto
+   * de la vista lee `cfg.xxx` directamente. */
+  function fijarAjustes(nuevo) {
+    Object.assign(cfg, normalizarAjustes(nuevo));
+    aplicarApariencia();
+  }
+  if (aaCtl.estilos) aaCtl.estilos.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-estilo]');
+    if (b) fijarAjustes(aplicarEstiloRapido(cfg, b.dataset.estilo));
+  });
+  if (aaCtl.menos) aaCtl.menos.addEventListener('click', () => fijarAjustes(pasoTamano(cfg, -1)));
+  if (aaCtl.mas) aaCtl.mas.addEventListener('click', () => fijarAjustes(pasoTamano(cfg, +1)));
+  if (aaCtl.grosor) aaCtl.grosor.addEventListener('change', () => fijarAjustes({ ...cfg, grosor: aaCtl.grosor.value }));
+  if (aaCtl.alinear) aaCtl.alinear.addEventListener('change', () => fijarAjustes({ ...cfg, alinear: aaCtl.alinear.value }));
+  if (aaCtl.bordes) aaCtl.bordes.addEventListener('change', () => { cfg.bordes = !!aaCtl.bordes.checked; guardarApariencia(cfg); });
+  if (aaCtl.progreso) aaCtl.progreso.addEventListener('change', () => { cfg.progreso = normalizarAjustes({ progreso: aaCtl.progreso.value }).progreso; guardarApariencia(cfg); pintarPieLectura(); });
+  if (aaCtl.brillo) aaCtl.brillo.addEventListener('input', () => fijarAjustes({ ...cfg, brillo: aaCtl.brillo.value }));
+  /* Restablecer solo devuelve la apariencia. El tema, el modo de página, el
+   * paso de página y la voz son elecciones aparte y no se tocan. */
+  if (aaCtl.restablecer) aaCtl.restablecer.addEventListener('click', () => {
+    const { tema, modo, modoPagina, vozDesplegado } = cfg;
+    fijarAjustes({ ...AJUSTES_BASE, tema, modo, modoPagina, vozDesplegado });
+    if (el.modoEstados) el.modoEstados.textContent = 'Apariencia restablecida.';
+  });
+  /* Tocar el pie cambia lo que dice (como en Kindle): % del libro → tiempo
+   * del capítulo → tiempo del libro → página → nada. */
+  const pieLectura = aa('pdfPieLectura');
+  if (pieLectura) {
+    pieLectura.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      cfg.progreso = siguienteModoProgreso(cfg.progreso);
+      guardarApariencia(cfg);
+      pintarPieLectura();
+      pintarControlesAa();
+    });
+  }
   /* Pasar páginas o desplazar: cada quien lee distinto, y la elección se
    * recuerda. */
   if (el.aparModo) el.aparModo.addEventListener('change', () => {
@@ -1179,18 +1286,21 @@ export function initLibroVista({ el, estado, api }) {
     guardarApariencia(cfg);
     medirPaginas({ conservar: true });
   });
-  // Los tres temas, en un solo sitio y con su estado a la vista.
+  // Los cinco colores de página, en un solo sitio y con su estado a la vista.
+  const botonesTema = () => (el.aparienciaHoja
+    ? [...el.aparienciaHoja.querySelectorAll('[data-tema]')]
+    : [el.temaPapel, el.temaSepia, el.temaNoche]);
   function pintarTemas(activo) {
-    for (const b of [el.temaPapel, el.temaSepia, el.temaNoche]) {
+    for (const b of botonesTema()) {
       if (!b) continue;
       const suyo = b.dataset.tema;
       b.classList.toggle('is-on', suyo === activo);
       b.setAttribute('aria-pressed', String(suyo === activo));
     }
   }
-  for (const b of [el.temaPapel, el.temaSepia, el.temaNoche]) {
+  for (const b of botonesTema()) {
     if (!b) continue;
-    b.addEventListener('click', () => { fijarTema(b.dataset.tema); pintarTemas(b.dataset.tema); });
+    b.addEventListener('click', () => { fijarTema(b.dataset.tema); pintarTemas(temaValido(b.dataset.tema)); });
   }
   try { pintarTemas(localStorage.getItem('jg_pdf_tema') || 'noche'); } catch (_) { pintarTemas('noche'); }
 
@@ -1253,7 +1363,15 @@ export function initLibroVista({ el, estado, api }) {
     const idioma = String(estado.idioma || 'es').slice(0, 2).toLowerCase();
     art.setAttribute('lang', idioma);
     const puedePartir = IDIOMAS_CON_GUIONES.has(idioma);
-    art.dataset.justificado = (esTelefono() && puedePartir) ? 'si' : 'no';
+    /* «Automática» es lo de siempre: justificado en el teléfono si el idioma
+     * se sabe partir. Elegirla a mano manda en cualquier pantalla; aun así,
+     * justificar sin poder partir abre ríos de blanco, así que entonces se
+     * alinea a la izquierda. */
+    const pide = cfg.alinear;
+    art.dataset.alinear = pide;
+    art.dataset.justificado = pide === 'izquierda' ? 'no'
+      : pide === 'justificado' ? (puedePartir ? 'si' : 'no')
+      : ((esTelefono() && puedePartir) ? 'si' : 'no');
   }
 
   /* Alto real de la cabecera: la barra de modo se coloca justo debajo, y
@@ -1308,15 +1426,27 @@ export function initLibroVista({ el, estado, api }) {
      * visibles, que era un segundo porcentaje ambiguo). */
     /* El tiempo restante pasó a la cabecera para acompañar sección y página.
        El pie conserva únicamente el progreso total del libro. */
+    /* Hoja «Aa» → «Progreso de lectura»: el pie dice UNA cosa, la que la
+     * persona eligió (o ninguna). Tocarlo pasa a la siguiente. */
     if (restante) { restante.textContent = ''; restante.hidden = true; }
     if (porc) {
-      const delLibro = typeof api.porcentajeLibro === 'function' ? api.porcentajeLibro() : null;
-      if (Number.isFinite(delLibro)) {
-        porc.textContent = `${Math.min(100, Math.max(0, Math.round(delLibro)))} % del libro`;
-      } else {
+      const modo = cfg.progreso;
+      const leer = (f) => { try { return typeof f === 'function' ? f() : null; } catch (_) { return null; } };
+      let delLibro = modo === 'libro' ? leer(api.porcentajeLibro) : null;
+      if (modo === 'libro' && !Number.isFinite(delLibro)) {
         const total = Math.max(1, pag.total || 1);
-        porc.textContent = `${Math.min(100, Math.max(0, Math.round(((pag.actual + 1) / total) * 100)))} %`;
+        delLibro = ((pag.actual + 1) / total) * 100;
       }
+      const texto = textoProgreso(modo, {
+        porcentaje: delLibro,
+        minutosCapitulo: modo === 'tiempo-capitulo' ? leer(api.minutosRestantes) : '',
+        minutosLibro: modo === 'tiempo-libro' ? leer(api.minutosRestantesLibro) : null,
+        pagina: pag.activo ? pag.actual + 1 : 0,
+        paginas: pag.activo ? pag.total : 0,
+      });
+      porc.textContent = texto;
+      pie.dataset.progreso = modo;
+      pie.title = 'Toca para cambiar lo que muestra el pie';
     }
   }
   api.pintarPieLectura = pintarPieLectura;
@@ -1963,6 +2093,23 @@ export function initLibroVista({ el, estado, api }) {
    * `click` de los botones y de «leer desde aquí» (TRAMPAS.md). */
   const dedos = new Set();
   let gesto = null;
+  /* Tocar los bordes pasa página, como en Kindle: el izquierdo vuelve, el
+   * derecho avanza y el centro trae los controles (zonaDeToque). Nunca sobre
+   * un enlace, un botón o una figura (esos toques son suyos), ni con texto
+   * seleccionado, ni leyendo con desplazamiento. Se apaga en la hoja «Aa». */
+  function tocarBorde(ev) {
+    if (!cfg.bordes || !pag.activo || !el.lectura) return false;
+    const t = ev.target instanceof Element ? ev.target : null;
+    if (t && t.closest('a, button, input, select, textarea, [role="button"], .lec-figura, img')) return false;
+    const sel = typeof document !== 'undefined' ? document.getSelection() : null;
+    if (sel && String(sel).trim().length > 1) return false;
+    const caja = el.lectura.getBoundingClientRect();
+    const zona = zonaDeToque(ev.clientX, caja.left, caja.width);
+    if (zona === 'centro') return false;
+    marcarToqueConsumido();
+    irAPagina(pag.actual + (zona === 'siguiente' ? 1 : -1), { deUsuario: true });
+    return true;
+  }
   function cerrarGesto(g, { devolver = false } = {}) {
     if (!g) return;
     if (g.id != null) { try { el.lectura.releasePointerCapture(g.id); } catch (_) { /* ya soltado */ } }
@@ -2027,7 +2174,7 @@ export function initLibroVista({ el, estado, api }) {
           g.estado = 'horizontal';
           g.dir = dx0 < 0 ? 1 : -1;
         } else {
-          if (Math.abs(dx0) < ARRANQUE_PX && Math.abs(dy0) < ARRANQUE_PX) devolverCromo();
+          if (Math.abs(dx0) < ARRANQUE_PX && Math.abs(dy0) < ARRANQUE_PX && !tocarBorde(ev)) devolverCromo();
           return;
         }
       }
@@ -2044,7 +2191,7 @@ export function initLibroVista({ el, estado, api }) {
         devolverHoja(g.h);
         /* Un recorrido corto es un toque tembloroso, no un deslizamiento: trae
          * los controles igual que un toque limpio. */
-        if (Math.abs(dx) < DESLIZ_MINIMO() && Math.abs(dy) < DESLIZ_MINIMO()) devolverCromo();
+        if (Math.abs(dx) < DESLIZ_MINIMO() && Math.abs(dy) < DESLIZ_MINIMO() && !tocarBorde(ev)) devolverCromo();
         return;
       }
       /* Si la hoja ya no está (un reparto nuevo o la voz la retiraron a mitad

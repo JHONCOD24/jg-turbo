@@ -1,5 +1,29 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Dos manos que fijan el mismo ajuste con listas distintas (2026-10-13)
+
+**Síntoma:** al recargar, un tema «Sepia» guardado volvía a «Noche».
+**Causa medida:** el tema lo fijaban dos funciones: `fijarTema` en
+`libroVista.js` aceptaba papel, sepia y noche; `aplicarTema` en
+`pdfController.js`, que corre ANTES al arrancar, solo aceptaba papel y noche,
+convertía cualquier otro en «noche» y lo GUARDABA en `jg_pdf_tema`. Cuando la
+vista leía el valor, ya estaba pisado. **Regla:** la lista de valores válidos
+vive en un solo sitio (`temaValido` en `js/pdf/ajustesLectura.js`) y la usan
+todos los que leen o escriben el ajuste. Al añadir un valor, buscar TODOS los
+que escriben esa clave (`grep jg_pdf_tema`). Prueba: «tras recargar sigue en
+Verde» en `tests/verificar_pdf_kindle.mjs`.
+
+## Amazon no carga su lector en un Chromium sin ventana (2026-10-13)
+
+**Síntoma:** al modelar Kindle con REA, `read.amazon.com/sample/...` quedaba en
+blanco o en el indicador de carga; `capture_browser_scenario` de REA además
+fallaba en Windows (`cleanup_incomplete`). **Causa:** el sitio detecta el modo
+`--headless`, y el proveedor de escenarios de REA no cierra bien en Windows.
+**Regla:** abrir Chromium **con** ventana fuera de la pantalla
+(`--window-position=-4000,0 --remote-debugging-port=<p>`) y usar las
+herramientas pasivas de REA (`list_browser_targets`, `capture_web_screenshot`,
+`inspect_web_page`) contra ese puerto. Detalle: `docs/kindle/MODELO_KINDLE.md`.
+
 ## Un registro sincronizado no puede traer lo que solo vale en el otro aparato (2026-10-04)
 
 **Síntoma:** un libro subido en el PC se leía en el teléfono sin ninguna

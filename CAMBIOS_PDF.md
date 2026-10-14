@@ -3,6 +3,44 @@
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
+## 2026-10-13 · v172 · Lector estilo Kindle: hoja «Aa», bordes, pie y capítulos de corrido
+
+Pedido del dueño: modelar Kindle con el MCP **REA** y llevarlo al lector PDF,
+cómodo en teléfono y tablet, con todo configurable y **las voces de Fish
+Audio intactas**. Modelo, evidencias y límites: `docs/kindle/MODELO_KINDLE.md`.
+
+- **Hoja «Aa»** (`#pdfAparienciaHoja`, mismos ids): estilos rápidos
+  (Compacto, Estándar, Grande, Baja visión), cinco colores de página con
+  muestra (Papel, Sepia, **Verde**, Noche, **Negro**), A−/A+ y tamaño 14–34,
+  grosor (normal/medio/negrita), letra **Legible**, interlineado 1,2–2,2,
+  márgenes, **alineación** (automática/justificada/izquierda), **brillo**
+  40–100 % (velo sin toques), modo y paso de página, «Tocar los bordes pasa
+  página», qué dice el pie, **voz de lectura** y «Restablecer apariencia». En
+  el teléfono la hoja ocupa ≤ 68 % del alto para ver el texto mientras se
+  ajusta.
+- **Bordes** (`zonaDeToque`): borde izquierdo (22 %, 48–160 px) atrás, derecho
+  adelante, centro trae los controles. Nunca sobre enlaces, botones, figuras ni
+  con texto seleccionado; solo leyendo con páginas.
+- **Pie**: tocarlo cambia lo que dice (% del libro → tiempo del capítulo →
+  tiempo del libro → página del capítulo → nada).
+- **De corrido**: pasar de la última página (borde, deslizar o flecha) entra al
+  capítulo siguiente; volver desde la primera cae en la ÚLTIMA página del
+  anterior (`api.cambiarCapitulo`, `irAlFinalAlAbrir`). La voz no salta de
+  capítulo por aquí.
+- **Voces Fish fijas**: el selector de «Aa» es `data-tts-voice-select
+  data-tts-voice-solo-fish`: el mismo llenado filtra el catálogo, sin añadir ni
+  quitar voces; elegir pasa por `ttsCambiarVozEnVivo`. Sin Fish activo muestra
+  el listado completo. Huellas congeladas en `test_voces_fish_intactas`.
+- **Arreglo**: un tema distinto de papel/noche se perdía al recargar
+  (`aplicarTema` del controlador lo convertía en «noche» y lo guardaba). Ahora
+  un solo `temaValido` (TRAMPAS.md).
+- Reglas puras nuevas en `js/pdf/ajustesLectura.js` (normalizar lo guardado,
+  estilos, pie, zonas). `jg_pdf_lectura` gana campos sin renombrar nada
+  (CONFIG_PERSISTENTE.md).
+
+Pruebas: `test_pdf_ajustes_lectura` 65 · `test_voces_fish_intactas` 29 ·
+`verificar_pdf_kindle` 42.
+
 ## 2026-10-04 · FIG-1 · Las imágenes del libro no se pierden al pasar a otro aparato
 
 Publicado como **v169** (`JG_JS_V`, SW `jg-turbo-shell-v169`), prod
