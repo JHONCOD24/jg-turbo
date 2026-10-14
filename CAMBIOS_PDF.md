@@ -2,8 +2,13 @@
 
 ## 2026-10-13 · v173 · Estabilidad de biblioteca y ajustes móviles
 
-Marcador `JG_JS_V='v173'`, shell `jg-turbo-shell-v173`. Publicación pendiente
-al preparar el commit; se anotará aquí el despliegue verificado.
+Publicado con `JG_JS_V='v173'`, shell `jg-turbo-shell-v173`, desde `git archive`
+de `40fd76b`. Despliegue `dpl_9pZj4QP1omEJuMxXXB3MsgMgjUBk` READY y alias
+`https://jg-turbo.vercel.app`. En el dominio: marcador v173, `/api/health` ok
+y sha256 idéntico al commit en HTML, SW y los cuatro módulos modificados.
+Kindle 41, estabilidad 24, móvil 60 y organización 37 contra el dominio:
+162 comprobaciones aprobadas. La transferencia de portadas usa dos contextos
+de navegador, no la cuenta personal de nube del dueño.
 
 Auditoría completa con hallazgos, evidencia, prioridades y checklist:
 [`docs/kindle/AUDITORIA_MOVIL_V173.md`](docs/kindle/AUDITORIA_MOVIL_V173.md).

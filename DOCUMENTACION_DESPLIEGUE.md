@@ -13,7 +13,10 @@ lastUpdated: 2026-08-02
 
 ## PDF móvil v173 (2026-10-13)
 
-Publicación pendiente al preparar el commit. Marcador v173 y shell-v173.
+Publicado desde `git archive` de `40fd76b` al proyecto `jg-turbo`:
+`dpl_9pZj4QP1omEJuMxXXB3MsgMgjUBk` READY. Marcador v173 y shell-v173.
+Dominio real: seis hashes iguales, `/api/health` ok y 162 comprobaciones de
+Kindle, estabilidad, móvil y organización aprobadas.
 Cambios, pruebas y evidencia: `CAMBIOS_PDF.md` y
 `docs/kindle/AUDITORIA_MOVIL_V173.md`. Se publica una sola vez al finalizar,
 desde un `git archive` del commit y con el enlace al proyecto `jg-turbo`.

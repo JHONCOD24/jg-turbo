@@ -8,6 +8,12 @@ volvió a ejecutar REA: sus herramientas no estaban expuestas en esta sesión.
 La referencia de comportamiento es `MODELO_KINDLE.md`, cuya distinción entre
 observado y conocido se conserva. No se presenta esto como réplica exacta.
 
+Publicado: v173, commit `40fd76b`, despliegue
+`dpl_9pZj4QP1omEJuMxXXB3MsgMgjUBk` READY. Dominio
+`https://jg-turbo.vercel.app`: seis archivos con sha256 igual al commit,
+marcador v173 y `/api/health` ok. Las cuatro suites que se repitieron en el
+dominio sumaron 162 comprobaciones aprobadas (41 + 24 + 60 + 37).
+
 ## Hallazgos
 
 1) Biblioteca / carátulas provisionales:

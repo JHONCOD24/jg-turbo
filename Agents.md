@@ -2,6 +2,8 @@
 
 ## PDF móvil v173 (2026-10-13)
 
+Prod `dpl_9pZj4QP1omEJuMxXXB3MsgMgjUBk`, `JG_JS_V='v173'`.
+
 Biblioteca sin regeneración en bucle de tapas provisionales; URLs de portada
 asociadas a sus elementos, sin revocar las de Seguir leyendo al ordenar.
 Sincronización no importa `tienePortada` sin imagen. Aa visible en inmersivo,
