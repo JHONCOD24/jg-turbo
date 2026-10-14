@@ -1,5 +1,15 @@
 # JG Turbo — reglas para agentes
 
+## Hoja 3D v174
+
+`js/pdf/hoja3d.js` calcula diez franjas con frente/reverso y copia solo el
+área visible. No volver a trasladar todo el texto como efecto Libro ni a
+clonar el capítulo entero por franja. El respaldo lento es un giro rígido,
+no Deslizar. Al tocarlo: geometría pura 32, hoja 3D Chromium 48 / WebKit 32,
+animación/voz 107, Kindle 41 y las suites del lector. WebKit/Windows valida
+el renderizador con texto: su importación Blob no funcionó en esta sesión.
+Detalle, límites y publicación: `docs/kindle/HOJA_3D_V174.md`, `CAMBIOS_PDF.md`.
+
 ## PDF móvil v173 (2026-10-13)
 
 Prod `dpl_9pZj4QP1omEJuMxXXB3MsgMgjUBk`, `JG_JS_V='v173'`.

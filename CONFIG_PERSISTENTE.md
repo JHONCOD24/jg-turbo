@@ -1,5 +1,10 @@
 # Persistencia de configuración — JG Turbo
 
+**v174:** hoja curva 3D, sin claves nuevas ni migraciones. Se mantiene
+`jg_pdf_paso_pagina` con Libro / Deslizar / Sin animación. La reducción a
+una hoja rígida por coste de preparación es temporal, por capítulo, y no
+reescribe la elección guardada. Las texturas no se guardan en IndexedDB.
+
 **v173 (2026-10-13):** no cambia nombres de claves ni versiones de IndexedDB.
 Aa rápido utiliza la misma hoja y preferencias existentes. Las marcas
 `tienePortada` y `origenPortada` de un paquete remoto solo se aplican cuando

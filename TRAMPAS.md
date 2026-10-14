@@ -1,5 +1,36 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## La preparación también consume el tiempo del toque (v174)
+
+**Síntoma:** dos pasos tardaron 514 y 544 ms aunque el giro duraba 420 ms.
+**Causa:** preparar la textura y luego animar sumaba ambas duraciones.
+**Regla:** descontar la preparación del presupuesto del toque, manteniendo
+un cierre visible de al menos 150 ms. La ejecución final pasó 107 comprobaciones;
+esa medida local no acredita el rendimiento de un teléfono físico.
+
+## Un gradiente por franja hace una cortina, no papel (v174)
+
+**Síntoma:** el primer prototipo 3D tenía diez bandas grises verticales.
+**Causa:** el gradiente de iluminación empezaba y terminaba en cada franja.
+**Regla:** iluminación continua según la normal de cada pieza y brillo en
+el borde del papel, no repetir una sombra completa por pieza. Se revisaron
+fotogramas al 15/30/50/70 % antes de aceptar el resultado.
+
+## Probar capítulos con un PDF que solo tiene uno (v174)
+
+**Síntoma:** seis fallos de cruce de capítulo aunque la hoja curva funcionaba.
+**Causa:** el libro narrativo del ayudante tiene un único título de capítulo;
+34 páginas no implican varios capítulos. **Regla:** generar capítulos reales
+y contar la navegación. El fixture de `generarPdfPrueba.mjs` sí los tiene.
+
+## Una selección asíncrona no está lista por esperar 300 ms (v174)
+
+**Síntoma:** el recorrido general encontraba un índice vacío y acababa en
+timeout. **Causa:** el ayudante devolvía `null` si Leer seguía deshabilitado
+durante la huella del archivo y luego comprobaba un libro que no había abierto.
+**Regla:** esperar a que Leer esté disponible o a un error visible; no omitir
+la lectura. La suite final completó sus 157 comprobaciones.
+
 ## Un aviso auxiliar puede borrar el resultado del OCR (2026-10-13)
 
 **Síntoma:** se reconocían «biblioteca» y «Ernesto», pero el aviso decía

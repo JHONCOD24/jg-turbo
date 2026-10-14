@@ -11,6 +11,13 @@ lastUpdated: 2026-08-02
 
 # Cómo desplegar JG Turbo en Vercel
 
+## Hoja curva 3D v174
+
+Publicación pendiente al preparar el commit. Marcador v174 y shell-v174.
+Se añade `js/pdf/hoja3d.js`, diferido con el lector; no viaja al arrancar.
+Comprobar el módulo nuevo y `libroVista.js` con hashes contra el dominio,
+además de HTML/SW, geometría 3D y las suites móviles.
+
 ## PDF móvil v173 (2026-10-13)
 
 Publicado desde `git archive` de `40fd76b` al proyecto `jg-turbo`:

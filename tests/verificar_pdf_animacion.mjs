@@ -4,7 +4,7 @@
  *
  * En modo «Libro» (por defecto) pasar página —botón, teclado, deslizamiento o
  * la voz— dibuja una hoja saliente encima del texto (`.lec-hoja`, un clon
- * visual de la página que se va) mientras el contenido real ya está en la
+ * visual de la página que se va, curva y con reverso) mientras el contenido real ya está en la
  * página destino. Se exige:
  *   · existe la hoja durante el paso y desaparece en ≤ 500 ms;
  *   · solo se animan `transform` y `opacity` (nada que remaquete);
@@ -155,7 +155,7 @@ const p95 = (xs) => { const o = [...xs].sort((a, b) => a - b); return o.length ?
   for (let i = 1; i <= 8; i += 1) {
     await new Promise((r) => setTimeout(r, 30));
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: c.x + 100 - i * 20, y: c.y, id: 1 }] });
-    posiciones.push(await p.evaluate(() => { const h = document.querySelector('.lec-hoja'); if (!h) return null; const m = h.firstElementChild ? new DOMMatrixReadOnly(getComputedStyle(h.firstElementChild).transform) : null; return m ? m.m41 : null; }));
+    posiciones.push(await p.evaluate(() => { const h = document.querySelector('.lec-hoja-tira:last-child'); if (!h) return null; const m = new DOMMatrixReadOnly(getComputedStyle(h).transform); return m.m41; }));
   }
   const vistas = posiciones.filter((x) => x != null);
   comprobar(vistas.length >= 5, `al arrastrar con el dedo hay hoja a la vista (${vistas.length}/8 cuadros)`);
@@ -203,7 +203,7 @@ const p95 = (xs) => { const o = [...xs].sort((a, b) => a - b); return o.length ?
       const m = await p.evaluate(() => {
         const h = document.querySelector('.lec-hoja');
         if (!h) return null;
-        const cs = getComputedStyle(h.firstElementChild);
+        const cs = getComputedStyle(h.querySelector('.lec-hoja-frente'));
         let fondo = 'rgba(0, 0, 0, 0)';
         for (let n = document.getElementById('pdfLectura'); n; n = n.parentElement) {
           const c = getComputedStyle(n).backgroundColor;

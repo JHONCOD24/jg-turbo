@@ -1,5 +1,10 @@
 # 📋 Ficha Técnica y Manual de Uso · JG Turbo
 
+**PDF v174:** hoja curva 3D con anverso, reverso y sombra, controlada por el
+dedo y presente también entre capítulos. Las figuras y el texto se copian
+solo para la capa visual; lectura, posición y voces conservan su recorrido.
+Detalle de validación y límites: `docs/kindle/HOJA_3D_V174.md`.
+
 **PDF v173 (2026-10-13):** acceso visible Aa en lectura inmersiva, ajustes
 inferiores en teléfono horizontal, aviso legible y giro de hoja de 420 ms.
 Biblioteca y carátulas sin regeneración repetida. Detalle y límites:

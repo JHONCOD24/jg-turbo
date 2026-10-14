@@ -1,5 +1,27 @@
 # Lector de PDF · historial de cambios y operación
 
+## v174 · Hoja curva 3D con reverso
+
+Publicación pendiente al preparar el commit. `JG_JS_V='v174'`, shell-v174.
+Diseño, decisiones y límites: [`docs/kindle/HOJA_3D_V174.md`](docs/kindle/HOJA_3D_V174.md).
+
+Diez franjas conectadas giran 180 grados con perspectiva, anverso, reverso,
+iluminación y sombra; solo se copia el texto/figuras de la página visible.
+El papel sigue al dedo, vuelve si se cancela y se anima también al cruzar
+capítulos. El respaldo de preparación lenta mantiene un giro rígido 3D,
+sin sustituir Libro por Deslizar. Se conservan preferencias y voces.
+
+Pruebas locales: 59 archivos `test_*.mjs` con código 0, geometría pura 32,
+Chromium 48 (incluye CPU ×4) y WebKit 32 de renderizado. Kindle 41, móvil 60,
+geometría 137, scroll 39, estabilidad 24, figuras 18, orientación 236 y
+recorrido general 157. Animación/voz: 107 en la ejecución final tras optimizar
+la copia visible y contar su preparación dentro del presupuesto del toque.
+
+Arranque 9/10: el presupuesto de menos de 1 MB ya falla en v173, 1103 KB,
+sin cargar PDF al arrancar. WebKit/Windows no guardó Blob en IndexedDB;
+su verificación usa texto, no importación de PDF. No se acredita igualdad
+exacta con Kindle ni ejecución en un teléfono físico.
+
 ## 2026-10-13 · v173 · Estabilidad de biblioteca y ajustes móviles
 
 Publicado con `JG_JS_V='v173'`, shell `jg-turbo-shell-v173`, desde `git archive`

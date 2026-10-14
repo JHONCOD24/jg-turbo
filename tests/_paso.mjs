@@ -173,7 +173,7 @@ export async function abrirLector(navegador, base, ruta, { ancho = 390, alto = 8
   /* «Unir palabras» hace una pasada al abrir el capítulo y eso cambia el texto. */
   await p.waitForFunction(() => document.body.dataset.pdfUnir === 'listo', null, { timeout: 30000 }).catch(() => {});
   await p.waitForTimeout(300);
-  const cdp = tactil ? await contexto.newCDPSession(p) : null;
+  const cdp = tactil && navegador.browserType().name() === 'chromium' ? await contexto.newCDPSession(p) : null;
   return { p, contexto, cdp, errores };
 }
 

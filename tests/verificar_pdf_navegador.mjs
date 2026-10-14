@@ -198,7 +198,11 @@ async function leer(pagina, archivo, espera = 90000) {
   await pagina.locator('#pdfInput').setInputFiles(archivo);
   await pagina.waitForTimeout(300);
   await cerrarHojaConsentimiento(pagina);
-  if (await pagina.locator('#btnPdfRead').isDisabled()) return null;
+  // La huella/selección del archivo es asíncrona. Una espera fija de 300 ms
+  // podía abandonar sin leer el PDF y luego probar un índice vacío.
+  await pagina.waitForFunction(() => !document.getElementById('btnPdfRead').disabled ||
+    ['pdfNotice','pdfNoticeLector'].some(id => { const n=document.getElementById(id); return n && !n.hidden && n.classList.contains('err'); }), null, { timeout: 30000 });
+  if (await pagina.locator('#btnPdfRead').isDisabled()) return (await avisoVisible(pagina)).texto;
   await pagina.locator('#btnPdfRead').click();
   await pagina.waitForFunction(() => {
     const avisos = ['pdfNotice', 'pdfNoticeLector'].map((id) => document.getElementById(id));

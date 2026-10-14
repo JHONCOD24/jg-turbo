@@ -7,6 +7,7 @@
  */
 import { aplicarDecisionUsuario } from './limites.js';
 import { construirLectura } from './mapaLectura.js';
+import { geometriaHoja, copiarPaginaVisible } from './hoja3d.js';
 import {
   normalizarAjustes, temaValido, aplicarEstiloRapido, estiloRapidoActual, pasoTamano,
   siguienteModoProgreso, textoProgreso, zonaDeToque, AJUSTES_BASE,
@@ -189,6 +190,12 @@ export function initLibroVista({ el, estado, api }) {
       pintarPieLectura();
       pintarIrAbajo();
       limpiarAlAbrir();
+      if (transicionCapitulo && hoja === transicionCapitulo && transicionCapitulo.capitulo !== claveCapitulo()) {
+        const saliente = transicionCapitulo;
+        transicionCapitulo = null;
+        saliente.pendiente = false;
+        lanzarHoja(saliente);
+      }
       /* Se intenta también al abrir el capítulo. `unirPalabras` vuelve a
        * pintar, así que hay que evitar el bucle: solo se dispara cuando el
        * render NO viene de una unión (ver `uniendo`). */
@@ -412,8 +419,8 @@ export function initLibroVista({ el, estado, api }) {
    * «Libro» (por defecto) dibuja una HOJA temporal (`.lec-hoja`) encima del
    * texto: un clon visual de la página que se va. El texto real salta de una
    * vez a la página destino —así `pag.actual`, el ancla y la voz no se enteran
-   * de la animación ni esperan por ella— y la hoja se desplaza con una leve
-   * inclinación y una sombra que la recorre, y desaparece. Solo `transform` y
+   * de la animación ni esperan por ella— y la hoja gira con curvatura,
+   * anverso, reverso y sombra. Solo `transform` y
    * `opacity`: nada remaqueta ni cambia el tamaño del área de texto.
    *
    * «Deslizar» es el desplazamiento suave de siempre; «Sin animación» salta.
@@ -421,8 +428,7 @@ export function initLibroVista({ el, estado, api }) {
   const CLAVE_PASO = 'jg_pdf_paso_pagina';
   const PASOS = ['libro', 'deslizar', 'ninguno'];
   const DURACION_HOJA = 420;
-  const GIRO_HOJA = 55;        // giro visible sin alterar el reparto del texto
-  const COSTE_MAX_CLON = 90;   // ms: si clonar la página cuesta más DOS veces seguidas, el capítulo usa «Deslizar»
+  const COSTE_MAX_CLON = 90;   // ms: dos preparaciones lentas usan una hoja rígida, nunca un bloque deslizante
   let clonesLentos = 0;        // la primera vez va en frío (compilación): una sola no condena al capítulo
   const selPaso = document.getElementById('pdfAparPaso');
   let pasoElegido = 'libro';
@@ -431,7 +437,6 @@ export function initLibroVista({ el, estado, api }) {
   const claveCapitulo = () => `${estado.id || ''}#${estado.parteActual}`;
   function modoPaso() {
     if (prefiereMenosMovimiento()) return 'ninguno';
-    if (pasoElegido === 'libro' && hojaLentaEn === claveCapitulo()) return 'deslizar';
     return pasoElegido;
   }
   function pintarPaso() {
@@ -455,10 +460,12 @@ export function initLibroVista({ el, estado, api }) {
    * el paso aún no se confirmó: si la hoja se retira sin confirmar, el texto
    * vuelve a su página. */
   let hoja = null;
+  let transicionCapitulo = null;
   function quitarHoja() {
     const h = hoja;
     if (!h) return;
     hoja = null;
+    if (transicionCapitulo === h) transicionCapitulo = null;
     clearTimeout(h.limite);
     if (h.vigia) h.vigia.disconnect();
     for (const a of h.anims) { try { a.cancel(); } catch (_) { /* ya terminó */ } }
@@ -473,7 +480,7 @@ export function initLibroVista({ el, estado, api }) {
     }
     return '#fff';
   }
-  /** Clona la página visible en una hoja temporal. `null` si no se pudo. */
+  /** Copia solo la página visible y la reparte en franjas 3D. */
   function crearHoja(dir) {
     quitarHoja();
     const art = el.lectura;
@@ -481,12 +488,31 @@ export function initLibroVista({ el, estado, api }) {
     try {
       const t0 = performance.now();
       const caja = art.getBoundingClientRect();
-      const copia = art.cloneNode(true);
-      copia.removeAttribute('id');
-      copia.removeAttribute('tabindex');
-      copia.removeAttribute('aria-label');
-      for (const n of copia.querySelectorAll('[id]')) n.removeAttribute('id');
-      copia.classList.add('lec-hoja-pagina');
+      const copia = copiarPaginaVisible(art);
+      const escena = document.createElement('div');
+      escena.className = 'lec-hoja-escena';
+      const cantidad = hojaLentaEn === claveCapitulo() ? 1 : 10;
+      const tiras = [];
+      for (let i = 0; i < cantidad; i++) {
+        const tira = document.createElement('div');
+        tira.className = 'lec-hoja-tira';
+        tira.style.width = `${caja.width / cantidad + .35}px`;
+        const frente = document.createElement('div');
+        frente.className = 'lec-hoja-cara lec-hoja-frente lec-hoja-pagina';
+        const textura = copia.cloneNode(true);
+        textura.style.left = `${-i * caja.width / cantidad}px`;
+        frente.append(textura);
+        const reverso = document.createElement('div');
+        reverso.className = 'lec-hoja-cara lec-hoja-reverso';
+        const luz = document.createElement('div');
+        luz.className = 'lec-hoja-luz';
+        frente.append(luz);
+        const luzAtras = luz.cloneNode(false);
+        reverso.append(luzAtras);
+        tira.append(frente, reverso);
+        escena.append(tira);
+        tiras.push({ nodo: tira, luz, luzAtras });
+      }
       const sombra = document.createElement('div');
       sombra.className = 'lec-hoja-sombra';
       const nodo = document.createElement('div');
@@ -494,24 +520,25 @@ export function initLibroVista({ el, estado, api }) {
       nodo.dataset.dir = String(dir);
       nodo.setAttribute('aria-hidden', 'true');
       nodo.inert = true;
-      nodo.style.cssText = `left:0;top:0;width:${caja.width}px;height:${caja.height}px;--hoja-fondo:${fondoDeLectura()}`;
-      nodo.append(copia, sombra);
+      nodo.dataset.tipo = cantidad === 1 ? 'rigida' : 'curva';
+      nodo.style.cssText = `left:0;top:0;width:${caja.width}px;height:${caja.height}px;--hoja-fondo:${fondoDeLectura()};perspective:${Math.max(1100, caja.width * 4)}px`;
+      nodo.append(sombra, escena);
       art.after(nodo);
       /* Se coloca sobre el texto sin suponer quién es su bloque contenedor:
        * se mide dónde cayó con left/top a 0 y se corrige la diferencia. */
       const o = nodo.getBoundingClientRect();
       nodo.style.left = `${caja.left - o.left}px`;
       nodo.style.top = `${caja.top - o.top}px`;
-      copia.scrollLeft = art.scrollLeft;
-      void copia.scrollWidth;   // fuerza el reparto aquí, antes de pintar
-      clonesLentos = performance.now() - t0 > COSTE_MAX_CLON ? clonesLentos + 1 : 0;
+      const preparacion = performance.now() - t0;
+      clonesLentos = preparacion > COSTE_MAX_CLON ? clonesLentos + 1 : 0;
       if (clonesLentos >= 2) hojaLentaEn = claveCapitulo();
       const vigia = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
         const c = art.getBoundingClientRect();
         if (Math.abs(c.width - caja.width) > 0.5 || Math.abs(c.height - caja.height) > 0.5) quitarHoja();
       }) : null;
       if (vigia) vigia.observe(art);
-      hoja = { nodo, pagina: copia, sombra, dir, ancho: caja.width, anims: [], limite: 0, vigia, progreso: 0, pendiente: false };
+      hoja = { nodo, pagina: escena, tiras, sombra, dir, ancho: caja.width, preparacion, anims: [], limite: 0, vigia, progreso: 0, pendiente: false, capitulo: claveCapitulo() };
+      moverHoja(hoja, 0);
       return hoja;
     } catch (_) {
       for (const n of document.querySelectorAll('.lec-hoja')) n.remove();
@@ -519,35 +546,39 @@ export function initLibroVista({ el, estado, api }) {
       return null;
     }
   }
-  /* Cómo está la hoja cuando se ha ido `p` (0 = en su sitio, 1 = fuera). */
-  function estiloHoja(h, p) {
-    return { transform: `translate3d(${-h.dir * p * 100}%,0,0) rotateY(${h.dir * GIRO_HOJA * p}deg)`, opacity: 1 };   // opaca: una hoja translúcida deja ver dos textos a la vez
-  }
+  /* La hoja gira de 0 a 180°; cada franja tiene una tangente diferente. */
   function estiloSombra(h, p) {
-    const aparece = Math.min(1, p / 0.08);
-    const seVa = p > 0.85 ? (1 - p) / 0.15 : 1;
-    return { transform: `translate3d(${-h.dir * p * h.ancho}px,0,0)`, opacity: Math.max(0, aparece * seVa) };
+    const g = geometriaHoja(h.ancho, p, h.dir, h.tiras.length);
+    return { transform: `translate3d(${Math.max(0, Math.min(h.ancho, g.borde)) - 28}px,0,0) scaleX(${1 + Math.sin(Math.PI * p) * 2})`, opacity: g.sombra };
   }
   /** Sigue al dedo: coloca la hoja a `p` sin animaciones. */
   function moverHoja(h, p) {
     h.progreso = p;
-    const a = estiloHoja(h, p);
+    const g = geometriaHoja(h.ancho, p, h.dir, h.tiras.length);
     const b = estiloSombra(h, p);
-    h.pagina.style.transform = a.transform;
-    h.pagina.style.opacity = String(a.opacity);
+    h.nodo.dataset.progreso = String(p);
+    g.piezas.forEach((pieza, i) => {
+      h.tiras[i].nodo.style.transform = pieza.transform;
+      h.tiras[i].luz.style.opacity = String(pieza.luz);
+      h.tiras[i].luzAtras.style.opacity = String(pieza.luz);
+    });
     h.sombra.style.transform = b.transform;
     h.sombra.style.opacity = String(b.opacity);
   }
   /** Lleva la hoja de donde esté hasta `hasta` (1 = se va, 0 = vuelve) y la retira. */
   function animarHoja(h, hasta, duracion) {
+    clearTimeout(h.limite);
     const desde = h.progreso;
     const opciones = { duration: duracion, easing: 'cubic-bezier(.3,.62,.2,1)', fill: 'forwards' };
-    const medio = (desde + hasta) / 2;
     try {
-      h.anims = [
-        h.pagina.animate([estiloHoja(h, desde), estiloHoja(h, hasta)], opciones),
-        h.sombra.animate([estiloSombra(h, desde), estiloSombra(h, medio), estiloSombra(h, hasta)], opciones),
-      ];
+      const pasos = Array.from({ length: 17 }, (_, i) => desde + (hasta - desde) * i / 16);
+      const geometria = pasos.map(p => geometriaHoja(h.ancho, p, h.dir, h.tiras.length));
+      h.anims = [];
+      h.tiras.forEach((t, i) => {
+        h.anims.push(t.nodo.animate(geometria.map(g => ({ transform: g.piezas[i].transform })), opciones));
+        for (const luz of [t.luz, t.luzAtras]) h.anims.push(luz.animate(geometria.map(g => ({ opacity: g.piezas[i].luz })), opciones));
+      });
+      h.anims.push(h.sombra.animate(pasos.map(p => estiloSombra(h, p)), opciones));
     } catch (_) {
       /* Sin la API de animaciones no hay hoja: el texto ya está en su sitio. */
       quitarHoja();
@@ -567,7 +598,10 @@ export function initLibroVista({ el, estado, api }) {
   /** La hoja termina de irse; si ya iba de camino (el dedo), le queda menos. */
   function lanzarHoja(h) {
     const resto = 1 - h.progreso;
-    animarHoja(h, 1, Math.max(150, Math.round(DURACION_HOJA * (0.4 + 0.6 * resto))));
+    // El presupuesto de un toque incluye preparar la textura. Al arrastrar,
+    // ese trabajo ya ocurrió: completar depende solo de lo que falta de giro.
+    const preparacion = h.progreso < .01 ? h.preparacion : 0;
+    animarHoja(h, 1, Math.max(150, Math.round(DURACION_HOJA * (0.4 + 0.6 * resto) - preparacion)));
   }
   /** El dedo soltó sin llegar al umbral: la hoja vuelve a su sitio y el texto también. */
   function devolverHoja(h) {
@@ -598,10 +632,17 @@ export function initLibroVista({ el, estado, api }) {
     const pedido = Math.round(Number(n) || 0);
     if (deUsuario && (pedido >= pag.total || pedido < 0) && typeof api.cambiarCapitulo === 'function') {
       const dir = pedido < 0 ? -1 : 1;
+      const saliente = modoPaso() === 'libro' ? (conHoja && hoja === conHoja ? conHoja : crearHoja(dir)) : null;
+      if (saliente) {
+        saliente.pendiente = false;
+        transicionCapitulo = saliente;
+        saliente.limite = setTimeout(() => { if (hoja === saliente) quitarHoja(); }, 2000);
+      }
       if (api.cambiarCapitulo(dir)) {
         irAlFinalAlAbrir = dir < 0;
         return;
       }
+      quitarHoja();
     }
     const destinoPag = Math.max(0, Math.min(pag.total - 1, pedido));
     const cambioPag = destinoPag !== pag.actual;
@@ -611,7 +652,7 @@ export function initLibroVista({ el, estado, api }) {
     let h = null;
     if (conHoja && hoja === conHoja) h = conHoja;
     else if (cambioPag && modo === 'libro') h = crearHoja(destinoPag > pag.actual ? 1 : -1);
-    else quitarHoja();
+    else if (!transicionCapitulo) quitarHoja();
     if (h) h.pendiente = false;
     pag.actual = destinoPag;
     art.scrollTo({
@@ -2153,11 +2194,13 @@ export function initLibroVista({ el, estado, api }) {
         /* Con «Libro», la hoja se despega ya y sigue al dedo; el texto real se
          * adelanta a la página destino para que se vea debajo. */
         const destino = pag.actual + g.dir;
-        if (modoPaso() === 'libro' && destino >= 0 && destino < pag.total) {
+        const parteDestino = estado.parteActual + g.dir;
+        const otroCapitulo = (destino < 0 || destino >= pag.total) && parteDestino >= 0 && parteDestino < (estado.partes?.length || 0);
+        if (modoPaso() === 'libro' && ((destino >= 0 && destino < pag.total) || otroCapitulo)) {
           const h = crearHoja(g.dir);
           if (h) {
             h.pendiente = true;
-            el.lectura.scrollLeft = destino * pag.paso;
+            if (!otroCapitulo) el.lectura.scrollLeft = destino * pag.paso;
             g.h = h;
           }
         }
