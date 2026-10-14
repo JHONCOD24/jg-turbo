@@ -366,10 +366,12 @@ export function inicializarLectorPdf(deps = {}) {
    * pantalla sin que nadie volviera a leerla. Los errores duran más que las
    * confirmaciones, que es lo único que justifica la diferencia.
    */
-  function avisar(mensaje, tipo = 'warn', { efimero = false } = {}) {
-    clearTimeout(temporizadorAviso);
+  function avisar(mensaje, tipo = 'warn', { efimero = false, segundoPlano = false } = {}) {
     const leyendo = hayDocumento();
     const destino = (leyendo && el.noticeLector) ? el.noticeLector : el.notice;
+    // Un resultado auxiliar no sustituye el mensaje de la acción del usuario.
+    if (segundoPlano && !destino.hidden) return;
+    clearTimeout(temporizadorAviso);
     const otro = destino === el.notice ? el.noticeLector : el.notice;
     if (otro) otro.hidden = true;
     if (!mensaje) { destino.hidden = true; return; }
@@ -438,9 +440,20 @@ export function inicializarLectorPdf(deps = {}) {
 
   /* ── Biblioteca ──────────────────────────────────────────────────── */
 
+  const duenosPortada = new Map();
+  function registrarPortada(url, nodo) {
+    for (const [vieja, dueno] of duenosPortada) {
+      if (dueno === nodo || !dueno.isConnected) {
+        URL.revokeObjectURL(vieja);
+        duenosPortada.delete(vieja);
+      }
+    }
+    duenosPortada.set(url, nodo);
+  }
   function liberarPortadas() {
-    for (const url of estado.urlsPortada) URL.revokeObjectURL(url);
-    estado.urlsPortada = [];
+    for (const [url, nodo] of duenosPortada) {
+      if (!nodo.isConnected) { URL.revokeObjectURL(url); duenosPortada.delete(url); }
+    }
   }
 
   /* ── Carátulas de los libros que no traen ninguna ───────────────────
@@ -454,7 +467,16 @@ export function inicializarLectorPdf(deps = {}) {
    * búsqueda de la real sí sale a la red: se hace al pulsar «Buscar carátula»
    * y al procesar un libro nuevo, no cada vez que se abre la biblioteca.
    */
-  async function ponerCaratula(doc, { buscarReal = false, forzar = false } = {}) {
+  const caratulasEnCurso = new Map();
+  const caratulasIntentadas = new Set();
+  function ponerCaratula(doc, opciones = {}) {
+    if (!doc?.id) return Promise.resolve('ninguna');
+    if (caratulasEnCurso.has(doc.id)) return caratulasEnCurso.get(doc.id);
+    const trabajo = generarCaratula(doc, opciones).finally(() => caratulasEnCurso.delete(doc.id));
+    caratulasEnCurso.set(doc.id, trabajo);
+    return trabajo;
+  }
+  async function generarCaratula(doc, { buscarReal = false, forzar = false } = {}) {
     if (!doc || !doc.id) return 'ninguna';
     if (doc.tienePortada && !forzar && doc.origenPortada !== 'dibujada') return 'ninguna';
     try {
@@ -503,6 +525,8 @@ export function inicializarLectorPdf(deps = {}) {
       }
 
       // 4. Red de seguridad: portada dibujada
+      // Una provisional existente no cambia de fecha ni reinicia la nube.
+      if (doc.tienePortada && await almacen.cargarPortada(doc.id)) return 'ninguna';
       const { blob: blobDib, origen: origenDib } = await conseguirCaratula({ titulo, autor, buscarReal: false });
       if (blobDib) {
         await almacen.guardarPortadaGenerada(doc.id, blobDib, origenDib, { nuevoTitulo });
@@ -534,6 +558,9 @@ export function inicializarLectorPdf(deps = {}) {
     if (!candidatos.length) return;
     let puestas = 0;
     for (const doc of candidatos) {
+      const huella = `${doc.id}:${doc.tieneArchivo}:${doc.titulo}:${doc.origenPortada}`;
+      if (caratulasIntentadas.has(huella)) continue;
+      caratulasIntentadas.add(huella);
       if (await ponerCaratula(doc, { buscarReal: true, forzar: true }) !== 'ninguna') puestas += 1;
     }
     if (puestas) {
@@ -668,7 +695,7 @@ export function inicializarLectorPdf(deps = {}) {
       almacen.cargarPortada(doc.id).then((blob) => {
         if (blob && blob.size > 0) {
           const url = URL.createObjectURL(blob);
-          estado.urlsPortada.push(url);
+          registrarPortada(url, tapa);
           tapa.style.backgroundImage = `url("${url}")`;
           tapa.dataset.sinPortada = '0';
         }
@@ -1245,7 +1272,7 @@ export function inicializarLectorPdf(deps = {}) {
       almacen.cargarPortada(doc.id).then((blob) => {
         if (blob && blob.size > 0) {
           const url = URL.createObjectURL(blob);
-          estado.urlsPortada.push(url);
+          registrarPortada(url, tapa);
           tapa.style.backgroundImage = `url("${url}")`;
           tapa.dataset.sinPortada = '0';
         } else {
@@ -1255,7 +1282,7 @@ export function inicializarLectorPdf(deps = {}) {
               almacen.cargarPortada(doc.id).then((nb) => {
                 if (nb) {
                   const url = URL.createObjectURL(nb);
-                  estado.urlsPortada.push(url);
+                  registrarPortada(url, tapa);
                   tapa.style.backgroundImage = `url("${url}")`;
                   tapa.dataset.sinPortada = '0';
                 }
@@ -1271,7 +1298,7 @@ export function inicializarLectorPdf(deps = {}) {
           almacen.cargarPortada(doc.id).then((nb) => {
             if (nb) {
               const url = URL.createObjectURL(nb);
-              estado.urlsPortada.push(url);
+              registrarPortada(url, tapa);
               tapa.style.backgroundImage = `url("${url}")`;
               tapa.dataset.sinPortada = '0';
             }
@@ -1376,8 +1403,8 @@ export function inicializarLectorPdf(deps = {}) {
      * modo se repinta de todos modos. */
     if (organizando) return;
     const documentos = await almacen.listarDocumentos();
-    liberarPortadas();
     el.rejilla.innerHTML = '';
+    liberarPortadas();
     el.rejilla.hidden = false;
 
     const hay = documentos.length > 0;
@@ -1423,8 +1450,8 @@ export function inicializarLectorPdf(deps = {}) {
     }
 
     /* Los libros sin tapa reciben la suya dibujada, sin bloquear el pintado.
-     * `pintarBiblioteca` se llama sola al terminar, y como para entonces ya
-     * tienen portada, no vuelve a entrar aquí: no hay bucle. */
+     * Los intentos se deduplican por libro y estado de su fuente; una tapa
+     * provisional existente no provoca otro repintado. */
     completarCaratulasQueFaltan(documentos).catch(() => {});
   }
 
@@ -1453,7 +1480,7 @@ export function inicializarLectorPdf(deps = {}) {
       almacen.cargarPortada(doc.id).then((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
-        estado.urlsPortada.push(url);
+        registrarPortada(url, el.continuarTapa);
         el.continuarTapa.style.backgroundImage = `url("${url}")`;
       }).catch(() => {});
     }
@@ -2444,9 +2471,9 @@ export function inicializarLectorPdf(deps = {}) {
         el.docTapa.title = titulo || 'Portada del libro';
       } else {
         almacen.cargarPortada(id).then((blob) => {
-          if (!blob || !el.docTapa) return;
+          if (!blob || !el.docTapa || estado.id !== id) return;
           const url = URL.createObjectURL(blob);
-          estado.urlsPortada.push(url);
+          registrarPortada(url, el.docTapa);
           el.docTapa.style.backgroundImage = `url("${url}")`;
           el.docTapa.hidden = false;
           el.docTapa.title = titulo || 'Portada del libro';
@@ -2762,7 +2789,7 @@ export function inicializarLectorPdf(deps = {}) {
           avisar(figuras.length === 1
             ? 'Se añadió 1 gráfico del PDF a la lectura.'
             : `Se añadieron ${figuras.length} gráficos del PDF a la lectura.`,
-          'info', { efimero: true });
+          'info', { efimero: true, segundoPlano: true });
         }
       } finally {
         try { await docPdf.destroy(); } catch (_) { /* nada */ }

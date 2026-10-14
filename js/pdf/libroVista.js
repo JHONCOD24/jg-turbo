@@ -420,8 +420,8 @@ export function initLibroVista({ el, estado, api }) {
    * Con `prefers-reduced-motion` manda «Sin animación». Clave: jg_pdf_paso_pagina. */
   const CLAVE_PASO = 'jg_pdf_paso_pagina';
   const PASOS = ['libro', 'deslizar', 'ninguno'];
-  const DURACION_HOJA = 340;
-  const GIRO_HOJA = 20;        // grados de inclinación con los que se va la hoja
+  const DURACION_HOJA = 420;
+  const GIRO_HOJA = 55;        // giro visible sin alterar el reparto del texto
   const COSTE_MAX_CLON = 90;   // ms: si clonar la página cuesta más DOS veces seguidas, el capítulo usa «Deslizar»
   let clonesLentos = 0;        // la primera vez va en frío (compilación): una sola no condena al capítulo
   const selPaso = document.getElementById('pdfAparPaso');
@@ -1538,7 +1538,7 @@ export function initLibroVista({ el, estado, api }) {
     clearTimeout(tempoAviso);
     if (el.unirAvisoTexto) {
       el.unirAvisoTexto.textContent = cuantas === 1
-        ? '1 palabra unida' : `${cuantas} palabras unidas`;
+        ? '1 palabra partida reparada' : `${cuantas} palabras partidas reparadas`;
     }
     el.unirAviso.hidden = false;
     /* Se va solo: es un aviso, no una tarea pendiente. */
@@ -1995,6 +1995,18 @@ export function initLibroVista({ el, estado, api }) {
     clearTimeout(tempoInmersivo);
     if (document.body.classList.contains('jg-inmersivo')) inmersivo(false);
   }
+  const accesoAa = document.createElement('button');
+  accesoAa.type = 'button';
+  accesoAa.id = 'btnPdfAaRapido';
+  accesoAa.textContent = 'Aa';
+  accesoAa.setAttribute('aria-label', 'Abrir ajustes de lectura');
+  accesoAa.setAttribute('aria-controls', 'pdfAparienciaHoja');
+  el.resultArea.append(accesoAa);
+  accesoAa.addEventListener('click', () => {
+    devolverCromo();
+    abrirDock(false);
+    el.abrirApariencia?.(accesoAa);
+  });
 
   /* Sin foco invisible (PDF-10): el cromo apartado es `opacity:0`, así que
    * el teclado SÍ puede caer en un control que no se ve. Al navegar con

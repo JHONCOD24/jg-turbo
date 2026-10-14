@@ -1,5 +1,16 @@
 # JG Turbo — reglas para agentes
 
+## PDF móvil v173 (2026-10-13)
+
+Biblioteca sin regeneración en bucle de tapas provisionales; URLs de portada
+asociadas a sus elementos, sin revocar las de Seguir leyendo al ordenar.
+Sincronización no importa `tienePortada` sin imagen. Aa visible en inmersivo,
+hoja inferior también en horizontal bajo, aviso opaco y giro de hoja de 420 ms.
+No modifica voces Fish. Auditoría: `docs/kindle/AUDITORIA_MOVIL_V173.md`.
+Al tocar estos caminos, ejecutar `verificar_pdf_estabilidad_movil` (24),
+`verificar_pdf_kindle` (41), `verificar_pdf_orientacion` (236) y
+`verificar_pdf_animacion` (107), además de las suites del lector.
+
 ## Voz v159 (2026-09-29)
 
 PDF/videos ofrecen `neural:multi:female` (Ava) y `neural:multi:male` (Andrew).

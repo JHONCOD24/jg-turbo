@@ -167,7 +167,7 @@ export function esSincronizable(documento) {
  * viajan por la nube, así que copiarlos desde otro aparato mentía: el teléfono
  * creía tener las figuras «listas», no encontraba ninguna y el libro se leía
  * sin imágenes para siempre (2026-10-04). */
-const CAMPOS_DEL_APARATO = ['tieneArchivo', 'figurasEstado', 'figurasCuenta', 'figurasVersion'];
+const CAMPOS_DEL_APARATO = ['tieneArchivo', 'tienePortada', 'origenPortada', 'figurasEstado', 'figurasCuenta', 'figurasVersion'];
 
 /**
  * El registro que llegó de otro aparato, sin sus campos locales. Conserva en

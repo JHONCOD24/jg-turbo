@@ -1,5 +1,10 @@
 # Persistencia de configuración — JG Turbo
 
+**v173 (2026-10-13):** no cambia nombres de claves ni versiones de IndexedDB.
+Aa rápido utiliza la misma hoja y preferencias existentes. Las marcas
+`tienePortada` y `origenPortada` de un paquete remoto solo se aplican cuando
+hay una imagen recibida; sin ella se conserva el estado local de la portada.
+
 Documento para **humanos y agentes de IA**. Objetivo: que las actualizaciones de código **nunca borren** las preferencias del usuario (claves, glosario, proveedor, etc.).
 
 ## Dónde vive cada cosa

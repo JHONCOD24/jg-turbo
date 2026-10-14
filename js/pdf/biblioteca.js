@@ -900,6 +900,7 @@ export async function guardarPortadaRecibida(id, dataURL) {
       const doc = await esperar(docs.get(id));
       if (!doc) return;
       doc.tienePortada = true;
+      doc.origenPortada = 'recibida';
       /* Si la carátula llegó de la nube, la nube ya la tiene: no hay que
        * devolvérsela. Y `actualizado` no se toca: esto no es un cambio del
        * usuario, así que no debe competir con lo que hagan los otros aparatos. */
@@ -1204,7 +1205,8 @@ export async function importarDeSincronizacion(documento) {
     portada = await dataURLABlob(datos?.portadaMini || null);
   } catch (_) { portada = null; }
   await guardarDocumento({
-    meta: { ...meta, id: idDestino, actualizado, sincronizado: actualizado },
+    meta: { ...meta, id: idDestino, actualizado, sincronizado: actualizado,
+      ...(portada ? { origenPortada: datos?.meta?.origenPortada || 'recibida' } : {}) },
     ...(portada ? { portada } : {}),
   });
   /* Lo que llegó con carátula no necesita reenviarla: ya la tienen los dos. */

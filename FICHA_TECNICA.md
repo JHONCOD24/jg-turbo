@@ -1,5 +1,10 @@
 # 📋 Ficha Técnica y Manual de Uso · JG Turbo
 
+**PDF v173 (2026-10-13):** acceso visible Aa en lectura inmersiva, ajustes
+inferiores en teléfono horizontal, aviso legible y giro de hoja de 420 ms.
+Biblioteca y carátulas sin regeneración repetida. Detalle y límites:
+`docs/kindle/AUDITORIA_MOVIL_V173.md`, publicación en `CAMBIOS_PDF.md`.
+
 Bienvenido a la documentación oficial de **JG Turbo**, una suite de captura, transcripción y traducción para navegador, Vercel y servidor local.
 
 **Voz v166:** con «Conservar términos de desarrollo web» encendido, los términos

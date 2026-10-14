@@ -2102,6 +2102,7 @@
     border-radius:12px;align-items:center;
     box-shadow:0 10px 34px -14px rgba(0,0,0,.8);
   }
+  #pdfResultArea #pdfNoticeLector{display:block;background:var(--lec-superficie);color:var(--lec-texto);border:1px solid var(--lec-linea);box-sizing:border-box}
   .pdf-aviso-lector[hidden]{display:none}
   body.jg-leyendo .pdf-aviso-lector{bottom:calc(var(--pdf-bm-alto,64px) + 12px)}
   /* En celular y tablet el dock (Anterior/Siguiente/Escuchar, ~150-160 px)
@@ -5842,6 +5843,8 @@ body.jg-leyendo:has(#pdfLectura[data-paginado="si"]){overscroll-behavior:none}
 .lec-hoja[data-dir="-1"] > .lec-hoja-sombra{left:auto;right:100%;
   background:linear-gradient(to left,rgba(0,0,0,.30),rgba(0,0,0,.10) 45%,transparent)}
 @media (prefers-reduced-motion:reduce){.lec-hoja{display:none}}
+.lec-hoja-pagina::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,transparent 70%,rgba(0,0,0,.12) 95%,rgba(255,255,255,.12));}
 
 /* ── Paso de páginas ──────────────────────────────────────────────────
    El texto fluye en columnas del ancho exacto del lector: cada columna es
@@ -6271,6 +6274,28 @@ body.jg-leyendo .pdf-texto-col[data-paginado="si"]{overflow:clip}
 @media(prefers-reduced-motion:reduce){
   #pdfResultArea .pdf-hoja-fondo,#pdfResultArea .pdf-doc-top,
   #pdfResultArea .pdf-modo-barra,#pdfResultArea .pdf-barra-movil{animation:none;transition:none}
+}
+</style>
+<style id="pdf-estabilidad-movil">
+/* Acceso visible a los ajustes durante la lectura, sin cambiar su altura. */
+#btnPdfAaRapido{display:none}
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
+  body.jg-leyendo.jg-inmersivo #btnPdfAaRapido{display:grid;place-items:center;
+    position:fixed;right:max(12px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));
+    width:44px;height:44px;z-index:26;border:1px solid var(--lec-linea);border-radius:50%;
+    background:var(--lec-superficie);color:var(--lec-texto);font-size:16px;cursor:pointer}
+  #pdfResultArea .pdf-apariencia-hoja{box-sizing:border-box;top:auto;bottom:0;left:0;right:0;
+    width:auto!important;max-width:560px;margin-inline:auto;
+    max-height:min(68dvh,calc(var(--jg-viewport-alto,100dvh) - env(safe-area-inset-top) - 12px))!important;
+    border-radius:18px 18px 0 0}
+  #pdfResultArea .pdf-apariencia-hoja .pdf-hoja-cab{position:sticky;top:0;z-index:1;background:var(--lec-superficie)}
+  body.jg-leyendo #pdfNoticeLector{bottom:calc(var(--pdf-bm-alto,64px) + 40px);height:auto;
+    line-height:1.4;padding:10px 14px;white-space:normal;overflow:visible}
+  body.jg-leyendo.jg-inmersivo #pdfNoticeLector{bottom:calc(40px + env(safe-area-inset-bottom))}
+}
+@media (orientation:landscape) and (max-height:500px){
+  body.jg-leyendo #pdfNoticeLector{bottom:var(--pdf-bm-alto);height:34px;padding:8px 14px}
+  body.jg-leyendo.jg-inmersivo #pdfNoticeLector{bottom:0}
 }
 </style>
 <style id="pdf-aa-v172">
@@ -19581,7 +19606,7 @@ actualizarContador();
  * caché al instante (stale-while-revalidate), así que sin esto un HTML nuevo
  * podía cargarse con un JS viejo y los botones nuevos no hacían nada. Al
  * subir este número en cada despliegue, el HTML y el JS van siempre juntos. */
-const JG_JS_V = 'v172';
+const JG_JS_V = 'v173';
 let jgCargaYoutube = null;
 function asegurarYoutubeSincronizado(){
   if(jgCargaYoutube) return jgCargaYoutube;

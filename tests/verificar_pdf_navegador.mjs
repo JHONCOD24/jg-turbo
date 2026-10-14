@@ -203,7 +203,8 @@ async function leer(pagina, archivo, espera = 90000) {
   await pagina.waitForFunction(() => {
     const avisos = ['pdfNotice', 'pdfNoticeLector'].map((id) => document.getElementById(id));
     const res = document.getElementById('pdfResultArea');
-    return (res && res.style.display !== 'none') || avisos.some((a) =>
+    const ocr = document.getElementById('pdfOcrBox');
+    return (res && res.style.display !== 'none') || (ocr && !ocr.hidden) || avisos.some((a) =>
       a && !a.hidden && (a.className || '').includes('err'));
   }, null, { timeout: espera }).catch(() => {});
   await pagina.waitForTimeout(700);
@@ -625,6 +626,9 @@ console.log('\n── OCR de un escaneado con letras ─────────
           ['pdfNotice','pdfNoticeLector'].some((id)=>(document.getElementById(id)?.className||'').includes('err') && !document.getElementById(id).hidden),
     null, { timeout: 240000 }
   );
+  // El texto se muestra antes de terminar de guardarlo. Esperar el cierre
+  // de OCR, cuyo finally restaura la etiqueta, antes de comprobar su aviso.
+  await pagina.waitForFunction(() => document.getElementById('pdfOcrLabel')?.textContent === 'Leer con OCR', null, { timeout: 60000 });
   await pagina.waitForTimeout(600);
 
   const texto = (await pagina.locator('#pdfOutput').inputValue()).toLowerCase();

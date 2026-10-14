@@ -1,5 +1,42 @@
 # Trampas de JG Turbo · errores ya cometidos que no deben repetirse
 
+## Un aviso auxiliar puede borrar el resultado del OCR (2026-10-13)
+
+**Síntoma:** se reconocían «biblioteca» y «Ernesto», pero el aviso decía
+«Se añadió 1 gráfico» en vez de explicar el reconocimiento y su revisión.
+**Causa medida:** la extracción diferida de figuras llama a `avisar` después
+del mensaje OCR. **Regla:** una confirmación de segundo plano no sustituye
+un aviso activo de la acción del usuario. La prueba espera el cierre real de
+OCR antes de comprobar su mensaje; pintar el texto no significa haber
+terminado de guardarlo. No quitar la exigencia del aviso para obtener verde.
+
+## Insertar reglas CSS antes de comprobar la etiqueta de cierre (2026-10-13)
+
+**Síntoma:** durante esta corrección se insertó brevemente un `@media` fuera
+de `<style>`. **Causa:** el contexto del parche incluía ya `</style>`.
+**Regla:** comprobar las etiquetas contiguas al insertar una regla y revisar
+el diff antes de ejecutar o publicar. Se movió dentro de la hoja de estilos
+en el siguiente parche, antes de la verificación.
+
+## Regenerar una tapa provisional desde el repintado (2026-10-13)
+
+**Síntoma:** al entrar a PDF, los libros titilan. **Causa medida:**
+`completarCaratulasQueFaltan` incluye todas las tapas `dibujada`, fuerza una
+generación y vuelve a pintar; si el catálogo no encuentra nada, guarda otra
+dibujada y repite. El controlador anterior produjo 241 repintados en 8 s.
+**Regla:** una provisional existente no vuelve a guardarse como resultado de
+un intento automático; compartir el trabajo en curso por id y deduplicar
+intentos por estado de la fuente. No revocar URLs de portadas cuyos elementos
+siguen vivos (lector y Seguir leyendo). Prueba: `verificar_pdf_estabilidad_movil`.
+
+## Un Service Worker invalida una comparación por rutas de Playwright (2026-10-13)
+
+**Síntoma:** la reproducción con el controlador anterior parecía estable.
+**Causa:** el Service Worker servía el controlador nuevo y `page.route` no
+interceptaba esa petición. **Regla:** una comparación que sustituye un módulo
+del navegador usa un contexto `serviceWorkers:'block'`; de otro modo puede
+estar midiendo otro archivo. La medición válida mostró 241 repintados en 8 s.
+
 ## Dos manos que fijan el mismo ajuste con listas distintas (2026-10-13)
 
 **Síntoma:** al recargar, un tema «Sepia» guardado volvía a «Noche».

@@ -1,5 +1,39 @@
 # Lector de PDF · historial de cambios y operación
 
+## 2026-10-13 · v173 · Estabilidad de biblioteca y ajustes móviles
+
+Marcador `JG_JS_V='v173'`, shell `jg-turbo-shell-v173`. Publicación pendiente
+al preparar el commit; se anotará aquí el despliegue verificado.
+
+Auditoría completa con hallazgos, evidencia, prioridades y checklist:
+[`docs/kindle/AUDITORIA_MOVIL_V173.md`](docs/kindle/AUDITORIA_MOVIL_V173.md).
+
+- Biblioteca: el controlador anterior provocó 241 repintados en 8 s con una
+  carátula provisional; se deduplican generaciones y una provisional ya
+  guardada no cambia de fecha ni se regenera si el catálogo no mejora la tapa.
+- URLs de portadas asociadas al elemento que las usa; ordenar la rejilla no
+  invalida las de Seguir leyendo ni del lector.
+- Sincronización: la presencia de una carátula se decide por la imagen que
+  realmente llega; se conserva procedencia y no se importan marcas sin imagen.
+- Móvil: Aa visible en modo inmersivo, hoja inferior también en horizontal
+  bajo, cierre accesible al desplazar y máximo 68 % del alto. No cambia el
+  contenido de los libros ni las voces Fish.
+- Aviso del lector opaco y legible; en horizontal ocupa la franja del pie.
+  El aviso de unir explica que se repararon palabras partidas y conserva Deshacer.
+  La detección de gráficos en segundo plano no sustituye un aviso activo de la
+  acción del usuario (se comprobó el caso OCR).
+- Animación propia: giro de 55 grados, sombra de pliegue y 420 ms; mantiene
+  las opciones guardadas y respeta movimiento reducido. No es la animación
+  original de Kindle ni se afirma equivalencia con su aplicación nativa.
+
+Pruebas locales: 58 archivos `test_*.mjs` con código 0; Kindle 41, móvil 60,
+geometría 137, scroll 39, figuras 18, animación 107 y regresión de estabilidad
+24 (dos contextos de navegador para transferencia, sin cuenta personal de nube).
+Recorrido general 157, orientación 236, organización 37 y Unir palabras 18:
+todas completas, código 0 y sin fallos. Se conservó la exigencia del aviso
+OCR; el test espera su cierre real y acepta el estado de escaneado como fin
+de extracción, en lugar de consumir 90 s esperando un resultado con texto.
+
 > Relato completo de la sesión del 2026-09-05, con los fallos y sus causas:
 > [INFORME_2026-09-05.md](INFORME_2026-09-05.md).
 
